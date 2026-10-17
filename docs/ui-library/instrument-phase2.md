@@ -394,6 +394,11 @@ scenes) stays valid; the next frame writes uniforms and clustered lights and not
 `emitters` field gets one through the full `update` path instead (for an Instrument scene that is a structure change,
 below). The pointer light is an emitter like any other, so the helper moves it with `setEmitters` every frame.
 
+**When to call it.** `setEmitters` asks core for a frame; core coalesces requests into one draw per animation frame. A
+helper that writes from its own animation-frame callback must ask for its next frame *after* writing (or write from
+the pointer event): one that asks first runs before core's draw in the next frame, so core draws every other frame
+(measured: 150 draws for 300 writes). The playground page does the former.
+
 Diagnostics: `state().emitters` (per layer: emitters in the scene, lit, drawn, dropped with their reach, the guard's
 rects and caps, the feather, the pass status, GPU time) and `emitterGpuMs` measurement samples.
 
@@ -424,10 +429,13 @@ multiplies what is on the canvas by `1 + E`:
 E = Σ I · face · colour · max(z / ‖d‖, 0) / (π ‖d‖²) · clamp(1 − (‖d‖² / R²)², 0, 1)² · (reach "layer" ? a(p) : 1) · opacity
 ```
 
-`a(p)` is the layer's captured alpha, read from the layer's capture, so the pointer light lights each layer's own content
-once where layers overlap and nothing beneath it. The pass is skipped (task execution off) on frames with no light. A
-frame-graph context rather than an effect renderer because Lite's per-task GPU timings only see frame graphs, and it
-registers synchronously, so it can join a frame without an asynchronous build.
+`a(p)` is the layer's captured alpha, read from the layer's capture (0 outside the layer's box), so the pointer light
+lights each layer's own content once where layers overlap and nothing beneath it. Past the layer's box the light eases
+out over the outer half of the outset on that side (`1 − smoothstep(0.5, 1, beyond / outset)`), so a lamp whose reach
+passes the outset leaves no edge on the page or the panel beneath (I0.3 saw a hard cut at the 48 px outset; a
+deviation from 2D.4, which draws the outset at full strength). The pass is skipped (task execution off) on frames with
+no light. A frame-graph context rather than an effect renderer because Lite's per-task GPU timings only see frame
+graphs, and it registers synchronously, so it can join a frame without an asynchronous build.
 
 **Why not inside `reliefShade`:** the layer blend is straight alpha, so the layer's shading can only darken what lies
 beneath its outset (I0.3). The pool must multiply the canvas.
@@ -460,12 +468,12 @@ The pool and the relief shading read the same **emitter block**, packed once per
 | 64 | protected rects |
 | 64 | per rect: the light cap and the shadow cap (the guard, below) |
 | 128 | emitters: `(x, y, z, ±R)` (negative for `reach: "layer"`), `(I · colour, face)` |
-| 72 | the 16 × 9 tiles, two 32-bit words per tile: the emitters whose reach meets the tile |
+| 144 | the 16 × 9 tiles, one vec4 each: four 16-bit masks of the emitters whose reach meets the tile (exact in f32, so no shader reinterprets uniform floats as bits) |
 
-The block is appended to the relief binding (1,702 → 2,032 vec4s, 32.5 KB of the 64 KB a uniform binding may hold), so
-the layer pass keeps its one binding layout; the stage material uses only the start of the binding and is unchanged.
-The pool's own binding is a 7-vec4 header (frame, draw bounds, inverse matrix rows, draw rectangle, capture grid) and the
-same block.
+The block (402 vec4s) is appended to the relief binding (1,702 → 2,104 vec4s, 33.7 KB of the 64 KB a uniform binding may
+hold), so the layer pass keeps its one binding layout; the stage material uses only the start of the binding and is
+unchanged. The pool's own binding is an 8-vec4 header (frame, draw bounds, inverse matrix rows, draw rectangle, capture
+grid, extent) and the same block.
 
 ## The guard
 
@@ -529,7 +537,7 @@ off, `state().emitters.order` names the reason), Instrument layers step down as 
 | --- | --- | --- | --- |
 | 1 | Where the face pool is drawn | Its own pass per layer after the layer's pass and before its parts, over the draw rectangle, `dst · src + dst`; the same pass at every level | A light term in `reliefShade`: cannot brighten what lies beneath the outset (I0.3) |
 | 2 | The pass object | A standalone frame-graph context with one effect task: synchronous registration, seen by Lite's task timings, execution off on unlit frames | An effect renderer: not timed by Lite; a Lite scene: asynchronous `registerScene` |
-| 3 | How emitters reach the relief shading | An emitter block (64 emitters, 64 rects with caps, 16 × 9 tiles of two words) appended to the relief binding, packed per frame | A separate binding: a second bind-group layout for every relief pass |
+| 3 | How emitters reach the relief shading | An emitter block (64 emitters, 64 rects with caps, 16 × 9 tiles of four 16-bit masks) appended to the relief binding, packed per frame | A separate binding: a second bind-group layout for every relief pass |
 | 4 | Specular at Relief and Objects | The 2.5 lobe per emitter on bevels, sides and domes, coloured, at full strength, zero where 2.9 guards and inside protected rects | No specular (I0.3's face-only light) |
 | 5 | The guard | CPU bounds of `k` per rect; light capped and part shadows scaled so the product stays in `1 ± m`; one feather per layer; `"extent"` protects the box; more than 64 rects protect the extent | The exact clamp of 2D.4, evaluating the relief and every caster per text pixel |
 | 6 | The update path | `handle.setEmitters` swaps the list into the validated scene in place: uniform writes only | `handle.update` every frame: re-validates and repacks the scene, and recomputes the Instrument structure key |
@@ -550,4 +558,81 @@ off, `state().emitters.order` names the reason), Instrument layers step down as 
 
 ## Results (item 2)
 
-To be measured.
+Canary 158.0.8110.0, Windows 11, RTX 3080, 1920 × 1080, [`instrument-emitters-core.html`](../../examples/playground/instrument-emitters-core.html)
+(stage layer and panels A, B, C; C's power lamp ×1.5 beside its label near C's left edge over B; its corner lamp near
+its bottom edge over the stage). Headless at DPR 1 and 2, and headful at DPR 1 (`--headed`, viewport emulated at
+1920 × 1080): every pixel number below is the same headful and headless. Pixel numbers are identical at the three
+levels except where a column says otherwise (the face pool is one pass at every level).
+
+**Pools** (8-bit mean-RGB gain, lamp on against off):
+
+| Where | Light theme | Dark theme |
+| --- | --- | --- |
+| Face, one lens diameter from the power lamp (median of the clear sample points) | +11.3 | +25.7 (DPR 2: +25.0) |
+| Face at 1.5 / 2 / 3 diameters | — / — / +6.3 | +10 / +4.3 / +1.3 |
+| Past C's edge onto B at 2 / 6 / 12 / 20 / 32 / 48 px | +35 / 21.3 / 19.3 / 19.3 / 12.3 / 0 | +16 / 13 / 9 / 6 / 2.7 / 0 |
+| Onto the dark stage past the corner lamp at 2 / 6 / 12 / 20 / 32 / 48 px | | +5 / 4 / 3 / 2 / 1 / 0 |
+| The lamp's bezel ring, 9.5 px from its centre (Instrument: a part, clustered light only) | +99 DPR 1, +67 DPR 2 (median) | |
+
+**Contrast and the guard** (decoded WCAG; the excess is how far any channel of the text box moves past `1 ± m`
+against core's plain pass, the capture with no material, in 8-bit levels, so ≤ 0.5 is rounding):
+
+| Theme | Text | Lamp off | Lamp on | Excess past `interior.max` |
+| --- | --- | --- | --- | --- |
+| Light | label | 13.96 | 14.96 | 0.44 |
+| Light | caption (muted) | 5.44 | 5.64 (DPR 2: 5.69) | 0.40 |
+| Dark | label | 11.00 (DPR 2: 11.07) | 11.59 | 0.40 (DPR 2: 0.44) |
+| Dark | caption (muted) | 5.95 | 6.42 | 0.32 (DPR 2: 0.40) |
+
+**Hits:** 16 visible controls, each hit at its centre, identical with every lamp off and on; 0 hit-geometry updates.
+
+**Highlights** (pointer light with `face` 0, so only the highlight changes pixels; the pointer moves from one side of
+A's knob to the other): knob pixels changed 68 / 137 / 783 at DPR 1 (Relief / Objects / Instrument), 274 / 518 /
+3,184 at DPR 2; A's protected text, less its 1 px rim (the REC label's box reaches under the lit ring part): 0 of
+13,067 (DPR 1) and 0 of 53,936 (DPR 2) changed, at every level.
+
+**The pointer run** (300 real mouse moves paced at 60 Hz across the stage, A, B and C, at every level and DPR, headless
+and headful): 0 captures, 0 uploads, 0 hit-geometry updates, 300 GPU frames, 301 `setEmitters` rounds (all four
+layers), interval p50 17.6–17.8 ms (p95 18.2–18.5), the page's write p50 / p95 0.1–0.2 / 0.2–0.3 ms; hits on every
+visible control unchanged; the face under the pointer (233, 235, 239) → (255, 255, 255) on the light theme; a point
+of B in C's outset and its mirror about the pointer both gain 4 levels (the light is applied once).
+
+**Budget:** 64 emitters on B: 64 drawn, 0 dropped; 65: 64 drawn, emitter 64 dropped (margin 167.81 px); 80: 64
+drawn, 16 dropped, the pass drawn, GPU on, at every level and DPR.
+
+**Cost** (GPU task medians over 120 frames, ms; the stage's pool covers the whole window; B's pool and B's Instrument
+scene, whose `parts` task carries the clustered lights). Headful DPR 1, the steadiest run:
+
+| Emitters | 0 | 1 | 16 | 64 |
+| --- | --- | --- | --- | --- |
+| Stage pool, Relief / Objects | off | 0.28 | 0.62 | 1.09 |
+| Stage pool, Instrument page | off | 0.22 | 0.42 | 0.74 |
+| B's pool | off | 0.09 | 0.22 | 0.41 |
+| B's Instrument scene (face shadows + parts with clustered lights) | 0.80 | 0.79 | 0.77 | 0.78 |
+
+Headless runs scatter by up to 10× on the same counts (stage pool at 64: 0.14–1.44 ms at DPR 1, 0.84–1.42 at DPR 2;
+B's scene 0.12–0.68), the RTX 3080's demand-driven clocks (I0.8); treat the numbers as upper bounds. The clustered
+lights add no measurable time to the parts at 64. With 0 emitters the pool's task is off and takes no GPU time.
+
+**Lifecycle:** after `disable`, `resources.lightPasses` is 0 and the engine is gone; after `enable` the pools come back
+and draw.
+
+**Suites:** `core-emitters` 6 of 6 (headless) and 3 of 3 (headful, DPR 1); `core-instrument` 5 of 5; relief, objects,
+stage, material, `ui-gpu` and the I0.3 probe (`ui-probe-instrument-emitters`) 69 of 69; unit 149 (1 skipped), compiler
+129, typecheck, build and `test:package` pass.
+
+**Found while building it** (each handled in core or the page, recorded):
+
+- Lite builds one shader module from an effect's vertex and fragment WGSL, so a binding is declared once.
+- An effect render task disposes its target with the task; the swapchain target is eager and survives it.
+- A Playwright screenshot asks the browser for a paint with no attribution, which recaptures every layer: the pointer
+  run takes its screenshots after the run.
+- Core coalesces draw requests into one per animation frame; a writer that asks for its next frame before writing
+  draws every other frame (150 of 300), hence the guidance above.
+- The pool reads the captured alpha for `reach: "layer"`; outside the layer's box the clamped read returned the edge
+  texel and lit C's outset over B twice (+8 instead of +4): the alpha is 0 outside the box, and the test checks it.
+
+**Limits:** captured caps (key labels at Instrument) are drawn after the pool and not lit, as in I0.3; text on a lower
+panel under another panel's outset glow is guarded by its own layer only; lamps at the Objects level saturate their own
+emissive pucks (the lamp's light falls on its own dome); one fast GPU; `prefers-contrast`, `forced-colors`, `pointer:
+fine` and the fade belong to the helper and are not tested here.
