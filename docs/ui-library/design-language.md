@@ -210,8 +210,8 @@ CSS presentation unable to follow.
   layer within reach. Each layer's pass lights only that layer's own content, so where layers overlap the light is
   applied once. A move is a uniform update: no capture, no upload and no change to hit geometry (I0.3, at every level).
 - **Levels:** at the Instrument level it also lights the meshes as a clustered light. At the Relief and Objects levels
-  it lights the face through the face pool only, with no highlight on bevels, sides or domes yet (that needs a
-  point-light specular term in the relief shading, [findings](instrument-phase0.md#findings-for-later-phases)). In CSS
+  it lights the face through the face pool, and its highlight travels across bevels, sides and domes through a
+  point-light specular term in the relief shading (core work item 2, [design note](instrument-phase2.md#core-work-item-2-emitters-and-the-pointer-light)). In CSS
   it is a `radial-gradient` overlay placed from two custom properties, its strength capped so no text under it changes
   beyond `interior.max`.
 - **Gaps between panels:** it lights what a layer covers. At the Scene level the backdrop is a layer, so the light
@@ -1336,3 +1336,5 @@ it.
   - section 14: ring clicks snap to a printed numeral (`knob.snap`), and taps and the wheel step by a notch of at least
     1% of the range;
   - section 19: the premium defaults.
+- 2026-10-18: section 3, the pointer light at the Relief and Objects levels: its highlight now travels across bevels,
+  sides and domes (core's point-light specular term, core work item 2). No token or rule changed.

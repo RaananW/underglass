@@ -291,7 +291,7 @@ Matching React18/19 types/builds and actual mounted behavior are recorded in
 | `transition(id, descriptor)` | Bounded declarative numeric motion; explicit completion/cancellation handle, no separate native animation source |
 | `transitionGroup(items, stagger?)` | Prepare 1..8 distinct boundaries, one start epoch, index-based0..1000ms stagger; invalid descriptors/groups have no enrollment/motion side effects |
 | `Presence` | Retain one React child subtree through enter/exit inside a stable enrolled boundary; no wrapper, clone or portal relocation |
-| `setMaterial(id, descriptor)` | Validate and install a persistent colour-only material on any enrolled layer, replacing the previous one; content stays interactive, and the change is one brightness factor within `interior.max` ([effects](effects.md#materials)); `update`/cancel/dispose handle |
+| `setMaterial(id, descriptor)` | Validate and install a persistent colour-only material on any enrolled layer, replacing the previous one; content stays interactive, and the change is one brightness factor within `interior.max` ([effects](effects.md#materials)); `update`/`setEmitters` ([emitters](#emitters-and-the-pointer-light))/cancel/dispose handle |
 | `setEffects(id, descriptors)` | Atomically validate 1..3 ripple/chromatic/dissolve/custom operations before replacing ownership. `interaction: "decorative"` needs decorative enrollment; `interaction: "inert"` runs a transition effect on an interactive layer whose content is held inert meanwhile ([effects](effects.md#contract)); explicit seconds/playback/`update`/cancel/dispose handles; static original DOM fallback |
 | `defineEffect(definition)` | Frozen trusted local WGSL color-function schema, 1..4 bounded numeric parameters, layer bounds and WebGPU capability; compile before successor publication, never a remote loader/sandbox |
 | `enable()` | Serialized structural and functional admission; owning native canvas must be laid out/visible for paint and functional probes during `admitting`; only complete application capture establishes `gpu`. No automatic initial enable |
@@ -549,7 +549,8 @@ upload/frame timing is synchronous public CPU work, not completion/GPU
 execution. `phase` separates admission work from content work.
 See [measurement definitions and raw evidence](archive/measurements.md).
 With an `instrument` material, `instrumentGpuMs` samples (`layerId`, `phase: "content"`) carry the GPU time of one
-layer's mesh pass in one frame, from Babylon Lite's per-task timings when the device has timestamp queries.
+layer's mesh pass in one frame, and with emitters, `emitterGpuMs` samples the GPU time of one layer's face pool pass,
+both from Babylon Lite's per-task timings when the device has timestamp queries.
 
 ### The instrument material
 
@@ -565,7 +566,8 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
 | `materials` | At most 16 recipes: `base` (`colour`, `roughness`, `metallic`, `direct`), `coat`, `reflectance` (dielectric F0 only), `emissive` (`strength`, `colour`), `sheen`, `iridescence`, `brush` with a hairline `grain`; `glass`, `dispersion`, `subsurface` validated, not drawn yet |
 | `profiles` | At most 64 shapes by name: `lathe` (`points: [[r, z, nr, nz], …]`, `segments`), `prism` (`width`, `length`, `radius`, `height`, `taper`, `chamfer`), `extrude` (`outline: [[x, z], …]`, `width`) |
 | `objects` | At most 256 (with `primitives`, 256 in all): `{ id, rect, bounds: { rect, radius }, t (clamped to 0..1), parts, relief }`. A part is `{ kind, profile, at, pose: { from, to }, material, captured, caster, state }`; a pose mixes `travel`, `slide`, `turn` and `tilt` about a fixed `axis` and `pivot`; only parts that travel may be `captured` |
-| `emitters`, `protected`, `feather`, `shadow.map`, `post` | Validated and kept, not drawn yet (core work items 2 and 3) |
+| `emitters`, `protected`, `feather` | Lights and the guard, as for every level ([emitters](#emitters-and-the-pointer-light)); the parts are lit by Babylon Lite clustered lights |
+| `shadow.map`, `post` | Validated and kept, not drawn yet (core work item 3) |
 
 - **Drawing.** Each instrument layer has a Lite scene on the shared engine, drawn right after the layer's pass:
   analytic face shadows of the parts, then the parts (thin-instanced per kind, GPU-culled) and the captured caps, with
@@ -589,6 +591,44 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
   down to Relief with GPU on. A GPU error (validation scope, device loss) still recovers to ordinary DOM.
 - **Limits:** a layer whose matrix is not a similarity (shear, non-uniform scale, a tilt) draws its objects at Relief;
   between 0 and 1, layer opacity blends each part over the faded face rather than the layer as one group.
+
+### Emitters and the pointer light
+
+Lamps, LEDs, lit rings and the pointer light are **emitters**: point lights a version 4 scene carries, at the Relief,
+Objects and Instrument levels ([design note](ui-library/instrument-phase2.md#core-work-item-2-emitters-and-the-pointer-light),
+Rendering Model 2D.4). The `relief` material takes them in a version 4 scene without a camera, the `objects` material
+in one with a camera (both `kind: "relief"`, the default), the `instrument` material in its own; versions 1 to 3 refuse
+them, and a version 4 scene without emitters shades as before.
+
+| Field | Contract |
+| --- | --- |
+| `emitters` | Up to 1,024 `{ position: [x, y, z], colour: [r, g, b], strength, radius, reach, face }`: layer px with `z` above the face, colour channels 0..1, `strength` at least 0, `radius` above 0, `reach` `"outset"` (default: the layer's box and outset) or `"layer"` (the layer's own captured content only: the pointer light), `face` 0..1 (default 1: the share of `strength` on the face; parts take all of it) |
+| `protected` | Up to 4,096 rects `[x, y, width, height]` (the layer's text runs), or `"extent"`. More than 64 protect the layer's whole box (reported) |
+| `feather` | 0..16 px, default 4: how far outside a protected rect the guard eases off |
+
+- **Drawing.** A lit layer gets a face pool pass right after its own pass (before its Instrument parts): over its box
+  and its `outset` it multiplies what is on the canvas by `1 + E`, with `E = I · face · colour · cos θ / (π d²)` windowed
+  to 0 at `radius`, so a lamp lights its faceplate and the page or the panel beneath past its edge (easing out over the
+  outer half of the outset). The relief shading adds each emitter's highlight on bevels, object sides and domes; at the
+  Instrument level the parts are lit by clustered lights with the same values.
+- **The guard.** Inside a protected rect the face's whole change (the relief, the part shadows and the light together)
+  stays within `interior.max`: the light is capped and part shadows are scaled there, easing back over `feather`.
+- **Budget.** A layer draws the 64 emitters that give light and reach furthest into it (scene order on ties); the rest
+  are dropped and reported, never a validation error, and GPU stays on.
+- **`handle.setEmitters(emitters)`** replaces a version 4 scene's emitters without validating, repacking or rebuilding
+  anything else: the path for a light that moves every frame. It writes uniforms and clustered light data only: no
+  capture, upload or hit-geometry change. A scene without an `emitters` field gets one through `update` (for an
+  Instrument scene, one rebuild of its mesh scene). Call it once per frame per layer, from the pointer event or from an
+  animation-frame callback that asks for its next frame after writing, so core draws every frame.
+- **Diagnostics.** `state().emitters` has the budget (64), `order` (`"core"`, or why the face pools are off), the task
+  timing status and, per layer with emitters or protected rects: `emitters`, `lit`, `outOfReach`, `drawn` (scene
+  indices), `dropped` (`{ index, margin }`, margin in px of reach), `pass` (`drawn`, `idle` or `off`), `feather`,
+  `guard` (`rects`, `extent`, `overflow`, `caps` with each rect's `light` and `shadow` caps) and `gpu` (`lastMs`,
+  `p50Ms`, `p95Ms`, `samples`, `total`). `state().instrument.layers[].lights` reports whether a scene has its clustered
+  lights and how many are lit.
+- **Not in core:** tracking the pointer, `pointer: fine`, the fade, `prefers-contrast` and `forced-colors` are the
+  application's (the Strata GPU helper's); core draws what the scene says. Emitters cast no shadows and never move the
+  key light.
 
 ## Supported boundary, budgets and failure
 

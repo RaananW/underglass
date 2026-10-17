@@ -318,6 +318,18 @@ and an object that cannot be drawn as meshes is drawn there at the Relief level,
 GPU on. Scene builds are sequenced with successor compositions so neither spends the
 other's compile deadline.
 
+Version 4 scenes of the `relief`, `objects` and `instrument` kinds may carry
+**emitters** (lamps, LEDs, the pointer light) and protected text rects
+(`emitters.ts`, [design note](ui-library/instrument-phase2.md#core-work-item-2-emitters-and-the-pointer-light)).
+A lit layer's pass gets a face pool: a Babylon Lite frame-graph context with one
+effect task, placed by the same guarded reorder right after the layer's pass and
+before its mesh scene, that multiplies what is already on the canvas over the
+layer's box and outset (a layer's own blend could only darken what lies beneath
+it). The relief binding carries the same emitter block for the highlights on
+bevels and objects, and instrument scenes light their parts with clustered lights.
+A moving light (`handle.setEmitters`) is uniform data only: no capture, no
+native geometry change, no rebuild.
+
 ## Explicit mount boundary
 
 The caller provides empty, distinct, connected, same-document sibling hosts:
