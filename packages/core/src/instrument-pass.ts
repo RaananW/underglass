@@ -19,18 +19,20 @@
  * released after a queue fence or device loss, as superseded compositions are.
  */
 import {
-  addMeshToTask, addTask, addToScene, createDirectionalLight, createDynamicTexture, createFreeCamera, createHemisphericLight,
+  addClusteredLightContainer, addMeshToTask, addTask, addToScene, createClusteredLightContainer, createClusteredPointLight, createDirectionalLight,
+  createDynamicTexture, createFreeCamera, createHemisphericLight, markClusteredLightContainerDirty,
   createMeshFromData, createPbrMaterial, createRenderTarget, createRenderTask, createSceneContext, createShaderMaterial, createStorageBuffer,
   disposeScene, disposeStorageBuffer, enableAsyncShaderPipelineCompilation, enableShaderMaterialInstanceWorld, enableThinInstanceGpuCulling,
   flushThinInstances, getRenderTaskGpuTimings, markMaterialUboDirty, isGpuTimingSupported, loadHdrEnvironment, onSceneDispose, registerScene, releaseTexture,
   setEnvironmentRotation, setPbrAnisotropy, setPbrClearCoat, setPbrEmissive, setPbrIridescence, setPbrMetallicReflectance, setPbrSheen,
   setMeshVisible, setRenderTaskGpuTimingEnabled, setShaderStorageBuffer, setShaderTexture, setShaderUniform, setThinInstanceCount, setThinInstances,
   unregisterScene, updateDynamicTexture, updateStorageBuffer, vec3,
-  type DynamicTexture2D, type EngineContext, type FreeCamera, type Material, type Mesh, type PbrMaterialProps, type RenderingContext,
+  type ClusteredLightContainer, type DynamicTexture2D, type EngineContext, type FreeCamera, type Material, type Mesh, type PbrMaterialProps, type RenderingContext,
   type SceneContext, type ShaderMaterial, type StorageBuffer,
 } from "@babylonjs/lite";
+import { DEFAULT_FEATHER, EMITTERS_PER_LAYER, layerGuard, PROTECTED_PER_LAYER, type Guard, type LayerEmitters } from "./emitters.js";
 import {
-  boundsInside, checkContainment, containmentFrontier, containmentKey, instrumentLayout, instrumentPartCount, instrumentStructure, multiply, partCaster, partKinds,
+  boundsInside, checkContainment, containmentFrontier, containmentKey, instrumentFaceScene, instrumentLayout, instrumentPartCount, instrumentStructure, multiply, partCaster, partKinds,
   partMatrix, profileBounds, profileGeometry, sameGeometry, similarity, INSTRUMENT_CASTERS_PER_OBJECT, INSTRUMENT_KINDS_CEILING, INSTRUMENT_KINDS_PER_LAYER, INSTRUMENT_OBJECTS, INSTRUMENT_PARTS_PER_LAYER,
   INSTRUMENT_PARTS_PER_STAGE, STUDIO_DEFAULTS, type Containment, type ContainmentFrontier, type InstrumentCaster, type InstrumentObject,
   type InstrumentProfile, type InstrumentRecipe, type InstrumentScene, type Matrix, type PartKind, type StudioTokens,
@@ -61,6 +63,8 @@ export interface InstrumentLayerInput {
   /** The layer's capture and its grid, for captured caps (as the layer pass samples it). */
   texture: DynamicTexture2D;
   content: { width: number; height: number; pixelWidth: number; pixelHeight: number };
+  /** The emitters the layer draws this frame (the budget's choice, `emitters.ts`): the parts' clustered lights. */
+  lights?: LayerEmitters;
 }
 /** Why an object is drawn as its Relief primitive. */
 export interface SteppedDown {
@@ -75,7 +79,8 @@ export interface SteppedDown {
 }
 type Status = "ready" | "pending" | "stepped-down" | "failed";
 
-interface Timing { samples: number[]; last: number | null }
+/** GPU time samples: the last 256, the latest, and how many were taken in all. */
+interface Timing { samples: number[]; last: number | null; total: number }
 /** One layer's mesh scene and what drives it. */
 interface Pass {
   scene: SceneContext;
@@ -83,10 +88,16 @@ interface Pass {
   structure: string;
   /** Whether these kinds (by key) and this many objects fit the scene's meshes and capacities. */
   capacityOk(kinds: ReadonlyMap<string, PartKind>, objects: number): boolean;
-  /** Writes one frame; `changed`: the geometry or the step-downs changed, so every instance is rewritten. */
-  update(input: InstrumentLayerInput, scene: InstrumentScene, hidden: ReadonlySet<number>, stage: Stage, kinds: ReadonlyMap<string, PartKind>, changed: boolean): number;
+  /**
+   * Writes one frame; `changed`: the geometry or the step-downs changed, so every instance is rewritten. `guard`: the
+   * layer's protected rects with their shadow caps, which scale the face shadows inside them.
+   */
+  update(input: InstrumentLayerInput, scene: InstrumentScene, hidden: ReadonlySet<number>, stage: Stage, kinds: ReadonlyMap<string, PartKind>, changed: boolean, guard: Guard): number;
   taskNames: string[];
   registered: boolean;
+  /** The clustered light container (a scene with `emitters`), and how many of its lights are lit. */
+  lights?: ClusteredLightContainer;
+  litLights: number;
 }
 interface Stage { width: number; height: number; dpr: number }
 interface LayerState {
@@ -129,6 +140,8 @@ export interface InstrumentControllerOptions {
   preparation(): Promise<void> | undefined;
   /** @internal Tests only: `beforeBuild` may delay (or never resolve) a layer's build, to prove the build deadline. */
   testHook?: { beforeBuild?(layerId: string): Promise<void> | void };
+  /** Whether Lite's task timings must stay on when the last instrument layer leaves (the renderer's face pools use them). */
+  keepTiming?(): boolean;
   onMeasure?(sample: { kind: "instrumentGpuMs"; at: number; durationMs: number; phase: "content"; layerId: string }): void;
 }
 
@@ -321,11 +334,20 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     const casterData = new Float32Array(objectCapacity * INSTRUMENT_CASTERS_PER_OBJECT * 8);
     const casterBuffer = createStorageBuffer(engine, casterData, `${label}:casters`);
     storage.push(casterBuffer);
+    // The guard (item 2): the protected rects and, per rect, the scale that keeps the face shadows inside it within
+    // the rect's shadow cap together.
+    const guardData = new Float32Array((1 + 2 * PROTECTED_PER_LAYER) * 4);
+    const guardBuffer = createStorageBuffer(engine, guardData, `${label}:guard`);
+    storage.push(guardBuffer);
     const shade = createShaderMaterial({ name: `${label}:shadows`, vertexSource: shadowVertex, fragmentSource: shadowFragment, attributes: ["position"],
       uniforms: ["world", "view", "projection", ...frameUniforms, { name: "light", type: "vec4<f32>", defaultValue: [0, 0, 1, 0] }],
-      storageBuffers: [{ name: "shapes", type: "array<vec4<f32>>" }], needAlphaBlending: true, blend: darken, depthWrite: false, backFaceCulling: false });
+      storageBuffers: [{ name: "shapes", type: "array<vec4<f32>>" }, { name: "guard", type: "array<vec4<f32>>" }], needAlphaBlending: true, blend: darken, depthWrite: false, backFaceCulling: false });
     enableShaderMaterialInstanceWorld(shade);
     setShaderStorageBuffer(shade, "shapes", casterBuffer);
+    setShaderStorageBuffer(shade, "guard", guardBuffer);
+    // Each object's face-shadow reach (layer px: left, top, right, bottom), for the guard's count of shadows per rect.
+    const reaches = new Float64Array(objectCapacity * 4);
+    let guardFor: Guard | undefined, guardFeather = -1, guardStrength = -1;
     materials.push(shade);
     quad.material = shade as unknown as Material;
     add(faceTask, quad);
@@ -343,6 +365,16 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     setMeshVisible(mask, false);
     add(partsTask, mask);
 
+    // Emitters on the parts: one clustered container of 64 point lights, created after every mesh is in the scene (Lite
+    // wires the PBR materials present when the container is added, and bakes its capacity then). Unused lights stay at
+    // intensity 0, which Lite skips; the drawn emitters are written into them every frame.
+    let lights: ClusteredLightContainer | undefined;
+    if (scene.emitters !== undefined) {
+      lights = createClusteredLightContainer();
+      for (let slot = 0; slot < EMITTERS_PER_LAYER; slot++) createClusteredPointLight(lights, { position: [0, 0, 1e6], diffuse: [0, 0, 0], range: 1, intensity: 0 });
+      addClusteredLightContainer(sceneContext, lights);
+    }
+
     let lastStage = "", lastWorld = "", lastHidden = "";
     let opacityApplied = 1;
     let boundTexture: DynamicTexture2D | undefined = options.texture(state.id);
@@ -356,11 +388,11 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     };
 
     const pass: Pass = {
-      scene: sceneContext, camera, structure, registered: false,
+      scene: sceneContext, camera, structure, registered: false, lights, litLights: 0,
       taskNames: [`${label}:face`, `${label}:parts`],
       capacityOk: (next, objects) => [...next.values()].every(kind => kind.key === "glass" || meshes.some(entry => entry.kind.key === kind.key && kind.instances.length <= entry.capacity))
         && objects <= objectCapacity,
-      update(input, current, hidden, stage, kinds, changed) {
+      update(input, current, hidden, stage, kinds, changed, guard) {
         // The camera: `D` from the scene, its field of view mapping the face plane one CSS px to one CSS px.
         const stageKey = `${stage.width},${stage.height},${current.camera.distance}`;
         if (stageKey !== lastStage) {
@@ -449,6 +481,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           castersDirty = true;
           casterData.fill(0, index * INSTRUMENT_CASTERS_PER_OBJECT * 8, (index + 1) * INSTRUMENT_CASTERS_PER_OBJECT * 8);
           quads.fill(0, index * 16, index * 16 + 16);
+          reaches.fill(0, index * 4, index * 4 + 4);
           if (hidden.has(index)) return;
           const casters = object.parts.flatMap(part => {
             if (part.glass) return [];
@@ -464,9 +497,47 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           });
           const box = multiply(world, new Float64Array([(right - left) / 2, 0, 0, 0, 0, (bottom - top) / 2, 0, 0, 0, 0, 1, 0, (left + right) / 2, (top + bottom) / 2, 0, 1]));
           for (let k = 0; k < 16; k++) quads[index * 16 + k] = box[k]!;
+          reaches.set([left, top, right, bottom], index * 4);
         });
         if (all) { casterData.fill(0, current.objects.length * INSTRUMENT_CASTERS_PER_OBJECT * 8); quads.fill(0, current.objects.length * 16); }
         if (castersDirty || all) { flushThinInstances(quad); updateStorageBuffer(engine, casterBuffer, casterData); }
+        if (all) reaches.fill(0, current.objects.length * 4);
+        // The guard: inside each protected rect, the `n` objects whose shadows reach it may darken it together by at most
+        // its shadow cap, so each object's shadow is scaled to `1 − (1 − cap)^(1 / n)` (2.9's g: the profile stays soft).
+        const feather = current.feather ?? DEFAULT_FEATHER, strength = current.shadow.strength;
+        if (guard !== guardFor || castersDirty || all || feather !== guardFeather || strength !== guardStrength) {
+          guardData.fill(0);
+          guardData.set([guard.rects.length, feather, 0, 0], 0);
+          guard.rects.forEach(({ rect, shadow }, at) => {
+            let count = 0;
+            for (let index = 0; index < current.objects.length; index++) {
+              const [l, t, r, b] = [reaches[index * 4]!, reaches[index * 4 + 1]!, reaches[index * 4 + 2]!, reaches[index * 4 + 3]!];
+              if (r > l && l <= rect.x1 + feather && r >= rect.x0 - feather && t <= rect.y1 + feather && b >= rect.y0 - feather) count++;
+            }
+            const each = count > 1 ? 1 - (1 - shadow) ** (1 / count) : shadow;
+            guardData.set([rect.x0, rect.y0, rect.x1, rect.y1, strength > each ? each / strength : 1, count, 0, 0], (1 + 2 * at) * 4);
+          });
+          updateStorageBuffer(engine, guardBuffer, guardData);
+          guardFor = guard; guardFeather = feather; guardStrength = strength;
+        }
+        // Emitters on the parts: the drawn ones in the clustered lights, in world units (the layer's scale on range and,
+        // squared, on intensity, so the falloff in layer px is the face pool's).
+        if (lights) {
+          const drawnLights = input.opacity > 0 ? input.lights?.drawn ?? [] : [];
+          let dirty = false;
+          lights.pointLights.forEach((light, slot) => {
+            const emitter = drawnLights[slot]?.emitter;
+            if (!emitter) { if (light.intensity !== 0) { light.intensity = 0; dirty = true; } return; }
+            const [x, y, z] = emitter.position;
+            const position: [number, number, number] = [m.a * x + m.c * y + m.e - stage.width / 2, stage.height / 2 - (m.b * x + m.d * y + m.f), -m.scale * z];
+            const range = emitter.radius * m.scale, intensity = emitter.strength * m.scale * m.scale;
+            if (light.position[0] !== position[0] || light.position[1] !== position[1] || light.position[2] !== position[2]) { light.position = position; dirty = true; }
+            if (light.range !== range || light.intensity !== intensity) { light.range = range; light.intensity = intensity; dirty = true; }
+            if (light.diffuse.some((value, channel) => value !== emitter.colour[channel])) { light.diffuse = [...emitter.colour]; dirty = true; }
+          });
+          if (dirty) markClusteredLightContainerDirty(lights);
+          pass.litLights = drawnLights.length;
+        }
         return drawn;
       },
     };
@@ -630,7 +701,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       let state = layers.get(input.id);
       if (!state) {
         state = { id: input.id, slot: ++slots, status: "pending", stepped: [], steppedDown: [], warnings: [], parts: 0, drawnParts: 0, kinds: 0, objects: 0,
-          frontiers: new Map(), exact: new Map(), gpu: { samples: [], last: null } };
+          frontiers: new Map(), exact: new Map(), gpu: { samples: [], last: null, total: 0 } };
         layers.set(input.id, state);
       }
       // The kinds and their instances follow the layout (each part's kind in order), so poses reuse them.
@@ -696,7 +767,9 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       state.checked = { scene, placementKey, structure };
       const changed = !reuse || state.status !== "ready";
       state.status = "ready";
-      state.drawnParts = state.pass!.update(input, scene, new Set(state.stepped), stage, kindMap, changed);
+      // The guard is bounded on the face as drawn: the primitives and the objects at Relief this frame.
+      const guard = layerGuard(instrumentFaceScene(scene, state.stepped), scene.protected);
+      state.drawnParts = state.pass!.update(input, scene, new Set(state.stepped), stage, kindMap, changed, guard);
     }
   }
 
@@ -706,8 +779,11 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     state.pass = undefined;
     state.building = undefined;
     layers.delete(state.id);
-    // The last instrument layer gone: Lite's task timings are turned off again.
-    if (!layers.size && timing.enabled) { timing.enabled = false; timing.status = "disabled"; void setRenderTaskGpuTimingEnabled(engine, false).catch(() => undefined); }
+    // The last instrument layer gone: Lite's task timings are turned off again, unless the face pools still read them.
+    if (!layers.size && timing.enabled) {
+      timing.enabled = false; timing.status = "disabled";
+      if (!options.keepTiming?.()) void setRenderTaskGpuTimingEnabled(engine, false).catch(() => undefined);
+    }
   }
 
   /** The contexts to draw right after layer `id`'s pass: its scene, when it is drawn as parts. */
@@ -736,6 +812,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       state.gpu.last = total;
       if (state.gpu.samples.length === 256) state.gpu.samples.shift();
       state.gpu.samples.push(total);
+      state.gpu.total++;
       options.onMeasure?.({ kind: "instrumentGpuMs", at: performance.now(), durationMs: total, phase: "content", layerId: state.id });
     }
   }
@@ -772,7 +849,9 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     state: () => ({
       layers: [...layers.values()].map(state => ({ id: state.id, status: state.status, objects: state.objects, parts: state.parts, drawnParts: state.drawnParts,
         kinds: state.kinds, steppedDown: state.steppedDown.map(entry => ({ ...entry })), warnings: [...state.warnings],
-        gpu: { lastMs: state.gpu.last, p50Ms: percentile(state.gpu.samples, 0.5), p95Ms: percentile(state.gpu.samples, 0.95), samples: state.gpu.samples.length } })),
+        // The parts' clustered lights: whether the scene has them, and how many the emitters lit this frame.
+        lights: { clustered: !!state.pass?.lights, lit: state.pass?.lights && state.status === "ready" ? state.pass.litLights : 0 },
+        gpu: { lastMs: state.gpu.last, p50Ms: percentile(state.gpu.samples, 0.5), p95Ms: percentile(state.gpu.samples, 0.95), samples: state.gpu.samples.length, total: state.gpu.total } })),
       stage: { parts: [...layers.values()].reduce((sum, state) => sum + state.drawnParts, 0), budget: INSTRUMENT_PARTS_PER_STAGE },
       budgets: { partsPerLayer: INSTRUMENT_PARTS_PER_LAYER, partsPerStage: INSTRUMENT_PARTS_PER_STAGE, kindsPerLayer: INSTRUMENT_KINDS_PER_LAYER, kindsCeiling: INSTRUMENT_KINDS_CEILING },
       timing: { ...timing },
@@ -881,6 +960,16 @@ fn roundedBox(q: vec2<f32>, half: vec2<f32>, r: f32) -> f32 {
     let q = p - a.xy;
     let shifted = roundedBox(q + shaderUniforms.light.xy * h, a.zw, b.x);
     s = max(s, shaderUniforms.light.z * (1.0 - smoothstep(-0.5 * h, 1.5 * h + 1.0, shifted)) * smoothstep(-1.0, 0.5, roundedBox(q, a.zw, b.x)));
+  }
+  // The guard (2D.4): inside a protected rect the shadow is scaled to its share of the rect's shadow cap, easing back
+  // to full strength over the feather outside it.
+  let header = guard[0];
+  for (var k = 0u; k < u32(header.x); k++) {
+    let rect = guard[1u + 2u * k];
+    let half = (rect.zw - rect.xy) * 0.5;
+    let d = abs(p - (rect.xy + half)) - half;
+    let t = clamp((length(max(d, vec2<f32>(0.0))) + min(max(d.x, d.y), 0.0)) / max(header.y, 1e-6), 0.0, 1.0);
+    s *= mix(1.0, guard[2u + 2u * k].x, 1.0 - t * t * (3.0 - 2.0 * t));
   }
   return vec4<f32>(0.0, 0.0, 0.0, s * shaderUniforms.frame.y);
 }`;
