@@ -15,7 +15,7 @@ import { validateCSSSource, type CSSAnimationSource } from "./css-animation.js";
 import { decorative, interactive, validateRipple, type Ripple } from "./ripple.js";
 import { reliefDegraded, type ReliefScene } from "./relief.js";
 import type { StageScene } from "./stage.js";
-import { effectNumber, isSceneMaterial, validateEffects, validateMaterial, type EffectDescriptor, type EffectHandle, type EffectResult, type MaterialDescriptor, type MaterialHandle } from "./effects.js";
+import { effectNumber, isSceneMaterial, validateEffects, validateMaterial, withEmitters, type EffectDescriptor, type EffectHandle, type EffectResult, type MaterialDescriptor, type MaterialHandle } from "./effects.js";
 import { compileMotion, type CoordinatedMotion, type MotionDescriptor, type MotionHandle, type TransitionHandle, type TransitionResult } from "./motion.js";
 import { EnrollmentError, type EnrollmentOptions } from "./enrollment.js";
 import { nativeEditingControl, nativeScrollKind } from "./native.js";
@@ -1670,6 +1670,12 @@ export class CanvasRuntime {
         entry.value = validateMaterial(isSceneMaterial(entry.value)
           ? { ...entry.value, scene: change as ReliefScene & StageScene }
           : { ...entry.value, parameters: change as Record<string, number> });
+        this.requestDraw();
+      },
+      setEmitters: emitters => {
+        this.assertLive();
+        if (!active || this.materials.get(id) !== entry) throw new Error("Material handle is no longer active");
+        entry.value = withEmitters(entry.value, emitters);
         this.requestDraw();
       },
       cancel: () => entry.finish({ status: "cancelled", reason: "Material cancelled" }),

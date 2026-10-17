@@ -9,6 +9,7 @@
  * axes, 2D.2). A part's profile is built in part-local px with its origin at the centre of the part's base.
  */
 import { validateReliefScene, type ReliefPrimitive, type ReliefScene } from "./relief.js";
+import { validateLight, type ProtectedRects, type SceneEmitter } from "./emitters.js";
 
 /** Parts one layer may draw (I0.1); above it the layer is drawn at the Relief level and reported. */
 export const INSTRUMENT_PARTS_PER_LAYER = 2048;
@@ -26,9 +27,7 @@ export const INSTRUMENT_SCENE_PARTS = 8192;
 export const INSTRUMENT_OBJECT_PARTS = 64;
 /** Analytic face casters per object (I0.5 drew 6). */
 export const INSTRUMENT_CASTERS_PER_OBJECT = 8;
-/** Emitters and protected rects a scene may carry (2D.1). */
-export const INSTRUMENT_EMITTERS = 64;
-export const INSTRUMENT_PROTECTED = 64;
+
 /** Profiles and materials a scene may name. */
 export const INSTRUMENT_PROFILES = 64;
 export const INSTRUMENT_MATERIALS = 16;
@@ -116,8 +115,8 @@ export interface InstrumentRecipe {
   dispersion?: { strength?: number };
   subsurface?: { strength?: number; tint?: string; thickness?: number };
 }
-/** An emitter (2D.4): accepted and validated, not lit until core work item 2. */
-export interface InstrumentEmitter { position: Vec3; colour: Vec3; strength: number; radius: number; reach?: "outset" | "layer"; face?: number }
+/** An emitter (2D.4): a point light on the face, the outset and the parts (`emitters.ts`). */
+export type InstrumentEmitter = SceneEmitter;
 export interface StudioTokens { key: number; keyRadius: number; fill: number; front: number; strip: number; floor: number; ceiling: number }
 /** A version 4 Instrument scene (Rendering Model 2D). */
 export interface InstrumentScene {
@@ -140,8 +139,11 @@ export interface InstrumentScene {
   primitives: ReliefPrimitive[];
   profiles: Record<string, InstrumentProfile>;
   objects: InstrumentObject[];
+  /** Point lights (2D.4): up to 1,024 in the format; the renderer draws the 64 with the most reach into the layer. */
   emitters?: InstrumentEmitter[];
-  protected?: Box[] | "extent";
+  /** The layer's text runs, or `"extent"`: inside them the face's whole change stays within `interior.max`. */
+  protected?: ProtectedRects;
+  /** px over which the guard eases off outside a protected rect, 0..16, default 4. */
   feather?: number;
   post?: { smaa?: boolean; bloom?: boolean; taa?: boolean; contact?: boolean; ssgi?: boolean };
 }
@@ -198,8 +200,8 @@ const known = (value: Record<string, unknown>, path: string, allowed: readonly s
 /**
  * Validates a scene for the `instrument` material and returns a deep, normalized copy (defaults filled in, `t`
  * clamped to its stops). Throws on the first problem with its path, so an invalid scene changes nothing. Fields of
- * later core work items (emitters, protected rects, the shadow map, the post chain, glass, the page probe) are
- * validated and kept but not drawn yet (`docs/ui-library/instrument-phase2.md`).
+ * later core work items (the shadow map, the post chain, glass, the page probe) are validated and kept but not drawn
+ * yet (`docs/ui-library/instrument-phase2.md`).
  */
 export function validateInstrumentScene(input: InstrumentScene): InstrumentScene {
   const scene = record(input, "");
@@ -230,21 +232,9 @@ export function validateInstrumentScene(input: InstrumentScene): InstrumentScene
   const profileNames = Object.keys(profiles);
   if (profileNames.length > INSTRUMENT_PROFILES) fail("profiles", `holds more than ${INSTRUMENT_PROFILES} profiles`);
   const shapes = Object.fromEntries(profileNames.map(name => [name, profile(record(profiles[name], `profiles.${name}`), `profiles.${name}`)]));
-  // Emitters and protected rects (item 2): validated, kept, not lit.
-  if (scene.emitters !== undefined && (!Array.isArray(scene.emitters) || scene.emitters.length > INSTRUMENT_EMITTERS)) fail("emitters", `requires an array of at most ${INSTRUMENT_EMITTERS}`);
-  const emitters = ((scene.emitters ?? []) as unknown[]).map((value, index): InstrumentEmitter => {
-    const at = `emitters[${index}]`, emitter = record(value, at);
-    known(emitter, at, ["position", "colour", "strength", "radius", "reach", "face"]);
-    return { position: tuple(emitter.position, `${at}.position`, 3) as Vec3, colour: tuple(emitter.colour, `${at}.colour`, 3, 0, 1) as Vec3,
-      strength: number(emitter.strength, `${at}.strength`, 0), radius: number(emitter.radius, `${at}.radius`, 1e-6),
-      reach: choice(emitter.reach, `${at}.reach`, ["outset", "layer"] as const, "outset"), face: optional(emitter.face, `${at}.face`, 0, 1, 1) };
-  });
-  let shielded: Box[] | "extent" | undefined;
-  if (scene.protected === "extent") shielded = "extent";
-  else if (scene.protected !== undefined) {
-    if (!Array.isArray(scene.protected) || scene.protected.length > INSTRUMENT_PROTECTED) fail("protected", `requires "extent" or an array of at most ${INSTRUMENT_PROTECTED} rects`);
-    shielded = (scene.protected as unknown[]).map((rect, index) => box(rect, `protected[${index}]`));
-  }
+  // Emitters, protected rects and the feather (item 2, `emitters.ts`).
+  const lights = validateLight(scene, "Instrument scene");
+  const emitters = lights.emitters ?? [];
   // Objects and their parts.
   if (!Array.isArray(scene.objects) || scene.objects.length > INSTRUMENT_OBJECTS) fail("objects", `requires an array of at most ${INSTRUMENT_OBJECTS}`);
   const primitivesIn = scene.primitives;
@@ -306,8 +296,7 @@ export function validateInstrumentScene(input: InstrumentScene): InstrumentScene
     primitives: face.primitives.slice(0, (primitivesIn as unknown[]).length) as ReliefPrimitive[],
     profiles: shapes,
     objects: objects.map((object, index) => ({ ...object, relief: face.primitives[(primitivesIn as unknown[]).length + index] as ReliefPrimitive })),
-    ...(scene.emitters !== undefined ? { emitters } : {}),
-    ...(shielded !== undefined ? { protected: shielded, feather: optional(scene.feather, "feather", 0, 1e3, 4) } : {}),
+    ...lights,
     ...(scene.post !== undefined ? { post: post(record(scene.post, "post")) } : {}),
   };
   derived.set(result, { ...structureOf(result), parts: partCount });
@@ -848,8 +837,9 @@ function structureOf(scene: InstrumentScene) {
     layout += "\u0002";
   }
   // The light and the environment are built into the scene (key light, fill, studio image and rotation, material
-  // environment intensity), so a change to them rebuilds it like a new profile does.
-  return { structure: JSON.stringify([scene.profiles, scene.materials, [...keys].sort(), scene.light, scene.environment]), layout };
+  // environment intensity), so a change to them rebuilds it like a new profile does; so is the clustered light
+  // container, which a scene has when it has an `emitters` field (emitter values themselves update in place).
+  return { structure: JSON.stringify([scene.profiles, scene.materials, [...keys].sort(), scene.light, scene.environment, scene.emitters !== undefined]), layout };
 }
 /** What the scene is built from (profiles, materials, part kinds, light, environment): only a rebuild changes it; counts do not. */
 export function instrumentStructure(scene: InstrumentScene): string {
