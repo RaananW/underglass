@@ -341,3 +341,213 @@ kept (S1):** any change of light or environment rebuilds the layer's scene, so o
 - Shader materials bind their textures when the scene registers: a captured cap's capture must be bound before
   `registerScene` (error 486 otherwise).
 - `registerScene` appends and is asynchronous; there is still no ordered insert (decision 1).
+
+# Core work item 2: emitters and the pointer light
+
+**Status:** design note for [core work item 2](instrument.md#core-work-additive), written before the code (2026-10-18),
+then implemented in the same PR ([results](#results-item-2)). One concern: lamps, LEDs, lit rings and the pointer light
+as **light sources** in core, at every GPU level. Not in it: bloom (item 3), shadows from emitters (never, design
+language section 3), and the Strata helper's pointer tracking and preferences (`pointermove`, `pointer: fine`,
+`prefers-contrast`, `forced-colors`): core draws what the scene says and exposes exactly what the helper needs.
+
+**Upstream check (2026-10-18):**
+
+- **WICG HTML-in-Canvas:** `5fb3df86d84de598c7f0fcfc5ee53de1df067e7d` (2026-10-09) is still the latest commit (`gh api`,
+  2026-10-18). Updated since item 1: [#162](https://github.com/WICG/html-in-canvas/issues/162) (rename `PaintEvent` to
+  `CanvasPaintEvent`) and #155 were closed on 2026-10-15 with no new commit; #186 and #185 are still open. None touches
+  this work: emitters change no capture, hit geometry or admission.
+- **Chromium hotlist 6783002** (including the ElementCanvasTransform issues): not accessible without sign-in; not
+  rechecked.
+- **Browser tested:** Chrome Canary 158.0.8110.0, Windows 11, RTX 3080 (as item 1).
+
+## What I0.3 proved and what core adds
+
+[I0.3](instrument-phase0.md#i03-emitters-and-the-pointer-light) lit three overlapping panels through the probe hook: a
+Lite effect task per layer right after the layer's pass, blend `dst · src + dst` over the layer box and a 48 px outset,
+clustered point lights for the parts, protected rects from the layer's text runs. It found that the layer blend cannot
+brighten what lies beneath (so the pool is its own pass), that strong pools turn guarded text boxes into grey patches
+(the I1 second iteration answered with the pointer light's `face` 0.3 and a 10 px feather), and that the Relief and
+Objects pointer light was face-only: no highlight followed bevel, side or dome normals.
+
+Core now owns it, behind fields the scenes of every GPU level accept:
+
+- **the face pool**, one pass per lit layer, at Relief, Objects and Instrument;
+- **the analytic specular term** in the relief shading (bevels, object sides, domes), so a lamp or the pointer catches
+  the Relief and Objects controls, not only the face;
+- **clustered lights** on the Instrument parts, with the same position, colour, strength and reach;
+- **protected rects and the guard**, with one feather per layer;
+- **the budget** (64 per layer, tiled 16 × 9), with the drop rule and its diagnostic;
+- **the per-frame path** for a moving emitter: `handle.setEmitters`, uniform writes only.
+
+## API
+
+```ts
+const handle = controller.setMaterial("panel", { kind: "relief" | "objects" | "instrument", scene, ...policy });
+// scene: version 4, with emitters, protected and feather (relief and objects: kind "relief", the default)
+handle.update(nextScene);      // structure, layout, protected rects: as today
+handle.setEmitters(emitters);  // positions, colours, strengths only: no validation of the rest, no repack, no rebuild
+```
+
+`setEmitters` is the only new call. It validates the emitter list alone and swaps it into the material's own validated
+copy of the scene, so every cache keyed on that scene (the packed relief binding, the Instrument structure and face
+scenes) stays valid; the next frame writes uniforms and clustered lights and nothing else. A version 4 scene that had no
+`emitters` field gets one through the full `update` path instead (for an Instrument scene that is a structure change,
+below). The pointer light is an emitter like any other, so the helper moves it with `setEmitters` every frame.
+
+Diagnostics: `state().emitters` (per layer: emitters in the scene, lit, drawn, dropped with their reach, the guard's
+rects and caps, the feather, the pass status, GPU time) and `emitterGpuMs` measurement samples.
+
+## The scene fields
+
+Rendering Model 2D.1 and 2D.4. Version 4 adds them to scenes of every level; versions 1 to 3 refuse them.
+
+| Field | Core |
+| --- | --- |
+| `emitters` | `{ position: [x, y, z], colour: [r, g, b] (0–1), strength, radius, reach: "outset" \| "layer", face (0–1, default 1) }`, layer px, `z` above the face. The format takes up to 1,024; the renderer draws 64 per layer (the budget, below) |
+| `protected` | Up to 4,096 rects `[x, y, width, height]` (the layer's text runs), or `"extent"`. Above 64 rects the layer protects its whole box, reported, never a validation error |
+| `feather` | Default 4 px, 0–16 (the pointer light's guard feather is 10; the helper passes the largest of the emitters that reach the layer) |
+
+Relief and Objects scenes carry them as **version 4 with `kind: "relief"`**: the `relief` material takes version 1 or
+4 (no camera), the `objects` material versions 2, 3 or 4 (camera required, studio or map). That is how versions 2
+and 3 were added (each version adds fields and the earlier ones refuse them), and it is what 2D.1 says. A version 4
+`relief` scene without emitters shades exactly as its version 1 to 3 equivalent.
+
+## Where the light is drawn
+
+**The face pool** is its own pass per layer: a Lite standalone frame-graph context (`createFrameGraphContext`) with one
+effect render task, drawn right after the layer's pass and before the layer's Instrument scene (so the parts are not lit
+twice). It covers the layer's draw rectangle (its box grown by the scene's `outset` on every side the clip does not cut,
+the relief pass's own rectangle), maps each pixel to layer px through the layer's inverse matrix (affine or tilted), and
+multiplies what is on the canvas by `1 + E`:
+
+```text
+E = Σ I · face · colour · max(z / ‖d‖, 0) / (π ‖d‖²) · clamp(1 − (‖d‖² / R²)², 0, 1)² · (reach "layer" ? a(p) : 1) · opacity
+```
+
+`a(p)` is the layer's captured alpha, read from the layer's capture, so the pointer light lights each layer's own content
+once where layers overlap and nothing beneath it. The pass is skipped (task execution off) on frames with no light. A
+frame-graph context rather than an effect renderer because Lite's per-task GPU timings only see frame graphs, and it
+registers synchronously, so it can join a frame without an asynchronous build.
+
+**Why not inside `reliefShade`:** the layer blend is straight alpha, so the layer's shading can only darken what lies
+beneath its outset (I0.3). The pool must multiply the canvas.
+
+**The specular term at Relief and Objects:** the relief shading adds, per emitter, a coloured point-light highlight on
+bevels, object sides and domes: the lobe of 2.5 (`pow(n · h, mix(160, 6, roughness)) · (1 − roughness) · mix(0.35, 1,
+metallic) · 1.2`, plus the coat lobe) with `h = normalize(l + (0, 0, 1))`, times the emitter's irradiance
+`I · colour · max(n · l, 0) / (π d²) · window` at full strength (`face` is for the face pool; parts and their projections
+take all of the light, design language section 3). It is added where the relief's own `shade` term is, so it is zero
+wherever the 2.9 guard holds, and it is multiplied by `1 − protect` inside protected rects. The point is `(p, 0)` on a
+relief bevel and `(p, mid height)` on an object. The pool already lights the diffuse part of bevels and domes.
+
+**The parts at Instrument:** one Lite clustered light container per Instrument scene with 64 point lights, created with
+the scene (Lite bakes the capacity and wires the PBR materials at `addClusteredLightContainer`); unused lights have
+intensity 0, which Lite skips. Each frame the drawn emitters are written into them in world units: position through the
+layer's world matrix, range `R · s` and intensity `I · s²` for a layer scale `s`, so the falloff in layer px matches the
+pool. A scene gets the container when it has an `emitters` field (even empty): the field's presence is part of the
+structure key, so turning the pointer light on rebuilds the scene once (its objects show at Relief for one build), and
+every later change is in place. `setMaxLights` is not used: it caps Lite's scene-light buffer (the key light and the
+fill), not clustered lights, and it is global.
+
+## Emitters in the relief binding
+
+The pool and the relief shading read the same **emitter block**, packed once per layer and frame:
+
+| vec4s | Content |
+| --- | --- |
+| 1 | emitter count, feather, protected rect count, `interior.max` |
+| 1 | the tile grid: origin and cell size over the draw rectangle, layer px |
+| 64 | protected rects |
+| 64 | per rect: the light cap and the shadow cap (the guard, below) |
+| 128 | emitters: `(x, y, z, ±R)` (negative for `reach: "layer"`), `(I · colour, face)` |
+| 72 | the 16 × 9 tiles, two 32-bit words per tile: the emitters whose reach meets the tile |
+
+The block is appended to the relief binding (1,702 → 2,032 vec4s, 32.5 KB of the 64 KB a uniform binding may hold), so
+the layer pass keeps its one binding layout; the stage material uses only the start of the binding and is unchanged.
+The pool's own binding is a 7-vec4 header (frame, draw bounds, inverse matrix rows, draw rectangle, capture grid) and the
+same block.
+
+## The guard
+
+Inside a protected rect the face's **whole** change stays within `m = interior.max`: the relief's interior factor `k`
+(2.9), the part shadows `Sₚ` and the emitter light together (2D.4). Core keeps it without evaluating the relief on the
+pool's pixels:
+
+- **Bounds of `k` per rect,** on the CPU, from the layer's face scene (for an Instrument layer, its primitives and the
+  objects drawn at Relief this frame): `k_hi = 1 + min(m, Σ positive interior offsets of the entries that overlap the
+  rect)` and `k_lo = max(1 − m, (1 − min(m, Σ negative offsets)) · (1 − min(strength, m) if a relief cast shadow can
+  reach the rect))`. Cached per face scene and rect list.
+- **Light:** inside rect `r`, `E` is capped per channel at `(1 + m) / k_hi − 1` (`m` on a plain face).
+- **Part shadows:** inside `r`, each object's face shadow is scaled (2.9's `g`, so it keeps its soft profile) so that the
+  `n` objects whose shadows reach the rect darken it together by at most `1 − (1 − m) / k_lo`.
+- Emitters only add light and shadows only take it away, so `k · (1 − Sₚ) · (1 + E)` stays in `[1 − m, 1 + m]` inside
+  every protected rect. Outside, both return to full strength over `feather` px (`1 − smoothstep(0, feather, q)`, `q` the
+  distance to the rect).
+- **`"extent"`** protects the layer's box; the outset is outside it, so a lamp near the edge still lights the page past
+  it. **More than 64 rects** protect the extent (the design language's rule), reported in `state().emitters`.
+
+**Deviation from 2D.4:** the model clamps the product `(1 − Sₚ)(1 + E)` to `[(1 − m)/k, (1 + m)/k]`; core bounds each
+side. They are equal when only light or only shadow reaches a protected pixel; with both, core is stricter (light does
+not lift a shadow inside text). The exact clamp needs `k` and `Sₚ` per pixel in the pool: the relief loop a second time
+on text pixels and the casters of every object, which a refactor of the conformance-tested shader could give later.
+
+**Not guarded by the lamp's layer:** a lower panel's text beneath another panel's outset glow. Its guard is its own
+layer's; the protected rects of other layers are not in this layer's pass. Recorded as a limit; the helper keeps lamps
+whose glow crosses an edge away from text on the panel beneath.
+
+## The budget
+
+64 emitters per layer, binned into the 16 × 9 tile mask over the layer's draw rectangle. An emitter counts when it gives
+light (strength and colour above 0) and reaches the draw rectangle: its reach margin is `√(R² − z²)` minus the distance
+from `(x, y)` to the rectangle. The renderer keeps the 64 with the largest margin (the nearest by reach, in scene order
+on ties) and drops the rest: `state().emitters.layers[].dropped` lists each dropped emitter's index and margin. Never a
+validation error, and GPU stays on. The stage has no emitter budget.
+
+## The update path
+
+| Change | Path | Work |
+| --- | --- | --- |
+| Emitter positions, colours, strengths (a lamp turns on, the pointer moves) | `handle.setEmitters` | Validate the list; next frame: tile binning, the pool's and the relief tail's uniforms, clustered light data. 0 captures, 0 capture uploads, 0 geometry updates, no rebuild |
+| Protected rects, feather, layout | `handle.update(scene)` | As any scene update; the guard's bounds are recomputed |
+| `emitters` appears in an Instrument scene | `handle.update(scene)` | One rebuild (the clustered container) |
+
+## Lifecycle
+
+The pool context belongs to its layer's pass (it reads that pass's capture texture): created the first frame the
+layer's scene has an `emitters` field, registered with the passes and ordered after its layer's pass, taken off the
+surface when the composition is unpresented, and disposed with the pass after the composition's queue fence, device
+loss or `destroyGPU`. The clustered container is a resource of its Instrument scene and goes with it. Task timings stay
+on while a pool or an Instrument layer exists.
+
+**Draw order.** Pools join item 1's documented reliance (decision 1): core permutes its own contexts in
+`getRenderingContexts` and reads the order back. If Lite refuses it, every pool is taken off the surface (the light is
+off, `state().emitters.order` names the reason), Instrument layers step down as before, and GPU stays on.
+
+## Decisions (item 2)
+
+| # | Decision | Recommendation | Alternative |
+| --- | --- | --- | --- |
+| 1 | Where the face pool is drawn | Its own pass per layer after the layer's pass and before its parts, over the draw rectangle, `dst · src + dst`; the same pass at every level | A light term in `reliefShade`: cannot brighten what lies beneath the outset (I0.3) |
+| 2 | The pass object | A standalone frame-graph context with one effect task: synchronous registration, seen by Lite's task timings, execution off on unlit frames | An effect renderer: not timed by Lite; a Lite scene: asynchronous `registerScene` |
+| 3 | How emitters reach the relief shading | An emitter block (64 emitters, 64 rects with caps, 16 × 9 tiles of two words) appended to the relief binding, packed per frame | A separate binding: a second bind-group layout for every relief pass |
+| 4 | Specular at Relief and Objects | The 2.5 lobe per emitter on bevels, sides and domes, coloured, at full strength, zero where 2.9 guards and inside protected rects | No specular (I0.3's face-only light) |
+| 5 | The guard | CPU bounds of `k` per rect; light capped and part shadows scaled so the product stays in `1 ± m`; one feather per layer; `"extent"` protects the box; more than 64 rects protect the extent | The exact clamp of 2D.4, evaluating the relief and every caster per text pixel |
+| 6 | The update path | `handle.setEmitters` swaps the list into the validated scene in place: uniform writes only | `handle.update` every frame: re-validates and repacks the scene, and recomputes the Instrument structure key |
+| 7 | The budget | 64 per layer kept by reach margin, the rest dropped with a diagnostic; the format takes 1,024 | A validation error at 65 |
+| 8 | Scene versions | Version 4 (`kind: "relief"`) carries `emitters`, `protected` and `feather` for the Relief and Objects materials | Additive fields on versions 1 to 3: changes normative versions |
+| 9 | Instrument parts | One clustered container of 64 lights per scene that has `emitters`, built with the scene, updated in place | A container sized to the emitter count: a rebuild whenever the count changes |
+| 10 | Timing | `emitterGpuMs` per layer from Lite's task timings; the clustered cost shows in `instrumentGpuMs` | Frame GPU time deltas only |
+
+## Verification (item 2)
+
+- Unit: `tests/unit/emitters.unit.test.mjs` (validation, the version rules, budget selection and its order, tile
+  binning, the guard's bounds of `k`, packing).
+- Browser: `tests/browser/core-emitters.test.mjs` on
+  [`instrument-emitters-core.html`](../../examples/playground/instrument-emitters-core.html), DPR 1 and 2, at
+  `?level=relief`, `objects` and `instrument`, headless, and a headful Canary check.
+- Regression: `core-instrument`, `ui-gpu`, the relief, objects, stage and material suites, and the I0.3 probe
+  (`ui-probe-instrument-emitters`).
+
+## Results (item 2)
+
+To be measured.
