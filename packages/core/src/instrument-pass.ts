@@ -66,6 +66,8 @@ export const INSTRUMENT_SUCCESSOR_DEFERRAL_MS = 3000;
 export interface InstrumentTestHook {
   beforeBuild?(layerId: string): Promise<void> | void;
   failStage?(layerId: string, stage: PostStage | "composite"): boolean;
+  /** Makes a scene's registration fail (after its chain is built), with (`minimal`) or without its optional stages. */
+  failRegistration?(layerId: string, minimal: boolean): boolean;
 }
 /** The chain's target, mask or composite could not be built: the layer steps down with `post`. */
 class PostBuildError extends Error {}
@@ -153,7 +155,7 @@ interface LayerState {
   /** The build in flight: its structure and a token that tells a superseded build to dispose its scene. */
   building?: { structure: string; token: object };
   /** A failed build; `post`: the chain's target, mask or composite could not be built (the `post` step-down). */
-  failed?: { structure: string; reason: string; post?: boolean };
+  failed?: { structure: string; reason: string; post?: boolean; size: string };
   status: Status;
   stepped: number[];
   steppedDown: SteppedDown[];
@@ -234,6 +236,11 @@ export function createInstrumentController(options: InstrumentControllerOptions)
   // A resize or a DPR change replaces the targets' textures when the first scene re-records; each composite then binds
   // the new ones (an effect keeps the views it was given until its textures are set again).
   const rebinds = new Set<() => void>();
+  // Shadow map textures released with their scenes, and any that could not be (N3 of the review).
+  const mapTextures = { destroyed: 0, missing: 0 };
+  // Builds running (from the build's start to its end, a retry and a timed-out build included): the shared targets are
+  // never released under one, since its scene may hold their handles or allocate them again.
+  let inFlight = 0;
   function target(name: TargetName): RenderTargetTextureResult {
     let result = targets.get(name);
     if (!result) {
@@ -301,8 +308,14 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           orthoMinZ: distance - window, orthoMaxZ: distance + window });
         key.shadowGenerator = generator;
         mapState = { ...map, biasPx: map.bias, bias: liteMapBias(map.bias, window), window, casters: 0, renders: 0, timedRenders: 0, generator };
-        // Lite 1.33 has no public disposal for a generator's map: its depth texture is released with the scene.
-        onSceneDispose(sceneContext, () => { (generator as { _depthTexture?: GPUTexture })._depthTexture?.destroy(); });
+        // Lite 1.33 has no public disposal for a generator's map: its depth texture (64 MB at 4,096²) is released with the
+        // scene through the internal field. If a Lite version renames it, that is counted and reported once, not leaked silently.
+        onSceneDispose(sceneContext, () => {
+          const texture = (generator as { _depthTexture?: GPUTexture })._depthTexture;
+          if (texture && typeof texture.destroy === "function") { texture.destroy(); mapTextures.destroyed++; return; }
+          mapTextures.missing++;
+          if (mapTextures.missing === 1) console.warn("Underglass instrument: a shadow map's texture could not be released (Babylon Lite's generator has no _depthTexture); it is left to garbage collection");
+        });
       }
       addToScene(sceneContext, key);
       // 2D.5: the fill is diffuse only and 0 unless the scene sets it; the studio is the fill.
@@ -321,6 +334,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       setEnvironmentRotation(sceneContext, Math.atan2(towards[0], -towards[2]));
       const pass = createPass(state, sceneContext, camera, scene, structure, key, mapState, minimal);
       if (!asyncPipelines) { enableAsyncShaderPipelineCompilation(engine); asyncPipelines = true; }
+      if (options.testHook?.failRegistration?.(state.id, !!minimal)) throw new Error(`the test hook fails the registration${minimal ? " of the minimal chain" : ""}`);
       // Every task of the chain is in the frame graph now, so registration prepares their pipelines inside this build.
       await (mapState ? registerSceneWithShadowSupport : registerScene)(sceneContext);
       registered = true;
@@ -852,11 +866,18 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         // A registration that fails with optional stages on is retried once with the chain's mandatory pieces only
         // (decision 13 of item 3); a failure of those is the `post` step-down.
         const optional = POST_STAGES.some(name => postFlags(scene)[name]);
+        inFlight++;
         const building = Promise.resolve(options.testHook?.beforeBuild?.(state.id)).then(() => build(state, scene, structure).catch(error => {
           if (error instanceof PostBuildError || !optional || disposed || state.building?.token !== token) throw error;
           console.error(`Underglass instrument layer ${state.id}: its post chain failed to register; building it without its optional stages: ${String(error)}`);
-          return build(state, scene, structure, `registration failed with the optional stages on: ${String(error)}`);
+          // The mandatory chain is all that is left, so its failure is the `post` step-down.
+          return build(state, scene, structure, `registration failed with the optional stages on: ${String(error)}`).catch(minimal => {
+            throw minimal instanceof PostBuildError ? minimal : new PostBuildError(`Instrument post chain could not be registered without its optional stages: ${String(minimal)}`);
+          });
         }));
+        // Once the build has ended (its scene registered and handed over or retired, or failed), a stage with no layer left
+        // releases the targets.
+        void building.then(() => undefined, () => undefined).finally(() => { inFlight--; scheduleRelease(); });
         try {
           const pass = await Promise.race([building, new Promise<never>((_, reject) => {
             timer = setTimeout(() => { timedOut = true; reject(new Error(`Instrument scene build timed out after ${INSTRUMENT_BUILD_DEADLINE_MS} ms`)); }, INSTRUMENT_BUILD_DEADLINE_MS);
@@ -886,7 +907,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
             state.pass = undefined;
             state.structure = undefined;
             const reason = `Instrument scene warm-up timed out after ${INSTRUMENT_BUILD_DEADLINE_MS} ms: the GPU queue did not catch up with its registration`;
-            state.failed = { structure, reason };
+            state.failed = { structure, reason, size: sizeKey() };
             console.error(`Underglass instrument layer ${state.id} is drawn at the Relief level: ${reason}`);
             options.requestDraw();
           }
@@ -896,7 +917,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           if (timedOut) { compile.timeouts++; void building.then(retirePass, () => undefined); }
           if (state.building?.token === token) {
             state.building = undefined;
-            state.failed = { structure, reason: String(error), ...(error instanceof PostBuildError ? { post: true } : {}) };
+            state.failed = { structure, reason: String(error), size: sizeKey(), ...(error instanceof PostBuildError ? { post: true } : {}) };
             console.error(`Underglass instrument layer ${state.id} is drawn at the Relief level: ${String(error)}`);
             options.requestDraw();
           }
@@ -916,6 +937,12 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       return options.lost.then(release);
     }).finally(() => { retirements.delete(fence); });
     retirements.add(fence);
+    scheduleRelease();
+  }
+  /** The canvas size a failed build is tied to: on another size (a resize, a DPR change) it is tried again. */
+  function sizeKey() {
+    const stage = options.stage();
+    return `${stage.width}x${stage.height}@${stage.dpr}`;
   }
 
   /** The containment of one object at the layer's current placement, cached by its geometry and the placement. */
@@ -979,6 +1006,8 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       const lensKinds = kinds.filter(kind => !kind.captured && kind.instances.some(({ object, part }) => scene.objects[object]?.parts[part]?.emitter !== undefined)).map(kind => kind.key);
       const structure = `${instrumentStructure(scene)}|${postStructure(scene, stage, lensKinds)}`;
       const matrix = similarity(input.matrix);
+      // A failed build is retried once the canvas size changes (a transient failure, a target that could not be sized).
+      if (state.failed && state.failed.size !== sizeKey()) state.failed = undefined;
       // Whole-layer step-downs, in the order of the note's ladder.
       let whole: SteppedDown[] | undefined, status: Status = "stepped-down";
       if (orderUnavailable) whole = all(scene, "order-unavailable", orderUnavailable);
@@ -1047,10 +1076,17 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       timing.enabled = false; timing.status = "disabled";
       if (!options.keepTiming?.()) void setRenderTaskGpuTimingEnabled(engine, false).catch(() => undefined);
     }
-    // ... and the shared targets are released once every retired scene that read them is gone, unless a layer came back.
-    if (!layers.size && targets.size) {
-      void Promise.all([...retirements]).then(() => { if (!layers.size && !disposed) releaseTargets(); });
-    }
+    // ... and the shared targets are released once every retired scene that read them is gone (`scheduleRelease`).
+    scheduleRelease();
+  }
+  /**
+   * Releases the shared targets when no instrument layer, no build and no registered scene is left, after every retired
+   * scene's fence; called when a layer leaves, a build ends and a scene retires, so whichever comes last releases them.
+   */
+  function scheduleRelease() {
+    const idle = () => !disposed && !layers.size && !inFlight && !scenes.size;
+    if (!idle() || !targets.size) return;
+    void Promise.all([...retirements]).then(() => { if (idle()) releaseTargets(); });
   }
   /** Releases the shared targets; a later layer allocates them again. Every scene that read them is gone. */
   function releaseTargets() {
@@ -1109,7 +1145,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
   }
   /** `state().instrument.post`: per layer the stages, the map and the GPU time per stage; the shared targets. */
   function postState() {
-    const timingOf = (entry: Timing) => ({ lastMs: entry.last, p50Ms: percentile(entry.samples, 0.5), p95Ms: percentile(entry.samples, 0.95), samples: entry.samples.length });
+    const timingOf = (entry: Timing) => ({ lastMs: entry.last, p50Ms: percentile(entry.samples, 0.5), p95Ms: percentile(entry.samples, 0.95), samples: entry.samples.length, total: entry.total });
     return {
       budgetMs: POST_STAGE_BUDGET_MS,
       targets: Object.fromEntries([...targets].map(([name, result]) => [name, { format: TARGET_FORMATS[name].format, width: result.texture.width, height: result.texture.height }])),
@@ -1165,7 +1201,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       timing: { ...timing },
       compile: { ...compile, building: !!gate },
       order: orderUnavailable ?? "core",
-      resources: { scenes: scenes.size, retiring: retirements.size, grain: grain ? 1 : 0, targets: targets.size },
+      resources: { scenes: scenes.size, retiring: retirements.size, grain: grain ? 1 : 0, targets: targets.size, mapTextures: { ...mapTextures } },
       post: postState(),
     }),
     /** Releases everything at once; the caller has fenced the GPU or the device is lost. */
