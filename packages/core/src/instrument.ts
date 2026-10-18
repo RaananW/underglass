@@ -82,9 +82,10 @@ export interface InstrumentPart {
   material: string;
   /** A cap that carries the layer's capture (2D.8); it may only travel. Not for custom parts. */
   captured?: boolean;
-  /** Glass parts (2D.6): accepted, not drawn until core work item 4. */
+  /** Glass parts (2D.6), drawn by the glass shader (`instrument-glass.ts`). */
   glass?: "lens" | "window";
   stand?: { radius: number; colour: string };
+  /** A window's finish zone (2D.6): `true` is its defaults (band 0.3, horizon 0.25). */
   finish?: boolean | { band?: number; horizon?: number };
   /** Omitted: resolved from the posed part. `null`: the part casts nothing. */
   caster?: InstrumentCaster | null;
@@ -204,8 +205,7 @@ const known = (value: Record<string, unknown>, path: string, allowed: readonly s
 /**
  * Validates a scene for the `instrument` material and returns a deep, normalized copy (defaults filled in, `t`
  * clamped to its stops). Throws on the first problem with its path, so an invalid scene changes nothing. Fields of
- * later core work items (the shadow map, the post chain, glass, the page probe) are validated and kept but not drawn
- * yet (`docs/ui-library/instrument-phase2.md`).
+ * later core work items (custom parts) are validated and kept but not drawn yet (`docs/ui-library/instrument-phase2.md`).
  */
 export function validateInstrumentScene(input: InstrumentScene): InstrumentScene {
   const scene = record(input, "");
@@ -897,18 +897,17 @@ export function instrumentFaceScene(scene: InstrumentScene, stepped: readonly nu
 }
 
 /** One part kind: one mesh and material, thin-instanced (design language section 6, *Part budgets*). */
-export interface PartKind { key: string; profile: string; material: string; captured: boolean; instances: { object: number; part: number }[] }
-/**
- * The part kinds of a scene in first-appearance order. Parts that share profile, material and `captured` are one kind.
- * Glass parts are left out until core work item 4 draws them.
- */
+export interface PartKind { key: string; profile: string; material: string; captured: boolean; glass?: "lens" | "window"; instances: { object: number; part: number }[] }
+/** The kind a part belongs to: parts that share profile, material, `captured` and glass mode are one kind (one mesh, one material). */
+export const partKindKey = (part: Pick<InstrumentPart, "profile" | "material" | "captured" | "glass">): string =>
+  `${part.profile}\u0000${part.material}\u0000${part.captured ? 1 : 0}\u0000${part.glass ?? ""}`;
+/** The part kinds of a scene in first-appearance order (glass parts are kinds of their own, drawn by the glass shader). */
 export function partKinds(scene: InstrumentScene): PartKind[] {
   const kinds = new Map<string, PartKind>();
   scene.objects.forEach((object, objectIndex) => object.parts.forEach((part, partIndex) => {
-    if (part.glass) return;
-    const captured = part.captured === true, key = `${part.profile}\u0000${part.material}\u0000${captured ? 1 : 0}`;
+    const captured = part.captured === true, key = partKindKey(part);
     let kind = kinds.get(key);
-    if (!kind) { kind = { key, profile: part.profile, material: part.material, captured, instances: [] }; kinds.set(key, kind); }
+    if (!kind) { kind = { key, profile: part.profile, material: part.material, captured, ...(part.glass ? { glass: part.glass } : {}), instances: [] }; kinds.set(key, kind); }
     kind.instances.push({ object: objectIndex, part: partIndex });
   }));
   return [...kinds.values()];
@@ -922,7 +921,7 @@ function structureOf(scene: InstrumentScene) {
   let layout = "";
   for (const object of scene.objects) {
     for (const part of object.parts) {
-      const key = part.glass ? "glass" : `${part.profile}\u0000${part.material}\u0000${part.captured ? 1 : 0}`;
+      const key = partKindKey(part);
       keys.add(key);
       layout += `${key}\u0001`;
     }
@@ -982,8 +981,8 @@ export function containmentKey(object: InstrumentObject, profiles: Record<string
 
 /** Whether a profile has its triangles: always, except a mesh reference whose file is not loaded (yet, or at all). */
 export const meshReady = (shape: InstrumentProfile): boolean => shape.type !== "mesh" || meshGeometry(shape) !== undefined;
-/** Whether a part is drawn as a part: not glass (item 4), and not a custom part waiting for (or failed on) its file. */
-export const partDrawn = (part: InstrumentPart, profiles: Record<string, InstrumentProfile>): boolean => !part.glass && meshReady(profiles[part.profile]!);
+/** Whether a part has its triangles to draw: every part does, except a custom part waiting for (or failed on) its file. */
+export const partDrawn = (part: InstrumentPart, profiles: Record<string, InstrumentProfile>): boolean => meshReady(profiles[part.profile]!);
 /** A mesh profile of a scene, by name. */
 export interface MeshReference { name: string; shape: MeshProfile }
 /** The scene's mesh profiles that are references to a file (the asset store loads these). */

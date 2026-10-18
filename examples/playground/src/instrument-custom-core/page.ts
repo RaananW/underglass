@@ -1,6 +1,6 @@
 /**
  * Core's custom parts on plain DOM (no UI framework), for `tests/browser/core-custom.test.mjs` and a headful look
- * (`docs/ui-library/instrument-phase2.md`, core work item 5). One enrolled panel of fourteen native range inputs, each with
+ * (`docs/ui-library/instrument-phase2.md`, core work item 5). One enrolled panel of fifteen native range inputs, each with
  * an Instrument object of a base plate and a custom part (inline meshes and references to `public/custom/parts.glb`,
  * three of them failing on purpose; see `scene.ts`), a heading and a caption under each: the text the contrast guard
  * protects. The panel's material is `{ kind: "instrument", scene }` through the public `setMaterial`; a control's value

@@ -323,7 +323,7 @@ target shared by every instrument layer of the engine, runs its post chain there
 chain and lays the result over the face in one composite multiplied by a mask of its
 objects' bounds and the layer's clip and by the layer's opacity; captured text never
 passes through a stage. A PCF shadow map from the key light shades parts on parts and
-never the face.
+never the face. Glass parts are drawn by a WGSL shader of their own (`instrument-glass.ts`) in that same target: it loads the layer's capture and traces the model's 2D.6, with an exact-only twin of each window in the caps target so that text under glass is never filtered. Metals and coats reflect the layer's page through a cube texture that `capture-probe.ts` fills from the capture on the canvas's configured device and Lite binds as a local environment; it is refreshed on a capture upload or a texture replacement, and on a move of the layer at most once per 100 ms with a trailing refresh (the placement is quantised to a quarter texel), never otherwise, and a probe or glass that cannot be built is left out with a diagnosis, GPU on.
 
 **Custom parts** (`mesh` profiles, [design note](ui-library/instrument-phase2.md#core-work-item-5-custom-parts)) add three
 GPU-free modules: `instrument-mesh.ts` validates a mesh, winds it against its normals and measures its footprint,

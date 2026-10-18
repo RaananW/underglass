@@ -30,6 +30,9 @@ const directory = evidenceDirectory("core-post");
 const viewport = { width: 1920, height: 1080 };
 const healthy = /^Current content=drawable owning WebGPU canvas/;
 const OFF = { smaa: false, bloom: false, taa: false, contact: false, ssgi: false };
+// How much darker (levels) the map makes a pixel for it to count in the band's connectedness check (it was 6; with the page probe on,
+// a plinth's penumbra pixels fall a few levels under 6 while the band's depth is unchanged: the depth floors below check strength).
+const DARKER = 3;
 const ALL = { smaa: true, bloom: true, taa: true, contact: true, ssgi: true };
 
 /** Signed distance from a client point to a rounded box, negative inside. */
@@ -333,13 +336,19 @@ for (const dpr of [1, 2]) test(`post chain: text safety, the clip, hits, exact o
     await call("setMap", { darkness: 1 });
     const unmapped = await shot(page, `${directory}/map-off-dpr${dpr}.png`);
     await call("setMap", undefined);
+    // The parts' coverage: the same parts lit by nothing are near black, never the face's colour (the colour of a part pixel can
+    // equal the face's by chance, with the page probe a polished part reflects the light face).
+    await call("setDark", true);
+    const mask = await shot(page);
+    await call("setDark", false);
     {
       const controls = await call("controls");
       let changed = 0, outsideParts = 0, outsideControls = 0;
       for (let offset = 0, index = 0; offset < parts.data.length; offset += 4, index++) {
         if (same(parts, unmapped, offset)) continue;
         changed++;
-        if (same(parts, face, offset)) outsideParts++;
+        // A changed pixel is a face pixel only where the parts' coverage mask (the parts lit by nothing) shows the face.
+        if (same(mask, face, offset)) outsideParts++;
         const point = { x: (index % parts.width + 0.5) / dpr, y: (Math.floor(index / parts.width) + 0.5) / dpr };
         if (!controls.some(control => rounded(point, control) <= 0)) outsideControls++;
       }
@@ -349,20 +358,30 @@ for (const dpr of [1, 2]) test(`post chain: text safety, the clip, hits, exact o
         for (let y = Math.ceil(box.y * dpr); y < Math.floor((box.y + box.height) * dpr); y++) for (let x = Math.ceil(box.x * dpr); x < Math.floor((box.x + box.width) * dpr); x++) {
           if (exclude && inside({ x: (x + 0.5) / dpr, y: (y + 0.5) / dpr }, exclude)) continue;
           const offset = (y * parts.width + x) * 4;
-          if (luminance(unmapped, offset) - luminance(parts, offset) >= 6) set.add(y * parts.width + x);
+          if (luminance(unmapped, offset) - luminance(parts, offset) >= DARKER) set.add(y * parts.width + x);
         }
         return set;
+      };
+      // How deep the map's band is: the largest luminance drop it makes in a box, and the box's mean map-off luminance.
+      const band = (box, exclude) => {
+        let depth = 0, sum = 0, count = 0;
+        for (let y = Math.ceil(box.y * dpr); y < Math.floor((box.y + box.height) * dpr); y++) for (let x = Math.ceil(box.x * dpr); x < Math.floor((box.x + box.width) * dpr); x++) {
+          if (exclude && inside({ x: (x + 0.5) / dpr, y: (y + 0.5) / dpr }, exclude)) continue;
+          const offset = (y * parts.width + x) * 4;
+          depth = Math.max(depth, luminance(unmapped, offset) - luminance(parts, offset)); sum += luminance(unmapped, offset); count++;
+        }
+        return { depth: Math.round(depth * 10) / 10, base: Math.round(sum / count * 10) / 10 };
       };
       const thins = cases.filter(entry => entry.kind === "thin").map(entry => {
         // The plinth beside the thin plate (its top grown by 1 px is left out), inset 1 px from the plinth's edge.
         const shadow = darker(grow(entry.plate, -1), grow(entry.top, 1));
         const sizes = components(shadow, parts.width);
-        return { id: entry.id, pixels: shadow.size, components: sizes.length, sizes: sizes.slice(0, 4), plinth: entry.plate, top: entry.top,
+        return { id: entry.id, ...band(grow(entry.plate, -1), grow(entry.top, 1)), pixels: shadow.size, components: sizes.length, sizes: sizes.slice(0, 4), plinth: entry.plate, top: entry.top,
           ...(sizes.length > 1 ? { at: [...shadow].map(index => [index % parts.width, Math.floor(index / parts.width)]) } : {}) };
       });
       const bats = cases.filter(entry => entry.kind === "bat").map(entry => {
         const shadow = darker(grow(entry.plate, -1));
-        return { id: entry.id, t: entry.t, pixels: shadow.size };
+        return { id: entry.id, t: entry.t, ...band(grow(entry.plate, -1)), pixels: shadow.size };
       });
       report.map = { changed, outsideParts, outsideControls, thins, bats };
       expect(changed, "the map changes part pixels").toBeGreaterThan(500);
@@ -370,7 +389,13 @@ for (const dpr of [1, 2]) test(`post chain: text safety, the clip, hits, exact o
       expect(outsideControls, "the map changes nothing outside the controls").toBe(0);
       expect(thins.length, "thin plates checked").toBeGreaterThan(3);
       for (const thin of thins) expect([thin.id, thin.components], `${thin.id}: its mapped shadow is one connected component (${JSON.stringify(thin)})`).toEqual([thin.id, 1]);
+      // The band's strength, not only its connectedness: the largest luminance drop the map makes on each plinth and plate.
+      // Measured on the same page, per plinth and plate, with the page probe on and off (`?page=off`): thin plinths 13 to 41
+      // (DPR 1) and 27 to 42 (DPR 2) on, 14 to 41 and 28 to 42 off; bats' plates 40 to 46 on, 39 to 47 off. The probe moves a band's
+      // depth by a few levels either way, so the floors below are the probe-on minimums less a margin.
+      for (const thin of thins) expect(thin.depth, `${thin.id}: the map darkens the plinth by at least 10 levels at its deepest`).toBeGreaterThanOrEqual(10);
       expect(bats.length, "bats checked").toBeGreaterThan(3);
+      for (const bat of bats) expect(bat.depth, `${bat.id}: the lever's shadow darkens the plate by at least 35 levels at its deepest`).toBeGreaterThanOrEqual(35);
       for (const bat of bats) expect(bat.pixels, `${bat.id}: the lever and ball shade the plate`).toBeGreaterThan(10 * dpr * dpr);
     }
     await call("setPost", undefined); await call("setShadows", true);

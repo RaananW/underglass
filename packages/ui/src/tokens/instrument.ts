@@ -86,7 +86,7 @@ export interface InstrumentPart {
   glass?: "lens" | "window";
   /** Lenses only: the polished disc the lens stands on, centred on the part at the height of its `at`. */
   stand?: { radius: number; colour: string };
-  /** `true`: finish zones on a captured cap (2.6); `{ band, horizon }`: a window's finish band (2D.6). */
+  /** `true`: finish zones on a captured cap (2.6), and on a window the band and horizon with their defaults; `{ band, horizon }`: a window's finish zone (2D.6). */
   finish?: boolean | { band?: number; horizon?: number };
   /** Omitted: resolved from the posed part (`partCaster`). `null`: the part casts nothing on the face. */
   caster?: InstrumentCaster | null;
@@ -1520,14 +1520,16 @@ export function glassSample(scene: InstrumentScene, captured: CapturedColour, hi
   const fresnel = Math.max(Fr(n) - Fr(flat), 0), transmitted = absorb(12 * (1 - n[2]));
   let col = T.map((c, i) => mixValue(c * transmitted[i]!, strength * glass.reflection * R[i]!, fresnel)) as Vec3;
   let zone = false;
-  if (typeof part.finish === "object") {
+  if (part.finish) {
+    // `finish: true` is the zone with its defaults (band 0.3, horizon 0.25).
+    const finish = typeof part.finish === "object" ? part.finish : {};
     // The window's top finish zone: v from its top, u from its edge on the key light's side, as fractions of its size.
     const caster = partCaster({ ...part, caster: undefined }, scene.profiles[part.profile]!, object.t ?? 0);
     if (caster) {
       const [left, top, width, height] = caster.rect, L = lightVector(scene.light.azimuth, scene.light.elevation);
       const v = (y - top) / height, u = L[0] < 0 ? (x - left) / width : (left + width - x) / width;
-      const band = (part.finish.band ?? 0.3) * smoothstep(0.03, 0.06, v) * (1 - smoothstep(0.06, 0.26, v)) * (1.25 - 0.6 * u);
-      const horizon = (part.finish.horizon ?? 0.25) * (smoothstep(0.25, 0.27, v) - smoothstep(0.28, 0.31, v));
+      const band = (finish.band ?? 0.3) * smoothstep(0.03, 0.06, v) * (1 - smoothstep(0.06, 0.26, v)) * (1.25 - 0.6 * u);
+      const horizon = (finish.horizon ?? 0.25) * (smoothstep(0.25, 0.27, v) - smoothstep(0.28, 0.31, v));
       zone = band > 0 || horizon > 0;
       col = col.map((c, i) => c * (1 - horizon) + [0.86, 0.9, 0.95][i]! * band) as Vec3;
     }

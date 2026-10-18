@@ -9,10 +9,9 @@
  *   2D.10) at the device pixel floor(at · dpr);
  * - `unchanged`: identical pixels in every listed variant; `presence`: the share of part pixels a feature changes;
  * - `ratio`: mapped shadow against the map off; `relief`: the objects are stepped down and reported.
- * A check that needs a part of 2D that core does not draw yet (glass: core work item 4,
- * `docs/ui-library/instrument-phase2.md`) is run and recorded as
- * `pending` with the item it waits for, and is not asserted. Every other check is. The pass rate per check kind, the
- * worst deviations and every sample go to the `ui-instrument-conformance` evidence directory.
+ * Every check is asserted (glass, core work item 4, included; a check that needs a part core does not draw would be recorded as
+ * `pending` with the item it waits for). The pass rate per check kind, the worst deviations and every sample go to the
+ * `ui-instrument-conformance` evidence directory.
  */
 import { test, expect } from "../helpers/current-browser.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -47,22 +46,10 @@ function boxDistance(x, y, [left, top, width, height], radius = 0) {
 const boundsOf = object => object.bounds ?? { rect: object.rect, radius: 0 };
 
 /**
- * The core work item a check waits for, or undefined when core draws everything it needs: glass and the page (item 4).
- * Emitters and the guard's face factor (item 2), the shadow map and the post chain (item 3) are drawn.
+ * The core work item a check waits for, or undefined when core draws everything it needs. Since core work item 4 (glass and
+ * the page probe) every check of the suite is asserted; the hook stays for a future version of the model.
  */
-function pending(entry, check, sample) {
-  const scene = variantOf(entry, check.variant);
-  if (check.kind === "presence") {
-    if (/dispersion|lens|window/.test(check.feature)) return "glass (core item 4)";
-    return undefined;
-  }
-  if (sample?.source === "glass") return "glass (core item 4)";
-  if (check.kind === "sampled") {
-    const object = scene.objects.find(item => item.id === sample.object), part = object.parts[sample.part];
-    if (part.glass) return "glass (core item 4)";
-  }
-  return undefined;
-}
+const pending = (_entry, _check, _sample) => undefined;
 
 async function open(browser, dpr) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: dpr });

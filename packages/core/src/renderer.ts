@@ -624,7 +624,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     if (!any && !instrument?.active()) return;
     if (!instrument) {
       const lost = observer.lost;
-      instrument = createInstrumentController({ engine, queue: queue as unknown as GPUQueue, lost, stage: () => options.size(),
+      instrument = createInstrumentController({ engine, queue: queue as unknown as GPUQueue, device: () => configuredDevice(output), lost, stage: () => options.size(),
         texture: id => layers.find(layer => layer.id === id)?.texture,
         preparation: () => preparation, onMeasure: options.onMeasure, testHook: options.instrumentTestHook,
         keepTiming: () => lightTiming.enabled,
@@ -642,7 +642,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       const matrix = new DOMMatrix().translate(shift, 0).multiply(layer.matrix());
       return { id: layer.id, scene: material?.kind === "instrument" ? material.scene : undefined, matrix,
         clip: layer.clip?.(matrix) ?? { x: 0, y: 0, width: layer.extent.width, height: layer.extent.height },
-        extent: layer.extent, opacity: layer.opacity(), texture: layer.texture, content: layer.contentExtent,
+        extent: layer.extent, opacity: layer.opacity(), texture: layer.texture, revision: metrics.perLayer[layer.id]?.uploads ?? 0, content: layer.contentExtent,
         ...(lightFrame.has(layer.id) ? { lights: lightFrame.get(layer.id)!.selection } : {}) };
     }));
   }

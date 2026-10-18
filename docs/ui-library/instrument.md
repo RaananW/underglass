@@ -317,8 +317,10 @@ Each item is its own PR with GPU tests, in order:
    the helper rewrites each frame, through the one call this step adds (`handle.setEmitters`, uniform writes only).
 3. **Done** ([design note](instrument-phase2.md#core-work-item-3-shadows-and-the-post-chain)). **Shadows and post chain:** contact shadows, the per-layer PCF map from the key light masked to parts, TAA and
    bloom on the mesh pass.
-4. **Reflections and glass over the capture:** the layer's capture as a local environment probe, and transmission
-   that refracts it.
+4. **Done** ([design note](instrument-phase2.md#core-work-item-4-the-capture-probe-and-glass)). **Reflections and glass over the capture:** the layer's
+   capture as a local environment probe for the PBR parts (a cube per layer, refreshed on capture, texture or
+   placement changes), and glass as a custom shader that traces the model's 2D.6 over the capture (Lite's transmission
+   and cube sampling in shader materials are unusable, L6 and L12), with text under windows exact.
 5. **Done** ([design note](instrument-phase2.md#core-work-item-5-custom-parts)). **Custom parts:** a `mesh` profile (inline
    triangles or a glB/glTF reference) and a `custom` part kind in the scene format, validated, wound to core's convention,
    contained on the real vertices and budgeted like the parametric parts. Core loads references outside any frame

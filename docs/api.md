@@ -563,13 +563,15 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
 | `extent`, `outset`, `backdrop`, `light`, `bevel`, `shadow.strength`, `interior`, `state`, `focus`, `primitives` | The face, shaded by core's relief pass as version 1; `light` adds `intensity` (1.6) and `ambient` (0: the studio is the fill) |
 | `camera` | Required: `distance` (`D`, at least 100) and `vanish`; the vanishing point is drawn at the canvas centre |
 | `environment` | Required: `{ source: "studio", strength (0..3), studio? }`, the studio generated in code and turned to the key light |
-| `materials` | At most 16 recipes: `base` (`colour`, `roughness`, `metallic`, `direct`), `coat`, `reflectance` (dielectric F0 only), `emissive` (`strength`, `colour`), `sheen`, `iridescence`, `brush` with a hairline `grain`; `glass`, `dispersion`, `subsurface` validated, not drawn yet |
+| `materials` | At most 16 recipes: `base` (`colour`, `roughness`, `metallic`, `direct`), `coat`, `reflectance` (dielectric F0 only), `emissive` (`strength`, `colour`), `sheen`, `iridescence`, `brush` with a hairline `grain`; `glass` (`ior`, `tint`, `absorption`, `reflection`) and `dispersion` for glass parts; `subsurface` validated, not drawn yet |
 | `profiles` | At most 64 shapes by name: `lathe` (`points: [[r, z, nr, nz], …]`, `segments`), `prism` (`width`, `length`, `radius`, `height`, `taper`, `chamfer`), `extrude` (`outline: [[x, z], …]`, `width`), `mesh` (explicit triangles, inline or a glB/glTF reference: [custom parts](#custom-parts)) |
-| `objects` | At most 256 (with `primitives`, 256 in all): `{ id, rect, bounds: { rect, radius }, t (clamped to 0..1), parts, relief }`. A part is `{ kind, profile, at, pose: { from, to }, material, captured, caster, state }`; a pose mixes `travel`, `slide`, `turn` and `tilt` about a fixed `axis` and `pivot`; only parts that travel may be `captured` |
+| `objects` | At most 256 (with `primitives`, 256 in all): `{ id, rect, bounds: { rect, radius }, t (clamped to 0..1), parts, relief }`. A part is `{ kind, profile, at, pose: { from, to }, material, captured, glass, stand, finish, caster, state }`; a pose mixes `travel`, `slide`, `turn` and `tilt` about a fixed `axis` and `pivot`; only parts that travel may be `captured` |
 | `emitters`, `protected`, `feather` | Lights and the guard, as for every level ([emitters](#emitters-and-the-pointer-light)); the parts are lit by Babylon Lite clustered lights |
 | `shadow.map` | The PCF map of parts on parts: `{ size: 2048 | 4096, bias (world px), darkness (0..1) }`, default `{ 4096, 1.95, 0.1 }`, drawn when omitted; `darkness: 1` draws no map |
 | `post` | `{ smaa, bloom, taa, contact, ssgi }`, booleans, default `true`, `true`, `false`, `false`, `false` (the defaults when omitted) |
-| a part's `emitter` | An index into `emitters`: the part is that emitter's lens and feeds the bloom while the emitter gives light |
+| a part's `emitter` | An index into `emitters`: the part is that emitter's lens and feeds the bloom while the emitter gives light; on a glass part the lens also glows through its glass |
+| a part's `glass` | `"lens"` or `"window"`: the part is drawn by the glass shader (below). A lens may have a `stand` (`{ radius, colour }`, the polished part it stands on, which its reflection sees); a window may have a `finish` zone (`true`: band 0.3, horizon 0.25, or `{ band, horizon }`) |
+| `environment.page` | `{ enabled, size, height }`, on by default (512, 300): the layer's page cube for its metals and coats (below); `enabled: false` leaves the studio alone |
 
 - **Drawing.** Each instrument layer has a Lite scene on the shared engine, drawn right after the layer's pass:
   analytic face shadows of the parts; then the parts (thin-instanced per kind, GPU-culled) into an offscreen target with
@@ -581,6 +583,8 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
   existing kinds. New profiles, materials, part kinds, a new light or environment, new `post` flags or `shadow.map`, or
   a stage larger than the map's depth window (a half-diagonal past 3,840 px) rebuild the scene; meanwhile the layer
   draws its objects at the Relief level.
+- **Glass** (core work item 4) is a custom shader, not Lite's transmission: per pixel it loads the layer's capture and traces Rendering Model 2D.6 exactly. A lens refracts the capture in at its dome and out at its flat bottom, one index of refraction per colour channel (`dispersion`), and a window shifts the capture against a flat pane; both add the Fresnel reflection of the studio, of the lens's `stand` and of the face, tinted and absorbed by `glass.tint` and `glass.absorption`. Text under a window, inside the scene's `protected` rects grown by 2 px, and a window's flat region outside its finish zone are the capture texel: for opaque texels a twin of the window in the caps target keeps SMAA from touching them, and translucent texels (alpha below 1) follow the face pass. Glass is drawn in the same target as the other parts, so the chain, the clip and the opacity apply; it neither casts into nor receives from the shadow map, casts on the face like any part unless its `caster` is `null`, and is not lit by the clustered lights (a lit lens glows through itself). Glass roughness is not drawn. If the glass cannot be built, the glass parts are left out (the face shows through) and `layers[].glass` reads `fallback`.
+- **The page probe.** Each layer with `environment.page` on holds a cube texture (`size` texels per face, a mip chain, 16.8 MB at 512) filled on the GPU from its capture and the studio, which Lite binds as the specular environment of the layer's PBR materials with box projection: metals and coats reflect the faceplate print and neighbouring controls, and the studio where the page does not reach. It is refreshed at once when the layer's capture is uploaded again or its texture is replaced, and when the layer moves (its placement quantised to a quarter of the cube's texel footprint, about 0.29 px at 512) at most once per 100 ms while it keeps moving or after a resize or DPR change that keeps the capture texture (a replaced texture refreshes at once), with one more when it settles; never otherwise (poses, emitters and idle frames refresh nothing); at most four layers per stage hold one (`state().instrument.probes.budget`), the others reflect the studio alone with `layers[].probe.status: "budget"`. A probe that cannot be built is left out the same way (`status: "failed"` with its `reason`), GPU on; one whose refresh throws turns the page off and the layer is rebuilt without it (the cube is released, the budget slot is free for the next build).
 - **The shadow map** is a PCF map from the key light, its depth window centred on the stage, the bias given in world px.
   Every part casts and receives it except captured caps; the face never receives it. It is rendered again only in a
   frame whose parts move.
@@ -594,7 +598,7 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
 - **Diagnostics.** `state().instrument` lists each layer's `status` (`ready`, `pending`, `stepped-down`, `failed`),
   objects, parts, drawn parts, kinds, `steppedDown` entries (`{ object, reason, part?, inset?, overshoot?, detail? }`,
   reasons `containment`, `budget`, `compile`, `pending`, `transform`, `order-unavailable`, `post`), warnings and GPU time
-  (`lastMs`, `p50Ms`, `p95Ms`); the stage's parts; the timing status; and the compile counters (builds, failures,
+  (`lastMs`, `p50Ms`, `p95Ms`); each layer's `probe` (`status` `on`, `off`, `budget` or `failed` with `reason`; with a probe its `size`, `bytes`, `refreshes` and the GPU time of the refreshes) and `glass` (`status` `none`, `on` or `fallback` with `error`); `state().instrument.probes` (`budget`, `live`, `builds`, `failures`, `refreshes`, `bytes`); the stage's parts; the timing status; and the compile counters (builds, failures,
   deferred successor deadlines). `state().instrument.post` lists per layer each stage's status (`on`, `off`, `idle`
   for bloom with no lit lens, `failed` with its `error`), the map (`size`, `biasPx`, `bias` in Lite's units, `darkness`,
   `window`, `casters`, `renders`: the controller's count of frames that flushed a caster, an estimate of Lite's refresh rule,
@@ -617,8 +621,8 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
 
 A `mesh` profile is a part of any shape ([design note](ui-library/instrument-phase2.md#core-work-item-5-custom-parts), Rendering
 Model 2D.2). A part uses it with `kind: "custom"` (or the kind of the part it replaces) and keeps everything a parametric
-part has: `material` (the scene's recipe, so themes apply), `at`, `pose`, `caster`, `emitter`, `finish`, `state`; it carries
-no `captured` content and no `stand`. Units are the profile's: part-local px, x right, y down, z up from the face.
+part has: `material` (the scene's recipe, so themes apply), `at`, `pose`, `caster`, `emitter`, `finish`, `state` and `glass` (the
+glass shader draws the mesh); it carries no `captured` content and no `stand`. Units are the profile's: part-local px, x right, y down, z up from the face.
 
 ```ts
 profiles: {

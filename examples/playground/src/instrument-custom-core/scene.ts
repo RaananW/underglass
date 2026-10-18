@@ -11,6 +11,7 @@
  *   box without the cap on a derived caster's height;
  * - `lamp`: the dome of `dense` as the lens of an emitter (`emitter: 0`): its glow copy takes the file's triangles too, and the
  *   emitter lights the lens (clustered lights) and blooms inside its box, with no light on the face (`face: 0`);
+ * - `glass-dome`: the same dome as a glass lens (`glass: "lens"`): the glass shader refracts the capture through the file's triangles;
  * - `prism-ref`: the parametric prism the `block` mesh imitates, for the tops-are-lit comparison.
  * Nothing here is a core API: it is what an application (or the Strata helper) writes.
  */
@@ -19,7 +20,7 @@ import type { InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentRec
 type Vec3 = [number, number, number];
 export const CAMERA_DISTANCE = 2400;
 export const GLB = "/custom/parts.glb";
-export const SPECS = ["bar-inline", "disc-inline", "cap", "lever", "block", "dense", "slab", "long-bar", "missing", "malformed", "wrong-scale", "prism-ref", "tall-cap", "lamp"] as const;
+export const SPECS = ["bar-inline", "disc-inline", "cap", "lever", "block", "dense", "slab", "long-bar", "missing", "malformed", "wrong-scale", "prism-ref", "tall-cap", "lamp", "glass-dome"] as const;
 export type Spec = (typeof SPECS)[number] | "cap-lathe";
 /** The control's box edge, px. */
 export const BOX = 100;
@@ -89,6 +90,7 @@ export function modelOf(spec: Spec): Model {
     case "wrong-scale": return { profile: glb("Cap", [-18.5, -18.5, 0], [18.5, 18.5, 10.6], { scale: 3 }), height: 10.6 };
     case "tall-cap": return { profile: glb("Cap", [-37, -37, 0], [37, 37, 21.2], { scale: 2 }), height: 21.2, pose: turn };
     case "lamp": return { profile: glb("Dense", [-20.5, -20.5, 0], [20.5, 20.5, 8.1]), height: 8.1 };
+    case "glass-dome": return { profile: glb("Dense", [-20.5, -20.5, 0], [20.5, 20.5, 8.1]), height: 8.1 };
     case "cap-lathe": return { profile: capLathe, height: 10.5, pose: turn };
     case "prism-ref": return { profile: { type: "prism", width: 24, length: 24, radius: 0, height: 6 }, height: 6, pose: { from: { travel: 0 }, to: { travel: -1.5 } } };
   }
@@ -101,6 +103,7 @@ export const materials: Record<string, InstrumentRecipe> = {
   matte: { base: { colour: "#c8ccd4", roughness: 0.55 } },
   pin: { base: { colour: "#101012", roughness: 0.9 } },
   lamp: { base: { colour: "#ffd9a0", roughness: 0.3 }, emissive: { strength: 1.2, colour: "#ffb347" } },
+  glass: { base: { roughness: 0.05 }, glass: { ior: 1.5, tint: "#d6ede6", absorption: 0.03, reflection: 1.5 } },
 };
 
 export interface SceneOptions {
@@ -124,8 +127,8 @@ export function objectOf(id: string, spec: Spec, rect: [number, number, number, 
   const parts: InstrumentPart[] = [{ kind: "plate", profile: name, at: [cx, cy, 0], material: "base", caster: null }];
   if (options.custom) {
     profiles[spec] = model.profile;
-    parts.push({ kind: model.profile.type === "mesh" ? "custom" : "cap", profile: spec, at: [cx, cy, 2], material: spec === "lamp" ? "lamp" : ["block", "prism-ref", "bar-inline", "disc-inline"].includes(spec) ? "matte" : "metal",
-      ...(emitter !== undefined ? { emitter } : {}),
+    parts.push({ kind: model.profile.type === "mesh" ? "custom" : "cap", profile: spec, at: [cx, cy, 2], material: spec === "lamp" ? "lamp" : spec === "glass-dome" ? "glass" : ["block", "prism-ref", "bar-inline", "disc-inline"].includes(spec) ? "matte" : "metal",
+      ...(emitter !== undefined ? { emitter } : {}), ...(spec === "glass-dome" ? { glass: "lens" as const } : {}),
       ...(model.pose ? { pose: model.pose } : {}), ...(options.casters ? (options.caster !== undefined ? { caster: options.caster } : {}) : { caster: null }) });
   }
   return { id, rect, bounds: { rect, radius: 0 }, t, parts, relief: { face: "raised", rect, radius: 4, height: 0, material: "base" } };
