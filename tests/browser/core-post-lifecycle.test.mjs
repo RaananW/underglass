@@ -150,6 +150,7 @@ test("post chain: a layer added and removed beside two live layers keeps the tar
     await call("cancel", "clipped");
     await counts(call);
     report.removed = { layers: (await call("instrument")).layers.map(layer => [layer.id, layer.status]), targets: Object.keys((await call("post")).targets), clip: await outsideControls(call, page, 1) };
+    expect((await call("instrument")).layers.length, "the removed layer stays removed through the pixel check").toBe(2);
     expect(report.removed.layers, "the two live layers draw").toEqual([["lower", "ready"], ["upper", "ready"]]);
     expect(report.removed.targets.length, "the targets stay while layers use them").toBeGreaterThan(3);
     expect(report.removed.clip.outside, "nothing outside the controls").toBe(0);
@@ -159,6 +160,7 @@ test("post chain: a layer added and removed beside two live layers keeps the tar
     report.restored = { layers: (await call("instrument")).layers.map(layer => [layer.id, layer.status]), clip: await outsideControls(call, page, 1) };
     expect(report.restored.layers.map(([, status]) => status), "the layer comes back").toEqual(["ready", "ready", "ready"]);
     expect(report.restored.clip.outside, "nothing outside the controls").toBe(0);
+    expect(report.restored.clip.changed, "the restored layer draws its parts again").toBeGreaterThan(report.removed.clip.changed);
     // Reduced motion: the chain is unchanged and frames still draw.
     await page.emulateMedia({ reducedMotion: "reduce" });
     report.reduced = await call("idle", 30);

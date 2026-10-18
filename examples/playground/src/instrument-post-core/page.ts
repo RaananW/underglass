@@ -185,8 +185,10 @@ const faceOnly = new Set<string>();
 const sceneOf = (panel: HTMLElement) => panelScene(panel, theme, stage(), pressed,
   { casters: options.casters, objects: options.meshes && !faceOnly.has(panel.id), lights: options.lights, post: options.post, map: options.map });
 /** Rebuilds a panel's scene from the DOM and hands it to core (`setMaterial` once, then `update`). */
+// Panels whose material is cancelled (`api.cancel`) until `api.restore`.
+const cancelled = new Set<string>();
 function refresh(panel: HTMLElement) {
-  if (options.plain) {
+  if (options.plain || cancelled.has(panel.id)) {
     handles.get(panel.id)?.cancel();
     handles.delete(panel.id);
     return;
@@ -401,8 +403,8 @@ const api = {
     await settle();
   },
   /** Ends one panel's material (`cancel`), or sets it again. */
-  async cancel(id: string) { handles.get(id)?.cancel(); handles.delete(id); await settle(); },
-  async restore(id: string) { refresh(panels().find(panel => panel.id === id)!); await settle(); },
+  async cancel(id: string) { cancelled.add(id); handles.get(id)?.cancel(); handles.delete(id); await settle(); },
+  async restore(id: string) { cancelled.delete(id); refresh(panels().find(panel => panel.id === id)!); await settle(); },
   setFailRegistration(mode: "optional" | "all" | null) { failRegistration = mode; },
   async disable() { await controller.disable(); return counts(); },
   async enable() { await controller.enable(); await settle(); return counts(); },
