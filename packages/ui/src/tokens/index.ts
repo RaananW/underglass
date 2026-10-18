@@ -33,3 +33,19 @@ export { buildConformance, buildObjectsConformance, buildSceneConformance, captu
 export { backdropColour, environmentColumns, environmentRows, environmentSample, particleAt, particleOrder, shadeStage, stageParticleBudget, validateEnvironmentMap, validateStageScene } from "./stage.ts";
 export type { EnvironmentMap, StageIssue, StageParticle, StageScene } from "./stage.ts";
 export type { CapturePaint, ConformanceCase, ConformanceSample, ConformanceSuite } from "./conformance.ts";
+export {
+  BOUNDS_TOLERANCE, CAMERA_FLOOR, CONTAINMENT_MARGIN, ENVIRONMENT_SAMPLES, INSTRUMENT_EMITTERS, INSTRUMENT_MATERIALS, INSTRUMENT_OBJECTS, INSTRUMENT_OBJECT_PARTS,
+  INSTRUMENT_PARTS_PER_LAYER, INSTRUMENT_PROFILES, INSTRUMENT_PROTECTED, INSTRUMENT_SCENE_PARTS, InstrumentSceneError, REFERENCE_STAGE, STUDIO_DEFAULTS,
+  bindingVertex, boxDistance, boxForTravel, cameraDistance, capColour, captureTexture, drift, emitterTerm, enc, faceEmitters, faceFactor, glassSample,
+  instrumentFaceScene, lin, mapShadowed, multiply, objectContained, partCaster, partColour, partHit, partKinds, partMatrix, partShadow, partTerms,
+  posedVertices, poseAt, poseMatrix, profileBounds, profileHeight, profileMesh, project, protectedDistance, rotate, shadeFace, shadeInstrument, shadePart,
+  steppedDown, studioHdr, studioRadiance, studioRotation, transform, travelFootprint, travelSteps, validateInstrumentScene,
+} from "./instrument.ts";
+export type {
+  Box, FaceFactor, GlassSample, InstrumentCaster, InstrumentEmitter, InstrumentObject, InstrumentPart, InstrumentPoint, InstrumentPose, InstrumentProfile,
+  InstrumentRecipe, InstrumentScene, Matrix, ObjectContainment, PartHit, PartKind, PartMesh, PartShadingOptions, PartTerms, StudioTokens, TravelVertex, Vec2, Vec3,
+} from "./instrument.ts";
+export { applyVariant, buildInstrumentConformance, instrumentCases, instrumentExpectations, instrumentScales, instrumentTolerance } from "./instrument-conformance.ts";
+export type { ExactSample, InstrumentCase, InstrumentCheck, InstrumentSuite, InstrumentVariant, RatioSample, SampledSeed, ScaledColour } from "./instrument-conformance.ts";
+export { applyCharacter, characterNames, characterOf, defaultCharacter, instrumentSettings, isProvisional } from "./character.ts";
+export type { AppliedCharacter, CharacterInfo, InstrumentSettings, StrataCharacter } from "./character.ts";

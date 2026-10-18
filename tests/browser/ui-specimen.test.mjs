@@ -52,9 +52,9 @@ test("the Strata specimen passes axe in every theme and under forced colours", a
     await page.evaluate(() => { document.documentElement.dataset.strataMode = "face"; });
     const face = await new AxeBuilder({ page }).withTags(tags).analyze();
     expect(summary(face.violations), `axe in the ${theme} theme, face mode`).toEqual([]);
-    // Selects draw their chevron with background gradients, and a fader's numerals lie under its transparent native
-    // input (one control covers the track), so their contrast is measured on decoded pixels.
-    const undecided = face.incomplete.filter(result => result.id === "color-contrast").map(result => ({ ...result, nodes: result.nodes.filter(node => !/ug-select|ug-combobox|ug-date-picker|ug-fader__mark|#set-|#spec-size|#spec-fruit|#spec-due/.test(node.html + node.target.join(" "))) })).filter(result => result.nodes.length);
+    // Selects draw their chevron with background gradients, and a knob's or a fader's numerals lie under its transparent
+    // native input (one control covers the dial or the track), so their contrast is measured on decoded pixels.
+    const undecided = face.incomplete.filter(result => result.id === "color-contrast").map(result => ({ ...result, nodes: result.nodes.filter(node => !/ug-select|ug-combobox|ug-date-picker|ug-knob__mark|ug-fader__mark|#set-|#spec-size|#spec-fruit|#spec-due/.test(node.html + node.target.join(" "))) })).filter(result => result.nodes.length);
     expect(summary(undecided), `undecided contrast in the ${theme} theme`).toEqual([]);
     await page.evaluate(() => { delete document.documentElement.dataset.strataMode; });
   }
@@ -87,6 +87,7 @@ test("text on the Strata specimen's lit faces meets 4.5:1 in decoded pixels in e
   // Labels on keys, help, error and link text, at rest and in the lit hover state.
   const samples = ["#buttons-title + .stack .ug-button >> nth=0", "#buttons-title + .stack .ug-button >> nth=1", "#buttons-title + .stack .ug-button--accent >> nth=0",
     ".ug-button--danger", "#spec-size", "#spec-fruit", "#spec-due", "#spec-name-help", "#spec-email-error", ".ug-link", ".ug-badge--success", "#icon-title + .stack .ug-toggle-button >> nth=1",
+    ".ug-knob__mark[data-strata-value='50']", ".ug-knob__mark[data-strata-value='-12']",
     ".ug-fader__mark[data-strata-value='-20']", ".ug-fader--horizontal .ug-fader__mark[data-strata-value='0']"];
   for (const theme of themes) {
     await page.evaluate(value => { document.documentElement.dataset.strataTheme = value; }, theme);

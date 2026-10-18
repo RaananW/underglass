@@ -32,6 +32,7 @@
     "./conformance/relief-1.json": "./conformance/relief-1.json",
     "./conformance/objects-2.json": "./conformance/objects-2.json",
     "./conformance/scene-3.json": "./conformance/scene-3.json",
+    "./conformance/instrument-4.json": "./conformance/instrument-4.json",
     "./dom": {
       "types": "./dist/dom/index.d.ts",
       "import": "./dist/dom/index.js"
@@ -72,6 +73,7 @@
     "src/dom/*.ts",
     "src/tokens/*.ts",
     "src/tokens/*.json",
+    "src/tokens/characters/*.json",
     "conformance/*.json",
     "CHANGELOG.md"
   ],

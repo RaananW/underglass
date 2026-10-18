@@ -142,6 +142,27 @@ test("profiles resolve to the triangles the format describes", () => {
   assert.equal(profileGeometry(knobProfile(18, 14)), lathe, "geometry is cached per parameter set");
 });
 
+test("every profile winds its triangles against their outward normals, the way Lite's front faces wind", () => {
+  // Lite's double-sided PBR flips the normal of a back face; a prism or extrude wound the other way was drawn dark.
+  const shapes = [knobProfile(18, 14), { type: "prism", width: 30, length: 42, radius: 3, height: 12, taper: 0.6, chamfer: 2 },
+    { type: "extrude", outline: [[-25, 0], [25, 0], [25, 3], [0, 5], [-25, 3]], width: 28 }, { type: "extrude", outline: [[-25, 3], [0, 5], [25, 3], [25, 0], [-25, 0]], width: 28 },
+    { type: "lathe", points: [[27, 0, 1, 0], [27, 3, 1, 0], [27, 3, 0, 1], [22, 3, 0, 1], [22, 3, -1, 0], [22, 0, -1, 0]], segments: 32 }];
+  for (const shape of shapes) {
+    const { positions: p, normals: n, indices } = profileGeometry(shape);
+    let checked = 0;
+    for (let t = 0; t < indices.length; t += 3) {
+      const [a, b, c] = [indices[t], indices[t + 1], indices[t + 2]];
+      const e1 = [0, 1, 2].map(k => p[b * 3 + k] - p[a * 3 + k]), e2 = [0, 1, 2].map(k => p[c * 3 + k] - p[a * 3 + k]);
+      const cross = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+      if (Math.hypot(...cross) < 1e-9) continue;
+      const normal = [0, 1, 2].map(k => n[a * 3 + k] + n[b * 3 + k] + n[c * 3 + k]);
+      assert.ok(cross[0] * normal[0] + cross[1] * normal[1] + cross[2] * normal[2] < 0, `${shape.type} triangle ${t / 3} winds with its normal`);
+      checked++;
+    }
+    assert.ok(checked > 0);
+  }
+});
+
 test("poses mix between their stops, clamp at them, and stay rigid", () => {
   const value = validateInstrumentScene(scene());
   const pointer = value.objects[0].parts[1];

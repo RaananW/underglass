@@ -6,9 +6,12 @@
  */
 export { Button, ButtonGroup, IconButton, Link, ToggleButton } from "./buttons.ts";
 export { Checkbox, Radio, RadioGroup, Switch } from "./choices.ts";
+export type { StrataSwitchForm } from "../shared/switch-forms.ts";
 export { Badge, Card, Divider, Panel, ProgressBar, Spinner } from "./display.ts";
 export { Dialog, Drawer } from "./overlays.ts";
 export { Field, Select, Slider, TextArea, TextField } from "./fields.ts";
+export { Knob } from "./knob.ts";
+export type { KnobMark } from "../shared/knob.ts";
 export { Combobox } from "./combobox.ts";
 export type { ComboboxOption } from "./combobox.ts";
 export { DatePicker } from "./date-picker.ts";

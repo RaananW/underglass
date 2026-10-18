@@ -8,6 +8,7 @@
 import { validateReliefScene, type ReliefScene } from "./relief.js";
 import { validateStageScene, type StageScene } from "./stage.js";
 import { validateInstrumentScene, type InstrumentScene } from "./instrument.js";
+import { validateEmitters, type SceneEmitter } from "./emitters.js";
 
 /** Effect clock: `seconds` is the effect time (0..1e6) and `playing` whether it advances each frame. */
 export interface EffectTime { seconds: number; playing?: boolean }
@@ -214,12 +215,15 @@ export interface CustomMaterial extends MaterialPolicy {
   /** The largest brightness change on the layer's interior: 0..0.1 (Strata's `interior.max`). */
   interior: { max: number };
 }
-/** The built-in relief material: a Strata scene, version 1 (`docs/ui-library/rendering-model.md`). */
+/**
+ * The built-in relief material: a Strata scene, version 1, or version 4 with emitters and protected text
+ * (`docs/ui-library/rendering-model.md`).
+ */
 export interface ReliefMaterial extends MaterialPolicy {
   kind: "relief";
   scene: ReliefScene;
 }
-/** The built-in objects material: a Strata scene, version 2 or 3, with objects (`docs/ui-library/rendering-model.md`, 2B). */
+/** The built-in objects material: a Strata scene, version 2 or 3, or 4 with a camera, with objects (`docs/ui-library/rendering-model.md`, 2B). */
 export interface ObjectsMaterial extends MaterialPolicy {
   kind: "objects";
   scene: ReliefScene;
@@ -249,8 +253,33 @@ export interface MaterialHandle {
    * layout update in place; new part kinds rebuild its mesh scene while the layer draws its objects at Relief.
    */
   update(change: Record<string, number> | ReliefScene | StageScene | InstrumentScene): void;
+  /**
+   * Replaces the emitters of a version 4 scene (`relief`, `objects` or `instrument`), the cheap path for a light that
+   * moves every frame (the pointer light, a lamp turning on): only the list is validated, nothing else of the scene is
+   * repacked or rebuilt, and the next frame writes the light's uniforms with no capture, upload or hit-geometry change.
+   * On a version 4 scene without an `emitters` field it takes the full validation path itself and adds the field (for an
+   * Instrument scene, one rebuild of its mesh scene, for the parts' clustered lights). Throws for other materials, a list
+   * that is not valid, or one shorter than a part's `emitter` index.
+   */
+  setEmitters(emitters: readonly SceneEmitter[]): void;
   cancel(): void;
   dispose(): void;
+}
+/**
+ * Validates `emitters` for `value` and returns the material with them: in place (the same scene object, so every cache
+ * keyed on it stays valid) when the scene already has an `emitters` field, else as a newly validated material.
+ */
+export function withEmitters(value: MaterialDescriptor, emitters: readonly SceneEmitter[]): MaterialDescriptor {
+  if (!isSceneMaterial(value) || value.kind === "stage" || value.scene.version !== 4) throw new Error("setEmitters requires a version 4 relief, objects or instrument scene");
+  const list = validateEmitters(emitters, value.kind === "instrument" ? "Instrument scene" : "Relief scene");
+  if (value.kind === "instrument") {
+    for (const [index, object] of value.scene.objects.entries()) for (const [at, part] of object.parts.entries()) {
+      if (part.emitter !== undefined && part.emitter >= list.length) throw new Error(`Instrument scene objects[${index}].parts[${at}].emitter requires an index into emitters`);
+    }
+  }
+  if (value.scene.emitters === undefined) return validateMaterial({ ...value, scene: { ...value.scene, emitters: list } } as MaterialDescriptor);
+  (value.scene as { emitters?: SceneEmitter[] }).emitters = list;
+  return value;
 }
 /** The hard ceiling on a material's interior change, matching the Strata token's validated range. */
 export const MATERIAL_INTERIOR_CEILING = 0.1;

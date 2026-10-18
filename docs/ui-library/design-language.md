@@ -16,8 +16,8 @@ never silently relaxed.
 **The Instrument level** ([plan](instrument.md), [Phase I0 report](instrument-phase0.md)) is a fourth presentation
 level: 3D-first hardware controls drawn as parametric meshes. Its rules are in sections 2, 3, 4, 6, 7, 11, 12, 14, 15
 and 16, and in sections [19](#19-characters) and [20](#20-feedback). Its numbers come from the second iteration of
-the [I1 prototype](instrument-phase0.md#i1-prototype), whose look sign-off is pending with the owner. A dagger (†)
-marks a **provisional** value: a number the second iteration did not use or measure, or a proposed range. The
+the [I1 prototype](instrument-phase0.md#i1-prototype-second-iteration), whose look sign-off is pending with the owner. A
+dagger (†) marks a **provisional** value: a number the second iteration did not use or measure, or a proposed range. The
 [spec notes](instrument-spec-notes.md) list every value and its status.
 
 ## Contents
@@ -121,8 +121,9 @@ the rest of their light.
 
 - **The studio is the fill.** An Instrument layer has no fill light by default (`light.ambient` 0 there; 0.55 stays
   the Objects default): a hemispheric fill's specular term faces the viewer and turns metal tops white
-  ([I0.4](instrument-phase0.md#i04-materials-over-the-capture), [I1](instrument-phase0.md#i1-prototype)). A fill an
-  application adds is diffuse only. The second iteration ran with the fill off.
+  ([I0.4](instrument-phase0.md#i04-materials-over-the-capture),
+  [I1](instrument-phase0.md#i1-prototype-second-iteration)). A fill an application adds is diffuse only. The second
+  iteration ran with the fill off.
 - **Metals take the full key light.** A metal takes the key light's direct term scaled by its `base.direct` (section
   4), 1 in every preset. The first iteration scaled it by 0.2 because brushed tops changed brightness with a knob's
   size and position under its grey sweep; with the studio of section 4 and crowned tops they no longer do.
@@ -210,8 +211,8 @@ CSS presentation unable to follow.
   layer within reach. Each layer's pass lights only that layer's own content, so where layers overlap the light is
   applied once. A move is a uniform update: no capture, no upload and no change to hit geometry (I0.3, at every level).
 - **Levels:** at the Instrument level it also lights the meshes as a clustered light. At the Relief and Objects levels
-  it lights the face through the face pool only, with no highlight on bevels, sides or domes yet (that needs a
-  point-light specular term in the relief shading, [findings](instrument-phase0.md#findings-for-later-phases)). In CSS
+  it lights the face through the face pool, and its highlight travels across bevels, sides and domes through a
+  point-light specular term in the relief shading (core work item 2, [design note](instrument-phase2.md#core-work-item-2-emitters-and-the-pointer-light)). In CSS
   it is a `radial-gradient` overlay placed from two custom properties, its strength capped so no text under it changes
   beyond `interior.max`.
 - **Gaps between panels:** it lights what a layer covers. At the Scene level the backdrop is a layer, so the light
@@ -265,9 +266,9 @@ others.
   from the probe's linear factors). Below Instrument, the recipe column applies and colour comes from the capture or
   the role, as before.
 - **Where the values come from:** [I0.4](instrument-phase0.md#i04-materials-over-the-capture), carried into the
-  [I1 prototype](instrument-phase0.md#i1-prototype)'s second iteration with its studio, which also set `polished`,
-  `gunmetal` and the glass shader's numbers. Every metal takes the key light's full direct term (`direct` 1, section 3).
-  `chrome` was not on the prototype page.
+  [I1 prototype](instrument-phase0.md#i1-prototype-second-iteration)'s second iteration with its studio, which also set
+  `polished`, `gunmetal` and the glass shader's numbers. Every metal takes the key light's full direct term (`direct` 1,
+  section 3). `chrome` was not on the prototype page.
 - **No grain on large plates:** a wall plate and a display bezel take `brush` without the `grain` map. There the
   hairline map aliased into coarse streaks; on caps, carriages and blocks it reads as brushed metal.
 
@@ -612,9 +613,9 @@ hands core mesh data; core never fetches at render time.
 ### Instrument object table
 
 The `premium` character's objects. Heights are at 50% depth; numbers come from the second iteration of the
-[I1 prototype](instrument-phase0.md#i1-prototype), whose look sign-off is pending with the owner, and those it did not
-use carry a dagger. Components not yet prototyped get theirs in their phase. Components not listed here keep their
-Objects object, drawn as meshes of the same shapes. Lit parts give their `emissive` strength lit / unlit.
+[I1 prototype](instrument-phase0.md#i1-prototype-second-iteration), whose look sign-off is pending with the owner, and
+those it did not use carry a dagger. Components not yet prototyped get theirs in their phase. Components not listed here
+keep their Objects object, drawn as meshes of the same shapes. Lit parts give their `emissive` strength lit / unlit.
 
 | Control (form) | Static parts | Moving part | Motion | Box and parts (premium, 50% depth) |
 | --- | --- | --- | --- | --- |
@@ -1236,13 +1237,16 @@ mechanics are the same in every character: parts, poses, containment, interactio
   not applied, as for any theme.
 
 **Premium.** The first character's defaults, from the second iteration of the
-[I1 prototype](instrument-phase0.md#i1-prototype) (the look sign-off on it is pending with the owner): Switch's form is
-`slide` (the `bat` lever, now 40 px long and thrown ±40°, projects about 28 px head-on and is available as a form);
-the theme picks the faceplate (`metal` on light, `gunmetal` on dark; an explicit plate overrides it); every metal takes
-the key light's full direct term and reads from the studio and the page; glass is the capture refraction of section 4;
-lit rings and flags are emissive and feed the emitter bloom; the pointer light, where an application turns it on,
-lights the face at 0.3 of its strength; the numbers are those of the [Instrument object table](#instrument-object-table),
-section 12's springs† and section 4's presets.
+[I1 prototype](instrument-phase0.md#i1-prototype-second-iteration) (the look sign-off on it is pending with the owner):
+Switch's form is `slide` (the `bat` lever, now 40 px long and thrown ±40°, projects about 28 px head-on and is available
+as a form); the theme picks the faceplate (`metal` on light, `gunmetal` on dark; an explicit plate overrides it); every
+metal takes the key light's full direct term and reads from the studio and the page; glass is the capture refraction of
+section 4; lit rings and flags are emissive and feed the emitter bloom; the pointer light, where an application turns it
+on, lights the face at 0.3 of its strength; the numbers are those of the
+[Instrument object table](#instrument-object-table), section 12's springs† and section 4's presets. They ship as
+`@underglass/ui`'s token layer `characters/premium.json`, which lists its provisional values (the daggers) inside it;
+`createStrataTheme({ character: "premium" })` applies it, reports anything a character may not set, and returns the
+provisional tokens it set in `theme.character.provisional`.
 
 ## 20. Feedback
 
@@ -1336,3 +1340,5 @@ it.
   - section 14: ring clicks snap to a printed numeral (`knob.snap`), and taps and the wheel step by a notch of at least
     1% of the range;
   - section 19: the premium defaults.
+- 2026-10-18: section 3, the pointer light at the Relief and Objects levels: its highlight now travels across bevels,
+  sides and domes (core's point-light specular term, core work item 2). No token or rule changed.

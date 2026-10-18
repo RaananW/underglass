@@ -28,7 +28,7 @@
 <main>
   <header>
     <h1>Strata specimen</h1>
-    <p class="lead">Every token, material, elevation and state of the Tier A components, in plain HTML and CSS from
+    <p class="lead">Every token, material, elevation and state of the Tier A components and the Knob, in plain HTML and CSS from
       <code>@underglass/ui/css</code>. States are shown statically with <code>data-strata-preview</code>; the real
       controls respond to the pointer and keyboard too. This page is the visual reference for later tests.</p>
     <form class="controls" id="settings" hidden>
@@ -283,6 +283,28 @@
         </div>
       </section>
 
+      <section class="ug-panel" data-strata-face="raised" aria-labelledby="knob-title">
+        <h3 id="knob-title">Knob</h3>
+        <div class="row" style="align-items: flex-start">
+          <div class="ug-knob" style="--strata-knob-value: 0.62;">
+            <div class="ug-knob__dial">
+              <span class="ug-knob__scale" aria-hidden="true"><span class="ug-knob__mark" data-strata-value="0" style="--strata-knob-at: 0;">0</span><span class="ug-knob__mark" data-strata-value="25" style="--strata-knob-at: 0.25;">25</span><span class="ug-knob__mark" data-strata-value="50" style="--strata-knob-at: 0.5;">50</span><span class="ug-knob__mark" data-strata-value="75" style="--strata-knob-at: 0.75;">75</span><span class="ug-knob__mark" data-strata-value="100" style="--strata-knob-at: 1;">100</span></span>
+              <span class="ug-knob__skirt" data-strata-face="raised" aria-hidden="true"><span class="ug-knob__cap" data-strata-face="raised"><span class="ug-knob__pointer"></span></span></span>
+              <input class="ug-knob__input" type="range" id="spec-knob" min="0" max="100" step="1" value="62" data-strata-default="62" data-strata-unit="%" aria-valuetext="62%">
+            </div>
+            <label class="ug-knob__label" for="spec-knob">Volume</label>
+          </div>
+          <div class="ug-knob ug-knob--detented" style="--strata-knob-value: 0.25;">
+            <div class="ug-knob__dial">
+              <span class="ug-knob__scale" aria-hidden="true"><span class="ug-knob__mark" data-strata-value="-12" style="--strata-knob-at: 0;">−12</span><span class="ug-knob__mark" data-strata-value="-6" style="--strata-knob-at: 0.25;">−6</span><span class="ug-knob__mark" data-strata-value="0" style="--strata-knob-at: 0.5;">0</span><span class="ug-knob__mark" data-strata-value="6" style="--strata-knob-at: 0.75;">6</span><span class="ug-knob__mark" data-strata-value="12" style="--strata-knob-at: 1;">12</span></span>
+              <span class="ug-knob__skirt" data-strata-face="raised" aria-hidden="true"><span class="ug-knob__cap" data-strata-face="raised"><span class="ug-knob__pointer"></span></span></span>
+              <input class="ug-knob__input" type="range" id="spec-gain" min="-12" max="12" step="6" value="-6" data-strata-preview="focus" data-strata-default="0" data-strata-unit=" dB" aria-valuetext="−6 dB">
+            </div>
+            <label class="ug-knob__label" for="spec-gain">Gain, focus</label>
+          </div>
+        </div>
+      </section>
+
       <section class="ug-panel" data-strata-face="raised" aria-labelledby="status-title">
         <h3 id="status-title">Badge, ProgressBar, Spinner, Divider, Link</h3>
         <div class="stack" style="align-items: stretch">
@@ -304,6 +326,17 @@
           <span class="ug-spinner ug-spinner--labelled" role="status" data-strata-face="ring"><span class="ug-spinner__arc" aria-hidden="true"></span><span class="ug-spinner__label">Loading results</span></span>
           <hr class="ug-divider" data-strata-face="groove">
           <p style="margin: 0">Read the <a class="ug-link" href="#components-title">component guide</a> for the markup contracts.</p>
+        </div>
+      </section>
+
+      <section class="ug-panel" data-strata-face="raised" aria-labelledby="switch-forms-title">
+        <h3 id="switch-forms-title">Switch forms</h3>
+        <div class="row" style="align-items: center">
+          <label class="ug-switch" data-strata-form="slide"><input class="ug-switch__input" type="checkbox" role="switch" checked><span class="ug-switch__object" aria-hidden="true"><span class="ug-switch__slot" data-strata-face="groove"></span><span class="ug-switch__flag" data-strata-face="flat"></span><span class="ug-switch__block" data-strata-face="raised"><span class="ug-switch__grip"></span></span></span><span class="ug-switch__label">Bypass</span></label>
+          <label class="ug-switch" data-strata-form="rocker"><input class="ug-switch__input" type="checkbox" role="switch" checked><span class="ug-switch__object" aria-hidden="true"><span class="ug-switch__bezel" data-strata-face="raised"></span><span class="ug-switch__paddle"><span class="ug-switch__facet ug-switch__facet--on" data-strata-face="raised"></span><span class="ug-switch__facet ug-switch__facet--off" data-strata-face="raised"></span><span class="ug-switch__flag" data-strata-face="flat"></span></span></span><span class="ug-switch__label">Power</span></label>
+          <label class="ug-switch" data-strata-form="bat"><input class="ug-switch__input" type="checkbox" role="switch" data-strata-preview="focus"><span class="ug-switch__object" aria-hidden="true"><span class="ug-switch__nut" data-strata-face="raised"></span><span class="ug-switch__bushing" data-strata-face="raised"></span><span class="ug-switch__lever" data-strata-face="raised"></span><span class="ug-switch__ball" data-strata-face="knob"></span></span><span class="ug-switch__label">Arm</span></label>
+          <label class="ug-switch" data-strata-form="wall"><input class="ug-switch__input" type="checkbox" role="switch" data-strata-preview="hover"><span class="ug-switch__object" aria-hidden="true"><span class="ug-switch__plate" data-strata-face="raised"></span><span class="ug-switch__paddle"><span class="ug-switch__facet ug-switch__facet--on" data-strata-face="raised"></span><span class="ug-switch__facet ug-switch__facet--off" data-strata-face="raised"></span><span class="ug-switch__flag" data-strata-face="flat"></span></span></span><span class="ug-switch__label">Hall</span></label>
+          <label class="ug-switch" data-strata-form="rocker"><input class="ug-switch__input" type="checkbox" role="switch" disabled><span class="ug-switch__object" aria-hidden="true"><span class="ug-switch__bezel" data-strata-face="raised"></span><span class="ug-switch__paddle"><span class="ug-switch__facet ug-switch__facet--on" data-strata-face="raised"></span><span class="ug-switch__facet ug-switch__facet--off" data-strata-face="raised"></span><span class="ug-switch__flag" data-strata-face="flat"></span></span></span><span class="ug-switch__label">Heater</span></label>
         </div>
       </section>
 

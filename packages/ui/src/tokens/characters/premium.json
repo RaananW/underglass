@@ -1,0 +1,2440 @@
+{
+  "$description": "The premium character (design language section 19): machined aluminium and glass, understated, soft light, little ornament. A validated theme layer of Instrument tokens over the defaults; an application's theme still overrides any of them. Its values are those of the I1 prototype's second iteration (its look sign-off is pending with the owner); `provisional` names the tokens v2 did not use or measure (docs/ui-library/instrument-spec-notes.md).",
+  "$extensions": {
+    "dev.underglass.strata": {
+      "character": {
+        "name": "premium",
+        "version": 1,
+        "status": "draft",
+        "source": "docs/ui-library/instrument-phase0.md#i1-prototype-second-iteration",
+        "provisional": [
+          "spring",
+          "emitter.lamp.height",
+          "emitter.lamp.strength",
+          "emitter.led.height",
+          "emitter.led.strength",
+          "emitter.guardFeather",
+          "colour.glowOn",
+          "lamp.lens",
+          "statusLight.lens",
+          "display.backlight",
+          "material.presets.chrome",
+          "instrument.material.chrome"
+        ]
+      }
+    }
+  },
+  "form": {
+    "switch": {
+      "$type": "string",
+      "$value": "slide",
+      "$description": "Switch's default form; bat, rocker and wall are available as forms.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "options": [
+            "slide",
+            "rocker",
+            "bat",
+            "wall"
+          ]
+        }
+      }
+    }
+  },
+  "knob": {
+    "$description": "Knob (design language section 6, Instrument object table).",
+    "sweep": {
+      "$type": "number",
+      "$value": 270,
+      "$description": "The turn from one stop to the other, degrees.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 90,
+          "max": 330
+        }
+      }
+    },
+    "detents": {
+      "$type": "number",
+      "$value": 11,
+      "$description": "Steps of a detented knob.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 2,
+          "max": 64
+        }
+      }
+    },
+    "detentScale": {
+      "$type": "number",
+      "$value": 0.8,
+      "$description": "A detented knob's size, as a share of a knob's.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0.5,
+          "max": 1
+        }
+      }
+    },
+    "dialMargin": {
+      "$type": "dimension",
+      "$value": "76px",
+      "$description": "The dial box beyond the skirt's diameter (ticks and numerals are printed on the face).",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 200
+        }
+      }
+    },
+    "ticks": {
+      "$type": "dimension",
+      "$value": "5px",
+      "$description": "The ticks' radius beyond the skirt's.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 40
+        }
+      }
+    },
+    "numerals": {
+      "$type": "dimension",
+      "$value": "20px",
+      "$description": "The numerals' radius beyond the skirt's.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 80
+        }
+      }
+    },
+    "skirt": {
+      "diameter": {
+        "$type": "dimension",
+        "$value": "64px",
+        "$description": "Skirt diameter.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 16,
+            "max": 200
+          }
+        }
+      },
+      "height": {
+        "$type": "dimension",
+        "$value": "2.5px",
+        "$description": "Skirt height at 50% depth.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "anchors": [
+              1.5,
+              2.5,
+              4
+            ]
+          }
+        }
+      },
+      "edge": {
+        "$type": "dimension",
+        "$value": "0.8px",
+        "$description": "The skirt's edge break.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 4
+          }
+        }
+      },
+      "cone": {
+        "$type": "number",
+        "$value": 7.5,
+        "$description": "The skirt top's cone: a turned flange that catches the studio's strip, degrees.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 30
+          }
+        }
+      }
+    },
+    "cap": {
+      "ratio": {
+        "$type": "number",
+        "$value": 0.8,
+        "$description": "Cap diameter as a share of the skirt's (51 px).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0.3,
+            "max": 1
+          }
+        }
+      },
+      "height": {
+        "$type": "dimension",
+        "$value": "16px",
+        "$description": "Cap height at 50% depth.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "anchors": [
+              9.6,
+              16,
+              25.6
+            ]
+          }
+        }
+      },
+      "crown": {
+        "$type": "dimension",
+        "$value": "1.2px",
+        "$description": "The spun top's crown.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 6
+          }
+        }
+      },
+      "chamfer": {
+        "$type": "dimension",
+        "$value": "2px",
+        "$description": "The polished chamfer at the cap's top edge.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 6
+          }
+        }
+      }
+    },
+    "pointer": {
+      "width": {
+        "$type": "dimension",
+        "$value": "2.2px",
+        "$description": "Pointer width, engraved in the cap's ink along the crown.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0.5,
+            "max": 6
+          }
+        }
+      },
+      "from": {
+        "$type": "number",
+        "$value": 0.28,
+        "$description": "Where the pointer starts, a share of the top's radius.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 1
+          }
+        }
+      },
+      "to": {
+        "$type": "number",
+        "$value": 0.86,
+        "$description": "Where the pointer ends, a share of the top's radius.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    },
+    "glass": {
+      "ratio": {
+        "$type": "number",
+        "$value": 0.45,
+        "$description": "A glass cap's radius as a share of the metal cap's diameter (23 px).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0.2,
+            "max": 0.6
+          }
+        }
+      },
+      "wall": {
+        "$type": "dimension",
+        "$value": "2px",
+        "$description": "The glass cap's wall.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 8
+          }
+        }
+      },
+      "dome": {
+        "$type": "dimension",
+        "$value": "22px",
+        "$description": "The glass cap's elliptical dome, at 50% depth.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "anchors": [
+              13.2,
+              22,
+              35.2
+            ]
+          }
+        }
+      },
+      "hub": {
+        "$type": "dimension",
+        "$value": "7px",
+        "$description": "The printed hub ring under the dome.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 20
+          }
+        }
+      },
+      "shadow": {
+        "$type": "number",
+        "$value": 0.45,
+        "$description": "The share of shadow.strength a glass part casts (design language section 7).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    }
+  },
+  "fader": {
+    "$description": "Fader.",
+    "travel": {
+      "$type": "dimension",
+      "$value": "180px",
+      "$description": "The carriage's travel.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 40,
+          "max": 600
+        }
+      }
+    },
+    "box": {
+      "$type": "dimension",
+      "$value": "46px",
+      "$description": "The fader's box width.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 20,
+          "max": 120
+        }
+      }
+    },
+    "slot": {
+      "$type": "dimension",
+      "$value": "5px",
+      "$description": "The printed slot's width.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 1,
+          "max": 20
+        }
+      }
+    },
+    "grip": {
+      "$type": "dimension",
+      "$value": "1.6px",
+      "$description": "The index line's width.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0.5,
+          "max": 6
+        }
+      }
+    },
+    "carriage": {
+      "width": {
+        "$type": "dimension",
+        "$value": "30px",
+        "$description": "Carriage width.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 8,
+            "max": 80
+          }
+        }
+      },
+      "length": {
+        "$type": "dimension",
+        "$value": "42px",
+        "$description": "Carriage length.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 8,
+            "max": 120
+          }
+        }
+      },
+      "height": {
+        "$type": "dimension",
+        "$value": "12px",
+        "$description": "Carriage height at 50% depth.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "anchors": [
+              7.2,
+              12,
+              19.2
+            ]
+          }
+        }
+      },
+      "taper": {
+        "$type": "dimension",
+        "$value": "0.6px",
+        "$description": "Carriage taper.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 8
+          }
+        }
+      },
+      "radius": {
+        "$type": "dimension",
+        "$value": "3px",
+        "$description": "Carriage corner radius.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 20
+          }
+        }
+      },
+      "chamfer": {
+        "$type": "dimension",
+        "$value": "2px",
+        "$description": "The polished chamfer.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 6
+          }
+        }
+      }
+    }
+  },
+  "switch": {
+    "slide": {
+      "$description": "Switch, slide form.",
+      "box": {
+        "width": {
+          "$type": "dimension",
+          "$value": "64px",
+          "$description": "Box width."
+        },
+        "length": {
+          "$type": "dimension",
+          "$value": "28px",
+          "$description": "Box length."
+        }
+      },
+      "travel": {
+        "$type": "dimension",
+        "$value": "28px",
+        "$description": "The block's slide.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 4,
+            "max": 80
+          }
+        }
+      },
+      "block": {
+        "width": {
+          "$type": "dimension",
+          "$value": "24px",
+          "$description": "Block width."
+        },
+        "length": {
+          "$type": "dimension",
+          "$value": "20px",
+          "$description": "Block length."
+        },
+        "height": {
+          "$type": "dimension",
+          "$value": "6px",
+          "$description": "Block height at 50% depth.",
+          "$extensions": {
+            "dev.underglass.strata": {
+              "anchors": [
+                3.6,
+                6,
+                9.6
+              ]
+            }
+          }
+        },
+        "taper": {
+          "$type": "dimension",
+          "$value": "0.4px",
+          "$description": "Block taper."
+        },
+        "chamfer": {
+          "$type": "dimension",
+          "$value": "2px",
+          "$description": "Block chamfer."
+        }
+      },
+      "flag": {
+        "$type": "number",
+        "$value": 1,
+        "$description": "The accent flag's emissive strength when on (hidden when off).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 4
+          }
+        }
+      }
+    },
+    "rocker": {
+      "$description": "Switch, rocker form.",
+      "box": {
+        "width": {
+          "$type": "dimension",
+          "$value": "38px",
+          "$description": "Box width."
+        },
+        "length": {
+          "$type": "dimension",
+          "$value": "62px",
+          "$description": "Box length."
+        }
+      },
+      "bezel": {
+        "$type": "dimension",
+        "$value": "2px",
+        "$description": "Bezel height at 50% depth.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "anchors": [
+              1.2,
+              2,
+              3.2
+            ]
+          }
+        }
+      },
+      "paddle": {
+        "width": {
+          "$type": "dimension",
+          "$value": "28px",
+          "$description": "Paddle width."
+        },
+        "length": {
+          "$type": "dimension",
+          "$value": "50px",
+          "$description": "Paddle length."
+        },
+        "facets": {
+          "on": {
+            "$type": "dimension",
+            "$value": "12px",
+            "$description": "The On facet."
+          },
+          "off": {
+            "$type": "dimension",
+            "$value": "4px",
+            "$description": "The Off facet."
+          }
+        }
+      },
+      "tilt": {
+        "$type": "number",
+        "$value": 17.7,
+        "$description": "The paddle's tilt either side, degrees.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 45
+          }
+        }
+      },
+      "flag": {
+        "width": {
+          "$type": "dimension",
+          "$value": "18px",
+          "$description": "Flag width."
+        },
+        "length": {
+          "$type": "dimension",
+          "$value": "9px",
+          "$description": "Flag length."
+        },
+        "lit": {
+          "$type": "number",
+          "$value": 1,
+          "$description": "Flag emissive, on.",
+          "$extensions": {
+            "dev.underglass.strata": {
+              "min": 0,
+              "max": 4
+            }
+          }
+        },
+        "unlit": {
+          "$type": "number",
+          "$value": 0.12,
+          "$description": "Flag emissive, off.",
+          "$extensions": {
+            "dev.underglass.strata": {
+              "min": 0,
+              "max": 4
+            }
+          }
+        }
+      }
+    },
+    "bat": {
+      "$description": "Switch, bat form.",
+      "box": {
+        "width": {
+          "$type": "dimension",
+          "$value": "48px",
+          "$description": "Box width."
+        },
+        "length": {
+          "$type": "dimension",
+          "$value": "92px",
+          "$description": "Box length."
+        }
+      },
+      "nut": {
+        "diameter": {
+          "$type": "dimension",
+          "$value": "24px",
+          "$description": "Nut diameter."
+        },
+        "height": {
+          "$type": "dimension",
+          "$value": "3px",
+          "$description": "Nut height at 50% depth.",
+          "$extensions": {
+            "dev.underglass.strata": {
+              "anchors": [
+                1.8,
+                3,
+                4.8
+              ]
+            }
+          }
+        }
+      },
+      "bushing": {
+        "diameter": {
+          "$type": "dimension",
+          "$value": "14px",
+          "$description": "Bushing diameter."
+        },
+        "height": {
+          "$type": "dimension",
+          "$value": "7px",
+          "$description": "Bushing height at 50% depth.",
+          "$extensions": {
+            "dev.underglass.strata": {
+              "anchors": [
+                4.2,
+                7,
+                11.2
+              ]
+            }
+          }
+        }
+      },
+      "lever": {
+        "length": {
+          "$type": "dimension",
+          "$value": "40px",
+          "$description": "Lever length; it scales with depth, at most × 1.15.",
+          "$extensions": {
+            "dev.underglass.strata": {
+              "anchors": [
+                24,
+                40,
+                46
+              ]
+            }
+          }
+        },
+        "pivot": {
+          "$type": "dimension",
+          "$value": "5px",
+          "$description": "The pivot's height."
+        },
+        "base": {
+          "$type": "dimension",
+          "$value": "3.4px",
+          "$description": "The lever's base radius."
+        },
+        "neck": {
+          "$type": "dimension",
+          "$value": "2.7px",
+          "$description": "The lever's neck radius."
+        },
+        "ball": {
+          "$type": "dimension",
+          "$value": "5.6px",
+          "$description": "The ball's radius."
+        }
+      },
+      "tilt": {
+        "$type": "number",
+        "$value": 40,
+        "$description": "The lever's throw either side, degrees.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 60
+          }
+        }
+      }
+    },
+    "wall": {
+      "$description": "Switch, wall form.",
+      "box": {
+        "width": {
+          "$type": "dimension",
+          "$value": "66px",
+          "$description": "Box width."
+        },
+        "length": {
+          "$type": "dimension",
+          "$value": "92px",
+          "$description": "Box length."
+        }
+      },
+      "plate": {
+        "height": {
+          "$type": "dimension",
+          "$value": "3px",
+          "$description": "Plate height at 50% depth.",
+          "$extensions": {
+            "dev.underglass.strata": {
+              "anchors": [
+                1.8,
+                3,
+                4.8
+              ]
+            }
+          }
+        },
+        "radius": {
+          "$type": "dimension",
+          "$value": "6px",
+          "$description": "Plate radius."
+        }
+      },
+      "paddle": {
+        "width": {
+          "$type": "dimension",
+          "$value": "30px",
+          "$description": "Paddle width."
+        },
+        "length": {
+          "$type": "dimension",
+          "$value": "54px",
+          "$description": "Paddle length."
+        },
+        "height": {
+          "$type": "dimension",
+          "$value": "7px",
+          "$description": "Paddle height at 50% depth.",
+          "$extensions": {
+            "dev.underglass.strata": {
+              "anchors": [
+                4.2,
+                7,
+                11.2
+              ]
+            }
+          }
+        },
+        "taper": {
+          "$type": "dimension",
+          "$value": "0.6px",
+          "$description": "Paddle taper."
+        },
+        "chamfer": {
+          "$type": "dimension",
+          "$value": "2px",
+          "$description": "Paddle chamfer."
+        },
+        "crown": {
+          "$type": "dimension",
+          "$value": "1.6px",
+          "$description": "The top's crown along its length."
+        }
+      },
+      "tilt": {
+        "$type": "number",
+        "$value": 9,
+        "$description": "The paddle's tilt either side, degrees.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 30
+          }
+        }
+      },
+      "dot": {
+        "width": {
+          "$type": "dimension",
+          "$value": "12px",
+          "$description": "Dot width."
+        },
+        "length": {
+          "$type": "dimension",
+          "$value": "4px",
+          "$description": "Dot length."
+        },
+        "lit": {
+          "$type": "number",
+          "$value": 1,
+          "$description": "Dot emissive, on.",
+          "$extensions": {
+            "dev.underglass.strata": {
+              "min": 0,
+              "max": 4
+            }
+          }
+        },
+        "unlit": {
+          "$type": "number",
+          "$value": 0.12,
+          "$description": "Dot emissive, off.",
+          "$extensions": {
+            "dev.underglass.strata": {
+              "min": 0,
+              "max": 4
+            }
+          }
+        }
+      }
+    }
+  },
+  "pushButton": {
+    "$description": "PushButton.",
+    "box": {
+      "$type": "dimension",
+      "$value": "64px",
+      "$description": "The box, with room for the halo."
+    },
+    "cap": {
+      "diameter": {
+        "$type": "dimension",
+        "$value": "40px",
+        "$description": "Cap diameter."
+      },
+      "height": {
+        "$type": "dimension",
+        "$value": "6px",
+        "$description": "Cap height at 50% depth.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "anchors": [
+              3.6,
+              6,
+              9.6
+            ]
+          }
+        }
+      },
+      "taper": {
+        "$type": "dimension",
+        "$value": "0.6px",
+        "$description": "Cap taper."
+      },
+      "chamfer": {
+        "$type": "dimension",
+        "$value": "2px",
+        "$description": "Cap chamfer."
+      }
+    },
+    "bezel": {
+      "outer": {
+        "$type": "dimension",
+        "$value": "27px",
+        "$description": "Bezel outer radius."
+      },
+      "inner": {
+        "$type": "dimension",
+        "$value": "22.6px",
+        "$description": "Bezel inner radius."
+      },
+      "height": {
+        "$type": "dimension",
+        "$value": "3.2px",
+        "$description": "Bezel height at 50% depth.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "anchors": [
+              1.92,
+              3.2,
+              5.12
+            ]
+          }
+        }
+      }
+    },
+    "ring": {
+      "outer": {
+        "$type": "dimension",
+        "$value": "22.6px",
+        "$description": "The lit ring's outer radius."
+      },
+      "inner": {
+        "$type": "dimension",
+        "$value": "20.6px",
+        "$description": "The lit ring's inner radius."
+      },
+      "lit": {
+        "$type": "number",
+        "$value": 1,
+        "$description": "Ring emissive, lit.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 4
+          }
+        }
+      },
+      "unlit": {
+        "$type": "number",
+        "$value": 0.22,
+        "$description": "Ring emissive, unlit.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 4
+          }
+        }
+      }
+    },
+    "travel": {
+      "held": {
+        "$type": "dimension",
+        "$value": "4px",
+        "$description": "Travel while held."
+      },
+      "latched": {
+        "$type": "dimension",
+        "$value": "1.8px",
+        "$description": "Travel when latched."
+      }
+    }
+  },
+  "display": {
+    "$description": "Display.",
+    "box": {
+      "width": {
+        "$type": "dimension",
+        "$value": "236px",
+        "$description": "Box width."
+      },
+      "length": {
+        "$type": "dimension",
+        "$value": "58px",
+        "$description": "Box length."
+      }
+    },
+    "bezel": {
+      "width": {
+        "$type": "dimension",
+        "$value": "7px",
+        "$description": "Bezel width."
+      },
+      "radius": {
+        "$type": "dimension",
+        "$value": "8px",
+        "$description": "Bezel radius."
+      },
+      "height": {
+        "$type": "dimension",
+        "$value": "2.4px",
+        "$description": "Bezel height at 50% depth.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "anchors": [
+              1.44,
+              2.4,
+              3.84
+            ]
+          }
+        }
+      },
+      "chamfer": {
+        "$type": "dimension",
+        "$value": "2px",
+        "$description": "Bezel chamfer."
+      },
+      "inset": {
+        "$type": "dimension",
+        "$value": "0.5px",
+        "$description": "The bezel stands this far inside the box (I0.4)."
+      }
+    },
+    "window": {
+      "height": {
+        "$type": "dimension",
+        "$value": "2.4px",
+        "$description": "Window height at 50% depth.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "anchors": [
+              1.44,
+              2.4,
+              3.84
+            ]
+          }
+        }
+      },
+      "bevel": {
+        "$type": "dimension",
+        "$value": "2.6px",
+        "$description": "The window's bevel."
+      }
+    },
+    "finish": {
+      "band": {
+        "$type": "number",
+        "$value": 0.3,
+        "$description": "The window's finish band.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 1
+          }
+        }
+      },
+      "horizon": {
+        "$type": "number",
+        "$value": 0.25,
+        "$description": "The window's dark horizon line.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    },
+    "textGrow": {
+      "$type": "dimension",
+      "$value": "2px",
+      "$description": "Protected rects are the text runs grown by this."
+    },
+    "backlight": {
+      "$type": "number",
+      "$value": 0,
+      "$description": "The backlight emitter's strength (not prototyped).",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 32000
+        }
+      }
+    }
+  },
+  "lamp": {
+    "lens": {
+      "$type": "dimension",
+      "$value": "28px",
+      "$description": "Lamp lens diameter."
+    }
+  },
+  "statusLight": {
+    "lens": {
+      "$type": "dimension",
+      "$value": "10px",
+      "$description": "StatusLight lens diameter."
+    }
+  },
+  "emitter": {
+    "lamp": {
+      "radius": {
+        "$type": "number",
+        "$value": 6,
+        "$description": "Reach, in lens diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 1,
+            "max": 20
+          }
+        }
+      },
+      "height": {
+        "$type": "number",
+        "$value": 0.7,
+        "$description": "Height above the face, in lens diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0.25,
+            "max": 2
+          }
+        }
+      },
+      "strength": {
+        "$type": "number",
+        "$value": 3200,
+        "$description": "Intensity I.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 32000
+          }
+        }
+      }
+    },
+    "led": {
+      "radius": {
+        "$type": "number",
+        "$value": 6,
+        "$description": "Reach, in lens diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 1,
+            "max": 20
+          }
+        }
+      },
+      "height": {
+        "$type": "number",
+        "$value": 0.8,
+        "$description": "Height above the face, in lens diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0.25,
+            "max": 2
+          }
+        }
+      },
+      "strength": {
+        "$type": "number",
+        "$value": 520,
+        "$description": "Intensity I.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 32000
+          }
+        }
+      }
+    },
+    "guardFeather": {
+      "$type": "dimension",
+      "$value": "4px",
+      "$description": "The guard's feather outside a protected rect.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 16
+        }
+      }
+    }
+  },
+  "pointerLight": {
+    "$description": "The pointer light (design language section 3); opt-in per application.",
+    "strength": {
+      "$type": "number",
+      "$value": 16000,
+      "$description": "Intensity I, on the parts.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 32000
+        }
+      }
+    },
+    "face": {
+      "$type": "number",
+      "$value": 0.3,
+      "$description": "The share of strength that lights the face.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 1
+        }
+      }
+    },
+    "guardFeather": {
+      "$type": "dimension",
+      "$value": "10px",
+      "$description": "Its guard feather.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 16
+        }
+      }
+    },
+    "radius": {
+      "$type": "dimension",
+      "$value": "360px",
+      "$description": "Reach R.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 60,
+          "max": 1000
+        }
+      }
+    },
+    "height": {
+      "$type": "dimension",
+      "$value": "120px",
+      "$description": "Height above the face.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 20,
+          "max": 400
+        }
+      }
+    },
+    "colour": {
+      "$type": "color",
+      "$value": "#fff2e0",
+      "$description": "A warm white: (1, 0.95, 0.88) as light."
+    }
+  },
+  "spring": {
+    "knob": {
+      "$description": "A continuous knob's cap.",
+      "stiffness": {
+        "$type": "number",
+        "$value": 420,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 41,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "detent": {
+      "$description": "A detented knob or selector settling.",
+      "stiffness": {
+        "$type": "number",
+        "$value": 900,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 42,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "fader": {
+      "$description": "A fader's carriage.",
+      "stiffness": {
+        "$type": "number",
+        "$value": 420,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 41,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "slide": {
+      "$description": "A slide switch's block.",
+      "stiffness": {
+        "$type": "number",
+        "$value": 600,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 49,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "rocker": {
+      "$description": "A rocker's paddle.",
+      "stiffness": {
+        "$type": "number",
+        "$value": 1200,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 58,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "bat": {
+      "$description": "A bat switch's lever.",
+      "stiffness": {
+        "$type": "number",
+        "$value": 1400,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 45,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "wall": {
+      "$description": "A wall switch's paddle.",
+      "stiffness": {
+        "$type": "number",
+        "$value": 1200,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 58,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "button": {
+      "$description": "A push button's cap.",
+      "stiffness": {
+        "$type": "number",
+        "$value": 1600,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 80,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    }
+  },
+  "studio": {
+    "$description": "The studio (design language section 4, rendering model 2D.5): application only.",
+    "key": {
+      "$type": "number",
+      "$value": 12,
+      "$description": "The key softbox.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 40,
+          "scope": false
+        }
+      }
+    },
+    "keyRadius": {
+      "$type": "number",
+      "$value": 0.24,
+      "$description": "The softbox's angular radius, radians.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0.05,
+          "max": 0.6,
+          "scope": false
+        }
+      }
+    },
+    "fill": {
+      "$type": "number",
+      "$value": 1.2,
+      "$description": "A broad fill opposite the key.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 10,
+          "scope": false
+        }
+      }
+    },
+    "front": {
+      "$type": "number",
+      "$value": 0.12,
+      "$description": "A dim panel behind the viewer.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 2,
+          "scope": false
+        }
+      }
+    },
+    "strip": {
+      "$type": "number",
+      "$value": 2.5,
+      "$description": "A ring 12–20° above the horizon.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 10,
+          "scope": false
+        }
+      }
+    },
+    "floor": {
+      "$type": "number",
+      "$value": 0.03,
+      "$description": "The room below the horizon.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 1,
+          "scope": false
+        }
+      }
+    },
+    "ceiling": {
+      "$type": "number",
+      "$value": 0.25,
+      "$description": "The room above it.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 2,
+          "scope": false
+        }
+      }
+    }
+  },
+  "colour": {
+    "glowOn": {
+      "$type": "color",
+      "$value": "#ff9228",
+      "$description": "Lit lenses, rings and flags.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "themes": {
+            "light": "#ff9228",
+            "dark": "#ff9228",
+            "contrast": "#ff9228",
+            "contrast-dark": "#ff9228"
+          }
+        }
+      }
+    }
+  },
+  "material": {
+    "presets": {
+      "polished": {
+        "$description": "Spun, bright aluminium.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "{colour.panel}",
+            "$description": "Colour role.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.04,
+            "$description": "Base roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "Base metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        }
+      },
+      "gunmetal": {
+        "$description": "Dark brushed metal.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "{colour.panel}",
+            "$description": "Colour role.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.36,
+            "$description": "Base roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "Base metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        }
+      },
+      "gold": {
+        "$description": "Gold, by its base colour.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "{colour.panel}",
+            "$description": "Colour role.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.18,
+            "$description": "Base roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "Base metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        }
+      },
+      "chrome": {
+        "$description": "Mirror.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "{colour.panel}",
+            "$description": "Colour role.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.04,
+            "$description": "Base roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "Base metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "roles": {
+      "knobCap": {
+        "$type": "string",
+        "$value": "metal",
+        "$description": "A knob's cap; its chamfer the same metal polished."
+      },
+      "knobSkirt": {
+        "$type": "string",
+        "$value": "polished",
+        "$description": "A knob's skirt."
+      },
+      "faderCap": {
+        "$type": "string",
+        "$value": "metal",
+        "$description": "A fader's carriage."
+      },
+      "lever": {
+        "$type": "string",
+        "$value": "metal",
+        "$description": "A bat's lever, polished as a chamfer is."
+      },
+      "rockerPlate": {
+        "$type": "string",
+        "$value": "metal",
+        "$description": "A rocker's paddle."
+      },
+      "plate": {
+        "$type": "string",
+        "$value": "metal",
+        "$description": "Wall plates: metal on light themes, gunmetal on dark.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "themes": {
+              "light": "metal",
+              "dark": "gunmetal",
+              "contrast": "metal",
+              "contrast-dark": "gunmetal"
+            }
+          }
+        }
+      },
+      "bezel": {
+        "$type": "string",
+        "$value": "polished",
+        "$description": "Bezels of rockers, push buttons and displays; a bat's nut and bushing."
+      },
+      "lens": {
+        "$type": "string",
+        "$value": "glass",
+        "$description": "Lenses."
+      },
+      "display": {
+        "$type": "string",
+        "$value": "glass",
+        "$description": "A display's window."
+      },
+      "glowOn": {
+        "$type": "string",
+        "$value": "emissive",
+        "$description": "Lit lenses, rings and flags."
+      },
+      "glowOff": {
+        "$type": "string",
+        "$value": "glass",
+        "$description": "Unlit lenses."
+      }
+    }
+  },
+  "instrument": {
+    "material": {
+      "$description": "The Instrument column of design language section 4's presets: meshes have no captured content, so each carries a base colour (sRGB).",
+      "matte": {
+        "$description": "The recipe, in the role's colour.",
+        "base": {
+          "roughness": {
+            "$type": "number",
+            "$value": 0.45,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        }
+      },
+      "satin": {
+        "$description": "The recipe.",
+        "base": {
+          "roughness": {
+            "$type": "number",
+            "$value": 0.4,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 0.3,
+            "$description": "The coat layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.35,
+            "$description": "The coat layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "ior": {
+            "$type": "number",
+            "$value": 1.5,
+            "$description": "The coat layer's ior.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 1,
+                "max": 3
+              }
+            }
+          }
+        }
+      },
+      "gloss": {
+        "$description": "The recipe.",
+        "base": {
+          "roughness": {
+            "$type": "number",
+            "$value": 0.25,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 0.6,
+            "$description": "The coat layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.12,
+            "$description": "The coat layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "ior": {
+            "$type": "number",
+            "$value": 1.5,
+            "$description": "The coat layer's ior.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 1,
+                "max": 3
+              }
+            }
+          }
+        }
+      },
+      "lacquer": {
+        "$description": "Black lacquer.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#1c1c1e",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.5,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The coat layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.03,
+            "$description": "The coat layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "ior": {
+            "$type": "number",
+            "$value": 1.5,
+            "$description": "The coat layer's ior.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 1,
+                "max": 3
+              }
+            }
+          }
+        }
+      },
+      "glass": {
+        "$description": "Glass: a refraction of the capture (rendering model 2D.6); the tint is (0.84, 0.93, 0.9) as 0–1 channels.",
+        "base": {
+          "roughness": {
+            "$type": "number",
+            "$value": 0.05,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "glass": {
+          "ior": {
+            "$type": "number",
+            "$value": 1.5,
+            "$description": "The glass layer's ior.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 1,
+                "max": 3
+              }
+            }
+          },
+          "tint": {
+            "$type": "color",
+            "$value": "#d6ede6",
+            "$description": "The glass layer's tint."
+          },
+          "absorption": {
+            "$type": "number",
+            "$value": 0.03,
+            "$description": "The glass layer's absorption.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 10
+              }
+            }
+          },
+          "reflection": {
+            "$type": "number",
+            "$value": 1.5,
+            "$description": "The glass layer's reflection.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 10
+              }
+            }
+          }
+        },
+        "dispersion": {
+          "strength": {
+            "$type": "number",
+            "$value": 0.2,
+            "$description": "The dispersion layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        }
+      },
+      "metal": {
+        "$description": "Brushed aluminium (no grain on large plates).",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#eff0f1",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.3,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "brush": {
+          "strength": {
+            "$type": "number",
+            "$value": 0.9,
+            "$description": "The brush layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direction": {
+            "$type": "string",
+            "$value": "circular",
+            "$description": "The brush layer's direction."
+          }
+        },
+        "grain": {
+          "kind": {
+            "$type": "string",
+            "$value": "hairline",
+            "$description": "The grain layer's kind."
+          },
+          "strength": {
+            "$type": "number",
+            "$value": 0.15,
+            "$description": "The grain layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        }
+      },
+      "polished": {
+        "$description": "Polished aluminium.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#fafafb",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.04,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        }
+      },
+      "gunmetal": {
+        "$description": "Dark brushed metal.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#686b72",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.36,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "brush": {
+          "strength": {
+            "$type": "number",
+            "$value": 0.9,
+            "$description": "The brush layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direction": {
+            "$type": "string",
+            "$value": "circular",
+            "$description": "The brush layer's direction."
+          }
+        },
+        "grain": {
+          "kind": {
+            "$type": "string",
+            "$value": "hairline",
+            "$description": "The grain layer's kind."
+          },
+          "strength": {
+            "$type": "number",
+            "$value": 0.15,
+            "$description": "The grain layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        }
+      },
+      "gold": {
+        "$description": "Gold, by its base colour; no brush.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#ffdb93",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.18,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        }
+      },
+      "chrome": {
+        "$description": "Mirror.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#fafafc",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.04,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        }
+      },
+      "emissive": {
+        "$description": "A light source; an emitter when the part is a lens.",
+        "base": {
+          "roughness": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "emissive": {
+          "strength": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The emissive layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 4
+              }
+            }
+          },
+          "colour": {
+            "$type": "color",
+            "$value": "{colour.glowOn}",
+            "$description": "The emissive layer's colour."
+          }
+        }
+      }
+    }
+  }
+}
