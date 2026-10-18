@@ -15,7 +15,7 @@ import { validateCSSSource, type CSSAnimationSource } from "./css-animation.js";
 import { decorative, interactive, validateRipple, type Ripple } from "./ripple.js";
 import { reliefDegraded, type ReliefScene } from "./relief.js";
 import type { StageScene } from "./stage.js";
-import { effectNumber, isSceneMaterial, validateEffects, validateMaterial, type EffectDescriptor, type EffectHandle, type EffectResult, type MaterialDescriptor, type MaterialHandle } from "./effects.js";
+import { effectNumber, isSceneMaterial, validateEffects, validateMaterial, withEmitters, type EffectDescriptor, type EffectHandle, type EffectResult, type MaterialDescriptor, type MaterialHandle } from "./effects.js";
 import { compileMotion, type CoordinatedMotion, type MotionDescriptor, type MotionHandle, type TransitionHandle, type TransitionResult } from "./motion.js";
 import { EnrollmentError, type EnrollmentOptions } from "./enrollment.js";
 import { nativeEditingControl, nativeScrollKind } from "./native.js";
@@ -118,6 +118,10 @@ export class CanvasRuntime {
   private readonly forced = matchMedia("(forced-colors: active)");
   /** Pending coalesced `requestDraw` RAF id; 0 when none. */
   private drawFrame = 0;
+  /** A light was written with `setEmitters` since the last draw (`requestDraw`'s lead frame). */
+  private lightWritten = false;
+  /** Someone other than a light asked for a draw since the last one (`requestDraw`). */
+  private drawWanted = false;
   /** The RAF currently awaited by `animate`/`advance`, with the rejecter `cancelMotion` uses to interrupt it. */
   private motionFrame: { id: number; reject(error: Error): void } | undefined;
   /** `animate`/`advance` loops parked until the document becomes visible again. */
@@ -935,14 +939,27 @@ export class CanvasRuntime {
     this.checkPolicy();
     this.presentTransform();
   }
-  /** Schedules one coalesced RAF `draw()` while GPU presents and the document is visible. */
-  private requestDraw() {
+  /**
+   * Schedules one coalesced RAF `draw()` while GPU presents and the document is visible. After a draw that carried a light
+   * written with `setEmitters`, one more frame is asked for at once (a lead frame, which draws only if another light was
+   * written by then): a writer that asks for its own next frame before writing (the usual idiom) would otherwise run
+   * ahead of core's request in every frame, and core would draw every other frame. The lead frame keeps core's callback
+   * after the writer's in each frame, so a light moved every frame is drawn every frame, in the frame it was written.
+   */
+  private requestDraw(lead = false) {
+    // A request made while the lead frame is pending is folded into it, which then draws.
+    if (!lead) this.drawWanted = true;
     if (this.stopped || this.drawFrame || !this.environment.visible || this.core?.phase() !== "gpu") return;
     this.resources.controllerFrames++;
     this.drawFrame = requestAnimationFrame(() => {
       this.drawFrame = 0;
       this.resources.controllerFrames--;
-      try { this.core?.draw(); } catch (error) { this.recover(`Geometry/draw failure: ${String(error)}`); }
+      if (lead && !this.lightWritten && !this.drawWanted) return;
+      const written = this.lightWritten;
+      this.lightWritten = false;
+      this.drawWanted = false;
+      try { this.core?.draw(); } catch (error) { this.recover(`Geometry/draw failure: ${String(error)}`); return; }
+      if (written) this.requestDraw(true);
     });
   }
   /**
@@ -1670,6 +1687,13 @@ export class CanvasRuntime {
         entry.value = validateMaterial(isSceneMaterial(entry.value)
           ? { ...entry.value, scene: change as ReliefScene & StageScene }
           : { ...entry.value, parameters: change as Record<string, number> });
+        this.requestDraw();
+      },
+      setEmitters: emitters => {
+        this.assertLive();
+        if (!active || this.materials.get(id) !== entry) throw new Error("Material handle is no longer active");
+        entry.value = withEmitters(entry.value, emitters);
+        this.lightWritten = true;
         this.requestDraw();
       },
       cancel: () => entry.finish({ status: "cancelled", reason: "Material cancelled" }),
