@@ -655,6 +655,36 @@ At the Instrument level (`level: "instrument"`) the carriage is a chamfered brus
 `spring.fader` (`gpu/instrument-fader.ts`), its shadow kept inside the input's box at every depth. A detented fader
 plays `tick` as it passes a detent when feedback is on (off by default). [Anatomy](../../docs/ui-library/components/fader.md).
 
+## RotarySelector and the push-button forms
+
+The third part of the Instrument level's second wave. A **RotarySelector** is a native `<select>` over a printed dial: a knob with
+one hard detent per option, the options' labels printed round it (a numbered legend when the dial is narrow or the text large). The
+select takes every press and stays the control; `attachStrataRotarySelectors` in `@underglass/ui/dom` (which `attachStrata` and the
+components attach) gives it the Knob's round behaviour: a vertical drag, a click on the ring or a printed label, a tap on the cap's
+upper or lower half, and the wheel, snapping to the nearest enabled option, with the select's own keys, type-ahead and popup. The
+**push-button forms** draw the existing Button and ToggleButton as machined caps on a bezel with a lit ring: `form="momentary"`
+lights the ring and lowers the cap while the button is held (`data-strata-down`), `form="latching"` keeps the cap down at 0.45 of its
+travel while `aria-pressed`, with an LED on the bezel; any other `form` is still the native form owner (`attachStrataPushButtons`).
+`colour` is the ring's role, as the Lamp's.
+
+```tsx
+<RotarySelector label="Filter" options={[{ value: "lp", label: "LP" }, { value: "hp", label: "HP" }, { value: "bp", label: "BP" }]} value={filter} onValueChange={setFilter} />
+<Button form="momentary" colour="danger" onClick={record}>Record</Button>
+<ToggleButton form="latching" colour="warning" pressed={muted} onPressedChange={setMuted}>Mute</ToggleButton>
+```
+
+Vue uses `v-model` on the selector and `v-model:pressed` on the toggle; Astro takes `value` and `pressed`. On the GPU the selector is the
+Knob's skirt and cap at Relief and Objects, and the Knob's parts at the Instrument level (`knobObject`), the pointer turned to the
+chosen option on `spring.detent` with no capture and no hit-geometry update. A push button's ring is an emitter at every level (and a
+latching button's LED another; `emitter.pushButton.*`, `emitter.led.*`): a panel with push buttons takes a version 4 scene with its
+`emitters`, the `protected` rects of its text and a `feather`, so the face is lit within the contrast guard and a press is a uniform
+write. Relief draws the bezel and the cap as raised faces, Objects as a slab and a key (`gpu/push-forms.ts`); at the Instrument level
+each button is a polished bezel, a glass ring, and a body with a captured cap travelling 4 px on the CSS throw (`gpu/instrument-push.ts`).
+Every part and shadow is inside the button's box. The selector plays the opt-in `tick` as its pointer moves to another option, a push
+button the opt-in `click` as it goes down. Anatomy: [RotarySelector](../../docs/ui-library/components/rotary-selector.md),
+[Button](../../docs/ui-library/components/button.md#11-push-button-form-momentary),
+[ToggleButton](../../docs/ui-library/components/toggle-button.md#11-push-button-form-latching).
+
 ## Lamp and StatusLight
 
 Hardware lights, the second wave of the Instrument level. A **Lamp** is a lens on a bezel over a native

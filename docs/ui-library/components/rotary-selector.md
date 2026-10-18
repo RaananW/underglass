@@ -179,3 +179,7 @@ flat `colour.knob` and the GPU paints the relief. The dial is at least 108 px hi
   markup above; controlled and uncontrolled values, `onValueChange` / `v-model`, the root ref, `class` and `style`, a Field.
 - **Unit** (`strata-rotary-push.unit.test.mjs`): the position and angle maths and the markup model; the selector's object
   (the Knob's) validated by core's `validateInstrumentScene` and contained.
+- **Not yet:** a parity budget between the Instrument and Objects or CSS renderings, a low-end GPU, and the manual screen-reader
+  script for a combobox whose positions are printed (VAL-002 in [open issues](../../open-issues.md)). Automation cannot hear the
+  native popup, which is the browser's. Selectors of more than about eight options, or with labels longer than about eight
+  characters, crowd the dial: use [Select](select.md).

@@ -26,7 +26,8 @@ native attributes (`:hover`, `:active`, `:focus-visible`, `:checked`, `:disabled
 | `data-strata-size` | A component or a scope | `small`, `medium` (default) or `large`: indicator, switch and control sizes |
 | `data-strata-mode` | The root or a scope | `face`: the GPU paints relief, so CSS paints flat faces (no bevel, shadow or finish) |
 | `data-strata-preview` | A control | `hover`, `active` or `focus`: shows a state statically, for specimens and tests only |
-| `data-strata-form` | A Switch's row | `slide`, `rocker`, `bat` or `wall`: the switch's hardware form ([Switch, Forms](switch.md#11-forms)) |
+| `data-strata-form` | A Switch's row, or a Button or ToggleButton | `slide`, `rocker`, `bat` or `wall`: the switch's hardware form ([Switch, Forms](switch.md#11-forms)); `momentary` (Button) or `latching` (ToggleButton): a push button ([Button](button.md#11-push-button-form-momentary), [ToggleButton](toggle-button.md#11-push-button-form-latching)) |
+| `data-strata-down` | A push button | `true` while it is held (the pointer or a key down), `false` once released: its ring lit and its cap down; set by `attachStrataPushButtons` |
 | `data-strata-colour` | A Lamp or StatusLight | The lens's colour role: `glowOn` (default), `accent`, `success`, `warning`, `danger` or `info` ([Lamp](lamp.md)) |
 | `data-strata-lit` | A StatusLight | `false`: an unlit light (lit when absent) |
 | `data-strata-blink` | A StatusLight | A tempo token, `slow`, `normal` or `fast`: a lit light blinks, off under reduced motion ([StatusLight](status-light.md)) |
@@ -73,9 +74,9 @@ light and depth, reduced motion, keyboard input and reflow.
 
 | Component | Native element | Object |
 | --- | --- | --- |
-| [Button](button.md) | `<button>` | Key |
+| [Button](button.md) | `<button>` | Key; `form="momentary"`: a push button, a machined cap with a lit ring |
 | [IconButton](icon-button.md) | `<button>` with `aria-label` | Square key |
-| [ToggleButton](toggle-button.md) | `<button aria-pressed>` | Latching key |
+| [ToggleButton](toggle-button.md) | `<button aria-pressed>` | Latching key; `form="latching"`: a push button that stays down, with an LED |
 | [ButtonGroup](button-group.md) | `<div role="group">` | Keys on one plinth |
 | [Link](link.md) | `<a href>` | None (flat text) |
 | [Field](field.md) | `<div>` with `<label>`, help and error | None (layout) |
@@ -137,5 +138,6 @@ The [Instrument level](../instrument.md)'s components: hardware objects over nat
 | --- | --- | --- |
 | [Knob](knob.md) | `<input type="range">` over a printed dial | A skirt and a cap with a turning pointer, a scale printed on the face |
 | [Fader](fader.md) | `<input type="range">`, vertical (`writing-mode: vertical-lr`) or horizontal, its thumb the carriage | A slot in the faceplate with a capped carriage, a scale printed beside it |
+| [RotarySelector](rotary-selector.md) | `<select>` over a printed dial, one detent per `<option>` | A knob that turns to the chosen option, the options' labels printed round it |
 | [Lamp](lamp.md) | `<input type="checkbox" role="switch">` in its label row, or a `<button aria-pressed>` when `momentary` | A lens on a bezel: dark glass off, glowing and emitting on |
 | [StatusLight](status-light.md) | `<span role="img" aria-label>`, a `<span>` with its label, or a live `<output>` | A small lens with an emitter; `colour` a role, `blink` a tempo token |

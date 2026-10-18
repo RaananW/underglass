@@ -166,8 +166,8 @@ object is drawn around it.
 | **[StatusLight](components/status-light.md)** (LED) | `<output>` or a `<span role="img" aria-label>`; an optional `aria-live` region names changes | A small lens; `colour` from a role; `blink` is a tempo token, off under reduced motion | None; emitter | 2 (done) |
 | **Meter** | `<meter>` (implicit role meter); `min`, `max`, `low`, `high`, `optimum` | A bar of LED segments behind a window (`segments`), or a needle meter (`form="needle"`) | Segments light; a needle sweeps with a damped spring | 2 |
 | **Gauge** | `<meter>` or `<progress>` with `aria-valuetext` | A round dial under glass with a needle and a printed scale | Needle | 2 |
-| **RotarySelector** | `<select>`; the native popup stays in the overlay host, as Select does today | A knob with a pointer over a ring of printed positions, one detent per `<option>` | Cap turns to the selected position | 2 |
-| **PushButton** forms | The existing Button and ToggleButton, `<button>` | `momentary`: a machined cap with a lit ring. `latching` (ToggleButton): stays down with an LED on | Travel; ring lights | 2 |
+| **[RotarySelector](components/rotary-selector.md)** | `<select>`; the native popup stays in the overlay host, as Select does today | A knob with a pointer over a ring of printed positions, one detent per `<option>` | Cap turns to the selected position | 2 (done) |
+| **PushButton** forms ([Button](components/button.md#11-push-button-form-momentary), [ToggleButton](components/toggle-button.md#11-push-button-form-latching)) | The existing Button and ToggleButton, `<button>` | `momentary`: a machined cap with a lit ring. `latching` (ToggleButton): stays down with an LED on | Travel; ring lights | 2 (done) |
 | **Display** | The existing TextField, `<input>`, as `form="display"`; read-only displays are `<output>` | A glass window in a bezel, backlit, with the text printed under the glass | None; backlight is an emitter | 2 |
 | **Pad** | `<button>`, with `aria-pressed` for latching pads | A square soft cap in a grid, lit from below when active | Travel; emitter | 3 |
 | **JogWheel** | `<input type="range">` with `wrap` (an endless encoder: the value steps, the visual position wraps) | A large flat wheel with a finger dimple | Turns | 3 |
@@ -560,3 +560,9 @@ at every presentation: CSS, plain DOM, React, Vue and Astro, and Relief, Objects
 first use of emitters (a version 4 scene with `emitters`, `protected` rects and a `feather`, and `setEmitters` for a toggle or
 a blink), the `blink` tempo tokens and the opt-in `click` feedback. Meter, Gauge, RotarySelector, the PushButton forms and
 Display follow.
+
+PR 12, wave 2, third part: the RotarySelector ([anatomy](components/rotary-selector.md)) and the PushButton forms
+([`momentary`](components/button.md#11-push-button-form-momentary), [`latching`](components/toggle-button.md#11-push-button-form-latching)),
+at every presentation. The selector is a native `<select>` over the Knob's dial with one detent per option and the labels printed round
+it, the knob's round behaviour and its parts at the Instrument level; the push forms are the Button and ToggleButton as a machined cap on
+a bezel with a lit ring (an emitter) and, latching, an LED, with the key's travel, `click` feedback and a panel of emitters at every level.
