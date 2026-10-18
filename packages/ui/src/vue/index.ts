@@ -6,6 +6,7 @@
  */
 export { Button, ButtonGroup, IconButton, Link, ToggleButton } from "./buttons.ts";
 export { Checkbox, Radio, RadioGroup, Switch } from "./choices.ts";
+export type { StrataSwitchForm } from "../shared/switch-forms.ts";
 export { Badge, Card, Divider, Panel, ProgressBar, Spinner } from "./display.ts";
 export { Dialog, Drawer } from "./overlays.ts";
 export { Field, Select, Slider, TextArea, TextField } from "./fields.ts";
