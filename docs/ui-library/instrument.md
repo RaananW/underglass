@@ -162,8 +162,8 @@ object is drawn around it.
 | **Knob** | `<input type="range">`, Slider pattern; `detents` makes it stepped (`step`); `aria-valuetext` for units | A machined cylinder: chamfered cap with a pointer line, skirt, a printed scale on the faceplate around it | Cap turns through `knob.sweep` (default 270°); detented knobs click | 1 |
 | **Fader** | `<input type="range">` vertical (`writing-mode: vertical-lr`, `aria-orientation="vertical"`) or horizontal | A slot in the faceplate with a capped carriage, a printed scale alongside | Cap slides the slot | 1 |
 | **Switch forms** | The existing Switch, `<input type="checkbox" role="switch">` | `slide` (default in premium): a flush slide switch. `rocker`: two plates on a pivot. `bat`: a lever that snaps over centre. `wall`: a wall plate with a paddle | Tip, throw, slide | 1 |
-| **Lamp** | `<input type="checkbox" role="switch">` with the lamp as its label, or a `<button aria-pressed>` when it is a momentary control | A lens on a bezel; off it is a dark glass dome, on it glows and **emits** | None; the emitter turns on | 2 |
-| **StatusLight** (LED) | `<output>` or a `<span role="img" aria-label>`; an optional `aria-live` region names changes | A small lens; `colour` from a role; `blink` is a tempo token, off under reduced motion | None; emitter | 2 |
+| **[Lamp](components/lamp.md)** | `<input type="checkbox" role="switch">` with the lamp as its label, or a `<button aria-pressed>` when it is a momentary control | A lens on a bezel; off it is a dark glass dome, on it glows and **emits** | None; the emitter turns on | 2 (done) |
+| **[StatusLight](components/status-light.md)** (LED) | `<output>` or a `<span role="img" aria-label>`; an optional `aria-live` region names changes | A small lens; `colour` from a role; `blink` is a tempo token, off under reduced motion | None; emitter | 2 (done) |
 | **Meter** | `<meter>` (implicit role meter); `min`, `max`, `low`, `high`, `optimum` | A bar of LED segments behind a window (`segments`), or a needle meter (`form="needle"`) | Segments light; a needle sweeps with a damped spring | 2 |
 | **Gauge** | `<meter>` or `<progress>` with `aria-valuetext` | A round dial under glass with a needle and a printed scale | Needle | 2 |
 | **RotarySelector** | `<select>`; the native popup stays in the overlay host, as Select does today | A knob with a pointer over a ring of printed positions, one detent per `<option>` | Cap turns to the selected position | 2 |
@@ -558,3 +558,9 @@ One concern per PR, each based on `main`:
 PR 11, the Switch forms ([anatomy](components/switch.md#11-forms)): `slide`, `rocker`, `bat` and `wall` done in CSS, Relief and
 Objects and Instrument (the helper's `instrument` level), with sound and haptics as the opt-in option, and the Knob's
 detents' `tick`.
+
+PR 12, wave 2, first part: the Lamp and the StatusLight ([Lamp](components/lamp.md), [StatusLight](components/status-light.md)),
+at every presentation: CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Instrument on the GPU, with the helper's
+first use of emitters (a version 4 scene with `emitters`, `protected` rects and a `feather`, and `setEmitters` for a toggle or
+a blink), the `blink` tempo tokens and the opt-in `click` feedback. Meter, Gauge, RotarySelector, the PushButton forms and
+Display follow.

@@ -15,7 +15,8 @@
  * - **Haptics:** a short `navigator.vibrate` pulse where the device has one, only in answer to the visitor's own
  *   input on the control, and never under `prefers-reduced-motion: reduce`.
  * Controls call `strataFeedback(element, kind)`: the switch forms on every throw (`dom/switch.ts`), a detented Fader
- * with `tick` as each detent passes (`dom/fader.ts`), and a detented Knob the same (`dom/knob.ts`).
+ * with `tick` as each detent passes (`dom/fader.ts`), a detented Knob the same (`dom/knob.ts`), and a Lamp with `click`
+ * as it is toggled or goes down (`dom/lamp.ts`).
  */
 
 /** The four sounds of a character's sound set. */
@@ -93,8 +94,8 @@ const soundOf = (element: Element, kind: StrataSoundKind): StrataSound => {
 const soundOn = (state: FeedbackState, element: Element) => !state.options.muted && (state.options.sound ?? token(element, "sound"));
 const hapticsOn = (state: FeedbackState, element: Element) => !state.options.muted && (state.options.haptics ?? token(element, "haptics"))
   && !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
-/** The Instrument controls feedback belongs to (the switch forms, faders and knobs). */
-const controls = ".ug-switch[data-strata-form] .ug-switch__input, .ug-knob__input, .ug-fader__input";
+/** The Instrument controls feedback belongs to (the switch forms, faders, knobs and lamps; a lamp's row, since a press on its label is a press on it). */
+const controls = ".ug-switch[data-strata-form] .ug-switch__input, .ug-knob__input, .ug-fader__input, .ug-lamp";
 
 /** The page's feedback state, with its gesture listeners, created once per document. */
 function stateOf(doc: Document): FeedbackState {

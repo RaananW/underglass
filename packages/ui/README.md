@@ -654,3 +654,33 @@ Vue uses `v-model`; Astro takes `value` and `unit`. The ref is the `.ug-fader` r
 At the Instrument level (`level: "instrument"`) the carriage is a chamfered brushed carriage with a grip, sliding on
 `spring.fader` (`gpu/instrument-fader.ts`), its shadow kept inside the input's box at every depth. A detented fader
 plays `tick` as it passes a detent when feedback is on (off by default). [Anatomy](../../docs/ui-library/components/fader.md).
+
+## Lamp and StatusLight
+
+Hardware lights, the second wave of the Instrument level. A **Lamp** is a lens on a bezel over a native
+`<input type="checkbox" role="switch">` in its label row, or, with `momentary`, a `<button aria-pressed>` with its lens and
+label inside it that is lit while it is held (`attachStrataLamps` in `@underglass/ui/dom`, which `attachStrata` and the
+components attach). A **StatusLight** is a small lens that shows a state and takes no input, named by its `label`: a
+`<span role="img">` by default, a `<span>` with the label shown (`showLabel`), or a live `<output>` that names changes
+(`live`). `colour` is a role (`glowOn` amber by default, or `accent`, `success`, `warning`, `danger`, `info`); `blink` is a
+tempo token (`slow`, `normal`, `fast`: never over three flashes a second, off under reduced motion); a light's meaning is its
+label, never its colour or its blink.
+
+```tsx
+<Lamp colour="success" checked={link} onChange={event => setLink(event.target.checked)}>Link</Lamp>
+<Lamp momentary colour="danger" onClick={talk}>Talk</Lamp>
+<StatusLight label="Recording" colour="danger" blink="normal" showLabel />
+<StatusLight label={status} live />
+```
+
+Vue uses `v-model` on a toggle lamp; Astro takes `checked`. `setStrataStatusLight(element, { label, lit, colour, blink })`
+changes a light in plain DOM and keeps it valid. A lens is lit by `--strata-lit`, a registered number: 1 for a lit lamp (0
+when disabled) and a lit StatusLight, animated by a blink. Every visible lens is an **emitter** at every GPU level: a panel
+with a lamp or an LED takes a version 4 scene with its `emitters`, the `protected` rects of its text and a `feather`, so
+core's face pool lights the page around it within the contrast guard (`emitter.*` tokens), and a toggle, a press or a blink is a
+uniform write with no capture. Relief draws the lens as a disc and Objects as a dome in its own colour; at the Instrument level
+(`level: "instrument"`) it is a polished bezel and a glass lens (`gpu/instrument-lamp.ts`) over a socket printed on the
+face, with bloom. Past 64 emitters in a layer core draws the 64 with the most reach and reports the rest. A lamp plays the
+opt-in `click` feedback. Anatomy: [Lamp](../../docs/ui-library/components/lamp.md),
+[StatusLight](../../docs/ui-library/components/status-light.md).
+

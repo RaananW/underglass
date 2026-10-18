@@ -12,6 +12,7 @@
  * - **Fader** (`faderObject` in `gpu/instrument-fader.ts`): the premium fader's carriage sliding the slot.
  * - **Custom parts** (`customPart`, `KnobInput.customCap`): a glB the application names for one part (a knob's cap), as a
  *   `mesh` profile that core loads, checks and draws like any other part; nothing is drawn for it until the file is there.
+ * - **Lamp and LED** (`lampObject` in `gpu/instrument-lamp.ts`): a polished bezel and a glass lens with its emitter.
  * - **Springs** (`advanceSpring`): a knob's `t` follows its value on `spring.knob` or `spring.detent`, a fader's on
  *   `spring.fader` (section 12), in fixed 4 ms steps, clamped at the stops; reduced motion makes it instant.
  */
@@ -81,12 +82,15 @@ export function customPart(input: CustomPartInput, profile: (name: string, shape
   return { kind, profile: name, at, material, ...(pose ? { pose } : {}), ...(caster !== undefined ? { caster } : {}), ...(state ? { state } : {}), ...(fallback ? { fallback } : {}) };
 }
 export interface InstrumentPart {
-  kind: "custom" | "cap" | "skirt" | "chamfer" | "pointer" | "plinth" | "carriage" | "grip" | "segment" | "bezel" | "paddle" | "nut" | "bushing" | "lever" | "ball" | "plate";
+  kind: "custom" | "cap" | "skirt" | "chamfer" | "pointer" | "plinth" | "carriage" | "grip" | "segment" | "bezel" | "paddle" | "nut" | "bushing" | "lever" | "ball" | "plate" | "lens";
   profile: string;
   at: Vec3;
   pose?: { from: InstrumentPose; to: InstrumentPose };
   material: string;
   captured?: boolean;
+  /** A glass lens (2D.6), and the index of the emitter it is the lens of. */
+  glass?: "lens";
+  emitter?: number;
   /** Omitted: core's own, from the posed part; `null`: none; given: this footprint at this mean height (2.8). */
   caster?: null | { rect: Box; radius: number; height: number };
   state?: { hover?: boolean; pressed?: boolean; focus?: boolean; disabled?: boolean };
@@ -107,6 +111,9 @@ export interface InstrumentRecipe {
   emissive?: { strength?: number; colour?: string };
   brush?: { strength?: number; direction?: "radial" | "linear" | "circular" };
   grain?: { kind?: "hairline"; strength?: number; scale?: number };
+  /** Glass (2D.6): the lens's refraction over the capture, tinted, with its reflection, and the prism fringe at its edge. */
+  glass?: { ior?: number; tint?: string | [number, number, number]; absorption?: number; reflection?: number };
+  dispersion?: { strength?: number };
 }
 
 /** The camera rule's floor (design language section 6). */

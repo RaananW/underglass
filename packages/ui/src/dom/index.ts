@@ -1,6 +1,6 @@
 /**
  * `@underglass/ui/dom`: framework-neutral runtime for the page: applying an application theme with runtime updates,
- * scope overrides for a subtree, panel motion through depth, modal Dialog and Drawer behaviour, Tabs keyboard and selection, the Knob's round behaviour, and the behaviour native elements need in markup rendered
+ * scope overrides for a subtree, panel motion through depth, modal Dialog and Drawer behaviour, Tabs keyboard and selection, the Knob's round behaviour, the Lamp's momentary press, and the behaviour native elements need in markup rendered
  * without a binding (`attachStrata`). React, Vue and Astro bindings build on it.
  */
 export { applyStrataTheme, resolveStrataScope, strataScope } from "./theme.ts";
@@ -25,6 +25,9 @@ export { attachStrataFaders, syncStrataFader } from "./fader.ts";
 export { attachStrataCarousels, showStrataSlide, strataSlideIndex, strataSlideTarget } from "./carousel.ts";
 export { attachStrataMenus, strataMenuTarget } from "./menu.ts";
 export { attachStrataKnobs, syncStrataKnob } from "./knob.ts";
+export { attachStrataLamps } from "./lamp.ts";
+export { setStrataStatusLight } from "./status-light.ts";
+export type { StatusLightUpdate } from "./status-light.ts";
 export { showStrataToast } from "./toast.ts";
 export type { ToastHandle, ToastOptions } from "./toast.ts";
 export type { TabChange, TabsActivation } from "./tabs.ts";

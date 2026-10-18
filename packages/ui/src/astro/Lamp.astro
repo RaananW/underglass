@@ -1,0 +1,46 @@
+---
+/**
+ * Lamp (anatomy page `lamp.md`): a lens on a bezel over a native `<input type="checkbox" role="switch">` in its label
+ * row, or, when `momentary`, a `<button aria-pressed>` with its lens and label inside it, lit while it is held. The slot
+ * is the label, which must not contain "on" or "off". With no script a toggle lamp is a native switch; the momentary press
+ * and the opt-in feedback come from `attachStrata`, which it loads.
+ */
+import Behaviour from "./Behaviour.astro";
+import Field from "./Field.astro";
+import { fieldControl } from "./field.ts";
+import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+import { lampMarkup, type StrataLampColour } from "../shared/lamp.ts";
+
+interface Props {
+  id?: string;
+  checked?: boolean;
+  /** The lens colour: `glowOn` (amber) by default, or a status role. */
+  colour?: StrataLampColour;
+  /** A momentary lamp: a button that is lit while it is pressed (`aria-pressed`), not a switch. */
+  momentary?: boolean;
+  reverse?: boolean;
+  help?: string;
+  error?: string;
+  required?: boolean;
+  disabled?: boolean;
+  invalid?: boolean;
+  errorPrefix?: string;
+  size?: StrataSize;
+  material?: string;
+  level?: StrataLevel;
+  class?: string;
+  style?: string;
+  [attribute: string]: unknown;
+}
+
+const { id, checked, colour, momentary = false, reverse = false, help, error, required, disabled, invalid, errorPrefix, size, material, level, class: className, style, ...rest } = Astro.props;
+const field = fieldControl({ id, help, error, required, disabled, invalid }, "lamp");
+const { required: _required, ...buttonAttrs } = field.attrs;
+const rowClass = classes("ug-lamp", momentary && "ug-lamp--momentary", reverse && "ug-lamp--reverse", className);
+---
+<Field wrap={field.wrap} controlId={field.id} help={help} error={error} errorPrefix={errorPrefix}>
+  {momentary
+    ? <button class={rowClass} style={style} type="button" aria-pressed="false" {...strataAttributes({ size, material, level })} data-strata-colour={colour} {...buttonAttrs} {...rest}><span class="ug-lamp__object" aria-hidden="true">{lampMarkup.map(part => <span class={part.className} data-strata-face={part.face}></span>)}</span><span class="ug-lamp__label"><slot /></span></button>
+    : <label class={rowClass} style={style} {...strataAttributes({ size, material, level })} data-strata-colour={colour}><input class="ug-lamp__input" type="checkbox" role="switch" checked={checked} {...field.attrs} {...rest} /><span class="ug-lamp__object" aria-hidden="true">{lampMarkup.map(part => <span class={part.className} data-strata-face={part.face}></span>)}</span><span class="ug-lamp__label"><slot /></span></label>}
+</Field>
+<Behaviour />
