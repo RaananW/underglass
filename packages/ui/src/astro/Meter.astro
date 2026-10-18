@@ -1,0 +1,56 @@
+---
+/**
+ * Meter (anatomy page `meter.md`): a native `<meter>` (role `meter`, a read-only measurement) under a bar of LED segments
+ * lit from its value, or a needle on a printed arc (`form="needle"`), with its legend printed under the window, rendered
+ * on the server. The zones come from `low`, `high` and `optimum`. With no script it is a native meter, drawn as
+ * rendered; keeping the drawing in step with a changed value (and the held peak) comes from `attachStrata`, which it
+ * loads. `class`, `style` and other attributes reach the `.ug-meter` root. `unit` keeps `aria-valuetext` in step in the
+ * browser; a `format` function would only apply on the server, so Astro takes `unit` alone.
+ */
+import Behaviour from "./Behaviour.astro";
+import MeterObject from "./MeterObject.astro";
+import { nextId } from "./field.ts";
+import { meterModel, type MeterMark, type StrataMeterForm } from "../shared/meter.ts";
+import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+
+interface Props {
+  /** The legend printed under the window; it names the meter. */
+  label: string;
+  value: number;
+  min?: number;
+  max?: number;
+  low?: number;
+  high?: number;
+  optimum?: number;
+  /** `bar` (the default) or `needle`. */
+  form?: StrataMeterForm;
+  /** A bar's segments; 16 by default. */
+  segments?: number;
+  marks?: number | readonly (number | MeterMark)[];
+  /** A unit for `aria-valuetext`, appended as written (" dB", "%"). */
+  unit?: string;
+  /** A bar holds its highest lit segment, and lets it fall. */
+  peak?: boolean;
+  /** The native meter's id; generated when absent. */
+  id?: string;
+  size?: StrataSize;
+  material?: string;
+  level?: StrataLevel;
+  class?: string;
+  style?: string;
+  [attribute: string]: unknown;
+}
+
+const { label, value, min, max, low, high, optimum, form = "bar", segments, marks, unit, peak, id, size, material, level, class: className, style, ...rest } = Astro.props;
+const model = meterModel({ value, min, max, low, high, optimum, form, segments, marks, unit, peak });
+const meterId = id ?? nextId("meter");
+---
+<div class={classes("ug-meter", ...model.classes, className)} {...strataAttributes({ size, material, level })} style={style ? `${model.style} ${style}` : model.style} {...rest}>
+  <div class="ug-meter__body">
+    <MeterObject model={model} />
+    <meter class="ug-meter__native" id={meterId} min={model.native.min} max={model.native.max} value={model.native.value} low={model.native.low} high={model.native.high} optimum={model.native.optimum}
+      data-strata-unit={unit} aria-valuetext={model.valueText}>{model.valueText ?? String(model.native.value)}</meter>
+  </div>
+  <label class="ug-meter__label" for={meterId}>{label}</label>
+</div>
+<Behaviour />
