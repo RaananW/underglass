@@ -269,12 +269,14 @@ export function castHeight(scene: Pick<ReliefScene, "state">, entry: ReliefPrimi
 }
 
 /** A relief entry as the guard sees it: its box, corner radius, interior offset, and its cast shadow when lifted. */
-interface GuardShape { box: Bounds; radius: number; offset: number; cast: number }
+interface GuardShape { box: Bounds; radius: number; offset: number; cast: number; region?: Bounds }
 const shapeCache = new WeakMap<ReliefScene, GuardShape[]>();
 function guardShapes(face: ReliefScene): GuardShape[] {
   let shapes = shapeCache.get(face);
   if (shapes) return shapes;
   const { hoverLift, pressSink } = face.state;
+  const a = (face.light.azimuth * Math.PI) / 180, e = (face.light.elevation * Math.PI) / 180;
+  const lx = Math.sin(a) * Math.cos(e), ly = -Math.cos(a) * Math.cos(e), lz = Math.sin(e);
   shapes = face.primitives.map(entry => {
     const [x, y, width, height] = entry.rect, state = entry.state ?? {};
     const material = face.materials[entry.material] ?? {};
@@ -287,7 +289,11 @@ function guardShapes(face: ReliefScene): GuardShape[] {
     const cast = object ? Math.max(castHeight(face, entry), castHeight(face, { face: "raised", rect: entry.rect, height: entry.height, material: entry.material, state }))
       : castHeight(face, entry);
     const round = !object && entry.face === "knob" || dome;
-    return { box: { x0: x, y0: y, x1: x + width, y1: y + height }, radius: round ? Math.min(width, height) / 2 : Math.min(entry.radius ?? 0, width / 2, height / 2), offset, cast };
+    const box = { x0: x, y0: y, x1: x + width, y1: y + height };
+    // The shadow's region: the caster moved against the light by up to its cast height, grown by its softness.
+    const ox = -(lx / lz) * cast, oy = -(ly / lz) * cast, grow = 1.5 * cast + 1;
+    const region = cast > 0 ? { x0: x + Math.min(0, ox) - grow, y0: y + Math.min(0, oy) - grow, x1: box.x1 + Math.max(0, ox) + grow, y1: box.y1 + Math.max(0, oy) + grow } : undefined;
+    return { box, radius: round ? Math.min(width, height) / 2 : Math.min(entry.radius ?? 0, width / 2, height / 2), offset, cast, ...(region ? { region } : {}) };
   });
   shapeCache.set(face, shapes);
   return shapes;
@@ -320,8 +326,6 @@ function within(shape: GuardShape, area: Bounds, by: number) {
  */
 export function interiorBounds(face: ReliefScene, rect: Bounds): [number, number] {
   const m = face.interior.max, shapes = guardShapes(face);
-  const a = (face.light.azimuth * Math.PI) / 180, e = (face.light.elevation * Math.PI) / 180;
-  const lx = Math.sin(a) * Math.cos(e), ly = -Math.cos(a) * Math.cos(e), lz = Math.sin(e);
   let up = 0, down = 0, shadowed = false;
   shapes.forEach((shape, index) => {
     if (overlap(shape.box, rect, 1)) {
@@ -335,12 +339,12 @@ export function interiorBounds(face: ReliefScene, rect: Bounds): [number, number
       up = Math.max(up, stackUp); down = Math.max(down, stackDown);
     }
     // Every caster, overlapping the rect or not: its shadow reaches past its own box.
-    if (shadowed || shape.cast <= 0) return;
-    // The shadow's region: the caster moved against the light by up to its cast height, grown by its softness.
-    const ox = -(lx / lz) * shape.cast, oy = -(ly / lz) * shape.cast, grow = 1.5 * shape.cast + 1;
-    const region = { x0: shape.box.x0 + Math.min(0, ox) - grow, y0: shape.box.y0 + Math.min(0, oy) - grow, x1: shape.box.x1 + Math.max(0, ox) + grow, y1: shape.box.y1 + Math.max(0, oy) + grow };
+    if (shadowed || !shape.region) return;
+    // Only the part of the rect the shadow can reach; most casters miss it, and their loop below is skipped.
+    const reached = intersect(rect, shape.region);
+    if (!reached) return;
     for (let below = 0; below < index && !shadowed; below++) {
-      const ground = intersect(intersect(rect, region) ?? { x0: 0, y0: 0, x1: 0, y1: 0 }, shapes[below]!.box);
+      const ground = intersect(reached, shapes[below]!.box);
       if (ground && !within(shape, ground, 1)) shadowed = true;
     }
   });
@@ -379,11 +383,19 @@ export function packEmitters(out: Float32Array, offset: number, light: LayerEmit
   out.fill(0, offset, offset + EMITTER_BLOCK_VEC4S * 4);
   const drawn = light.drawn;
   const own = guard.rects.slice(0, BLOCK_RECTS), room = BLOCK_RECTS - own.length;
-  // Lower layers' text that does not fit is merged into its bounding box (no light there, and only there); with no room
-  // at all, the whole outset gets no light. Either is reported (`state().emitters.layers[].beneath`).
+  // Lower layers' text that does not fit is merged per side of the layer's box (left, right, top, bottom: at most four
+  // boxes, none reaching into the box, so the layer's own face keeps its light); with too little room even for those,
+  // the whole outset gets no light. Either is reported (`state().emitters.layers[].beneath`).
   let lower = beneath.rects;
   const merged = lower.length > room && room > 0;
-  if (merged) lower = [{ x0: Math.min(...lower.map(box => box.x0)), y0: Math.min(...lower.map(box => box.y0)), x1: Math.max(...lower.map(box => box.x1)), y1: Math.max(...lower.map(box => box.y1)) }];
+  if (merged) {
+    const sides = new Map<string, Bounds>();
+    for (const box of lower) {
+      const side = box.x1 <= 0 ? "left" : box.x0 >= extent.width ? "right" : box.y1 <= 0 ? "top" : "bottom", seen = sides.get(side);
+      sides.set(side, seen ? { x0: Math.min(seen.x0, box.x0), y0: Math.min(seen.y0, box.y0), x1: Math.max(seen.x1, box.x1), y1: Math.max(seen.y1, box.y1) } : { ...box });
+    }
+    lower = [...sides.values()];
+  }
   const overflow = beneath.overflow || lower.length > room;
   if (overflow) lower = [];
   out.set([drawn.length, feather, own.length + lower.length, m], offset);

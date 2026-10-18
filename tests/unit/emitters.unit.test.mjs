@@ -212,6 +212,19 @@ test("the guard uses the cast height the relief pass packs, in every state", () 
   assert.equal(castHeight(state, { face: "well", rect: [0, 0, 10, 10], height: 10, material: "x" }), 0);
 });
 
+test("a protected box over 256 entries is bounded in a few milliseconds", () => {
+  // The third review measured 31–37 ms here when every caster scanned every earlier entry; only casters whose shadow
+  // reaches a cell do now (about 1 ms on the dev machine). A generous ceiling, so a slow CI machine does not flake.
+  const make = () => validateReliefScene(relief({ extent: { width: 1600, height: 900 }, protected: "extent", primitives: [{ face: "raised", rect: [0, 0, 1600, 900], radius: 14, height: 6, material: "face" },
+    ...Array.from({ length: 255 }, (_, index) => ({ face: "raised", rect: [10 + (index % 20) * 79, 10 + Math.floor(index / 20) * 68, 60, 40], radius: 6, height: 4, material: "satin" }))] }));
+  layerGuard(make(), "extent");
+  const scene = make(), started = performance.now();
+  const guard = layerGuard(scene, "extent");
+  const elapsed = performance.now() - started;
+  assert.equal(guard.cells.length, 144);
+  assert.ok(elapsed < 15, `a protected box over 256 entries took ${elapsed.toFixed(2)} ms`);
+});
+
 test("each object's face shadow takes its share of a guarded area's shadow cap", () => {
   const areas = [{ rect: { x0: 0, y0: 0, x1: 100, y1: 20 }, light: 0.04, shadow: 0.04 }, { rect: { x0: 300, y0: 0, x1: 400, y1: 20 }, light: 0.04, shadow: 0 }];
   // Two objects reach the first area, none the second; one casts nothing.
@@ -261,6 +274,14 @@ test("the emitter block packs the drawn emitters, the guard and the tiles where 
   assert.deepEqual(packEmitters(out, RELIEF_EMITTER_BASE * 4, light, full, lower, rect, scene.extent, scene.feather, scene.interior.max), { beneath: 2, merged: false, overflow: true });
   assert.equal(at(0)[2], 64);
   assert.equal(at(EMITTER_EXTENT)[3], 1, "no room: the outset is dark");
+  // Text on two sides is merged per side, never into a box over the layer's own face (third review).
+  const sixtyTwo = { ...crowded, rects: crowded.rects.slice(0, 62) };
+  const twoSides = { rects: [{ x0: -40, y0: 0, x1: -30, y1: 10 }, { x0: 410, y0: 50, x1: 430, y1: 60 }, { x0: 405, y0: 150, x1: 420, y1: 160 }], overflow: false };
+  assert.deepEqual(packEmitters(out, RELIEF_EMITTER_BASE * 4, light, sixtyTwo, twoSides, rect, scene.extent, scene.feather, scene.interior.max), { beneath: 3, merged: true, overflow: false });
+  assert.equal(at(0)[2], 64);
+  assert.deepEqual([at(EMITTER_RECTS + 62), at(EMITTER_RECTS + 63)], [[-40, 0, -30, 10], [405, 50, 430, 160]], "one box left of the layer, one right of it");
+  for (const box of [at(EMITTER_RECTS + 62), at(EMITTER_RECTS + 63)]) assert.ok(box[2] <= 0 || box[0] >= 400 || box[3] <= 0 || box[1] >= 200, "no merged box reaches into the layer's box");
+  assert.deepEqual(packEmitters(out, RELIEF_EMITTER_BASE * 4, light, crowded, twoSides, rect, scene.extent, scene.feather, scene.interior.max), { beneath: 3, merged: true, overflow: true }, "one slot for two sides: the outset is dark");
   // The shaders read the same block.
   assert.match(reliefWGSL, /fn reliefLamp/);
   assert.match(poolWGSL.fragment, /fn lampTile/);
