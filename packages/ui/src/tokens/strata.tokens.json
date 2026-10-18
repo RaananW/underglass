@@ -1684,6 +1684,82 @@
         }
       }
     },
+    "push": {
+      "small": {
+        "$type": "dimension",
+        "$value": "32px",
+        "$description": "PushButton cap height at small (the button's box is the cap plus 24 px).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 24,
+            "max": 80
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "40px",
+        "$description": "PushButton cap height at medium (the premium push button: a 64 px box).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 24,
+            "max": 80
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "48px",
+        "$description": "PushButton cap height at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 24,
+            "max": 80
+          }
+        }
+      }
+    },
+    "rotary": {
+      "small": {
+        "$type": "dimension",
+        "$value": "48px",
+        "$description": "RotarySelector skirt diameter at small.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 120
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "64px",
+        "$description": "RotarySelector skirt diameter at medium (the premium knob).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 120
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "80px",
+        "$description": "RotarySelector skirt diameter at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 120
+          }
+        }
+      }
+    },
     "lamp": {
       "small": {
         "$type": "dimension",
@@ -2231,6 +2307,44 @@
         "$type": "number",
         "$value": 520,
         "$description": "Intensity I at the reference lens.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 32000
+          }
+        }
+      }
+    },
+    "pushButton": {
+      "radius": {
+        "$type": "number",
+        "$value": 4,
+        "$description": "Reach R of the lit ring, in cap diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 1,
+            "max": 20
+          }
+        }
+      },
+      "height": {
+        "$type": "number",
+        "$value": 0.3,
+        "$description": "Height of the lit ring's light above the face, in cap diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.1,
+            "max": 2
+          }
+        }
+      },
+      "strength": {
+        "$type": "number",
+        "$value": 2400,
+        "$description": "Intensity I at the reference cap (40 px).",
         "$extensions": {
           "dev.underglass.strata": {
             "scope": true,

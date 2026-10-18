@@ -22,6 +22,8 @@ export { attachStrataPopovers, placeStrataPopover } from "./popover.ts";
 export { attachStrataTrees, rovingStrataTree, strataTreeAction, strataTreeTabStop, visibleStrataTreeItems } from "./tree.ts";
 export type { StrataTreeAction } from "./tree.ts";
 export { attachStrataFaders, syncStrataFader } from "./fader.ts";
+export { attachStrataPushButtons } from "./push-button.ts";
+export { attachStrataRotarySelectors, syncStrataRotarySelector } from "./rotary-selector.ts";
 export { attachStrataCarousels, showStrataSlide, strataSlideIndex, strataSlideTarget } from "./carousel.ts";
 export { attachStrataMenus, strataMenuTarget } from "./menu.ts";
 export { attachStrataKnobs, syncStrataKnob } from "./knob.ts";

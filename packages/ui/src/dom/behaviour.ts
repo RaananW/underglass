@@ -19,6 +19,8 @@
  * - Menus: `attachStrataMenus` runs the Menu Button pattern's keys, and reports `strata-select` from a chosen item;
  * - Knobs: `attachStrataKnobs` gives every `.ug-knob` its round pointer, wheel and reset behaviour (anatomy page `knob.md`);
  * - Lamps: `attachStrataLamps` lights a momentary `.ug-lamp` while it is pressed and plays opt-in feedback (anatomy page `lamp.md`);
+ * - Push buttons: `attachStrataPushButtons` holds a `form="momentary"` or `"latching"` button down (`data-strata-down`) while it is pressed and plays opt-in feedback (anatomy pages `button.md`, `toggle-button.md`);
+ * - Rotary selectors: `attachStrataRotarySelectors` gives every `.ug-rotary` its detented pointer, wheel and tap behaviour (anatomy page `rotary-selector.md`);
  * - Toolbars: the first time focus enters one, its controls get a roving tabindex (one tab stop), and the arrow keys,
  *   Home and End move between them;
  * - Tabs: a click on a tab selects it, and the arrow keys, Home and End move between tabs and select them (only move,
@@ -33,6 +35,8 @@ import { attachStrataSwitches } from "./switch.ts";
 import { attachStrataPopovers } from "./popover.ts";
 import { attachStrataTrees } from "./tree.ts";
 import { attachStrataFaders } from "./fader.ts";
+import { attachStrataPushButtons } from "./push-button.ts";
+import { attachStrataRotarySelectors } from "./rotary-selector.ts";
 import { attachStrataCarousels } from "./carousel.ts";
 import { attachStrataMenus } from "./menu.ts";
 import { attachStrataKnobs } from "./knob.ts";
@@ -68,6 +72,8 @@ export function attachStrata(root: Document | HTMLElement = document): () => voi
   applyIndeterminate(root);
   attachStrataTooltips(root instanceof Document ? root : root.ownerDocument);
   attachStrataSwitches(root instanceof Document ? root : root.ownerDocument);
+  attachStrataPushButtons(root instanceof Document ? root : root.ownerDocument);
+  attachStrataRotarySelectors(root instanceof Document ? root : root.ownerDocument);
   attachStrataPopovers(root instanceof Document ? root : root.ownerDocument);
   attachStrataTrees(root instanceof Document ? root : root.ownerDocument);
   attachStrataFaders(root instanceof Document ? root : root.ownerDocument);
