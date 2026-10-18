@@ -798,6 +798,7 @@
     display: inline-flex;
     align-items: center;
     gap: var(--strata-space-3);
+    max-width: 100%;
     min-height: max(var(--_box), var(--strata-target-min));
     color: var(--strata-colour-text);
     font-family: var(--strata-font-family);
@@ -853,7 +854,7 @@
   :where(.ug-lamp--momentary:focus-visible) { outline: none; }
   :where(.ug-lamp--momentary > .ug-lamp__object) { position: relative; flex: none; left: auto; right: auto; top: auto; }
   :where(.ug-lamp__object) :where(*) { position: absolute; box-sizing: border-box; pointer-events: none; }
-  :where(.ug-lamp__label) { min-width: 0; }
+  :where(.ug-lamp__label) { min-width: 0; overflow-wrap: anywhere; }
   :where(.ug-lamp__bezel) {
     --_h: 3px;
     --_bevel: 3px;
@@ -902,6 +903,7 @@
     display: inline-flex;
     align-items: center;
     gap: var(--strata-space-2);
+    max-width: 100%;
     min-height: var(--_box);
     vertical-align: middle;
     color: var(--strata-colour-text);
@@ -910,15 +912,22 @@
   }
   :where(.ug-status-light:not([data-strata-lit="false"])) { --strata-lit: 1; }
   :where(.ug-status-light__object) { position: relative; flex: none; width: var(--_box); height: var(--_box); pointer-events: none; }
+  :where(.ug-status-light__socket, .ug-status-light__lens) { position: absolute; pointer-events: none; }
+  :where(.ug-status-light__socket) {
+    left: 7px;
+    top: 7px;
+    width: calc(var(--_lens) + 2px);
+    height: calc(var(--_lens) + 2px);
+    border-radius: 50%;
+    background: var(--_off);
+  }
   :where(.ug-status-light__lens) {
-    position: absolute;
     left: 8px;
     top: 8px;
     width: var(--_lens);
     height: var(--_lens);
-    pointer-events: none;
   }
-  :where(.ug-status-light__text) { min-width: 0; }
+  :where(.ug-status-light__text) { min-width: 0; overflow-wrap: anywhere; }
   :where(.ug-status-light--bare .ug-status-light__text) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   :where(.ug-status-light--bare) { gap: 0; }
   /* The blink tempos (`blink.*`): one full on-off cycle, half lit, in steps. Never over three flashes a second. */
@@ -2631,7 +2640,7 @@
   /* More contrast: a lit lens is flat colour, with no glow, and the socket under it takes that colour too (so the GPU's
      glass shows it, and its emitters are off); lenses and bezels are edged in the text colour. */
   @media (prefers-contrast: more) {
-    :where(.ug-lamp__socket) { background: var(--_glass); }
+    :where(.ug-lamp__socket, .ug-status-light__socket) { background: var(--_glass); }
     :where(.ug-lamp__lens, .ug-status-light__lens) { background: var(--_glass); box-shadow: none; }
     :where(.ug-lamp__bezel, .ug-lamp__lens, .ug-status-light__lens) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
   }
@@ -2742,7 +2751,7 @@
     /* The lamp and the LED: a Canvas lens with a CanvasText edge on a Canvas bezel, Highlight when lit, so the state shows by
        fill and by the label; no glow, no blink; GrayText edges when disabled; a Highlight focus ring. */
     :where(.ug-lamp__bezel, .ug-lamp__lens, .ug-status-light__lens) { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; box-shadow: none; filter: none; }
-    :where(.ug-lamp__socket) { background: transparent; }
+    :where(.ug-lamp__socket, .ug-status-light__socket) { background: transparent; }
     :where(.ug-lamp:has(> .ug-lamp__input:checked:not(:disabled)), .ug-lamp--momentary[aria-pressed="true"]:not(:disabled)) :where(.ug-lamp__lens), :where(.ug-status-light:not([data-strata-lit="false"])) :where(.ug-status-light__lens) { background: Highlight; }
     :where(.ug-lamp:has(> .ug-lamp__input:focus-visible), .ug-lamp--momentary:focus-visible) :where(.ug-lamp__bezel) { outline-color: Highlight; }
     :where(.ug-lamp:has(> .ug-lamp__input:disabled), .ug-lamp--momentary:disabled) :where(.ug-lamp__object) { opacity: 1; }

@@ -1,0 +1,39 @@
+---
+/**
+ * Strata Astro Lamp and StatusLight check page (`/lamp/`): `[data-contract]` renders the anatomy pages' markup examples
+ * (`lamp.md` two, `status-light.md` three) with `@underglass/ui/astro`, and `main` holds live lamps and lights
+ * `tests/browser/ui-lamp-astro.test.mjs` drives with real input. Server-rendered HTML; the only script is the components'
+ * own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { Lamp, StatusLight } from "@underglass/ui/astro";
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro Lamp check</title>
+</head>
+<body>
+  <div data-contract="lamp:0" hidden><Lamp colour="success" name="link">Link</Lamp></div>
+  <div data-contract="lamp:1" hidden><Lamp momentary colour="danger" name="talk">Talk</Lamp></div>
+  <div data-contract="status-light:0" hidden><StatusLight label="Link up" colour="success" /></div>
+  <div data-contract="status-light:1" hidden><StatusLight label="Recording" colour="danger" blink="normal" showLabel /></div>
+  <div data-contract="status-light:2" hidden><StatusLight label="Disconnected" colour="accent" lit={false} live /></div>
+  <main>
+    <form class="ug-panel" data-strata-face="raised" aria-label="Lamps" id="lamps" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+      <Lamp id="mains" name="mains" class="extra" style="margin-right: 4px" data-testid="mains">Mains</Lamp>
+      <Lamp id="arm" name="arm" colour="accent" checked size="small">Armed</Lamp>
+      <Lamp id="hall" name="hall" colour="warning" help="Lights the hall." reverse>Hall</Lamp>
+      <Lamp id="locked" name="locked" disabled checked>Locked</Lamp>
+      <Lamp id="talk" name="talk" momentary colour="success" data-testid="talk">Talk</Lamp>
+      <Lamp id="muted" name="muted" momentary disabled>Muted</Lamp>
+      <Lamp id="owned" name="owned" form="lamps">Owned</Lamp>
+      <StatusLight id="link" label="Link up" colour="success" />
+      <StatusLight id="rec" label="Recording" colour="danger" blink="fast" showLabel class="extra" style="margin-right: 4px" data-testid="rec" />
+      <StatusLight id="sync" label="Synced" live showLabel colour="accent" />
+      <StatusLight id="alert" label="Disk full" live="assertive" colour="danger" />
+    </form>
+  </main>
+</body>
+</html>

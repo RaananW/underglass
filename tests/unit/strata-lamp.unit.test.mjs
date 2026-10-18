@@ -51,7 +51,7 @@ test("the colour roles, the sizes and the boxes: a lens plus room for its bezel 
 
 test("every part is styled, the lens is a knob face and the bezel a raised one", () => {
   assert.deepEqual(lampMarkup, [{ className: "ug-lamp__bezel", face: "raised" }, { className: "ug-lamp__socket" }, { className: "ug-lamp__lens", face: "knob" }]);
-  assert.deepEqual(statusLightMarkup, [{ className: "ug-status-light__lens", face: "knob" }]);
+  assert.deepEqual(statusLightMarkup, [{ className: "ug-status-light__socket" }, { className: "ug-status-light__lens", face: "knob" }]);
   for (const part of [...lampMarkup, ...statusLightMarkup]) assert.ok(css.includes(`.${part.className}`), `${part.className} is styled`);
   assert.match(css, /@property --strata-lit \{ syntax: "<number>"; inherits: true; initial-value: 0; \}/);
   assert.match(css, /@keyframes ug-blink \{ 0% \{ --strata-lit: 1; \} 50% \{ --strata-lit: 0; \} 100% \{ --strata-lit: 1; \} \}/);

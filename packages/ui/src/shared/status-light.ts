@@ -11,8 +11,11 @@
  */
 import type { StrataLampColour } from "./lamp.ts";
 
-/** The decorative object of a StatusLight: the lens, a knob face. */
-export const statusLightMarkup = [{ className: "ug-status-light__lens", face: "knob" as const }];
+/**
+ * The decorative object of a StatusLight, in paint order: the `socket`, the dark disc printed under the lens at every level
+ * (so an unlit LED is a dark glass dome on any faceplate), and the `lens`, a knob face, the emitter's part.
+ */
+export const statusLightMarkup: { className: string; face?: "knob" }[] = [{ className: "ug-status-light__socket" }, { className: "ug-status-light__lens", face: "knob" }];
 
 /** The blink tempos (`blink.*`): the period of one full on-off cycle, ms. */
 export const blinkTempos = ["slow", "normal", "fast"] as const;
