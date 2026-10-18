@@ -178,6 +178,10 @@ at angles from `sin()` and `cos()`. The dial is at least 108 px square, far abov
 - **`prefers-contrast: more`:** the high-contrast theme applies through the tokens; the pointer and the numerals take
   `colour.text`, and the skirt and cap an `edge` border.
 - **`prefers-reduced-motion: reduce`:** the detent settle is off; the pointer turns at once.
+- **Feedback** ([design language section 20](../design-language.md#20-feedback)): a detented knob's pointer passing a
+  detent plays `tick` through `strataFeedback` (one per change, however many detents it passes; the Fader's rule).
+  Sound and haptics are both off by default (`feedback.sound`, `feedback.haptics`, or `attachStrataFeedback`), so
+  nothing plays unless the application or a scope turns them on; a knob without detents never ticks.
 
 ## 10. Tests
 
@@ -196,6 +200,9 @@ at angles from `sin()` and `cos()`. The dial is at least 108 px square, far abov
   inside a dial, and native hits on them find the input; real ring clicks, drags, cap taps, keys, the wheel and the
   reset turn the pointer with fresh pixels inside the dial only; 300 frames of turning add 0 captures beyond the native
   changes and 0 hit-geometry updates; nothing is stepped down to Relief; reduced motion makes the turn instant.
+- **Feedback** (`ui-knob.test.mjs`): with feedback off a detent passed by a real key pulses nothing; with haptics on,
+  each change of a detented knob by the visitor's own key or click is one 5 ms pulse, none at a stop, a jump across two
+  detents one pulse, and a knob without detents never pulses. Unit: the detent-crossing rule (`knobDetentsCrossed`).
 - **Bindings** (`ui-knob-bindings.test.mjs`, `ui-knob-astro.test.mjs`): React, Vue and Astro render the markup above;
   controlled and uncontrolled values, `onValueChange` / `v-model`, the root ref, `class` and `style`.
 - **Unit** (`strata-knob.unit.test.mjs`): the value and angle maths, marks and styles; the knob's and a key's objects
