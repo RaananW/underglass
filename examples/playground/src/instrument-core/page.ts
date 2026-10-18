@@ -154,7 +154,18 @@ const handles = new Map<string, MaterialHandle>();
 let budgetParts: number | undefined;
 // Scene changes for the review's cases: the light's azimuth, an object whose bounds leave the lower panel, and extra
 // objects (copies of the lower panel's first knob) that need no new kind.
-const extras = { azimuth: 323, outside: false, copies: 0 };
+const extras = { azimuth: 323, outside: false, copies: 0, swatches: false };
+/**
+ * Three swatches in one matte material near the lower panel's bottom-right corner: a lathe, a prism and an extrude, each
+ * with a flat top facing the viewer, so their tops must shade alike (a part's winding must not decide its light).
+ */
+const swatchShapes = {
+  lathe: { type: "lathe", points: [[20, 0, 1, 0], [20, 8, 1, 0], [20, 8, 0, 1], [0, 8, 0, 1]], segments: 48 },
+  prism: { type: "prism", width: 40, length: 40, radius: 4, height: 8 },
+  extrude: { type: "extrude", outline: [[-20, 0], [20, 0], [20, 8], [-20, 8]], width: 40 },
+} as const;
+const swatchCentres = (panel: HTMLElement) => (Object.keys(swatchShapes) as (keyof typeof swatchShapes)[])
+  .map((kind, index) => ({ kind, x: panel.offsetWidth - 300 + index * 90, y: panel.offsetHeight - 90 }));
 const sceneOf = (panel: HTMLElement) => {
   const base = panelScene(panel, theme, stage(), pressed, { overshoot: overshoot && panel === lower ? lower.querySelector<HTMLElement>("[data-part=knob]")?.id : undefined,
     casters: options.casters, objects: options.meshes && !faceOnly.has(panel.id) });
@@ -162,6 +173,15 @@ const sceneOf = (panel: HTMLElement) => {
   if (panel === lower && base.objects.length) {
     const knob = base.objects.find(object => object.id.includes("-knob-"))!;
     for (let index = 0; index < extras.copies; index++) base.objects.push({ ...knob, id: `${knob.id}-copy-${index}` });
+    if (extras.swatches) {
+      base.materials.swatch = { base: { colour: "#8a9099", roughness: 0.5 } };
+      for (const { kind, x, y } of swatchCentres(panel)) {
+        const name = `swatch-${kind}`, rect: [number, number, number, number] = [x - 30, y - 30, 60, 60];
+        base.profiles[name] = structuredClone(swatchShapes[kind]) as unknown as InstrumentScene["profiles"][string];
+        base.objects.push({ id: name, rect, bounds: { rect, radius: 0 }, t: 0,
+          parts: [{ kind: "plate", profile: name, at: [x, y, 0], material: "swatch", caster: null }] });
+      }
+    }
     if (extras.outside) {
       // The same knob moved so its box reaches 40 px past the panel's right edge.
       const [, y, w, h] = knob.rect, dx = panel.offsetWidth - w + 40 - knob.rect[0];
@@ -342,6 +362,12 @@ const api = {
   async relight(azimuth: number) { extras.azimuth = azimuth; refreshAll(); await settle(); },
   async outside(on: boolean) { extras.outside = on; refresh(lower); await settle(); },
   async copies(count: number) { extras.copies = count; refresh(lower); await settle(); },
+  /** Shows the swatches (a lathe, a prism and an extrude in one material) and returns their centres in client px. */
+  async swatches(on: boolean) {
+    extras.swatches = on; refresh(lower); await settle();
+    const box = lower.getBoundingClientRect();
+    return swatchCentres(lower).map(({ kind, x, y }) => ({ kind, x: box.left + x, y: box.top + y }));
+  },
   /** Ends a panel's material (`cancel`), or sets it again. */
   async cancel(id: string) { handles.get(id)?.cancel(); handles.delete(id); await settle(); },
   async restore(id: string) { refresh(panels().find(panel => panel.id === id)!); await settle(); },

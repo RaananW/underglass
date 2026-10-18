@@ -458,13 +458,25 @@ export function profileHeight(shape: InstrumentProfile): number {
   return Math.max(...shape.outline.map(point => point[1]));
 }
 
-/** Builds (and caches by its parameters) a profile's triangles. */
+/**
+ * Builds (and caches by its parameters) a profile's triangles. Every triangle is wound the same way against its outward
+ * normal: in the layer's axes, `(b − a) × (c − a)` points against the normal, which is a front face in Lite's world once
+ * the layer's axes become its (y up, +z away). Lite's double-sided PBR shades a back face with its normal flipped, so a
+ * triangle wound the other way is lit as if it faced inward: prism and extrude faces were drawn dark while lathes were
+ * lit. `face` orients each triangle by its vertices' normals, whatever order a builder lists them in.
+ */
 export function profileGeometry(shape: InstrumentProfile): PartGeometry {
   const key = JSON.stringify(shape);
   const cached = geometries.get(key);
   if (cached) return cached;
   const positions: number[] = [], normals: number[] = [], uvs: number[] = [], indices: number[] = [];
   const vertex = (p: Vec3, n: Vec3, uv: Vec2) => { positions.push(...p); normals.push(...n); uvs.push(...uv); return positions.length / 3 - 1; };
+  const face = (a: number, b: number, c: number) => {
+    const at = (index: number, axis: number) => positions[index * 3 + axis]!, normal = (axis: number) => normals[a * 3 + axis]! + normals[b * 3 + axis]! + normals[c * 3 + axis]!;
+    const e1 = [0, 1, 2].map(axis => at(b, axis) - at(a, axis)), e2 = [0, 1, 2].map(axis => at(c, axis) - at(a, axis));
+    const cross = [e1[1]! * e2[2]! - e1[2]! * e2[1]!, e1[2]! * e2[0]! - e1[0]! * e2[2]!, e1[0]! * e2[1]! - e1[1]! * e2[0]!];
+    if (cross[0]! * normal(0) + cross[1]! * normal(1) + cross[2]! * normal(2) > 0) indices.push(a, c, b); else indices.push(a, b, c);
+  };
   if (shape.type === "lathe") {
     // One ring per profile point, each with that point's normal revolved, so bands are smooth across the profile and a
     // repeated point with another normal is a crease. u runs around the axis (a circular brush), v along the profile.
@@ -477,7 +489,7 @@ export function profileGeometry(shape: InstrumentProfile): PartGeometry {
     });
     for (let index = 0; index + 1 < count; index++) for (let step = 0; step < segments; step++) {
       const a = index * (segments + 1) + step, b = a + segments + 1;
-      indices.push(a, b, a + 1, a + 1, b, b + 1);
+      face(a, b, a + 1); face(a + 1, b, b + 1);
     }
   } else if (shape.type === "prism") {
     const { width, length, height } = shape, radius = shape.radius ?? 0, taper = shape.taper ?? 0, chamfer = shape.chamfer ?? 0;
@@ -498,13 +510,13 @@ export function profileGeometry(shape: InstrumentProfile): PartGeometry {
       }
       for (let index = 0; index < count; index++) {
         const next = (index + 1) % count, a = start + index * 2, b = a + 1, c = start + next * 2, d = c + 1;
-        indices.push(a, c, b, b, c, d);
+        face(a, c, b); face(b, c, d);
       }
     }
     // The top, fanned from its centre; its UVs map x and y across the prism's box, so a linear brush runs along x.
     const top = rings[2]!, centre = vertex([0, 0, height], [0, 0, 1], [0.5, 0.5]);
     for (const [x, y] of top.points) vertex([x, y, height], [0, 0, 1], [x / width + 0.5, y / length + 0.5]);
-    for (let index = 0; index < count; index++) indices.push(centre, centre + 1 + index, centre + 1 + ((index + 1) % count));
+    for (let index = 0; index < count; index++) face(centre, centre + 1 + index, centre + 1 + ((index + 1) % count));
   } else {
     // An [x, z] outline swept along y; flat facets, both ends fanned from the outline's mean point.
     const { outline: points, width } = shape, half = width / 2, count = points.length;
@@ -520,12 +532,12 @@ export function profileGeometry(shape: InstrumentProfile): PartGeometry {
       for (const [px, py, pz] of [[x0, -half, z0], [x0, half, z0], [x1, half, z1], [x1, -half, z1]] as const) {
         vertex([px, py, pz], normal, [(px - minX) / span, (py + half) / width]);
       }
-      indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
+      face(start, start + 1, start + 2); face(start, start + 2, start + 3);
     }
     for (const side of [-1, 1]) {
       const centre = vertex([cx, side * half, cz], [0, side, 0], [(cx - minX) / span, side < 0 ? 0 : 1]);
       for (const [x, z] of points) vertex([x, side * half, z], [0, side, 0], [(x - minX) / span, side < 0 ? 0 : 1]);
-      for (let index = 0; index < count; index++) indices.push(centre, centre + 1 + index, centre + 1 + ((index + 1) % count));
+      for (let index = 0; index < count; index++) face(centre, centre + 1 + index, centre + 1 + ((index + 1) % count));
     }
   }
   const result = { positions: new Float32Array(positions), normals: new Float32Array(normals), uvs: new Float32Array(uvs), indices: new Uint32Array(indices) };

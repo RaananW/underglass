@@ -334,6 +334,10 @@ kept (S1):** any change of light or environment rebuilds the layer's scene, so o
 **Lite 1.33 behaviour found while building it** (each fixed in core, recorded for the Lite requests):
 
 - Opaque draws are recorded in a render bundle: `mesh.visible` writes do not reach it, `setMeshVisible` does.
+- Double-sided PBR shades a back face with its normal flipped. Core's prism and extrude builders wound their triangles
+  the other way from its lathes, so prism and extrude tops were drawn dark (a matte swatch's top 89 against its
+  lathe's 149; brushed carriages and paddles 1–7 levels, found by `instrument-4.json`'s first run). Every builder now
+  orients each triangle by its normals (`profileGeometry`), and a swatch test checks the three profile types alike.
 - A `ShaderMaterial` with a `blend` is transparent unless `needAlphaBlending: false` is set, which the clip mask needs to
   draw before the parts.
 - A material assigned after registration is rebuilt asynchronously and was not drawn by an explicit render task, hence

@@ -461,3 +461,38 @@ test("instrument material: a build that hangs times out, its layer steps down, a
     expect(warnings.some(warning => warning.includes("stopped waiting for an instrument scene build after 3000 ms")), "the ceiling, not the gate, released the successor").toBe(true);
   } finally { await context.close(); }
 });
+
+/**
+ * Every profile type is lit alike: a lathe, a prism and an extrude in one matte material, each with a flat top facing
+ * the viewer (`swatches`), must shade their tops within a few levels of each other, and never near black. A triangle
+ * wound against Lite's front-face convention is shaded with its normal flipped by double-sided PBR, which once drew
+ * every prism and extrude top near black (1–7 levels) while lathes were lit.
+ */
+for (const dpr of [1, 2]) test(`instrument material: prism and extrude tops are lit like a lathe's DPR${dpr}`, async ({ browser }) => {
+  test.setTimeout(120000);
+  const { context, page, call, errors } = await open(browser, dpr, "?density=4");
+  try {
+    await stillGpu(call, "boot");
+    const swatches = await call("swatches", true);
+    await stillGpu(call, "swatches");
+    const png = await shot(page, `${directory}/swatches-dpr${dpr}.png`);
+    // The mean of a 7 × 7 patch of device pixels at each top's centre (the tops are 40 px across, drift a few px).
+    const patch = ({ x, y }) => {
+      const sum = [0, 0, 0];
+      for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+        const offset = ((Math.round(y * dpr) + dy) * png.width + Math.round(x * dpr) + dx) * 4;
+        for (let channel = 0; channel < 3; channel++) sum[channel] += png.data[offset + channel];
+      }
+      return sum.map(value => value / 49);
+    };
+    const tops = Object.fromEntries(swatches.map(swatch => [swatch.kind, patch(swatch)]));
+    const luminance = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    await writeFile(`${directory}/swatches-dpr${dpr}.json`, JSON.stringify({ swatches, tops, luminance: Object.fromEntries(Object.entries(tops).map(([kind, rgb]) => [kind, luminance(rgb)])) }, null, 2));
+    for (const [kind, rgb] of Object.entries(tops)) expect(luminance(rgb), `${kind} top is lit (${rgb.map(Math.round)})`).toBeGreaterThan(40);
+    for (const kind of ["prism", "extrude"]) {
+      const deviation = Math.max(...tops[kind].map((value, index) => Math.abs(value - tops.lathe[index])));
+      expect(deviation, `${kind} top (${tops[kind].map(Math.round)}) against the lathe's (${tops.lathe.map(Math.round)})`).toBeLessThan(12);
+    }
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
