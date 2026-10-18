@@ -3,16 +3,17 @@
  * and the plain-DOM behaviour (`attachStrata` from `@underglass/ui/dom`), in a Strata panel that is a direct child of an
  * Underglass root, presented on the GPU by `attachStrataGpu`. `window.strataFaderProbe` is the hook for
  * `tests/browser/ui-fader.test.mjs`.
- * - `?dom` starts in the CSS presentation; `?level=objects` presents the panel at the Objects level.
+ * - `?dom` starts in the CSS presentation; `?level=objects` presents the panel at the Objects level, and
+ *   `?level=instrument` at the Instrument level (core's `instrument` material: the carriages and the Reset key as parts).
  * - `?plain` puts the panel in the page's flow with no Underglass at all, as a plain HTML page uses it (the mobile and
  *   preference checks).
  * Three faders: Level (vertical, −60 to 6 dB, printed every 10 dB and at 6), Send (vertical, 0–10 in five detents) and
  * Pan (horizontal, −50 to 50, printed L, C and R), and a Reset button that returns them to their defaults. Every
- * `input` and `change` event is recorded.
+ * `input` and `change` event is recorded; `feedback(options)` sets the page's feedback options (off by default).
  */
 import "@underglass/ui/css";
 import { compileStyle, mountApplicationModule, type CanvasController } from "@underglass/core";
-import { attachStrata } from "@underglass/ui/dom";
+import { attachStrata, attachStrataFeedback, type StrataFeedbackOptions } from "@underglass/ui/dom";
 import { attachStrataGpu, type StrataGpu } from "@underglass/ui/gpu";
 
 const params = new URLSearchParams(location.search);
@@ -94,7 +95,8 @@ if (params.has("plain")) {
     return () => container.replaceChildren();
   } });
   attachStrata();
-  strata = attachStrataGpu(controller, { level: params.get("level") === "objects" ? "objects" : undefined });
+  const level = params.get("level");
+  strata = attachStrataGpu(controller, { level: level === "objects" || level === "instrument" ? level : undefined });
   host("enable").addEventListener("click", () => void controller!.enable());
   host("disable").addEventListener("click", () => void controller!.disable());
   if (!params.has("dom")) void controller.enable().then(() => strata?.refresh());
@@ -103,13 +105,16 @@ if (params.has("plain")) {
 window.strataFaderProbe = {
   controller, panel: () => panel, scene: () => strata?.scene(panel), refresh: () => strata?.refresh(),
   events: () => [...events], clearEvents: () => { events.length = 0; },
+  feedback: (options: StrataFeedbackOptions) => { attachStrataFeedback(options); },
+  instrument: () => (controller?.state() as unknown as { instrument: unknown } | undefined)?.instrument,
   counts: () => { const state = controller?.state() as unknown as { mode: string; metrics: { captures: number; uploads: number; geometryUpdates: number } } | undefined;
     return state ? { mode: state.mode, captures: state.metrics.captures, uploads: state.metrics.uploads, geometryUpdates: state.metrics.geometryUpdates } : undefined; },
 };
 declare global {
   interface Window { strataFaderProbe: {
     controller: CanvasController | undefined; panel(): HTMLElement; scene(): ReturnType<StrataGpu["scene"]>; refresh(): void;
-    events(): { id: string; type: string; value: string }[]; clearEvents(): void;
+    events(): { id: string; type: string; value: string }[]; clearEvents(): void; instrument(): unknown;
+    feedback(options: StrataFeedbackOptions): void;
     counts(): { mode: string; captures: number; uploads: number; geometryUpdates: number } | undefined;
   } }
 }
