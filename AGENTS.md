@@ -46,7 +46,9 @@ User-facing behaviour is described in [docs/guide](docs/guide/getting-started.md
 - Headless and a real window can differ (scrollbars put the canvas on fractional pixels). For capture,
   geometry or admission changes, also check in a headful Canary window.
 - Run `npm run typecheck`, `npm run test:unit`, `node --test tests/compiler/*.test.mjs` and
-  `npm run test:browser`. Run `npm run test:showcase` when the showcase changes.
+  `npm run test:browser`. Run `npm run test:showcase` when the showcase changes, and
+  `npm run test:browser:probes` (the `ui-probe-*`/`ui-proto-*` evidence suites, skipped by default) when a
+  probe page or harness changes.
 
 ## Pull requests
 

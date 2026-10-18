@@ -15,10 +15,20 @@ import { resolve } from "node:path";
 // servers are not reused.
 const isolated = !!process.env.CANVAS_TEST_DEV_URL;
 
+// Probe and prototype suites (`ui-probe-*`, `ui-proto-*`) are the evidence behind design decisions
+// (docs/ui-library/phase0.md, docs/ui-library/instrument-phase0.md), not regression coverage: the core and
+// component suites cover what they proved, and they cost about 25 of the full run's 55 minutes. The default
+// run skips them. `CANVAS_BROWSER_PROBES=only` (`npm run test:browser:probes`) runs only them and
+// `CANVAS_BROWSER_PROBES=all` runs everything; naming a probe file on the command line runs it
+// (scripts/test-browser.mjs sets the variable).
+const probePattern = /ui-pro(?:be|to)-[^/\\]*\.test\.mjs$/;
+const probes = process.env.CANVAS_BROWSER_PROBES ?? "";
+
 export default defineConfig({
   testDir: ".",
-  // Every suite in this directory; a new suite needs no edit to a shared list.
-  testMatch: "*.test.mjs",
+  // Every regression suite in this directory; a new suite needs no edit to a shared list.
+  testMatch: probes === "only" ? probePattern : "*.test.mjs",
+  testIgnore: probes ? [] : probePattern,
   // Suites run serially in one worker.
   workers: 1,
   // Playwright artifacts and the JSON report go under the evidence root (see tests/helpers/evidence.mjs).

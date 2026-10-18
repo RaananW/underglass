@@ -32,6 +32,7 @@
     "test:compiler": "npm run build:library && node scripts/compiler-validation.mjs",
     "test:worker": "node scripts/worker-validation.mjs",
     "test:browser": "npm run build && node scripts/test-browser.mjs",
+    "test:browser:probes": "npm run build && node scripts/test-browser.mjs --probes",
     "typecheck": "tsc -p packages/core/tsconfig.json && tsc -p packages/react/tsconfig.json --noEmit && tsc -p packages/vue/tsconfig.json --noEmit && tsc -p packages/ui/tsconfig.json --noEmit && tsc -p examples/playground/tsconfig.json --noEmit && tsc -p examples/showcase/tsconfig.json --noEmit",
     "probe": "node scripts/browser-probe.mjs",
     "test:react18": "node scripts/react-matrix.mjs",
