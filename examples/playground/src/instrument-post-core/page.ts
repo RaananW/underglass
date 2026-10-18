@@ -154,7 +154,13 @@ function layout(count: number) {
 
 const hosts = createCanvasHosts(frame);
 const failing = params.get("fail");
-const instrumentTestHook = failing ? { failStage: (_id: string, name: string) => name === failing } : undefined;
+// `?failRegistration=optional` (or `all`): core's internal test hook fails each scene's registration with its optional
+// stages (or every registration, the minimal chain's too) while `failRegistration` is set (`api.setFailRegistration`).
+let failRegistration = params.get("failRegistration") as "optional" | "all" | null;
+const instrumentTestHook = failing || failRegistration ? {
+  failStage: (_id: string, name: string) => name === failing,
+  failRegistration: (_id: string, minimal: boolean) => failRegistration === "all" || failRegistration === "optional" && !minimal,
+} : undefined;
 const runtimeOptions = { ...hosts, budgets: { layers: 8, pixels: 4_000_000 }, instrumentTestHook,
   onStatusChange: (value: { mode: string; reason: string }) => { status.dataset.core = `${value.mode}: ${value.reason}`; } };
 const controller: CanvasController = mountApplicationModule(runtimeOptions, { mount({ container, enroll }) {
@@ -228,7 +234,7 @@ window.addEventListener("resize", () => { layout(density); refreshAll(); });
 
 const nextFrame = () => new Promise<number>(resolve => requestAnimationFrame(resolve));
 type PostState = { layers: { id: string; stages: Record<string, { status: string; error?: string }>; map: { renders: number; timedRenders: number } | null;
-  gpu: Record<string, { p50Ms: number | null; p95Ms: number | null; samples: number }> }[] };
+  gpu: Record<string, { p50Ms: number | null; p95Ms: number | null; samples: number; total: number }> }[] };
 type State = ReturnType<CanvasController["state"]> & { instrument: { layers: { id: string; status: string; steppedDown: { object: string; reason: string }[]; gpu: { p50Ms: number | null; p95Ms: number | null } }[];
   compile: { building: boolean }; post: PostState } | null };
 const state = () => controller.state() as unknown as State;
@@ -313,7 +319,9 @@ async function animate(frames: number) {
  */
 async function idle(frames: number) {
   await settle();
-  const renders = () => (state().instrument?.post.layers ?? []).map(layer => [layer.id, layer.map?.renders ?? 0, layer.map?.timedRenders ?? 0] as const);
+  // Per layer: the map renders the controller counted, those Lite's timings saw, and the frames Lite timed at all (the
+  // composite runs every frame), so a count of 0 timed renders is only meaningful when frames were timed.
+  const renders = () => (state().instrument?.post.layers ?? []).map(layer => [layer.id, layer.map?.renders ?? 0, layer.map?.timedRenders ?? 0, layer.gpu.composite?.total ?? 0] as const);
   const before = counts(), mapBefore = renders();
   for (let index = 0; index < frames; index++) {
     await nextFrame();
@@ -322,7 +330,8 @@ async function idle(frames: number) {
   await nextFrame();
   const after = counts(), mapAfter = renders();
   return { frames, gpuFrames: after.gpuFrames - before.gpuFrames, captures: after.captures - before.captures,
-    map: mapAfter.map(([id, rendered, timed]) => { const previous = mapBefore.find(entry => entry[0] === id); return { id, renders: rendered - (previous?.[1] ?? 0), timedRenders: timed - (previous?.[2] ?? 0) }; }) };
+    map: mapAfter.map(([id, rendered, timed, frames]) => { const previous = mapBefore.find(entry => entry[0] === id);
+      return { id, renders: rendered - (previous?.[1] ?? 0), timedRenders: timed - (previous?.[2] ?? 0), timedFrames: frames - (previous?.[3] ?? 0) }; }) };
 }
 
 const boot = { started: performance.now(), enabledMs: 0, readyMs: 0, mode: "", reason: "" };
@@ -343,6 +352,9 @@ if (params.get("race") === "1") {
     state: { hoverHeight: 1.6, pressHeight: 0.25, hoverLift: 0.02, pressSink: 0.03 }, focus: { colour: "#2563eb", width: 2, offset: 2 },
     materials: { face: { base: { roughness: 0.6 } } }, primitives: [{ face: "raised", rect: [0, 0, 160, 60], radius: 10, height: 6, material: "face" }] } });
 }
+// `?dropAt=ms`: every instrument material is cancelled that long after the page started, while the scenes still build.
+const dropAt = params.get("dropAt");
+if (dropAt !== null) setTimeout(() => { options.plain = true; refreshAll(); }, Math.max(0, Number(dropAt) - (performance.now() - boot.started)));
 try { await settle(); } catch (error) { boot.reason = String(error); }
 boot.readyMs = performance.now() - boot.started;
 boot.mode = counts().mode;
@@ -388,6 +400,10 @@ const api = {
     refreshAll();
     await settle();
   },
+  /** Ends one panel's material (`cancel`), or sets it again. */
+  async cancel(id: string) { handles.get(id)?.cancel(); handles.delete(id); await settle(); },
+  async restore(id: string) { refresh(panels().find(panel => panel.id === id)!); await settle(); },
+  setFailRegistration(mode: "optional" | "all" | null) { failRegistration = mode; },
   async disable() { await controller.disable(); return counts(); },
   async enable() { await controller.enable(); await settle(); return counts(); },
 };

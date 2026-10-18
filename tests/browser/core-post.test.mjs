@@ -274,6 +274,10 @@ for (const dpr of [1, 2]) test(`post chain: text safety, the clip, hits, exact o
       const { one, face1, faceHalf, zero, half, back } = opacityFrames;
       const upperControls = (await call("controls")).filter(control => control.layer === "upper");
       let compared = 0, partPixels = 0, worst = 0, over1 = 0, hiddenAtZero = 0, drawn = 0;
+      // Part pixels with face content under them (the face at opacity 1 differs from what lies beneath the panel by 24
+      // levels or more): the formula as implemented, `α · P + (1 − α) · (α · F + (1 − α) · B)`, against true group opacity
+      // `α · P + (1 − α) · B`, which this PR does not draw (the face is faded by the layer pass before the composite).
+      const faced = { pixels: 0, worstAgainstFormula: 0, worstAgainstTrueGroup: 0 };
       const errorSamples = [];
       for (const control of upperControls) for (let y = Math.ceil(control.y * dpr); y < Math.floor((control.y + control.height) * dpr); y++) for (let x = Math.ceil(control.x * dpr); x < Math.floor((control.x + control.width) * dpr); x++) {
         // A captured cap shows the capture, so it equals the face: a key's inside (8 px clear of its box) is its cap; the
@@ -286,6 +290,14 @@ for (const dpr of [1, 2]) test(`post chain: text safety, the clip, hits, exact o
         compared++;
         if (part) partPixels++;
         if (differs && !same(one, zero, offset)) hiddenAtZero++;
+        if (differs && [0, 1, 2].some(channel => Math.abs(face1.data[offset + channel] - zero.data[offset + channel]) >= 24)) {
+          faced.pixels++;
+          for (let channel = 0; channel < 3; channel++) {
+            const [P, F, B, H] = [one, face1, zero, half].map(frame => frame.data[offset + channel]);
+            faced.worstAgainstFormula = Math.max(faced.worstAgainstFormula, Math.abs(H - (0.5 * P + 0.25 * F + 0.25 * B)));
+            faced.worstAgainstTrueGroup = Math.max(faced.worstAgainstTrueGroup, Math.abs(H - (0.5 * P + 0.5 * B)));
+          }
+        }
         for (let channel = 0; channel < 3; channel++) {
           const reference = part ? (one.data[offset + channel] + faceHalf.data[offset + channel]) / 2 : faceHalf.data[offset + channel];
           const error = Math.abs(half.data[offset + channel] - reference);
@@ -296,12 +308,17 @@ for (const dpr of [1, 2]) test(`post chain: text safety, the clip, hits, exact o
       let backChanged = 0;
       for (let offset = 0; offset < one.data.length; offset += 4) if (!same(one, back, offset)) backChanged++;
       // At opacity 0 the layer draws nothing: the frame is the lower layers' alone wherever the upper panel is.
-      report.opacity = { compared, partPixels, drawn, hiddenAtZero, worstLevels: worst, over1, backChanged, errorSamples };
+      report.opacity = { compared, partPixels, drawn, hiddenAtZero, worstLevels: worst, over1, backChanged, faced, errorSamples };
       expect(partPixels, "the upper panel's parts draw").toBeGreaterThan(1000);
       // A part pixel can match what lies beneath the panel by chance, so not every one changes.
       expect(hiddenAtZero, "opacity 0 hides the parts").toBeGreaterThan(0.95 * drawn);
       expect(over1, `opacity 0.5 matches the group blend within 1 level (worst ${worst})`).toBe(0);
       expect(backChanged, "back at opacity 1 the frame is the same").toBe(0);
+      expect(faced.pixels, "part pixels with face content under them").toBeGreaterThan(100);
+      // 1.25 levels: each of P, F and B is an 8-bit screenshot (±0.5 · its weight, 0.5 in all), the result is rounded once
+      // (0.5), and the faded face is rounded to 8 bits on the canvas before the composite reads it (0.5 · 0.5).
+      expect(faced.worstAgainstFormula, "over face content, the implemented blend within 1.25 levels (rounding)").toBeLessThanOrEqual(1.25);
+      expect(faced.worstAgainstTrueGroup, "the faded face shows through (not true group opacity: a recorded follow-up)").toBeGreaterThan(8);
     }
     await call("setMeshes", true);
 
@@ -364,15 +381,26 @@ for (const dpr of [1, 2]) test(`post chain: text safety, the clip, hits, exact o
     for (const layer of report.idle.map) {
       expect(layer.renders, `${layer.id}: no map render over 120 still frames`).toBe(0);
       expect(layer.timedRenders, `${layer.id}: no map pass timed over 120 still frames`).toBe(0);
+      // ... while Lite did time frames then (its timings sample frames), so the 0 above is not vacuous.
+      expect(layer.timedFrames, `${layer.id}: still frames were timed`).toBeGreaterThan(10);
     }
     {
       const bat = (await call("controls")).find(control => control.kind === "bat" && control.layer === "lower");
       const rendersOf = async () => Object.fromEntries((await call("post")).layers.map(layer => [layer.id, layer.map.renders]));
       const before = await rendersOf();
+      const timedBefore = Object.fromEntries((await call("post")).layers.map(layer => [layer.id, layer.map.timedRenders]));
       for (let index = 0; index < 5; index++) await call("pose", bat.id, index % 2 ? 1 : 0.3);
       const after = await rendersOf();
       report.poseRenders = Object.fromEntries(Object.keys(after).map(id => [id, after[id] - before[id]]));
       expect(report.poseRenders, "one map render per pose change, on the posed layer only").toEqual({ lower: 5, upper: 0, clipped: 0 });
+      // `renders` is the controller's own flush count (an estimate of Lite's refresh rule); the GPU-timed count is checked
+      // against it: timestamp queries are available, and Lite times a sample of frames, so a single render is seen or not
+      // (reported) while the animation below, which renders the map every frame, must be seen (the positive control).
+      const instrument = await call("instrument"), post = await call("post");
+      const timed = Object.fromEntries(post.layers.map(layer => [layer.id, layer.map.timedRenders - (timedBefore[layer.id] ?? 0)]));
+      report.timedPoseRenders = { status: instrument.timing.status, timed };
+      expect(instrument.timing.status, "Lite's task timings are available").toBe("available");
+      expect([timed.upper, timed.clipped], "and no map render on the layers that did not move").toEqual([0, 0]);
     }
 
     // Stage toggles, each an option on its own, then the defaults: GPU on, the stage built.
@@ -389,10 +417,13 @@ for (const dpr of [1, 2]) test(`post chain: text safety, the clip, hits, exact o
     report.costs = {};
     for (const [name, post] of [["defaults", undefined], ["taa", { taa: true }], ["contact", { contact: true }], ["ssgi", { ssgi: true }]]) {
       await call("setPost", post);
+      const timedBefore = (await call("post")).layers.find(layer => layer.id === "lower").map.timedRenders;
       const run = await call("animate", 300);
+      const timedRun = (await call("post")).layers.find(layer => layer.id === "lower").map.timedRenders - timedBefore;
+      expect(timedRun, `${name}: Lite's timings saw the map render while the poses moved (the positive control)`).toBeGreaterThan(10);
       expect(run.mode, `${name}: GPU on while animating`).toBe("gpu");
       expect([run.captures, run.uploads, run.geometryUpdates], `${name}: poses capture nothing`).toEqual([0, 0, 0]);
-      report.costs[name] = { run, stages: costs(await call("post")), layers: (await call("instrument")).layers.map(layer => ({ id: layer.id, p50: layer.gpu.p50Ms, p95: layer.gpu.p95Ms })) };
+      report.costs[name] = { run, timedMapRenders: timedRun, stages: costs(await call("post")), layers: (await call("instrument")).layers.map(layer => ({ id: layer.id, p50: layer.gpu.p50Ms, p95: layer.gpu.p95Ms })) };
     }
     await call("setPost", undefined);
 
@@ -426,6 +457,11 @@ for (const dpr of [1, 2]) test(`post chain: text safety, the clip, hits, exact o
     expect(report.dprChange.back.outside, "after a DPR change and back: 0 pixels outside").toBe(0);
     expect(report.dprChange.back.changed, "after a DPR change and back: the parts draw").toBeGreaterThan(10000);
     await cdp.detach();
+
+    // Every scene rebuilt above released its shadow map's texture (Lite 1.33 has the internal field core relies on).
+    report.mapTextures = (await call("instrument")).resources.mapTextures;
+    expect(report.mapTextures.missing, "no shadow map texture left unreleased").toBe(0);
+    expect(report.mapTextures.destroyed, "retired scenes released their map textures").toBeGreaterThan(5);
 
     // Disable and enable: the targets go with the engine and come back.
     const disabled = await call("disable");
