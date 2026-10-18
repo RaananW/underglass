@@ -46,7 +46,8 @@ These runners are untested here, and Canary on Linux must come from Chrome for T
 ```sh
 node scripts/ci-gpu-probe.mjs   # WebGPU adapter and HTML-in-Canvas APIs present?
 npm run build && node scripts/ci-gpu-smoke.mjs   # does the runtime admit GPU on this machine?
-npm run test:browser
+npm run test:browser            # the regression suite, as CI runs it (about 30 minutes)
+npm run test:browser:probes     # the probe and prototype evidence suites CI skips (about 25 minutes)
 ```
 
 `CANVAS_BROWSER_EXECUTABLE` selects another Chrome build, and `CANVAS_BROWSER_EXTRA_ARGS`
