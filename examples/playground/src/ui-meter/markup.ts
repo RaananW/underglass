@@ -40,7 +40,7 @@ export function meterMarkup(spec: MeterSpec): string {
   let style = `--strata-meter-value: ${fraction(value, spec)};`;
   if (form === "bar") style += ` --strata-meter-count: ${count};`;
   else { if (low !== undefined) style += ` --strata-meter-lo: ${fraction(low, spec)};`; if (high !== undefined) style += ` --strata-meter-hi: ${fraction(high, spec)};`; }
-  const native = `<meter class="ug-meter__native" id="${id}" min="${min}" max="${max}" value="${value}"${low !== undefined ? ` low="${low}"` : ""}${high !== undefined ? ` high="${high}"` : ""}${optimum !== undefined ? ` optimum="${optimum}"` : ""}${unit !== undefined ? ` data-strata-unit="${unit}"` : ""} aria-valuetext="${text}">${text}</meter>`;
+  const native = `<meter class="ug-meter__native" id="${id}" min="${min}" max="${max}" value="${value}"${low !== undefined ? ` low="${low}"` : ""}${high !== undefined ? ` high="${high}"` : ""}${optimum !== undefined ? ` optimum="${optimum}"` : ""}${unit !== undefined ? ` data-strata-unit="${unit}" aria-valuetext="${text}"` : ""}>${text}</meter>`;
   const root = `class="ug-meter ug-meter--${form}${form === "bar" && peak ? " ug-meter--peak" : ""}${form === "dial" ? " ug-gauge" : ""}"${size ? ` data-strata-size="${size}"` : ""} style="${style}"`;
   const segments = Array.from({ length: count }, (_, index) => `<span class="ug-meter__segment" data-strata-face="knob" data-strata-zone="${zone(min + ((index + 0.5) / count) * (max - min), spec)}" style="--_i: ${index};"></span>`).join("");
   const object = form === "bar"

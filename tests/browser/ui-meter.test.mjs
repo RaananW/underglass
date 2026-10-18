@@ -86,7 +86,7 @@ test("a meter is a native <meter>: role, name, value, range, zones, aria-valuete
   expect(await page.locator("#level").evaluate(native => [native.value, native.min, native.max, native.low, native.high, native.optimum])).toEqual([50, 0, 100, 70, 90, 0]);
   await expect(page.locator("#level")).toHaveAttribute("aria-valuetext", "50 %");
   await expect(page.locator("#vu")).toHaveAttribute("aria-valuetext", "−6 dB");
-  await expect(page.locator("#gain")).toHaveAttribute("aria-valuetext", "2.5");
+  await expect(page.locator("#gain")).not.toHaveAttribute("aria-valuetext", /.*/);
   // The zones: 11 good, 3 suboptimal, 2 worst for the level bar; one zone for the gain bar.
   expect(await zones(page, "level")).toBe("gggggggggggwwwbb");
   expect(await zones(page, "gain")).toBe("gggggggg");
