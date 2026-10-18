@@ -31,12 +31,12 @@ import {
   createDynamicTexture, createEffectRenderTask, createEffectWrapper, createFreeCamera, createHemisphericLight, createPcfDirectionalShadowGenerator, markClusteredLightContainerDirty,
   createMeshFromData, createPbrMaterial, createRenderTask, createSceneContext, createScreenSpaceContactShadowsPostProcessTask,
   createScreenSpaceGlobalIlluminationPostProcessTask, createShaderMaterial, createSmaaPostProcessTask, createStorageBuffer, createSurfaceRenderTargetTexture, createTaaPostProcessTask,
-  disposeEffectWrapper, disposeRenderTargetTexture, onRenderTargetTextureResize, disposeScene, disposeStorageBuffer, enableAsyncShaderPipelineCompilation, enableShaderMaterialInstanceWorld, enableThinInstanceGpuCulling,
+  disposeEffectWrapper, disposeRenderTargetTexture, onRenderTargetTextureResize, disposeScene, disposeStorageBuffer, enableAsyncShaderPipelineCompilation, enablePbrLocalCubemap, enableShaderMaterialInstanceWorld, enableThinInstanceGpuCulling,
   flushThinInstances, getRenderTaskGpuTimings, isGpuTimingSupported, loadHdrEnvironment, onSceneDispose, registerScene, registerSceneWithShadowSupport, releaseTexture,
-  setEffectTexture, setEffectUniforms, setEnvironmentRotation, setPbrAnisotropy, setPbrClearCoat, setPbrEmissive, setPbrIridescence, setPbrMetallicReflectance, setPbrSheen,
+  setEffectTexture, setEffectUniforms, setEnvironmentRotation, setPbrAnisotropy, setPbrClearCoat, setPbrEmissive, setPbrIridescence, setPbrLocalEnvironment, setPbrMetallicReflectance, setPbrSheen,
   setMeshVisible, setRenderTaskGpuTimingEnabled, setShaderStorageBuffer, setShaderTexture, setShaderUniform, setShadowTaskCasterMeshes, setThinInstanceCount, setThinInstances,
   unregisterScene, updateDynamicTexture, updateStorageBuffer, vec3, withSampledDepthTexture,
-  type ClusteredLightContainer, type DirectionalLight, type DynamicTexture2D, type EngineContext, type FreeCamera, type Material, type Mesh, type PbrMaterialProps,
+  type ClusteredLightContainer, type DirectionalLight, type DynamicTexture2D, type EngineContext, type EnvironmentTextures, type FreeCamera, type Material, type Mesh, type PbrMaterialProps,
   type RenderingContext, type RenderTargetTextureResult, type RenderTask, type SceneContext, type ShaderMaterial, type ShadowGenerator, type StorageBuffer, type Task,
 } from "@babylonjs/lite";
 import { DEFAULT_FEATHER, EMITTERS_PER_LAYER, GUARD_CELLS, guardCells, layerGuard, PROTECTED_PER_LAYER, shadowScales, type Guard, type LayerEmitters } from "./emitters.js";
@@ -46,6 +46,8 @@ import {
   INSTRUMENT_PARTS_PER_STAGE, STUDIO_DEFAULTS, type Containment, type ContainmentFrontier, type InstrumentCaster, type InstrumentObject,
   type InstrumentProfile, type InstrumentRecipe, type InstrumentScene, type Matrix, type PartKind, type StudioTokens,
 } from "./instrument.js";
+import { createCaptureProbe, type CaptureProbe } from "./capture-probe.js";
+import { CAPTURE_WGSL, GLASS_VEC4S, glassConstants, glassFragment, glassInstance, glassVertex, INSTRUMENT_PROBES_PER_STAGE, layerLight, pageSettings, probeKey } from "./instrument-glass.js";
 import {
   compositeRect, settledAll, INSTRUMENT_CONTRAST, INSTRUMENT_EXPOSURE, liteMapBias, mapSettings, mapWindow, partGlow, placedBox, postFlags, postStructure, POST_SETTINGS,
   POST_STAGE_BUDGET_MS, POST_STAGES, type PostStage,
@@ -70,6 +72,10 @@ export interface InstrumentTestHook {
   failRegistration?(layerId: string, minimal: boolean): boolean;
   /** Makes a build fail before registration with an ordinary error (as a mesh or shader would), with or without its optional stages. */
   failBuild?(layerId: string, minimal: boolean): boolean;
+  /** Makes a layer's capture probe fail to build (the layer then reflects the studio alone). */
+  failProbe?(layerId: string): boolean;
+  /** Makes a layer's glass material fail to build (the layer then draws without its glass). */
+  failGlass?(layerId: string): boolean;
 }
 /** The chain's target, mask or composite could not be built: the layer steps down with `post`. */
 class PostBuildError extends Error {}
@@ -99,6 +105,8 @@ export interface InstrumentLayerInput {
   opacity: number;
   /** The layer's capture and its grid, for captured caps (as the layer pass samples it). */
   texture: DynamicTexture2D;
+  /** How many times the layer's capture was uploaded: the capture probe refreshes when it changes (never per frame). */
+  revision: number;
   content: { width: number; height: number; pixelWidth: number; pixelHeight: number };
   /** The emitters the layer draws this frame (the budget's choice, `emitters.ts`): the parts' clustered lights. */
   lights?: LayerEmitters;
@@ -115,6 +123,12 @@ export interface SteppedDown {
   detail?: string;
 }
 type Status = "ready" | "pending" | "stepped-down" | "failed";
+/** A layer's capture probe: `off` (the scene turned it off), `on`, `failed` (the build or a refresh threw) or `budget` (the stage holds enough). */
+interface ProbeStatus { status: "on" | "off" | "failed" | "budget"; reason?: string }
+/** A layer's glass: `none`, `on`, or `fallback` (its material could not be built: its kinds are left out). */
+interface GlassStatus { status: "none" | "on" | "fallback"; error?: string }
+/** The probe a pass holds, and what decides its next refresh. */
+interface PassProbe { probe: CaptureProbe; key: string; revision: number; texture: unknown }
 
 /** GPU time samples: the last 256, the latest, and how many were taken in all. */
 interface Timing { samples: number[]; last: number | null; total: number }
@@ -137,6 +151,10 @@ interface Pass {
   lights?: ClusteredLightContainer;
   litLights: number;
   post: PassPost;
+  /** The page cube of the PBR parts (`capture-probe.ts`), when the layer holds one, and why not otherwise. */
+  probe?: PassProbe;
+  probeStatus: ProbeStatus;
+  glass: GlassStatus;
 }
 /** A stage's status: `idle` is bloom on a frame with no lit lens (its tasks off). */
 type StageStatus = { status: "on" | "off" | "failed" | "idle"; error?: string };
@@ -176,11 +194,15 @@ interface LayerState {
   kindMap?: Map<string, PartKind>;
   /** The scene and placement the step-downs were last decided for. */
   checked?: { scene: InstrumentScene; placementKey: string; structure: string };
+  /** The layer's latest input: its placement anchors the capture probe when a scene is built. */
+  input?: InstrumentLayerInput;
 }
 
 export interface InstrumentControllerOptions {
   engine: EngineContext;
   queue: GPUQueue;
+  /** The canvas's configured device (the capture probe's cube and passes are raw WebGPU). */
+  device(): GPUDevice;
   /** Resolves on device loss; superseded scenes are then released without a fence. */
   lost: Promise<unknown>;
   stage(): Stage;
@@ -206,6 +228,8 @@ const linear = (hex: string): [number, number, number] => [1, 3, 5].map(index =>
   const c = Number.parseInt(hex.slice(index, index + 2), 16) / 255;
   return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }) as [number, number, number];
+/** The GPU time of a probe's refreshes (ms), as the layer's timings report them. */
+const gpuStats = (samples: readonly number[]) => ({ lastMs: samples.at(-1) ?? null, p50Ms: percentile(samples, 0.5), p95Ms: percentile(samples, 0.95), samples: samples.length });
 const percentile = (values: readonly number[], q: number) => {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -235,6 +259,9 @@ export function createInstrumentController(options: InstrumentControllerOptions)
   let grain: DynamicTexture2D | undefined;
   const studios = new Map<string, Uint8Array>();
   let asyncPipelines = false;
+  // Lite's local cubemap path (`setPbrLocalEnvironment`), enabled once, before the first environment a probe is built on.
+  let cubemap: Promise<void> | undefined;
+  const probeCounters = { builds: 0, failures: 0 };
   // The post chain's targets, shared by every instrument layer (decision 1 of item 3), allocated on first use.
   const targets = new Map<TargetName, RenderTargetTextureResult>();
   // A resize or a DPR change replaces the targets' textures when the first scene re-records; each composite then binds
@@ -285,6 +312,41 @@ export function createInstrumentController(options: InstrumentControllerOptions)
   }
 
   /**
+   * The layer's page cube (decisions 2 to 6 of item 4): none when the scene turns it off, when the stage already holds
+   * `INSTRUMENT_PROBES_PER_STAGE` of them, or when it cannot be built (the PBR parts then reflect the studio alone).
+   * Validation and out-of-memory errors of its textures and pipelines are caught with error scopes, since WebGPU reports
+   * them asynchronously.
+   */
+  async function makeProbe(state: LayerState, scene: InstrumentScene, studio: EnvironmentTextures, rotation: number, cubemapError: unknown): Promise<{ probe?: CaptureProbe; status: ProbeStatus }> {
+    const page = pageSettings(scene);
+    if (!page.enabled) return { status: { status: "off" } };
+    const others = [...layers.values()].filter(other => other !== state && other.pass?.probeStatus.status === "on").length;
+    if (others >= INSTRUMENT_PROBES_PER_STAGE) return { status: { status: "budget", reason: `${others} other layers hold a page probe (${INSTRUMENT_PROBES_PER_STAGE} per stage)` } };
+    const device = options.device();
+    let scopes = 0;
+    try {
+      probeCounters.builds++;
+      if (options.testHook?.failProbe?.(state.id)) throw new Error("the test hook fails the capture probe");
+      if (cubemapError) throw new Error(`the local cubemap path could not be enabled: ${String(cubemapError)}`);
+      const input = state.input, m = input && similarity(input.matrix);
+      if (!input || !m) throw new Error("the layer has no placement to anchor the probe");
+      // The layer's centre in Lite's world (the canvas centre at the origin, y up): the capture point stands in front of it.
+      const stage = options.stage(), cx = m.a * input.extent.width / 2 + m.c * input.extent.height / 2 + m.e, cy = m.b * input.extent.width / 2 + m.d * input.extent.height / 2 + m.f;
+      device.pushErrorScope("out-of-memory"); device.pushErrorScope("validation"); scopes = 2;
+      const probe = createCaptureProbe(device, studio, { size: page.size, rotation, anchor: [cx - stage.width / 2, stage.height / 2 - cy], height: page.height });
+      const validation = await device.popErrorScope(); scopes = 1;
+      const memory = await device.popErrorScope(); scopes = 0;
+      if (validation || memory) { probe.dispose(); throw new Error((validation ?? memory)!.message); }
+      return { probe, status: { status: "on" } };
+    } catch (error) {
+      for (; scopes > 0; scopes--) await device.popErrorScope().catch(() => undefined);
+      probeCounters.failures++;
+      console.error(`Underglass instrument layer ${state.id}: its page probe was left out (the parts reflect the studio alone): ${String(error)}`);
+      return { status: { status: "failed", reason: String(error) } };
+    }
+  }
+
+  /**
    * Builds a layer's scene; resolves once it is registered (pipelines prepared) or rejects. `minimal` (the reason) builds
    * the chain without its optional stages, after a registration with them failed (decision 13 of item 3).
    */
@@ -331,12 +393,22 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       // The studio, rotated about the screen's vertical so its softbox lies at the key light (I0.4: 0.40° measured).
       const tokens = { ...STUDIO_DEFAULTS, ...scene.environment.studio };
       const url = URL.createObjectURL(new Blob([studioImage(towards[1], tokens) as BlobPart], { type: "image/vnd.radiance" }));
-      try { await loadHdrEnvironment(sceneContext, url, { faceSize: 256, skipSkybox: true, skipGround: true }); }
+      // Lite's local cubemap path is enabled before the environment loads (its docs ask for that order); a failure there is a
+      // probe that cannot be built, not a layer that cannot be drawn.
+      let cubemapError: unknown;
+      if (pageSettings(scene).enabled) {
+        try { await (cubemap ??= enablePbrLocalCubemap()); } catch (error) { cubemap = undefined; cubemapError = error; }
+      }
+      let studioTextures: EnvironmentTextures;
+      try { studioTextures = await loadHdrEnvironment(sceneContext, url, { faceSize: 256, skipSkybox: true, skipGround: true }); }
       finally { URL.revokeObjectURL(url); }
       // The output transform, explicitly (decision 15 of item 3): the loader sets exactly these as a side effect (L2).
       Object.assign(sceneContext.imageProcessing, { exposure: INSTRUMENT_EXPOSURE, contrast: INSTRUMENT_CONTRAST, toneMappingEnabled: false });
-      setEnvironmentRotation(sceneContext, Math.atan2(towards[0], -towards[2]));
-      const pass = createPass(state, sceneContext, camera, scene, structure, key, mapState, minimal);
+      const rotation = Math.atan2(towards[0], -towards[2]);
+      setEnvironmentRotation(sceneContext, rotation);
+      const page = await makeProbe(state, scene, studioTextures, rotation, cubemapError);
+      if (page.probe) { const made = page.probe; onSceneDispose(sceneContext, () => made.dispose()); }
+      const pass = createPass(state, sceneContext, camera, scene, structure, key, mapState, page, minimal);
       if (!asyncPipelines) { enableAsyncShaderPipelineCompilation(engine); asyncPipelines = true; }
       if (options.testHook?.failBuild?.(state.id, !!minimal)) throw new Error(`the test hook fails the build${minimal ? " of the minimal chain" : ""}`);
       // Every task of the chain is in the frame graph now, so registration prepares their pipelines inside this build.
@@ -361,7 +433,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
    * `update` writes them every frame. `minimal` leaves the optional stages out (reported failed with that reason).
    */
   function createPass(state: LayerState, sceneContext: SceneContext, camera: FreeCamera, scene: InstrumentScene, structure: string, key: DirectionalLight,
-    mapState: PassPost["map"], minimal?: string): Pass {
+    mapState: PassPost["map"], page: { probe?: CaptureProbe; status: ProbeStatus }, minimal?: string): Pass {
     const label = `instrument:${state.id}`;
     const hook = options.testHook?.failStage;
     const flags = postFlags(scene);
@@ -385,7 +457,17 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     const add = (task: RenderTask, mesh: Mesh) => { addToScene(sceneContext, mesh); addMeshToTask(task, mesh); };
     const storage: StorageBuffer[] = [];
     onSceneDispose(sceneContext, () => { for (const buffer of storage.splice(0)) disposeStorageBuffer(buffer); });
-    const kinds = partKinds(scene);
+    // Glass kinds the test hook or a failed material leaves out: the layer draws everything else (decision 6 of item 4).
+    const glass: GlassStatus = { status: "none" };
+    const skipped = new Set<string>();
+    const glassHook = options.testHook?.failGlass?.(state.id) ? "the test hook fails the glass material" : undefined;
+    const kinds = partKinds(scene).filter(kind => {
+      if (!kind.glass) return true;
+      if (!glassHook) { glass.status = "on"; return true; }
+      skipped.add(kind.key);
+      return false;
+    });
+    if (glassHook) Object.assign(glass, { status: "fallback", error: glassHook });
     const capacityOf = (count: number) => Math.min(INSTRUMENT_PARTS_PER_LAYER, Math.max(256, 2 ** Math.ceil(Math.log2(Math.max(1, count) * 2))));
     // Uniforms every shader material shares: canvas → layer px (the inverse similarity) and the frame.
     const materials: ShaderMaterial[] = [];
@@ -394,7 +476,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     const pbr = new Map<string, PbrMaterialProps>();
     const pbrOf = (name: string) => {
       let material = pbr.get(name);
-      if (!material) { material = recipeMaterial(scene.materials[name]!, scene, name); pbr.set(name, material); }
+      if (!material) { material = recipeMaterial(scene.materials[name]!, scene, name, page.probe); pbr.set(name, material); }
       return material;
     };
 
@@ -415,21 +497,72 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         } catch (error) { emitterTask = undefined; stages.bloom = { status: "failed", error: String(error) }; console.error(`Underglass instrument layer ${state.id}: bloom left out: ${String(error)}`); }
       }
     }
-    const capsTarget = kinds.some(kind => kind.captured) ? mandatory("caps target", () => target("caps")) : undefined;
+    // Captured caps, and the exact twins of glass windows (text under glass is the capture texel, which no stage may filter).
+    const capsTarget = kinds.some(kind => kind.captured || kind.glass === "window") ? mandatory("caps target", () => target("caps")) : undefined;
     // The caps test their depth against the parts' (the mesh target's depth, loaded): a part in front of a cap hides it.
     const capsTask = capsTarget ? createRenderTask({ name: `${label}:caps`, rt: capsTarget.rt, depth: mesh.rt, sharedRt: true, clr: true, clrColor: transparent, autoMirror: false }, engine, sceneContext) : undefined;
 
-    // Parts: one thin-instanced mesh per kind. Captured kinds take the cap shader instead of PBR.
+    // The guard (item 2): the protected rects and, per rect, the scale that keeps the face shadows inside it within
+    // the rect's shadow cap together; the glass reads the rects too (text under a window is exact).
+    // Layout: (rects, feather, protected box, 0), (extent), then per rect (rect, (scale, ·)), then a scale per extent cell.
+    const guardData = new Float32Array((2 + 2 * PROTECTED_PER_LAYER + GUARD_CELLS.x * GUARD_CELLS.y) * 4);
+    const guardBuffer = createStorageBuffer(engine, guardData, `${label}:guard`);
+    storage.push(guardBuffer);
+
+    // Every shader material that samples the capture: the caps and the glass (rebound when the layer's texture is replaced).
+    const captured: ShaderMaterial[] = [];
+    // One glass kind's materials (the shading and, for a window, its exact twin) and its per-instance buffers (decision 7 of item 4).
+    const makeGlass = (kind: PartKind, index: number, capacity: number) => {
+      const texture = options.texture(state.id);
+      if (!texture) throw new Error(`Layer ${state.id} has no capture to bind to its glass`);
+      const constants = glassConstants(scene, kind.material, kind.glass!);
+      const data = new Float32Array(capacity * GLASS_VEC4S * 4), buffer = createStorageBuffer(engine, data, `${label}:glass${index}`);
+      storage.push(buffer);
+      // The lit lens's glow colour (the glow copy's buffer, when the kind is a lens), read by the glass too.
+      const glowData = new Float32Array(capacity * 4), glowBuffer = createStorageBuffer(engine, glowData, `${label}:glow${index}`);
+      storage.push(glowBuffer);
+      const make = (entry: "main" | "exact") => {
+        const material = createShaderMaterial({ name: `${label}:glass${index}:${entry}`, vertexSource: glassVertex, fragmentSource: glassFragment(localWGSL, entry),
+          attributes: ["position", "normal"], uniforms: ["world", "view", "projection", ...frameUniforms, ...glassUniforms], samplers: ["capture"],
+          storageBuffers: [{ name: "glasses", type: "array<vec4<f32>>" }, { name: "glows", type: "array<vec4<f32>>" }, { name: "guard", type: "array<vec4<f32>>" }],
+          needAlphaBlending: true, blend: entry === "main" ? premultiplied : straightAlpha, depthWrite: false, backFaceCulling: true });
+        enableShaderMaterialInstanceWorld(material);
+        setShaderStorageBuffer(material, "glasses", buffer);
+        setShaderStorageBuffer(material, "glows", glowBuffer);
+        setShaderStorageBuffer(material, "guard", guardBuffer);
+        constants.forEach((value, at) => setShaderUniform(material, `g${at}`, value));
+        // Lite builds the material's bind group at registration, so the capture is bound now and rebound per frame.
+        setShaderTexture(material, "capture", texture as never);
+        materials.push(material);
+        captured.push(material);
+        return material;
+      };
+      return { material: make("main"), exact: kind.glass === "window" ? make("exact") : undefined, data, buffer, glowData, glowBuffer };
+    };
+
+    // Parts: one thin-instanced mesh per kind. Captured kinds take the cap shader instead of PBR, glass kinds the glass shader.
     const caps: { material: ShaderMaterial; buffer: StorageBuffer; data: Float32Array; dirty: boolean }[] = [];
     const casters: Mesh[] = [];
     const meshes = kinds.map((kind, index) => {
+      const capacity = capacityOf(kind.instances.length), matrices = new Float32Array(capacity * 16);
+      // A glass kind's materials are made before its mesh, so a failure leaves nothing behind but its buffers (released with the scene).
+      let built: ReturnType<typeof makeGlass> | undefined;
+      if (kind.glass) {
+        try { built = makeGlass(kind, index, capacity); }
+        catch (error) {
+          skipped.add(kind.key);
+          Object.assign(glass, { status: "fallback", error: String(error) });
+          console.error(`Underglass instrument layer ${state.id}: its glass was left out: ${String(error)}`);
+          return undefined;
+        }
+      }
       const geometry = profileGeometry(scene.profiles[kind.profile]!);
       const mesh = createMeshFromData(engine, `${label}:kind${index}`, geometry.positions, geometry.normals, geometry.indices, geometry.uvs);
-      const capacity = capacityOf(kind.instances.length), matrices = new Float32Array(capacity * 16);
       setThinInstances(mesh, matrices, capacity);
       setThinInstanceCount(mesh, kind.instances.length);
       let cap: (typeof caps)[number] | undefined;
       let lens: { mesh: Mesh; buffer: StorageBuffer; data: Float32Array; dirty: boolean } | undefined;
+      let twin: Mesh | undefined;
       // The world box of each instance (NaN when hidden): their union is the kind's bounds for the map's fit.
       const boxes = new Float64Array(capacity * 6).fill(Number.NaN);
       const local = profileBounds(scene.profiles[kind.profile]!);
@@ -446,6 +579,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         materials.push(material);
         cap = { material, buffer, data, dirty: true };
         caps.push(cap);
+        captured.push(material);
         // Lite builds the material's bind group at registration, so the capture is bound now and rebound per frame.
         const texture = options.texture(state.id);
         if (!texture) throw new Error(`Layer ${state.id} has no capture to bind to its captured caps`);
@@ -453,22 +587,38 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         mesh.material = material as unknown as Material;
         add(capsTask!, mesh);
       } else {
-        mesh.material = pbrOf(kind.material) as unknown as Material;
-        // Every PBR part casts into the map and receives from it (2D.7); its bounds are published below.
-        mesh.receiveShadows = !!mapState;
-        mesh.boundMin = boundMin;
-        mesh.boundMax = boundMax;
-        casters.push(mesh);
-        // Lite culls thin instances on the GPU; caps and glow copies index their storage by instance, so they are not culled.
-        enableThinInstanceGpuCulling(mesh);
-        add(partsTask, mesh);
+        if (built) {
+          // Glass: the shading in the parts task (depth-tested, not written), the window's exact twin in the caps task.
+          // Glass neither casts into the map nor receives from it (decision 9 of item 4), and is not culled: its storage is
+          // indexed by instance.
+          mesh.material = built.material as unknown as Material;
+          add(partsTask, mesh);
+          if (built.exact) {
+            twin = createMeshFromData(engine, `${label}:kind${index}:exact`, geometry.positions, geometry.normals, geometry.indices, geometry.uvs);
+            setThinInstances(twin, matrices, capacity);
+            setThinInstanceCount(twin, kind.instances.length);
+            twin.material = built.exact as unknown as Material;
+            add(capsTask!, twin);
+          }
+        } else {
+          mesh.material = pbrOf(kind.material) as unknown as Material;
+          // Every PBR part casts into the map and receives from it (2D.7); its bounds are published below.
+          mesh.receiveShadows = !!mapState;
+          mesh.boundMin = boundMin;
+          mesh.boundMax = boundMax;
+          casters.push(mesh);
+          // Lite culls thin instances on the GPU; caps and glow copies index their storage by instance, so they are not culled.
+          enableThinInstanceGpuCulling(mesh);
+          add(partsTask, mesh);
+        }
         if (emitterTask && lensKinds.includes(kind)) {
           const glow = createMeshFromData(engine, `${label}:kind${index}:glow`, geometry.positions, geometry.normals, geometry.indices, geometry.uvs);
           setThinInstances(glow, matrices, capacity);
           setThinInstanceCount(glow, kind.instances.length);
-          const data = new Float32Array(capacity * 4);
-          const buffer = createStorageBuffer(engine, data, `${label}:glow${index}`);
-          storage.push(buffer);
+          // A glass lens shares its glow colours with its glass (the glass adds them while lit).
+          const data = built?.glowData ?? new Float32Array(capacity * 4);
+          const buffer = built?.glowBuffer ?? createStorageBuffer(engine, data, `${label}:glow${index}`);
+          if (!built) storage.push(buffer);
           const material = createShaderMaterial({ name: `${label}:glow${index}`, vertexSource: slotVertex, fragmentSource: glowFragment, attributes: ["position"],
             uniforms: ["world", "view", "projection", ...frameUniforms], storageBuffers: [{ name: "glows", type: "array<vec4<f32>>" }],
             needAlphaBlending: false, depthWrite: false, backFaceCulling: false });
@@ -480,8 +630,9 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           lens = { mesh: glow, buffer, data, dirty: true };
         }
       }
-      return { kind, mesh, matrices, capacity, cap, lens, boxes, local, boundMin, boundMax, count: kind.instances.length };
-    });
+      const glassEntry = built ? { data: built.data, buffer: built.buffer, dirty: true, twin, scratch: new Float32Array(GLASS_VEC4S * 4) } : undefined;
+      return { kind, mesh, matrices, capacity, cap, lens, glass: glassEntry, boxes, local, boundMin, boundMax, count: kind.instances.length };
+    }).filter(<T,>(entry: T | undefined): entry is T => entry !== undefined);
     if (mapState) {
       setShadowTaskCasterMeshes(mapState.generator, casters);
       mapState.casters = casters.length;
@@ -500,12 +651,6 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     const casterData = new Float32Array(objectCapacity * INSTRUMENT_CASTERS_PER_OBJECT * 8);
     const casterBuffer = createStorageBuffer(engine, casterData, `${label}:casters`);
     storage.push(casterBuffer);
-    // The guard (item 2): the protected rects and, per rect, the scale that keeps the face shadows inside it within
-    // the rect's shadow cap together.
-    // Layout: (rects, feather, protected box, 0), (extent), then per rect (rect, (scale, ·)), then a scale per extent cell.
-    const guardData = new Float32Array((2 + 2 * PROTECTED_PER_LAYER + GUARD_CELLS.x * GUARD_CELLS.y) * 4);
-    const guardBuffer = createStorageBuffer(engine, guardData, `${label}:guard`);
-    storage.push(guardBuffer);
     const shade = createShaderMaterial({ name: `${label}:shadows`, vertexSource: slotVertex, fragmentSource: shadowFragment, attributes: ["position"],
       uniforms: ["world", "view", "projection", ...frameUniforms, { name: "light", type: "vec4<f32>", defaultValue: [0, 0, 1, 0] }],
       storageBuffers: [{ name: "shapes", type: "array<vec4<f32>>" }, { name: "guard", type: "array<vec4<f32>>" }], needAlphaBlending: true, blend: darken, depthWrite: false, backFaceCulling: false });
@@ -606,8 +751,9 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     };
 
     const pass: Pass = {
-      scene: sceneContext, camera, structure, registered: false, lights, litLights: 0, prefix: `${label}:`, post,
-      capacityOk: (next, objects) => [...next.values()].every(kind => kind.key === "glass" || meshes.some(entry => entry.kind.key === kind.key && kind.instances.length <= entry.capacity))
+      scene: sceneContext, camera, structure, registered: false, lights, litLights: 0, prefix: `${label}:`, post, probeStatus: page.status, glass,
+      ...(page.probe ? { probe: { probe: page.probe, key: "", revision: -1, texture: undefined } } : {}),
+      capacityOk: (next, objects) => [...next.values()].every(kind => skipped.has(kind.key) || meshes.some(entry => entry.kind.key === kind.key && kind.instances.length <= entry.capacity))
         && objects <= objectCapacity,
       update(input, current, hidden, stage, kinds, changed, guard) {
         // The camera: `D` from the scene, its field of view mapping the face plane one CSS px to one CSS px.
@@ -634,12 +780,13 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           setShaderUniform(material, "frame", [stage.dpr, input.opacity, grid[0]!, grid[1]!]);
           setShaderUniform(material, "clip", [input.clip.x, input.clip.y, input.clip.width, input.clip.height]);
           setShaderUniform(material, "captured", [content.pixelWidth, content.pixelHeight, current.interior.max, 0]);
+          setShaderUniform(material, "placement", [stage.width / 2, stage.height / 2, m.scale, current.camera.distance]);
         }
         if (boundTexture !== input.texture) {
-          for (const cap of caps) setShaderTexture(cap.material, "capture", input.texture as never);
+          for (const material of captured) setShaderTexture(material, "capture", input.texture as never);
           boundTexture = input.texture;
         }
-        const L = lightVector(current);
+        const L = layerLight(current);
         setShaderUniform(shade, "light", [L[0] / L[2], L[1] / L[2], current.shadow.strength, 0]);
         // Lite records opaque draws in a bundle: visibility goes through `setMeshVisible`, which re-records it. The parts
         // always draw into the target; the composite applies the opacity (decision 6 of item 3).
@@ -676,24 +823,37 @@ export function createInstrumentController(options: InstrumentControllerOptions)
                 if (entry.lens.data[index * 4 + channel] !== Math.fround(value[channel]!)) { entry.lens.data[index * 4 + channel] = value[channel]!; entry.lens.dirty = true; }
               }
             }
+            if (entry.glass) {
+              // The glass reads its centre, base height, stand and finish (layer px) at the object's `t`. Those are not geometry
+              // (a finish or a stand changes with the same layout), so they are compared every frame and written when they change.
+              const glassPart = current.objects[object]!.parts[part]!, name = glassPart.profile, at = index * GLASS_VEC4S * 4;
+              const next = hidden.has(object) ? entry.glass.scratch.fill(0) : glassInstance(current, object, part, current.profiles[name]!, boundsOf(name, current), entry.glass.scratch);
+              for (let k = 0; k < next.length; k++) if (entry.glass.data[at + k] !== next[k]) { entry.glass.data.set(next, at); entry.glass.dirty = true; break; }
+            }
             if (!all && !moved[object]) return;
             dirty = true;
             const target = entry.matrices.subarray(index * 16, index * 16 + 16);
-            if (hidden.has(object)) { target.fill(0); entry.boxes.fill(Number.NaN, index * 6, index * 6 + 6); return; }
+            if (hidden.has(object)) {
+              target.fill(0); entry.boxes.fill(Number.NaN, index * 6, index * 6 + 6);
+              return;
+            }
             const entryObject = current.objects[object]!, placement = multiply(world, partMatrix(entryObject.parts[part]!, entryObject.t ?? 0));
             for (let k = 0; k < 16; k++) target[k] = placement[k]!;
-            if (!entry.cap) placedBox(placement, entry.local.low, entry.local.high, entry.boxes.subarray(index * 6, index * 6 + 6));
+            if (!entry.cap && !entry.glass) placedBox(placement, entry.local.low, entry.local.high, entry.boxes.subarray(index * 6, index * 6 + 6));
+
           });
           if (count !== entry.count) {
             setThinInstanceCount(entry.mesh, count);
             if (entry.lens) setThinInstanceCount(entry.lens.mesh, count);
+            if (entry.glass?.twin) setThinInstanceCount(entry.glass.twin, count);
             entry.boxes.fill(Number.NaN, count * 6);
             entry.count = count;
           }
           if (dirty) {
             flushThinInstances(entry.mesh);
             if (entry.lens) flushThinInstances(entry.lens.mesh);
-            if (!entry.cap) {
+            if (entry.glass?.twin) flushThinInstances(entry.glass.twin);
+            if (!entry.cap && !entry.glass) {
               // The kind's bounds: the union of its placed instances, written in place (Lite fits the map to them).
               const low = [Infinity, Infinity, Infinity], high = [-Infinity, -Infinity, -Infinity];
               for (let index = 0; index < count; index++) {
@@ -708,13 +868,14 @@ export function createInstrumentController(options: InstrumentControllerOptions)
             }
           }
           if (entry.cap?.dirty) { updateStorageBuffer(engine, entry.cap.buffer, entry.cap.data); entry.cap.dirty = false; }
+          if (entry.glass?.dirty) { updateStorageBuffer(engine, entry.glass.buffer, entry.glass.data); entry.glass.dirty = false; }
           if (entry.lens?.dirty) { updateStorageBuffer(engine, entry.lens.buffer, entry.lens.data); entry.lens.dirty = false; }
         }
         // A kind with no placed instance takes the others' box, so it never stretches the map's fit to the origin.
         if (castersMoved) {
-          const placed = meshes.filter(entry => !entry.cap && entry.kind.instances.some((_, index) => !Number.isNaN(entry.boxes[index * 6]!)));
+          const placed = meshes.filter(entry => !entry.cap && !entry.glass && entry.kind.instances.some((_, index) => !Number.isNaN(entry.boxes[index * 6]!)));
           for (const entry of meshes) {
-            if (entry.cap || placed.includes(entry) || !placed.length) continue;
+            if (entry.cap || entry.glass || placed.includes(entry) || !placed.length) continue;
             for (let axis = 0; axis < 3; axis++) { entry.boundMin[axis] = placed[0]!.boundMin[axis]!; entry.boundMax[axis] = placed[0]!.boundMax[axis]!; }
           }
           // Lite re-renders the map in a frame its casters' instances changed (and only then): counted here.
@@ -739,7 +900,6 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           reaches.fill(0, index * 4, index * 4 + 4);
           if (hidden.has(index)) return;
           const casters = object.parts.flatMap(part => {
-            if (part.glass) return [];
             const caster = partCaster(part, current.profiles[part.profile]!, object.t ?? 0, boundsOf(part.profile, current));
             return caster && caster.height > 0 ? [caster] : [];
           }).sort((a, b) => b.height - a.height).slice(0, INSTRUMENT_CASTERS_PER_OBJECT);
@@ -812,6 +972,26 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           if (dirty) markClusteredLightContainerDirty(lights);
           pass.litLights = drawnLights.length;
         }
+        // The capture probe (decision 3 of item 4): refreshed when the capture was uploaded again, its texture was replaced or
+        // the layer moved, and at no other time. A refresh that throws turns the page off for good (the cube then holds the
+        // studio alone, and the layer reports it).
+        const held = pass.probe;
+        if (held) {
+          const probeStamp = probeKey(m, stage, content);
+          if (held.texture !== input.texture || held.revision !== input.revision || held.key !== probeStamp) {
+            try {
+              held.probe.refresh({ capture: input.texture.texture as GPUTexture, inverse: [inverse.slice(0, 4), inverse.slice(4, 8)],
+                stage: { halfWidth: stage.width / 2, halfHeight: stage.height / 2, gridX: grid[0]!, gridY: grid[1]! }, content: { width: content.pixelWidth, height: content.pixelHeight } });
+              held.texture = input.texture; held.revision = input.revision; held.key = probeStamp;
+            } catch (error) {
+              pass.probeStatus = { status: "failed", reason: `a refresh threw: ${String(error)}` };
+              pass.probe = undefined;
+              probeCounters.failures++;
+              console.error(`Underglass instrument layer ${state.id}: its page probe was turned off (the parts reflect the studio alone): ${String(error)}`);
+              try { held.probe.refresh(undefined); } catch { /* the cube keeps whatever it held */ }
+            }
+          }
+        }
         return drawn;
       },
     };
@@ -819,11 +999,13 @@ export function createInstrumentController(options: InstrumentControllerOptions)
   }
 
   /** A Lite PBR material from a recipe (decision 4 of the note). */
-  function recipeMaterial(recipe: InstrumentRecipe, scene: InstrumentScene, name: string): PbrMaterialProps {
+  function recipeMaterial(recipe: InstrumentRecipe, scene: InstrumentScene, name: string, probe?: CaptureProbe): PbrMaterialProps {
     const base = recipe.base ?? {};
     const material = createPbrMaterial({ name, baseColorFactor: [...linear(base.colour ?? "#ffffff"), 1], metallicFactor: base.metallic ?? 0,
       roughnessFactor: base.roughness ?? 1, doubleSided: true, directIntensity: base.direct ?? 1, environmentIntensity: scene.environment.strength } as Partial<PbrMaterialProps>);
     if ((recipe.coat?.strength ?? 0) > 0) setPbrClearCoat(material, { isEnabled: true, intensity: recipe.coat!.strength, roughness: recipe.coat!.roughness, indexOfRefraction: recipe.coat!.ior });
+    // The page cube (core work item 4): the layer's capture and the studio as this material's specular environment.
+    if (probe) setPbrLocalEnvironment(material, probe.environment, probe.projection);
     // `reflectance` tints the dielectric F0 only (I0.4): a metal's colour is its base colour.
     if (recipe.reflectance) setPbrMetallicReflectance(material, { color: linear(recipe.reflectance.tint ?? "#ffffff"), f0Factor: recipe.reflectance.f0 ?? 1 });
     if ((recipe.emissive?.strength ?? 0) > 0) setPbrEmissive(material, linear(recipe.emissive!.colour ?? "#ffffff").map(value => value * recipe.emissive!.strength!) as [number, number, number]);
@@ -963,7 +1145,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     const [bx, by] = bounds.rect;
     const relative: InstrumentObject = { ...object, rect: [object.rect[0] - bx, object.rect[1] - by, object.rect[2], object.rect[3]],
       bounds: { rect: [0, 0, bounds.rect[2], bounds.rect[3]], radius: bounds.radius ?? 0 },
-      parts: object.parts.filter(part => !part.glass).map(part => ({ ...part, at: [part.at[0] - bx, part.at[1] - by, part.at[2]] })) };
+      parts: object.parts.map(part => ({ ...part, at: [part.at[0] - bx, part.at[1] - by, part.at[2]] })) };
     if (!relative.parts.length) return { contained: true, part: 0, inset: Infinity, overshoot: 0, exact: false } satisfies Containment;
     const key = containmentKey(relative, scene.profiles as Record<string, InstrumentProfile>);
     let frontier = state.frontiers.get(key);
@@ -997,9 +1179,10 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       const scene = input.scene;
       if (!scene) continue;
       let state = layers.get(input.id);
+      if (state) state.input = input;
       if (!state) {
         state = { id: input.id, slot: ++slots, status: "pending", stepped: [], steppedDown: [], warnings: [], parts: 0, drawnParts: 0, kinds: 0, objects: 0,
-          frontiers: new Map(), exact: new Map(), gpu: { samples: [], last: null, total: 0 } };
+          frontiers: new Map(), exact: new Map(), gpu: { samples: [], last: null, total: 0 }, input };
         layers.set(input.id, state);
       }
       // The kinds and their instances follow the layout (each part's kind in order), so poses reuse them.
@@ -1011,7 +1194,6 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       const kindMap = state.kindMap, kinds = [...kindMap.values()], parts = kinds.reduce((sum, kind) => sum + kind.instances.length, 0);
       Object.assign(state, { parts: instrumentPartCount(scene), kinds: kinds.length, objects: scene.objects.length, warnings: [] as string[] });
       if (kinds.length > INSTRUMENT_KINDS_PER_LAYER) state.warnings.push(`kinds: ${kinds.length} part kinds (draw calls), above about ${INSTRUMENT_KINDS_PER_LAYER}`);
-      if (scene.objects.some(object => object.parts.some(part => part.glass))) state.warnings.push("glass: glass parts are not drawn until core work item 4");
       // The chain's flags, its map and the map's window on this stage, and which kinds have lenses, are structure too
       // (`postStructure`): a stage that outgrows the window rebuilds the scene.
       const lensKinds = kinds.filter(kind => !kind.captured && kind.instances.some(({ object, part }) => scene.objects[object]?.parts[part]?.emitter !== undefined)).map(kind => kind.key);
@@ -1059,9 +1241,8 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           }
           const result = contain(state!, scene, object, placementKey, placement);
           if (result.contained) return;
-          const drawnParts = object.parts.filter(part => !part.glass);
           stepped.push(index);
-          steppedDown.push({ object: object.id, reason: "containment", part: drawnParts[result.part]?.kind ?? "", inset: Math.round(result.inset * 100) / 100,
+          steppedDown.push({ object: object.id, reason: "containment", part: object.parts[result.part]?.kind ?? "", inset: Math.round(result.inset * 100) / 100,
             overshoot: Math.round(result.overshoot * 100) / 100 });
         });
         state.stepped = stepped;
@@ -1206,6 +1387,10 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         kinds: state.kinds, steppedDown: state.steppedDown.map(entry => ({ ...entry })), warnings: [...state.warnings],
         // The parts' clustered lights: whether the scene has them, and how many the emitters lit this frame.
         lights: { clustered: !!state.pass?.lights, lit: state.pass?.lights && state.status === "ready" ? state.pass.litLights : 0 },
+        // The page cube of the PBR parts and the glass (core work item 4).
+        probe: state.pass ? { ...state.pass.probeStatus, ...(state.pass.probe ? { size: state.pass.probe.probe.size, bytes: state.pass.probe.probe.bytes,
+          refreshes: state.pass.probe.probe.refreshes(), gpuMs: gpuStats(state.pass.probe.probe.gpuMs()) } : {}) } : null,
+        glass: state.pass ? { ...state.pass.glass } : null,
         gpu: { lastMs: state.gpu.last, p50Ms: percentile(state.gpu.samples, 0.5), p95Ms: percentile(state.gpu.samples, 0.95), samples: state.gpu.samples.length, total: state.gpu.total } })),
       stage: { parts: [...layers.values()].reduce((sum, state) => sum + state.drawnParts, 0), budget: INSTRUMENT_PARTS_PER_STAGE },
       budgets: { partsPerLayer: INSTRUMENT_PARTS_PER_LAYER, partsPerStage: INSTRUMENT_PARTS_PER_STAGE, kindsPerLayer: INSTRUMENT_KINDS_PER_LAYER, kindsCeiling: INSTRUMENT_KINDS_CEILING },
@@ -1213,6 +1398,9 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       compile: { ...compile, building: !!gate },
       order: orderUnavailable ?? "core",
       resources: { scenes: scenes.size, retiring: retirements.size, grain: grain ? 1 : 0, targets: targets.size, mapTextures: { ...mapTextures } },
+      probes: { budget: INSTRUMENT_PROBES_PER_STAGE, live: [...layers.values()].filter(state => state.pass?.probe).length, builds: probeCounters.builds, failures: probeCounters.failures,
+        refreshes: [...layers.values()].reduce((sum, state) => sum + (state.pass?.probe?.probe.refreshes() ?? 0), 0),
+        bytes: [...layers.values()].reduce((sum, state) => sum + (state.pass?.probe?.probe.bytes ?? 0), 0) },
       post: postState(),
     }),
     /** Releases everything at once; the caller has fenced the GPU or the device is lost. */
@@ -1235,11 +1423,6 @@ export function createInstrumentController(options: InstrumentControllerOptions)
 }
 export type InstrumentController = ReturnType<typeof createInstrumentController>;
 
-/** The light vector of 2.1 (layer axes, y down): towards the light. */
-function lightVector(scene: InstrumentScene): [number, number, number] {
-  const a = (scene.light.azimuth * Math.PI) / 180, e = (scene.light.elevation * Math.PI) / 180;
-  return [Math.sin(a) * Math.cos(e), -Math.cos(a) * Math.cos(e), Math.sin(e)];
-}
 /** A captured cap's interior factor (2B.4 and 2.9): hover lift, press sink, coat and gloss, within `interior.max`. */
 function capFactor(scene: InstrumentScene, part: InstrumentScene["objects"][number]["parts"][number]): number {
   const material = scene.materials[part.material] ?? {}, state = part.state ?? {}, m = scene.interior.max;
@@ -1255,7 +1438,11 @@ const frameUniforms = [
   { name: "frame", type: "vec4<f32>" as const, defaultValue: [1, 1, 1, 1] },
   { name: "clip", type: "vec4<f32>" as const, defaultValue: [0, 0, 1e6, 1e6] },
   { name: "captured", type: "vec4<f32>" as const, defaultValue: [1, 1, 0.04, 0] },
+  // The layer's scale and the camera, for the glass: (half the stage in CSS px, the layer's scale, the camera distance).
+  { name: "placement", type: "vec4<f32>" as const, defaultValue: [0, 0, 1, 1] },
 ];
+/** The glass material's constants (`glassConstants`): ior and dispersion, tint, the studio and the light. */
+const glassUniforms = [0, 1, 2, 3, 4].map(at => ({ name: `g${at}`, type: "vec4<f32>" as const, defaultValue: [0, 0, 0, 0] }));
 const localWGSL = /* wgsl */ `
 fn layerLocal(position: vec2<f32>) -> vec2<f32> {
   let p = vec3<f32>(position / shaderUniforms.frame.x, 1.0);
@@ -1284,20 +1471,7 @@ fn roundedBox(q: vec2<f32>, half: vec2<f32>, r: f32) -> f32 {
 // transparent clear (so premultiplied there); the composite applies the layer's opacity.
 const capFragment = /* wgsl */ `struct VertexOutput { @builtin(position) position: vec4<f32>, @location(0) @interpolate(flat) slot: u32 };
 ${localWGSL}
-fn premultipliedTexel(texel: vec2<f32>) -> vec4<f32> {
-  let value = textureLoad(capture, vec2<i32>(floor(texel)), 0);
-  return vec4<f32>(value.rgb * value.a, value.a);
-}
-fn filtered(texel: vec2<f32>, captured: vec2<f32>) -> vec4<f32> {
-  let position = clamp(texel, vec2<f32>(0.5), captured - vec2<f32>(0.5)) - vec2<f32>(0.5);
-  let base = floor(position);
-  let weight = position - base;
-  let low = base + vec2<f32>(0.5);
-  let high = min(base + vec2<f32>(1.5), max(captured - vec2<f32>(0.5), vec2<f32>(0.5)));
-  let value = mix(mix(premultipliedTexel(low), premultipliedTexel(vec2<f32>(high.x, low.y)), weight.x),
-    mix(premultipliedTexel(vec2<f32>(low.x, high.y)), premultipliedTexel(high), weight.x), weight.y);
-  return select(vec4<f32>(0.0), vec4<f32>(value.rgb / value.a, value.a), value.a > 1e-5);
-}
+${CAPTURE_WGSL}
 @fragment fn mainFragment(input: VertexOutput) -> @location(0) vec4<f32> {
   let local = layerLocal(input.position.xy);
   if (!insideClip(local)) { discard; }

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Underglass core: Instrument glass and the capture probe</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body { background: #e3e5e9; color: black; font: 14px system-ui; }
+    [hidden] { display: none !important; }
+    #frame { position: fixed; inset: 0; }
+    #status { position: fixed; right: 8px; bottom: 6px; max-width: 46ch; margin: 0; padding: 4px 8px; border-radius: 6px;
+      background: rgb(255 255 255 / 0.85); font: 11px/1.3 system-ui; white-space: pre-wrap; pointer-events: none; z-index: 1; }
+    #glass { position: absolute; left: 40px; top: 40px; width: 940px; height: 560px; box-sizing: border-box; border-radius: 14px;
+      background: rgb(223, 225, 229); color: rgb(28, 30, 36); margin: 0; }
+    .igc-print { position: absolute; font: 600 12px/14px system-ui; white-space: nowrap; color: rgb(28, 30, 36); }
+    /* What lies under the glass: stripes behind the display, target rings under each lens, a checkerboard under the plate. */
+    .igc-stripes { position: absolute; left: 24px; top: 24px; width: 420px; height: 88px; border-radius: 10px;
+      background: repeating-linear-gradient(90deg, rgb(18, 38, 24) 0 6px, rgb(70, 120, 84) 6px 12px); }
+    .igc-ring { position: absolute; width: 100px; height: 100px; border-radius: 50%;
+      background: radial-gradient(circle, rgb(20, 24, 40) 0 3px, transparent 3px 8px, rgb(37, 99, 235) 8px 11px, transparent 11px 18px, rgb(20, 24, 40) 18px 20px, transparent 20px); }
+    .igc-ring::before, .igc-ring::after { content: ""; position: absolute; top: 49px; height: 3px; width: 26px; background: rgb(37, 99, 235); }
+    .igc-ring::before { left: 12px; } .igc-ring::after { right: 12px; }
+    .igc-checks { position: absolute; left: 520px; top: 24px; width: 220px; height: 120px; border-radius: 10px;
+      background: conic-gradient(rgb(28, 30, 36) 25%, rgb(236, 238, 242) 0 50%, rgb(28, 30, 36) 0 75%, rgb(236, 238, 242) 0) 0 0 / 20px 20px; }
+    #display { position: absolute; left: 34px; top: 36px; width: 400px; height: 64px; box-sizing: border-box; margin: 0; padding: 0 20px; border: 0; border-radius: 8px;
+      background: rgb(18, 38, 24); color: rgb(214, 228, 206); font: 600 30px/64px ui-monospace, Consolas, monospace; outline: none; }
+    .igc-panel input, .igc-panel button { position: absolute; }
+    .igc-panel input[type="range"] { appearance: none; margin: 0; padding: 0; background: transparent; outline: none; cursor: pointer; border-radius: 50%; }
+    .igc-panel input[type="range"]::-webkit-slider-thumb { appearance: none; width: 1px; height: 1px; background: transparent; }
+    .igc-panel input[type="checkbox"] { appearance: none; margin: 0; background: transparent; outline: none; cursor: pointer; border-radius: 50%; }
+    .igc-panel button { margin: 0; padding: 0; border: 0; background: transparent; color: transparent; border-radius: 10px; cursor: pointer; outline: none; }
+    .igc-panel :focus-visible { outline: 2px solid rgb(250, 180, 40); outline-offset: -2px; }
+  </style>
+</head>
+<body>
+  <div id="frame"></div>
+  <pre id="status" role="status"></pre>
+  <script type="module" src="/src/instrument-glass-core/page.ts"></script>
+</body>
+</html>
