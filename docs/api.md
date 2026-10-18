@@ -597,17 +597,21 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
   (`lastMs`, `p50Ms`, `p95Ms`); the stage's parts; the timing status; and the compile counters (builds, failures,
   deferred successor deadlines). `state().instrument.post` lists per layer each stage's status (`on`, `off`, `idle`
   for bloom with no lit lens, `failed` with its `error`), the map (`size`, `biasPx`, `bias` in Lite's units, `darkness`,
-  `window`, `casters`, `renders`: frames that re-rendered it, `timedRenders`: those Lite's timings saw), its lenses and
+  `window`, `casters`, `renders`: the controller's count of frames that flushed a caster, an estimate of Lite's refresh rule,
+  `timedRenders`: the frames Lite's timings saw the map task in, a sample), its lenses and
   lit lenses, and the GPU time per stage (`face`, `map`, `mask`, `parts`, the stages, `caps`, `composite`: `lastMs`,
-  `p50Ms`, `p95Ms`, `samples`); and the shared targets (`format`, `width`, `height`). A stage that fails to build is
+  `p50Ms`, `p95Ms`, `samples`, `total`); and the shared targets (`format`, `width`, `height`; a target no layer uses may
+  report its last size). `state().instrument.resources.mapTextures` counts shadow map textures released with their scenes
+  (`destroyed`) and any that could not be (`missing`, warned once). A stage that fails to build is
   left out and reported; a layer whose target, mask or composite cannot be built is drawn at Relief with `post`. `state().materials` lists `{ kind: "instrument", objects, parts, interior, degraded }`.
 - **Compile sequencing.** A successor composition that starts while a mesh build compiles starts its 1.5 s deadline when
   the build is done or after 3 s, whichever comes first; a build that takes over 10 s steps its layer down.
 - **Never DOM for an instrument reason.** Containment, budgets, build failures and slow builds (10 s) step objects
   down to Relief with GPU on. A GPU error (validation scope, device loss) still recovers to ordinary DOM.
 - **Limits:** a layer whose matrix is not a similarity (shear, non-uniform scale, a tilt) draws its objects at Relief;
-  between 0 and 1, the meshes blend as one group over the layer's already faded face, so under an opaque part the faded
-  face (not only what lies beneath the layer) shows at `1 − opacity`.
+  between 0 and 1, the meshes blend as one group over the layer's already faded face: under an opaque part the canvas is
+  `α · P + (1 − α) · (α · F + (1 − α) · B)` (`F` the face, `B` what lies beneath the layer), not the layer's true group
+  opacity `α · P + (1 − α) · B`, so face content under a part shows through at `α (1 − α)`.
 
 ### Emitters and the pointer light
 
