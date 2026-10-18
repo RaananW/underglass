@@ -306,6 +306,27 @@ const api = {
    * A writer in the usual idiom: each animation frame it first asks for its next frame, then moves a light on B with
    * `setEmitters`; returns the writes and the GPU frames core drew meanwhile.
    */
+  /**
+   * A light written in one frame, then an ordinary `update` in the next (B's shadow strength `strength`), while core's lead
+   * frame is pending: returns the GPU frames core drew in the two frames after the update (the update must be drawn).
+   */
+  async leadThenUpdate(strength: number) {
+    const b = panels[1]!, handle = handles.get("b")!;
+    // Quiet first: no paint or draw request left from earlier steps.
+    await settle();
+    for (let index = 0; index < 10; index++) await nextFrame();
+    await nextFrame();
+    handle.setEmitters(emittersOf(b));
+    await nextFrame();
+    const scene = sceneOf(b) as { shadow: { strength: number } };
+    scene.shadow = { ...scene.shadow, strength };
+    const metrics = () => (state() as unknown as { metrics: { paintNotifications: number; gpuFrames: number } }).metrics;
+    const before = counts().gpuFrames, paints = metrics().paintNotifications;
+    handle.update(scene as never);
+    await nextFrame();
+    await nextFrame();
+    return { framesAfterUpdate: counts().gpuFrames - before, paints: metrics().paintNotifications - paints };
+  },
   async writerRun(frames: number) {
     const b = panels[1]!, before = counts();
     let writes = 0;

@@ -23,7 +23,7 @@ const { validateReliefScene, reliefUniforms, RELIEF_VEC4S, RELIEF_EMITTER_BASE, 
 const { validateInstrumentScene, instrumentStructure } = await import("../../packages/core/src/instrument.ts");
 const { validateMaterial, withEmitters } = await import("../../packages/core/src/effects.ts");
 sourceImports.deregister();
-const { selectEmitters, tileMasks, layerGuard, interiorBounds, packEmitters, reachMargin, validateLight, shadowScales, EMITTERS_PER_LAYER, EMITTER_BLOCK_VEC4S, EMITTER_TILES,
+const { selectEmitters, tileMasks, layerGuard, interiorBounds, packEmitters, reachMargin, validateLight, shadowScales, castHeight, EMITTERS_PER_LAYER, EMITTER_BLOCK_VEC4S, EMITTER_TILES,
   EMITTER_LIGHTS, EMITTER_TILE_BASE, EMITTER_RECTS, EMITTER_CAPS, EMITTER_EXTENT, EMITTER_CELLS, POOL_VEC4S, poolWGSL } = emitters;
 
 const lamp = (x, y, overrides = {}) => ({ position: [x, y, 20], colour: [1, 0.72, 0.38], strength: 3200, radius: 168, ...overrides });
@@ -174,7 +174,15 @@ test("the guard bounds offsets by the largest stack, shadows by where they fall,
   assert.ok(Math.abs(interiorBounds(two, { x0: 50, y0: 45, x1: 170, y1: 65 })[1] - 1.005) < 1e-12, "two separate keys: k_hi 1.005");
   // A key on a satin plate: there the offsets may stack (the plate's beneath the key's edge).
   const stacked = validateReliefScene(relief({ primitives: [face, key(30, 30, { rect: [30, 30, 200, 100], radius: 10 }), key(60, 60)], protected: [[70, 65, 30, 10]] }));
-  assert.ok(Math.abs(interiorBounds(stacked, { x0: 70, y0: 65, x1: 100, y1: 75 })[1] - 1.01) < 1e-12, "a key on a plate: k_hi 1.01");
+  assert.deepEqual(interiorBounds(stacked, { x0: 70, y0: 65, x1: 100, y1: 75 }).map(value => Math.round(value * 1e6) / 1e6), [1, 1.005], "wholly inside the key: its offset replaces the plate's");
+  assert.deepEqual(interiorBounds(stacked, { x0: 50, y0: 65, x1: 70, y1: 75 }).map(value => Math.round(value * 1e6) / 1e6), [0.96, 1.01], "across the key's edge: key and plate stack, and the key's shadow falls there");
+  // A caster near a rect but not touching it still counts: its shadow reaches past its own box (second review).
+  const single = validateReliefScene(relief({ primitives: [face, key(40, 40)] }));
+  for (const [y0, expected] of [[70, [0.96, 1.005]], [72, [0.96, 1]], [75, [0.96, 1]], [90, [1, 1]]]) {
+    assert.deepEqual(interiorBounds(single, { x0: 50, y0, x1: 90, y1: y0 + 10 }).map(value => Math.round(value * 1e6) / 1e6), expected, `a rect at y ${y0} below the key (its bottom at 70)`);
+  }
+  const square = validateReliefScene(relief({ primitives: [face, { face: "raised", rect: [100, 50, 40, 40], radius: 4, height: 4, material: "satin" }] }));
+  assert.deepEqual(interiorBounds(square, { x0: 146, y0: 96, x1: 160, y1: 104 }).map(value => Math.round(value * 1e6) / 1e6), [0.96, 1], "the review's rect beside a raised key, in its shadow");
   // "extent" on one rounded raised face (the review's case: shadow cap 0): every cell keeps the full caps.
   const lone = validateReliefScene(relief({ primitives: [face], protected: "extent" }));
   const loneGuard = layerGuard(lone, "extent");
@@ -185,11 +193,23 @@ test("the guard bounds offsets by the largest stack, shadows by where they fall,
   const lightest = Math.min(...tenGuard.cells.map(cell => cell.light)), darkest = Math.min(...tenGuard.cells.map(cell => cell.shadow));
   assert.ok(Math.abs(lightest - ((1.04 / 1.005) - 1)) < 1e-12, `ten keys: the smallest light cap is one key's (${lightest})`);
   assert.ok(darkest === 0, "cells inside a key's shadow on the face lose the shadow cap");
-  assert.ok(tenGuard.cells.slice(6 * 16).every(cell => cell.shadow > 0 && Math.abs(cell.light - 0.04) < 1e-12), "cells clear of every key and its shadow keep both caps");
+  assert.ok(tenGuard.cells.slice(7 * 16).every(cell => cell.shadow > 0 && Math.abs(cell.light - 0.04) < 1e-12), "cells clear of every key and its shadow keep both caps");
+  assert.equal(tenGuard.cells.filter(cell => cell.shadow === 0).length, 91, "91 of 144 cells lie where a key's shadow may fall");
   // Overlapping protected rects keep their own caps; the shader applies the lower of the two where they overlap.
   const overlapping = layerGuard(validateReliefScene(relief({ primitives: [face, key(300, 40)], protected: [[290, 30, 40, 20], [310, 45, 40, 20]] })), [[290, 30, 40, 20], [310, 45, 40, 20]]);
-  assert.equal(overlapping.rects.length, 2);
-  assert.ok(overlapping.rects[1].light < overlapping.rects[0].light + 1e-12);
+  assert.deepEqual(overlapping.rects.map(({ light, shadow }) => [Math.round(light * 1e6) / 1e6, Math.round(shadow * 1e6) / 1e6]), [[0.034826, 0], [0.034826, 0.04]],
+    "the first rect reaches past the key into its shadow; the second lies inside the key");
+});
+
+test("the guard uses the cast height the relief pass packs, in every state", () => {
+  const state = { state: { hoverHeight: 1.6, pressHeight: 0.25, hoverLift: 0.02, pressSink: 0.03 } };
+  const raised = (extra = {}) => ({ face: "raised", rect: [0, 0, 10, 10], height: 10, material: "x", ...extra });
+  const key = (extra = {}) => ({ object: "key", rect: [0, 0, 10, 10], height: 10, travel: 2, material: "x", ...extra });
+  assert.deepEqual([castHeight(state, raised()), castHeight(state, raised({ state: { hover: true } })), castHeight(state, raised({ state: { pressed: true } }))], [10, 16, 2.5]);
+  assert.deepEqual([castHeight(state, key({ state: { pressed: true } })), castHeight(state, key({ state: { hover: true } })), castHeight(state, { object: "slab", rect: [0, 0, 10, 10], height: 10, material: "x", state: { pressed: true } })], [8, 12.5, 2.5],
+    "a pressed key casts its height less its travel (8), not the press multiplier (2.5)");
+  assert.equal(castHeight(state, raised({ state: { disabled: true } })), 0);
+  assert.equal(castHeight(state, { face: "well", rect: [0, 0, 10, 10], height: 10, material: "x" }), 0);
 });
 
 test("each object's face shadow takes its share of a guarded area's shadow cap", () => {
@@ -230,6 +250,17 @@ test("the emitter block packs the drawn emitters, the guard and the tiles where 
   packEmitters(out, RELIEF_EMITTER_BASE * 4, light, boxed, { rects: [], overflow: true }, rect, scene.extent, scene.feather, scene.interior.max);
   assert.deepEqual(at(EMITTER_EXTENT), [1, 400, 200, 1]);
   assert.equal(Math.round(at(EMITTER_CELLS)[0] * 1e6) / 1e6, 0.04);
+  // Lower layers' text that does not fit is merged into its bounding box; with no room at all, the outset is dark.
+  const many = { rects: Array.from({ length: 63 }, (_, index) => [index, 0, 1, 1]), extent: false, overflow: 0, cells: null };
+  const crowded = { ...many, rects: many.rects.map(([x, y, w, h]) => ({ rect: { x0: x, y0: y, x1: x + w, y1: y + h }, light: 0.04, shadow: 0.04 })) };
+  const lower = { rects: [{ x0: -40, y0: 0, x1: -30, y1: 10 }, { x0: -20, y0: 50, x1: -10, y1: 60 }], overflow: false };
+  assert.deepEqual(packEmitters(out, RELIEF_EMITTER_BASE * 4, light, crowded, lower, rect, scene.extent, scene.feather, scene.interior.max), { beneath: 2, merged: true, overflow: false });
+  assert.equal(at(0)[2], 64, "63 own rects and one merged");
+  assert.deepEqual(at(EMITTER_RECTS + 63), [-40, 0, -10, 60]);
+  const full = { ...crowded, rects: [...crowded.rects, crowded.rects[0]] };
+  assert.deepEqual(packEmitters(out, RELIEF_EMITTER_BASE * 4, light, full, lower, rect, scene.extent, scene.feather, scene.interior.max), { beneath: 2, merged: false, overflow: true });
+  assert.equal(at(0)[2], 64);
+  assert.equal(at(EMITTER_EXTENT)[3], 1, "no room: the outset is dark");
   // The shaders read the same block.
   assert.match(reliefWGSL, /fn reliefLamp/);
   assert.match(poolWGSL.fragment, /fn lampTile/);

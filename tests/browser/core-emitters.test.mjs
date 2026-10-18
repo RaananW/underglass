@@ -93,6 +93,13 @@ function changedIn(a, b, box, dpr) {
   }
   return { changed, compared };
 }
+/** The largest raw change of any channel inside `rect` between two screenshots, in 8-bit levels. */
+function rawChange(a, b, rect, dpr) {
+  const before = region(a, rect, dpr), after = region(b, rect, dpr);
+  let worst = 0;
+  before.forEach((values, index) => values.forEach((value, channel) => { worst = Math.max(worst, Math.abs(after[index][channel] - value)); }));
+  return worst;
+}
 const median = values => { const sorted = [...values].sort((a, b) => a - b); return sorted.length ? sorted[Math.floor(sorted.length / 2)] : null; };
 
 /** The lamp's pool: gains on the face around it (clear of text and controls) and past its panel's edge along `direction`. */
@@ -183,12 +190,31 @@ for (const dpr of [1, 2]) for (const level of levels) test(`emitters at ${level}
         // Two quantized frames (lamp off and on), each rounded once: up to a level past 1 ± m from rounding alone.
         expect(entry.lampChange.levels, `${theme} ${id}: the lamp's change alone stays within interior.max: ${JSON.stringify(entry.lampChange)}`).toBeLessThanOrEqual(1.5);
       }
-      expect(report.contrast[theme]["b-edge"].rect.width, "B's edge note shows left of C").toBeGreaterThan(20);
+      const edge = report.contrast[theme]["b-edge"];
+      expect(edge.rect.width, "B's edge note shows left of C").toBeGreaterThan(20);
+      // C adds no light to B's note: the raw difference lamp off against on stays within a level (rounding); a control
+      // point in C's glow just below the note gains.
+      edge.raw = rawChange(off, on, edge.rect, dpr);
+      edge.control = gain(off, on, { x: cBox.x - 20, y: edge.rect.y + edge.rect.height + 9 }, dpr);
+      expect(edge.raw, `${theme}: C's lamp leaves B's note as it was`).toBeLessThanOrEqual(1);
+      expect(edge.control, `${theme}: C's glow lights B just below the note`).toBeGreaterThan(2);
       await call("allOff");
     }
     await call("setTheme", "light");
     await stillGpu(call, "after the contrast checks");
     report.beneath = (await call("emitters")).layers.map(layer => [layer.id, layer.beneath]);
+
+    // A light written in one frame, then an ordinary update in the next while core's lead frame is pending: the update is
+    // drawn (B's shadow strength 0.6 darkens the stage below B), not folded into the lead frame and dropped.
+    const bBox = (await call("panels")).b, belowB = { x: bBox.x + bBox.width * 0.25, y: bBox.y + bBox.height + 6 };
+    const beforeUpdate = await shot(page);
+    // No screenshot between the light and the update: a screenshot asks for a paint, which would draw anyway.
+    report.leadThenUpdate = await call("leadThenUpdate", 0.6);
+    const afterUpdate = await shot(page);
+    report.leadThenUpdate.darker = -gain(beforeUpdate, afterUpdate, belowB, dpr);
+    expect(report.leadThenUpdate.framesAfterUpdate, "core draws the update made while its lead frame was pending").toBeGreaterThanOrEqual(1);
+    expect(report.leadThenUpdate.darker, "the update's pixels: a stronger shadow below B").toBeGreaterThan(2);
+    await call("setTheme", "light");
 
     // A successor composition (C grows by 2 px): C's old pass and its face pool are disposed after the queue fence while the
     // engine lives (the pool's task targets the swapchain, which must survive the task), and the new pass brings its own.
@@ -201,10 +227,17 @@ for (const dpr of [1, 2]) for (const level of levels) test(`emitters at ${level}
     expect(report.successor.poolsAfter, "the retired pool was disposed, none leaked").toBe(poolsBefore);
     expect(report.successor.disposed, "C's old pool was disposed while the engine lives").toBeGreaterThanOrEqual(1);
     expect(report.successor.pass, "the new pass draws C's light").toBe("drawn");
+    // The frame after: C's glow past its edge onto B, lamp on against off.
+    const resizedOn = await shot(page);
+    await call("allOff");
+    const resizedOff = await shot(page);
+    const cAfter = (await call("panels")).c, power = (await call("lamps")).find(entry => entry.id === "c-lamp");
+    report.successor.glow = gain(resizedOff, resizedOn, { x: cAfter.x - 6, y: power.centre.y }, dpr);
+    expect(report.successor.glow, "after the pool was replaced, C's lamp still lights B past C's edge").toBeGreaterThan(2);
     await stillGpu(call, "after a pool was disposed with the engine alive");
     await call("resize", "c", -2);
     await call("allOff");
-    expect(report.beneath.find(([id]) => id === "c")[1], "C knows the lower layers' text under its outset").toBeGreaterThan(0);
+    expect(report.beneath.find(([id]) => id === "c")[1].rects, "C knows the lower layers' text under its outset").toBeGreaterThan(0);
 
     // Other ways to protect text: the whole box ("extent"), more than 64 rects (the whole box too), and overlapping rects.
     // The guard still holds, the pool still lights the face, and at Instrument the key light's part shadows stay.
