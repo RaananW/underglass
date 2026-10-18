@@ -18,6 +18,7 @@
  * - Carousels: `attachStrataCarousels` runs every `.ug-carousel`'s buttons and reports `strata-slide`;
  * - Menus: `attachStrataMenus` runs the Menu Button pattern's keys, and reports `strata-select` from a chosen item;
  * - Knobs: `attachStrataKnobs` gives every `.ug-knob` its round pointer, wheel and reset behaviour (anatomy page `knob.md`);
+ * - Lamps: `attachStrataLamps` lights a momentary `.ug-lamp` while it is pressed and plays opt-in feedback (anatomy page `lamp.md`);
  * - Toolbars: the first time focus enters one, its controls get a roving tabindex (one tab stop), and the arrow keys,
  *   Home and End move between them;
  * - Tabs: a click on a tab selects it, and the arrow keys, Home and End move between tabs and select them (only move,
@@ -35,6 +36,7 @@ import { attachStrataFaders } from "./fader.ts";
 import { attachStrataCarousels } from "./carousel.ts";
 import { attachStrataMenus } from "./menu.ts";
 import { attachStrataKnobs } from "./knob.ts";
+import { attachStrataLamps } from "./lamp.ts";
 
 const attached = new WeakMap<Document | HTMLElement, () => void>();
 
@@ -72,6 +74,7 @@ export function attachStrata(root: Document | HTMLElement = document): () => voi
   attachStrataCarousels(root instanceof Document ? root : root.ownerDocument);
   attachStrataMenus(root instanceof Document ? root : root.ownerDocument);
   attachStrataKnobs(root instanceof Document ? root : root.ownerDocument);
+  attachStrataLamps(root instanceof Document ? root : root.ownerDocument);
   const existing = attached.get(root);
   if (existing) return existing;
   const block = (event: Event) => {

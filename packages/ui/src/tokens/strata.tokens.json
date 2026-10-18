@@ -1253,6 +1253,22 @@
           "scope": true
         }
       }
+    },
+    "glowOn": {
+      "$type": "color",
+      "$value": "#ff9228",
+      "$description": "Lit lenses, rings and flags: the Lamp's default colour.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "themes": {
+            "light": "#ff9228",
+            "dark": "#ff9228",
+            "contrast": "#ff9228",
+            "contrast-dark": "#ff9228"
+          },
+          "scope": true
+        }
+      }
     }
   },
   "font": {
@@ -1667,6 +1683,82 @@
           }
         }
       }
+    },
+    "lamp": {
+      "small": {
+        "$type": "dimension",
+        "$value": "20px",
+        "$description": "Lamp lens diameter at small.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 12,
+            "max": 64
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "28px",
+        "$description": "Lamp lens diameter at medium (the premium lamp).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 12,
+            "max": 64
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "36px",
+        "$description": "Lamp lens diameter at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 12,
+            "max": 64
+          }
+        }
+      }
+    },
+    "statusLight": {
+      "small": {
+        "$type": "dimension",
+        "$value": "8px",
+        "$description": "StatusLight lens diameter at small.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 6,
+            "max": 32
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "10px",
+        "$description": "StatusLight lens diameter at medium (the premium LED).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 6,
+            "max": 32
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "14px",
+        "$description": "StatusLight lens diameter at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 6,
+            "max": 32
+          }
+        }
+      }
     }
   },
   "motion": {
@@ -2027,6 +2119,136 @@
         "contrast-dark": {
           "scheme": "dark",
           "contrast": "more"
+        }
+      }
+    }
+  },
+  "blink": {
+    "$description": "StatusLight blink tempos (section 14): one full on-off cycle; never faster than 334 ms, so a light flashes at most three times a second (WCAG 2.3.1). Off under reduced motion.",
+    "slow": {
+      "$type": "duration",
+      "$value": "1600ms",
+      "$description": "A slow blink: 0.6 flashes a second.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 334,
+          "max": 4000,
+          "scope": true
+        }
+      }
+    },
+    "normal": {
+      "$type": "duration",
+      "$value": "1000ms",
+      "$description": "A steady blink: 1 flash a second.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 334,
+          "max": 4000,
+          "scope": true
+        }
+      }
+    },
+    "fast": {
+      "$type": "duration",
+      "$value": "400ms",
+      "$description": "A fast blink: 2.5 flashes a second.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 334,
+          "max": 4000,
+          "scope": true
+        }
+      }
+    }
+  },
+  "emitter": {
+    "$description": "Emitters (section 3): the light a lit lamp or LED gives. Radius and height are in lens diameters; strength is for the reference lens (28 px for a lamp, 10 px for an LED) and scales with the square of the lens.",
+    "lamp": {
+      "radius": {
+        "$type": "number",
+        "$value": 6,
+        "$description": "Reach R, in lens diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 1,
+            "max": 20
+          }
+        }
+      },
+      "height": {
+        "$type": "number",
+        "$value": 0.7,
+        "$description": "Height above the face, in lens diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.25,
+            "max": 2
+          }
+        }
+      },
+      "strength": {
+        "$type": "number",
+        "$value": 3200,
+        "$description": "Intensity I at the reference lens.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 32000
+          }
+        }
+      }
+    },
+    "led": {
+      "radius": {
+        "$type": "number",
+        "$value": 6,
+        "$description": "Reach R, in lens diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 1,
+            "max": 20
+          }
+        }
+      },
+      "height": {
+        "$type": "number",
+        "$value": 0.8,
+        "$description": "Height above the face, in lens diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.25,
+            "max": 2
+          }
+        }
+      },
+      "strength": {
+        "$type": "number",
+        "$value": 520,
+        "$description": "Intensity I at the reference lens.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 32000
+          }
+        }
+      }
+    },
+    "guardFeather": {
+      "$type": "dimension",
+      "$value": "4px",
+      "$description": "Width over which the guard eases off outside a protected rect.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 0,
+          "max": 16
         }
       }
     }
