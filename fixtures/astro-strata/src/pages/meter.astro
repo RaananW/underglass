@@ -1,0 +1,29 @@
+---
+/**
+ * Strata Astro Meter and Gauge check page (`/meter/`): `[data-contract]` renders the anatomy pages' markup examples
+ * (`meter.md` two, `gauge.md` one) with `@underglass/ui/astro`, and `main` holds live meters and a gauge
+ * `tests/browser/ui-meter-astro.test.mjs` drives. Server-rendered HTML; the only script is the components' own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { Gauge, Meter } from "@underglass/ui/astro";
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro Meter check</title>
+</head>
+<body>
+  <div data-contract="meter:0" hidden><Meter id="level" label="Level" value={62} low={70} high={90} optimum={0} segments={8} unit=" %" marks={3} /></div>
+  <div data-contract="meter:1" hidden><Meter id="vu" label="VU" value={-6} min={-20} max={3} high={0} form="needle" unit=" dB" marks={[-20, -10, 0, 3]} /></div>
+  <div data-contract="gauge:0" hidden><Gauge id="temperature" label="Temperature" value={72} max={120} low={20} high={100} unit=" °C" marks={5} /></div>
+  <main>
+    <section class="ug-panel" data-strata-face="raised" aria-label="Meters" style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px">
+      <Meter id="bar" label="Bar" value={30} low={70} high={90} optimum={0} unit=" %" peak class="extra" style="margin-right: 4px" data-testid="bar" size="small" />
+      <Meter id="needle" label="Needle" form="needle" value={30} min={0} max={100} />
+      <Gauge id="dial" label="Dial" value={30} max={100} high={80} unit=" bar" class="extra" style="margin-right: 4px" data-testid="dial" />
+      <Meter id="plain" label="Plain" value={5} max={10} segments={10} />
+    </section>
+  </main>
+</body>
+</html>

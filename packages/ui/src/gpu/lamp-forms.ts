@@ -57,7 +57,7 @@ export function lensColourAt(role: string, lit: number): string {
  * handles it as usual). A part whose box is empty gives no entries.
  */
 export function lampFormEntries(element: Element, context: LampFormContext): SceneEntry[] | undefined {
-  const isBezel = element.matches(".ug-lamp__bezel"), isLens = element.matches(".ug-lamp__lens, .ug-status-light__lens");
+  const isBezel = element.matches(".ug-lamp__bezel"), isLens = element.matches(".ug-lamp__lens, .ug-status-light__lens, .ug-meter__segment");
   if (!isBezel && !isLens) return undefined;
   const [x, y, width, height] = context.rect, box = context.box;
   if (width <= 0.25 || height <= 0.25) return [];

@@ -684,3 +684,31 @@ face, with bloom. Past 64 emitters in a layer core draws the 64 with the most re
 opt-in `click` feedback. Anatomy: [Lamp](../../docs/ui-library/components/lamp.md),
 [StatusLight](../../docs/ui-library/components/status-light.md).
 
+## Meter and Gauge
+
+Read-only measurements, the second wave of the Instrument level: a **Meter** is a native `<meter>` (role `meter`, with `min`,
+`max`, `low`, `high` and `optimum`) under a bar of LED segments lit from its value, or, with `form="needle"`, a needle on a
+printed arc; a **Gauge** is the same native element under a round dial with a needle, a printed scale and a red zone from `high`
+(a bounded measurement, so `<meter>` and not `<progress>`). `unit` or `format` gives `aria-valuetext`; `peak` makes a bar hold its
+highest segment and let it fall (`meter.peakHold`, `meter.peakDecay`). A segment takes its zone's colour by the native rule (the
+region of `optimum` is good, the next suboptimal, the far one worst), and a needle meter or gauge prints a band in `danger`
+below `low` and above `high`.
+
+```tsx
+<Meter label="Level" value={level} low={70} high={90} optimum={0} unit=" %" peak />
+<Meter label="VU" form="needle" value={vu} min={-20} max={3} high={0} unit=" dB" marks={[-20, -10, 0, 3]} />
+<Gauge label="Temperature" value={celsius} max={120} low={20} high={100} unit=" °C" />
+```
+
+Vue and Astro take the same props (Astro takes `unit` alone); the ref is the `.ug-meter` root (`meterRef`, or Vue's exposed `meter`,
+is the native meter). `attachStrataMeters` (`attachStrata` and the components attach it) keeps the drawing's `--strata-meter-value`,
+the segments' zones, the unit's `aria-valuetext` and a held peak in step with the native meter, which is observed, not polled.
+A **live value** (a level at frame rate) goes through `driveStrataMeter(meter, value)`: where the GPU draws the meter (a bar's
+segments at every level, a needle at the Instrument level) it writes nothing to the DOM, so no capture, upload or hit-geometry
+update follows (300 frames: 0 of each), and the native `value` follows at a low rate for assistive technology
+(`interval`, 1,000 ms by default; `releaseStrataMeter` writes it now). On the GPU each lit segment is the Lamp's LED lens with an
+emitter in its zone's colour (`emitter.segment.*`) at every level; a needle meter's bezel, window and hub are Relief and Objects
+primitives with the needle as captured content on `spring.meter` (a gauge's on `spring.gauge`, `linear()` curves in the CSS); at the
+Instrument level (`level: "instrument"`) the needle is a part on its spring, a gauge has a polished bezel, and a glass window keeps
+the printed scale under it exact (`gpu/instrument-meter.ts`). Anatomy: [Meter](../../docs/ui-library/components/meter.md),
+[Gauge](../../docs/ui-library/components/gauge.md).

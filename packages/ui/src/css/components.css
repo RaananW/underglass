@@ -1324,6 +1324,253 @@
   :where(.ug-knob:has(.ug-knob__input:disabled)) :where(.ug-knob__skirt, .ug-knob__cap) { --_h: 0px; --_gain: 0; }
   :where(.ug-knob__input:disabled) { cursor: not-allowed; }
 
+  /* ---- Meter and Gauge: a native meter under a bar of LED segments or a needle on a printed arc (anatomy pages meter.md, gauge.md) ---- */
+
+  /*
+   * The native `<meter>` is the control: it covers the whole object, transparent, and says the value, the range and the
+   * zones to assistive technology. The object (decoration, no pointer) is drawn over it in a window set in the faceplate:
+   * a bar of round LED segments lit from the value (`bar`), or a needle on a printed arc (`needle`, and a Gauge's round
+   * dial). The value is one number, `--strata-meter-value` (0 at `min`, 1 at `max`), kept by the behaviour; a segment is
+   * lit by `--strata-lit` (the Lamp's registered number, here computed from the value), so every presentation follows one
+   * number, and a needle by `--strata-meter-t`, the value's place on the needle's spring (a transition on `linear()`
+   * sampled from `spring.meter` or `spring.gauge` by `meterSpringCurve`). The GPU presentation draws the segments as lenses
+   * with emitters and the needle as a part, reading the native meter itself, so a live value recaptures nothing.
+   */
+  @property --strata-meter-t { syntax: "<number>"; inherits: true; initial-value: 0; }
+  :where(.ug-meter) {
+    --_lens: var(--strata-meter-size);
+    --_pad: max(10px, 1.6em);
+    --_ink: color-mix(in srgb, var(--strata-colour-edge), black 55%);
+    --_metal: var(--strata-colour-knob);
+    --_metal-light: color-mix(in srgb, var(--strata-colour-knob), white 60%);
+    --_metal-shade: color-mix(in srgb, var(--strata-colour-knob), var(--strata-colour-edge) 45%);
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--strata-space-1);
+    max-width: 100%;
+    color: var(--strata-colour-text);
+    font-family: var(--strata-font-family);
+    font-size: var(--strata-font-size-caption);
+    line-height: 1;
+  }
+  /* The box is the object plus room each side for the box rule's margin and the bezel's cast shadow (4 px round a bar's window, 6 px round a bezel). */
+  :where(.ug-meter--bar) { width: calc(var(--strata-meter-count, 16) * var(--_lens) * 1.5 + 2 * var(--_pad) + 8px); }
+  :where(.ug-meter--needle) { width: calc(var(--strata-gauge-size) * 1.5 + 24px); }
+  :where(.ug-meter--dial) { width: calc(var(--strata-gauge-size) + 24px); }
+  :where(.ug-meter__body) { position: relative; flex: none; box-sizing: border-box; width: 100%; }
+  :where(.ug-meter--bar .ug-meter__body) { height: calc(var(--_lens) + 1em + 36px); }
+  :where(.ug-meter--needle .ug-meter__body) { aspect-ratio: 264 / 152; }
+  :where(.ug-meter--dial .ug-meter__body) { aspect-ratio: 1; }
+  :where(.ug-meter__object) { position: absolute; inset: 0; container-type: inline-size; pointer-events: none; }
+  :where(.ug-meter__object) :where(*) { box-sizing: border-box; pointer-events: none; }
+  /* The window set in the faceplate: a well. The bar's and the needle meter's lie 4 px inside the box; a gauge's dial lies in its bezel. */
+  :where(.ug-meter__window) {
+    position: absolute;
+    inset: 4px;
+    border-radius: 8px;
+    background-color: var(--strata-colour-panel);
+  }
+  :where(.ug-meter--needle .ug-meter__window) { inset: 6px; border-radius: 8px; }
+  /* A bezel is a raised ring of metal round the window (a gauge's is round, a needle meter's a rounded slab). */
+  :where(.ug-meter__bezel) {
+    --_h: 3px;
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background-color: var(--strata-colour-knob);
+    background-image: linear-gradient(160deg, var(--_metal-light), var(--_metal) 45%, var(--_metal-shade));
+  }
+  :where(.ug-meter--needle .ug-meter__bezel) { border-radius: 10px; }
+  :where(.ug-meter--dial .ug-meter__window) { inset: 6px; border-radius: 50%; }
+  /* The native meter: the box, transparent, over the object; it takes every press (none does anything). */
+  :where(.ug-meter__native) {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    appearance: none;
+    background: transparent;
+    opacity: 0;
+  }
+  /* The printed legend, on the faceplate under the window. */
+  :where(.ug-meter__label) {
+    max-width: 100%;
+    font-size: var(--strata-font-size-small);
+    font-weight: var(--strata-font-weight-strong);
+    line-height: 1.25;
+    letter-spacing: 0.08em;
+    text-align: center;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+
+  /* The bar: a row of LED segments, `--_i` the index, lit while the value reaches it: segment i is lit when value · count − i − ½ is above 0. */
+  :where(.ug-meter__segments) {
+    position: absolute;
+    left: var(--_pad);
+    right: var(--_pad);
+    top: 8px;
+    height: var(--_lens);
+    display: grid;
+    grid-template-columns: repeat(var(--strata-meter-count, 16), 1fr);
+    align-items: center;
+    justify-items: center;
+  }
+  :where(.ug-meter__segment) {
+    --_c: var(--strata-colour-success);
+    --_on: color-mix(in srgb, var(--_c), white 18%);
+    --_off: color-mix(in srgb, var(--_c) 16%, #15171b);
+    --_glass: color-mix(in srgb, var(--_on) calc(var(--strata-lit) * 100%), var(--_off));
+    --_k: clamp(0, calc((var(--strata-meter-value, 0) * var(--strata-meter-count, 16) - var(--_i, 0) - 0.5) * 1000), 1);
+    --_pk: clamp(0, calc(1 - abs(var(--_i, 0) - var(--strata-meter-peak-index, -1)) * 1000), 1);
+    --strata-lit: max(var(--_k), var(--_pk));
+    display: block;
+    width: var(--_lens);
+    height: var(--_lens);
+    border-radius: 50%;
+    background: radial-gradient(circle at 36% 30%, color-mix(in srgb, var(--_glass), white 55%) 0, var(--_glass) 45%, color-mix(in srgb, var(--_glass), black 35%) 100%);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35), 0 0 calc(var(--strata-lit) * var(--_lens) * 0.9) calc(var(--strata-lit) * var(--_lens) * 0.1) color-mix(in srgb, var(--_on) 55%, transparent);
+  }
+  /* The socket under the lens, printed on the face at every level (and the only paint left when the GPU draws the lens as glass,
+     which refracts it): the unlit glass's dark disc. */
+  :where(.ug-meter__segment) { position: relative; isolation: isolate; }
+  :where(.ug-meter__segment)::before { content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: 50%; background: var(--_off); }
+  :where(.ug-meter__segment[data-strata-zone="warn"]) { --_c: var(--strata-colour-warning); }
+  :where(.ug-meter__segment[data-strata-zone="bad"]) { --_c: var(--strata-colour-danger); }
+
+  /* The printed scale of a bar: a tick and a numeral at the value's place along the segments, on whole pixels. */
+  :where(.ug-meter--bar .ug-meter__scale) { position: absolute; left: var(--_pad); right: var(--_pad); top: calc(14px + var(--_lens)); height: calc(1em + 8px); }
+  :where(.ug-meter--bar .ug-meter__mark) {
+    position: absolute;
+    left: round(nearest, calc(var(--strata-meter-at, 0) * 100% - 1.5em), 1px);
+    top: 8px;
+    width: 3em;
+    height: 1em;
+    color: var(--strata-colour-muted);
+    font-weight: var(--strata-font-weight-strong);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    white-space: nowrap;
+  }
+  :where(.ug-meter--bar .ug-meter__mark)::before { content: ""; position: absolute; left: calc(50% - 0.6px); top: -8px; width: 1.2px; height: 5px; background: var(--strata-colour-text); }
+
+  /* A dial (a needle meter or a Gauge): the arc is printed on the window, the pivot at (50%, --_py), the ticks at --_r. */
+  :where(.ug-meter--needle) {
+    --_sweep: calc(var(--strata-meter-sweep) * 1deg);
+    --_r: 36.36cqw;
+    --_py: 40.9cqw;
+    --_throw: linear(0, 0.0319 6.25%, 0.0988 12.5%, 0.1872 18.75%, 0.2865 25%, 0.3889 31.25%, 0.4888 37.5%, 0.5823 43.75%, 0.667 50%, 0.7416 56.25%, 0.8058 62.5%, 0.8597 68.75%, 0.9039 75%, 0.9392 81.25%, 0.9668 87.5%, 0.9876 93.75%, 1);
+    --_throw-duration: 192ms;
+  }
+  /* A Gauge's needle turns through `gauge.sweep`; the Meter's through `meter.sweep`. */
+  :where(.ug-gauge) { --_sweep: calc(var(--strata-gauge-sweep) * 1deg); }
+  :where(.ug-meter--dial) {
+    --_r: 39.13cqw;
+    --_py: 43.48cqw;
+    /* spring.gauge 160 / 20 (unit-tested against meterSpringCurve). */
+    --_throw: linear(0, 0.0235 4.88%, 0.0757 9.76%, 0.1466 14.63%, 0.2282 19.51%, 0.3146 24.39%, 0.4013 29.27%, 0.485 34.15%, 0.5637 39.02%, 0.6358 43.9%, 0.7007 48.78%, 0.758 53.66%, 0.8077 58.54%, 0.8504 63.41%, 0.8863 68.29%, 0.9162 73.17%, 0.9406 78.05%, 0.9603 82.93%, 0.9758 87.8%, 0.9878 92.68%, 0.9968 97.56%, 1);
+    --_throw-duration: 328ms;
+  }
+  /* spring.meter 360 / 28 (unit-tested against meterSpringCurve). */
+  :where(.ug-meter--needle, .ug-meter--dial) {
+    --strata-meter-t: var(--strata-meter-value, 0);
+    --_rn: calc(var(--_r) - 12px - 0.9em);
+    --_len: calc(var(--_r) - 4px);
+    transition: --strata-meter-t var(--_throw-duration) var(--_throw);
+  }
+  :where(.ug-meter--needle, .ug-meter--dial) :where(.ug-meter__scale, .ug-meter__zones) { position: absolute; inset: 0; }
+  :where(.ug-meter--needle, .ug-meter--dial) .ug-meter__mark {
+    --_a: calc((var(--strata-meter-at, 0) - 0.5) * var(--_sweep));
+    position: absolute;
+    left: round(nearest, calc(50% + sin(var(--_a)) * var(--_rn) - 1.5em), 1px);
+    top: round(nearest, calc(var(--_py) - cos(var(--_a)) * var(--_rn) - 0.5em), 1px);
+    width: 3em;
+    height: 1em;
+    color: var(--strata-colour-muted);
+    font-weight: var(--strata-font-weight-strong);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    white-space: nowrap;
+  }
+  :where(.ug-meter--needle, .ug-meter--dial) .ug-meter__mark::before {
+    content: "";
+    position: absolute;
+    left: calc(1.5em - 0.6px + sin(var(--_a)) * (var(--_r) - 3px - var(--_rn)));
+    top: calc(0.5em - 3px - cos(var(--_a)) * (var(--_r) - 3px - var(--_rn)));
+    width: 1.2px;
+    height: 6px;
+    rotate: var(--_a);
+    background: var(--strata-colour-text);
+  }
+  /* The zones a dial prints: a band outside the ticks below `low` and above `high`, in the danger colour (a red zone), when the author gave them. */
+  :where(.ug-meter--needle, .ug-meter--dial) .ug-meter__zones {
+    background: conic-gradient(from calc(-0.5 * var(--_sweep)) at 50% var(--_py),
+      var(--strata-colour-danger) 0 calc(var(--strata-meter-lo, 0) * var(--_sweep)), transparent 0 calc(var(--strata-meter-hi, 1) * var(--_sweep)), var(--strata-colour-danger) 0 var(--_sweep), transparent 0);
+    mask: radial-gradient(circle at 50% var(--_py), transparent calc(var(--_r) + 1px), #000 calc(var(--_r) + 1.5px) calc(var(--_r) + 5px), transparent calc(var(--_r) + 5.5px));
+  }
+  /* The needle: a blade from its tail behind the pivot to the ticks, turning about the pivot with the value's place on its spring (clamped at the stops). */
+  :where(.ug-meter__needle) {
+    position: absolute;
+    left: calc(50% - 1.1px);
+    top: calc(var(--_py) - var(--_len));
+    width: 2.2px;
+    height: calc(var(--_len) + 12px);
+    transform-origin: 50% var(--_len);
+    rotate: calc((clamp(0, var(--strata-meter-t, 0), 1) - 0.5) * var(--_sweep));
+    border-radius: 1.1px;
+    background: var(--_ink);
+  }
+  :where(.ug-meter__hub) {
+    position: absolute;
+    left: calc(50% - 6px);
+    top: calc(var(--_py) - 6px);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--strata-colour-knob);
+  }
+  /* When the GPU draws the needle as a part (the Instrument level, on its own spring), its CSS paint is hidden altogether, so a
+     live value repaints nothing (the scale, the zones and the window stay). */
+  :where([data-strata-mode="face"]) .ug-meter__needle[data-strata-dome] { visibility: hidden; }
+
+  /* Preferences. Reduced motion: the needle moves at once and a lit segment has no glow. */
+  @media (prefers-reduced-motion: reduce) {
+    :where(.ug-meter--needle, .ug-meter--dial) { transition: none; }
+    :where(.ug-meter__segment) { box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35); }
+  }
+  /* More contrast: the high-contrast themes apply through the tokens; the needle, the scale and the segments take the text colour, and a lit segment has no glow. */
+  @media (prefers-contrast: more) {
+    :where(.ug-meter) { --_ink: var(--strata-colour-text); }
+    :where(.ug-meter__mark) { color: var(--strata-colour-text); }
+    :where(.ug-meter__segment) { background: var(--_glass); box-shadow: none; border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
+    :where(.ug-meter__segment)::before { background: var(--_glass); }
+    :where(.ug-meter__window) { border-color: var(--strata-colour-text); }
+  }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-meter) { --_ink: var(--strata-colour-text); }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-meter__mark) { color: var(--strata-colour-text); }
+  /* Forced colours: a CanvasText window; lit segments are Highlight and unlit ones Canvas with a CanvasText edge; the needle and scale CanvasText. */
+  @media (forced-colors: active) {
+    :where(.ug-meter__window, .ug-meter__bezel) { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
+    :where(.ug-meter__segment) { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
+    :where(.ug-meter__segment) { background: color-mix(in srgb, Highlight calc(var(--strata-lit) * 100%), Canvas); }
+    :where(.ug-meter__needle) { forced-color-adjust: none; background: CanvasText; }
+    :where(.ug-meter__hub) { forced-color-adjust: none; background: CanvasText; border: 0; }
+    :where(.ug-meter__mark) { forced-color-adjust: none; color: CanvasText; }
+    :where(.ug-meter__mark)::before { forced-color-adjust: none; background: CanvasText; }
+    :where(.ug-meter__zones) {
+      forced-color-adjust: none;
+      background: conic-gradient(from calc(-0.5 * var(--_sweep)) at 50% var(--_py),
+        CanvasText 0 calc(var(--strata-meter-lo, 0) * var(--_sweep)), transparent 0 calc(var(--strata-meter-hi, 1) * var(--_sweep)), CanvasText 0 var(--_sweep), transparent 0);
+    }
+  }
+
   /* ---- Tabs ---- */
 
   /* A row of flat tabs over a rail (a groove); the selected tab's indicator (a mark) stands in the rail under it. */

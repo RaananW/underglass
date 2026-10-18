@@ -440,6 +440,60 @@
       }
     }
   },
+  "meter": {
+    "$description": "Meter interaction and layout (section 14, Instrument controls): the needle meter's arc and the peak hold of a bar.",
+    "sweep": {
+      "$type": "number",
+      "$value": 100,
+      "$description": "The needle meter's arc from minimum to maximum, in degrees.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 40,
+          "max": 160,
+          "scope": true
+        }
+      }
+    },
+    "peakHold": {
+      "$type": "duration",
+      "$value": "600ms",
+      "$description": "How long a held peak stays where it was set before it starts to fall.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 5000,
+          "scope": true
+        }
+      }
+    },
+    "peakDecay": {
+      "$type": "number",
+      "$value": 0.5,
+      "$description": "How fast a held peak falls, in shares of the range a second.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0.05,
+          "max": 5,
+          "scope": true
+        }
+      }
+    }
+  },
+  "gauge": {
+    "$description": "Gauge layout (section 14, Instrument controls).",
+    "sweep": {
+      "$type": "number",
+      "$value": 240,
+      "$description": "The needle's turn from minimum to maximum, in degrees.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 90,
+          "max": 330,
+          "scope": true
+        }
+      }
+    }
+  },
   "material": {
     "$description": "Open, layered materials: presets, roles, and any custom materials an application adds (design-language.md section 4).",
     "presets": {
@@ -1759,6 +1813,82 @@
           }
         }
       }
+    },
+    "meter": {
+      "small": {
+        "$type": "dimension",
+        "$value": "8px",
+        "$description": "Meter segment lens diameter at small.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 6,
+            "max": 24
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "10px",
+        "$description": "Meter segment lens diameter at medium (the premium LED segment).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 6,
+            "max": 24
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "12px",
+        "$description": "Meter segment lens diameter at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 6,
+            "max": 24
+          }
+        }
+      }
+    },
+    "gauge": {
+      "small": {
+        "$type": "dimension",
+        "$value": "120px",
+        "$description": "Gauge dial diameter at small.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 80,
+            "max": 400
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "160px",
+        "$description": "Gauge dial diameter at medium (the premium gauge).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 80,
+            "max": 400
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "200px",
+        "$description": "Gauge dial diameter at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 80,
+            "max": 400
+          }
+        }
+      }
     }
   },
   "motion": {
@@ -2231,6 +2361,44 @@
         "$type": "number",
         "$value": 520,
         "$description": "Intensity I at the reference lens.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 32000
+          }
+        }
+      }
+    },
+    "segment": {
+      "radius": {
+        "$type": "number",
+        "$value": 3,
+        "$description": "Reach R of a lit meter segment, in lens diameters (a bar throws many small pools, so each reaches less than an LED's).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 1,
+            "max": 20
+          }
+        }
+      },
+      "height": {
+        "$type": "number",
+        "$value": 0.8,
+        "$description": "Height above the face, in lens diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.25,
+            "max": 2
+          }
+        }
+      },
+      "strength": {
+        "$type": "number",
+        "$value": 260,
+        "$description": "Intensity I at the reference lens (10 px).",
         "$extensions": {
           "dev.underglass.strata": {
             "scope": true,
