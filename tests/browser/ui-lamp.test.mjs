@@ -618,6 +618,9 @@ test("under more contrast the Instrument lamps have no light and print the lit l
   expect(scene.emitters.every(emitter => emitter.strength === 0), "every emitter is off").toBe(true);
   const sockets = await page.evaluate(() => Object.fromEntries(["mains", "standby"].map(id => [id, getComputedStyle(document.getElementById(id).closest(".ug-lamp").querySelector(".ug-lamp__socket")).backgroundColor])));
   expect(sockets.standby, "a lit lamp's socket is its lit colour, flat").not.toBe(sockets.mains);
+  // A change of media can change the layout under a scene that was built a frame earlier: core draws that frame's objects at
+  // Relief (GPU on), and the next scene, built from the new layout, is drawn as parts. Wait for it before judging.
+  await page.waitForFunction(() => window.strataLampProbe.state().instrument.layers[0].steppedDown.length === 0, null, { timeout: 5000 });
   await healthy(page, "more contrast", "instrument");
   await page.emulateMedia({ contrast: "no-preference" });
   await (await context.newCDPSession(page)).send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-transparency", value: "reduce" }] });
@@ -627,6 +630,9 @@ test("under more contrast the Instrument lamps have no light and print the lit l
   expect(scene.objects.every(object => object.parts[1].startsWith("lens:lensOpaque ")), "opaque lenses").toBe(true);
   expect(scene.objects.every(object => object.glass[1] === undefined), "no glass").toBe(true);
   expect(scene.emitters.some(emitter => emitter.strength > 0), "the lamps still give light").toBe(true);
+  // A change of media can change the layout under a scene that was built a frame earlier: core draws that frame's objects at
+  // Relief (GPU on), and the next scene, built from the new layout, is drawn as parts. Wait for it before judging.
+  await page.waitForFunction(() => window.strataLampProbe.state().instrument.layers[0].steppedDown.length === 0, null, { timeout: 5000 });
   await healthy(page, "reduced transparency", "instrument");
   await context.close();
 });

@@ -502,6 +502,9 @@ test("under more contrast the Instrument lights have no emitters' light and the 
   await ready(page, "?level=instrument");
   let scene = await sceneOf(page);
   expect(scene.emitters.every(emitter => emitter.strength === 0)).toBe(true);
+  // A change of media can change the layout under a scene that was built a frame earlier: core draws that frame's objects at
+  // Relief (GPU on), and the next scene, built from the new layout, is drawn as parts. Wait for it before judging.
+  await page.waitForFunction(() => window.strataStatusProbe.state().instrument.layers[0].steppedDown.length === 0, null, { timeout: 5000 });
   await healthy(page, "more contrast", "instrument");
   await page.emulateMedia({ contrast: "no-preference" });
   await (await context.newCDPSession(page)).send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-transparency", value: "reduce" }] });
@@ -510,6 +513,9 @@ test("under more contrast the Instrument lights have no emitters' light and the 
   scene = await sceneOf(page);
   expect(scene.objects.every(object => object.parts[0].startsWith("lens:lensOpaque ") && object.glass[0] === undefined)).toBe(true);
   expect(scene.emitters.some(emitter => emitter.strength > 0)).toBe(true);
+  // A change of media can change the layout under a scene that was built a frame earlier: core draws that frame's objects at
+  // Relief (GPU on), and the next scene, built from the new layout, is drawn as parts. Wait for it before judging.
+  await page.waitForFunction(() => window.strataStatusProbe.state().instrument.layers[0].steppedDown.length === 0, null, { timeout: 5000 });
   await healthy(page, "reduced transparency", "instrument");
   await context.close();
 });
