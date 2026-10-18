@@ -17,9 +17,11 @@
  * - **Double-click** returns to `data-strata-default`, or the input's default value. **Keys** stay native.
  * Every change goes through the input's `value`, firing `input` and, at the end of a gesture, `change`, so forms and
  * framework bindings see native events. On every `input`, the carriage (`--strata-fader-value` on the root) and, when
- * the input has `data-strata-unit`, its `aria-valuetext` follow the value.
+ * the input has `data-strata-unit`, its `aria-valuetext` follow the value, and a detented fader's carriage passing a
+ * detent plays `tick` through `strataFeedback` (sound and haptics, both off unless the page or scope turns them on).
  */
 import { faderDefaults, faderFraction, faderGeometry, faderNotch, faderSnap, faderValueAt, faderValueText, type FaderRange } from "../shared/fader.ts";
+import { listenForStrataFeedback, strataFeedback } from "./feedback.ts";
 
 const faderInputs = ".ug-fader__input";
 
@@ -85,6 +87,7 @@ const attached = new WeakSet<Document>();
 export function attachStrataFaders(doc: Document = document): void {
   if (attached.has(doc)) return;
   attached.add(doc);
+  listenForStrataFeedback(doc);
   const presses = new Map<number, Press>();
   const faderInput = (target: EventTarget | null) => {
     const input = (target as Element | null)?.closest?.(faderInputs);
@@ -149,6 +152,15 @@ export function attachStrataFaders(doc: Document = document): void {
   // the capture phase, so the page's own listeners already see the new value text.
   doc.addEventListener("input", event => {
     const input = (event.target as Element | null)?.closest?.(faderInputs);
-    if (input instanceof HTMLInputElement) syncStrataFader(input);
+    if (!(input instanceof HTMLInputElement)) return;
+    // A detented carriage passing a detent ticks (feedback, off by default): the carriage's last place, read before it
+    // follows, against the new value, in detents.
+    const root = input.closest(".ug-fader");
+    if (root?.matches(".ug-fader--detented")) {
+      const { min, max, step } = rangeOf(input), before = Number.parseFloat(root instanceof HTMLElement ? root.style.getPropertyValue("--strata-fader-value") : "");
+      const detent = (fraction: number) => Math.round((fraction * (max - min)) / step);
+      if (Number.isFinite(before) && max > min && detent(before) !== detent(faderFraction(Number(input.value), { min, max }))) strataFeedback(input, "tick");
+    }
+    syncStrataFader(input);
   }, true);
 }

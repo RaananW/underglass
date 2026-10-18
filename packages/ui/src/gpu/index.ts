@@ -24,7 +24,9 @@
  * At the Instrument level (`instrument`, between `objects` and `scene` on the ladder, set like the others) a panel with
  * any element at that level takes core's `instrument` material and a version 4 scene (`gpu/instrument.ts`): its knobs
  * become the premium knob's parts, whose pointer turns on a spring as their value changes (uniform updates, no
- * recapture), and its buttons keys with captured caps; every other component stays a Relief primitive on the face.
+ * recapture), its faders the premium fader's carriage (`gpu/instrument-fader.ts`), sliding its slot on `spring.fader`
+ * while the slot stays a groove and the scale printed on the face, and its buttons keys with captured caps; every
+ * other component stays a Relief primitive on the face.
  * The Scene level still draws its panels at the Objects level, so the adjust policy steps a Scene page over
  * `instrument`.
  *
@@ -43,6 +45,7 @@ import type { EnvironmentMap, StageScene } from "../tokens/stage.ts";
 import { advance, asParticle, decodeHdr, environmentFrom, launch, spring, type BurstOptions, type Confetto } from "./scene.ts";
 import { advanceSpring, depthScale, INSTRUMENT_CAMERA, keyObject, knobObject, knobSprings, premiumMaterials, type InstrumentObject, type InstrumentProfile,
   type InstrumentRecipe, type KnobSpring } from "./instrument.ts";
+import { faderMaterials, faderObject, faderParts, faderSpring } from "./instrument-fader.ts";
 
 export type { InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentRecipe, KnobSpring } from "./instrument.ts";
 
@@ -305,7 +308,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   // with core's `instrument` material. Its knobs and buttons become parts; everything else stays on the face as Relief.
   const instrumentLayer = [panel, ...panel.querySelectorAll("[data-strata-level]")].some(element => effective(element) === "instrument");
   const objects = (element: Element) => !instrumentLayer && effective(element) !== "relief";
-  const knobs = new Set<HTMLElement>(), keys: HTMLElement[] = [];
+  const knobs = new Set<HTMLElement>(), faders = new Set<HTMLElement>(), keys: HTMLElement[] = [];
   // Objects (design language section 6): the tokens of their proportions, and the height each surface's top stands at.
   const keyHeight = tokens.number("object.keyHeight", 8), keyTravel = tokens.number("object.keyTravel", 6), taper = tokens.number("object.taper", 3);
   const tops = new Map<Element, number>(), floors = new Map<Element, number>();
@@ -327,9 +330,12 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     const face = element.getAttribute("data-strata-face") as SceneFace;
     if (!faces.includes(face) || !element.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
     if (instrumentLayer && effective(element) !== "relief") {
-      // A knob's skirt and cap are drawn as its Instrument object; a button as a key with a captured cap.
+      // A knob's skirt and cap, and a fader's carriage, are drawn as its Instrument object (a fader's slot stays a
+      // groove on the face); a button as a key with a captured cap.
       const knob = element.matches(".ug-knob__skirt, .ug-knob__cap") ? element.closest<HTMLElement>(".ug-knob") : null;
       if (knob) { knobs.add(knob); continue; }
+      const fader = element.matches(".ug-fader__carriage") ? element.closest<HTMLElement>(".ug-fader") : null;
+      if (fader) { faders.add(fader); continue; }
       if (face === "raised" && element.matches("button")) { keys.push(element); continue; }
     }
     let rect = rectWithin(element, panel);
@@ -445,7 +451,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     focus: { colour: tokens.colour("accent"), width: tokens.number("focus.width", 3), offset: tokens.number("focus.offset", 0.5) },
     materials,
   };
-  if (instrumentLayer) return instrumentScene(panel, options, { settings, entries: entries as ScenePrimitive[], knobs, keys, states, materialFor, tokens, reach });
+  if (instrumentLayer) return instrumentScene(panel, options, { settings, entries: entries as ScenePrimitive[], knobs, faders, keys, states, materialFor, tokens, reach });
   if (!entries.some(isSceneObject)) return { format: "strata-scene", version: 1, ...settings, primitives: entries };
   // The camera (design language section 2): centred on the stage, at D = max(camera.distance, r · h / taper + h),
   // with r the stage's half-diagonal, so every solid keeps the taper rule wherever its panel sits.
@@ -482,10 +488,11 @@ const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(pre
 /**
  * The Instrument scene of a panel (design language section 16, `gpu/instrument.ts`): the face as the Relief level
  * draws it (its primitives), each knob at the Instrument level as the premium knob, its pointer turned by its spring,
- * and each button at the Objects level or above as a key with a captured cap. Everything else stays a Relief primitive.
+ * each fader's carriage as the premium fader's, slid by its spring, and each button at the Objects level or above as a
+ * key with a captured cap. Everything else stays a Relief primitive.
  */
 function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, context: {
-  settings: Omit<StrataScene, "format" | "version" | "primitives">; entries: ScenePrimitive[]; knobs: Set<HTMLElement>; keys: HTMLElement[];
+  settings: Omit<StrataScene, "format" | "version" | "primitives">; entries: ScenePrimitive[]; knobs: Set<HTMLElement>; faders: Set<HTMLElement>; keys: HTMLElement[];
   states: (element: Element) => { hover: boolean; pressed: boolean; focus: boolean; disabled: boolean };
   materialFor: (element: Element, face: SceneFace) => string; tokens: ReturnType<typeof reader>; reach: number;
 }): StrataInstrumentScene {
@@ -500,7 +507,7 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     profiles[key] ??= shape;
     return key;
   };
-  const use = (name: string) => { materials[name] ??= premiumMaterials[name]!; return name; };
+  const use = (name: string) => { materials[name] ??= premiumMaterials[name] ?? faderMaterials[name as keyof typeof faderMaterials]; return name; };
   const scale = depthScale(tokens.number("depth", 0.5)), raised = tokens.number("elevation.raised", 3);
   const outer = panel.getBoundingClientRect(), stageBox = (options.stage ?? panel.parentElement ?? panel).getBoundingClientRect();
   const zoom = outer.width / Math.max(panel.offsetWidth, 1) || 1;
@@ -513,25 +520,27 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     return id;
   };
   const now = options.now ?? performance.now(), instant = reducedMotion();
+  /** Where a range input's value sits, 0–1, as its spring has it now (section 12): a uniform update, never a capture. */
+  const follow = (input: HTMLInputElement, constants: { stiffness: number; damping: number }) => {
+    const min = Number.parseFloat(input.min) || 0, max = Number.isFinite(Number.parseFloat(input.max)) ? Number.parseFloat(input.max) : 100;
+    const target = max > min ? Math.min(1, Math.max(0, (Number(input.value) - min) / (max - min))) : 0;
+    if (!options.springs) return target;
+    let spring = options.springs.get(input);
+    if (!spring || instant) { spring = { t: target, v: 0, time: now }; options.springs.set(input, spring); }
+    else {
+      // A spring at rest starts one frame back, so the first frame after a change already moves.
+      if (spring.v === 0 && spring.t === target) spring.time = now;
+      else if (spring.v === 0 && now - spring.time > 50) spring.time = now - 16;
+      if (!advanceSpring(spring, target, now, constants)) options.moving?.add(input);
+    }
+    return spring.t;
+  };
   let tallest = 0;
   for (const root of context.knobs) {
     const input = root.querySelector<HTMLInputElement>(".ug-knob__input"), skirt = root.querySelector(".ug-knob__skirt"), cap = root.querySelector(".ug-knob__cap");
     if (!input || !skirt || !cap || objects.length + entries.length >= 255) continue;
-    const min = Number.parseFloat(input.min) || 0, max = Number.isFinite(Number.parseFloat(input.max)) ? Number.parseFloat(input.max) : 100;
-    const target = max > min ? Math.min(1, Math.max(0, (Number(input.value) - min) / (max - min))) : 0;
-    // The pointer follows the value on its spring (section 12): a uniform update per frame, never a capture.
-    let t = target;
-    if (options.springs) {
-      let spring = options.springs.get(input);
-      if (!spring || instant) { spring = { t: target, v: 0, time: now }; options.springs.set(input, spring); }
-      else {
-        // A spring at rest starts one frame back, so the first frame after a change already moves.
-        if (spring.v === 0 && spring.t === target) spring.time = now;
-        else if (spring.v === 0 && now - spring.time > 50) spring.time = now - 16;
-        if (!advanceSpring(spring, target, now, root.matches(".ug-knob--detented") ? knobSprings.detent : knobSprings.knob)) options.moving?.add(input);
-      }
-      t = spring.t;
-    }
+    // The pointer follows the value on its spring.
+    const t = follow(input, root.matches(".ug-knob--detented") ? knobSprings.detent : knobSprings.knob);
     const state = context.states(skirt);
     const sweep = reader(root).number("knob.sweep", 270);
     objects.push(knobObject({ id: idOf(input, "knob"), box: rectWithin(input, panel), skirt: rectWithin(skirt, panel)[2], cap: rectWithin(cap, panel)[2], t, sweep, scale,
@@ -539,6 +548,22 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     for (const name of ["knobSkirt", "knobChamfer", "knobInk"]) use(name);
     options.domes?.add(skirt); options.domes?.add(cap);
     tallest = Math.max(tallest, (2.5 + 16 + 1.2) * scale);
+  }
+  const light = { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) };
+  for (const root of context.faders) {
+    const input = root.querySelector<HTMLInputElement>(".ug-fader__input"), slot = root.querySelector(".ug-fader__slot"), carriage = root.querySelector(".ug-fader__carriage");
+    if (!input || !slot || !carriage || objects.length + entries.length >= 255) continue;
+    // The carriage slides with the value on `spring.fader`; the slot stays a groove and the scale captured on the face.
+    const t = follow(input, faderSpring);
+    const state = context.states(carriage), box = rectWithin(input, panel), slotBox = rectWithin(slot, panel);
+    if (box[2] <= 0 || box[3] <= 0 || slotBox[2] <= 0 || slotBox[3] <= 0) continue;
+    const vertical = !root.matches(".ug-fader--horizontal");
+    // The carriage's caster is capped where its shadow would leave the box (full depth), so the shadow stays in it.
+    objects.push(faderObject({ id: idOf(input, "fader"), box, slot: slotBox, vertical, t, scale, light, state: { hover: state.hover, disabled: state.disabled },
+      relief: { rect: rectWithin(carriage, panel), height: raised, material: use("faderCap") } }, profile));
+    for (const name of ["faderChamfer", "faderInk"]) use(name);
+    options.domes?.add(carriage);
+    tallest = Math.max(tallest, faderParts(vertical, scale).carriage.height + 0.13);
   }
   for (const element of context.keys) {
     if (objects.length + entries.length >= 255) break;

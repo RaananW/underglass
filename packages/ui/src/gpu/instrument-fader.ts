@@ -1,10 +1,9 @@
 /**
  * The Fader at the Instrument level (design language section 6, the Instrument object table; Rendering Model part 2D):
  * the premium fader as an object of parts for core's `instrument` material, sized by the laid-out slot and bounded by
- * the native input's box. The GPU helper's `instrument` level picks it up as it does the Knob (anatomy page
- * `fader.md`); until then this module is the fader's part definitions and poses, checked by core's validator and
- * containment check in the unit tests. The helper never imports core, so the version 4 shapes are restated here as
- * the subset the fader writes.
+ * the native input's box. The GPU helper's `instrument` level draws each fader with it, as it does the Knob (anatomy
+ * page `fader.md`). The helper never imports core, so the version 4 shapes are restated here as the subset the fader
+ * writes.
  * - **carriage:** a prism 30 across and 42 along the travel, 12 high (× 0.6, 1, 1.6 with depth), radius 3, its side
  *   tapering 0.6 and a 2 px chamfer at its top edge, in brushed metal (`faderCap`, a linear brush across the travel);
  * - **chamfer:** the carriage's chamfer band in the same metal polished (`faderChamfer`), a hair outside it;
@@ -13,7 +12,9 @@
  * - every part **slides** along the slot together, from the minimum's stop (`t` 0: the bottom of a vertical fader, the
  *   left of a horizontal one) to the maximum's, driven by `spring.fader` (420 / 41, critically damped, in fixed 4 ms
  *   steps, clamped at the stops). The slot and the scale stay printed on the face (captured content and the face's
- *   groove), and only the carriage casts a shadow on it.
+ *   groove), and only the carriage casts a shadow on it. Its caster is core's own (the carriage's footprint at its mean
+ *   height) wherever that shadow stays in the box; above that height (past 50% depth under the default light) it is
+ *   capped there (`faderCasterHeight`), so the shadow on the face never leaves the input's box.
  */
 
 type Vec2 = [number, number];
@@ -30,9 +31,12 @@ export interface FaderPart {
   at: Vec3;
   pose: { from: FaderPose; to: FaderPose };
   material: string;
-  caster?: null;
+  /** Omitted: core's own; `null`: none; a rect: the carriage's footprint where it stands now, at a capped height. */
+  caster?: null | FaderCaster;
   state: { hover: boolean; disabled: boolean };
 }
+/** A face caster (Rendering Model 2.8), panel px: a rounded footprint at a mean height. */
+export interface FaderCaster { rect: Box; radius: number; height: number }
 export interface FaderObject {
   id: string;
   rect: Box;
@@ -82,6 +86,8 @@ export interface FaderInput {
   state: { hover: boolean; disabled: boolean };
   /** The Relief primitive drawn instead if the object cannot be drawn as parts: the carriage as laid out now. */
   relief: { rect: Box; height: number; material: string };
+  /** The key light; given, the carriage's caster is capped so its shadow stays in `box` (`faderCasterHeight`). */
+  light?: { azimuth: number; elevation: number };
 }
 
 /** The carriage's numbers at a depth scale, oriented: `width` along x, `length` along y. */
@@ -99,6 +105,35 @@ export function faderParts(vertical: boolean, scale = 1) {
 /** The travel of a slot's carriage centre, px: the slot's length less 3 px at each end. */
 export const faderTravel = (slot: Box, vertical: boolean) => Math.max(0, (vertical ? slot[3] : slot[2]) - 6);
 
+/** The carriage's footprint (x, y, width, length) at `t`, panel px: its centre runs 3 px inside each end of the slot. */
+export function faderFootprint(slot: Box, vertical: boolean, t: number): Box {
+  const { carriage } = faderParts(vertical), [sx, sy, sw, sh] = slot, along = Math.min(1, Math.max(0, t)) * faderTravel(slot, vertical);
+  const cx = vertical ? sx + sw / 2 : sx + 3 + along, cy = vertical ? sy + sh - 3 - along : sy + sh / 2;
+  return [round(cx - carriage.width / 2), round(cy - carriage.length / 2), carriage.width, carriage.length];
+}
+
+/**
+ * The carriage's caster height on the face, px: its mean height (core's caster, 2D.7), capped at the tallest whose
+ * shadow (`faderShadowReach`, linear in the height) stays inside `box` on every side from the carriage at either stop.
+ * At 50% depth under the default light the mean height (6) is under the cap (6.2 for the 16 px margin), so core's
+ * caster is used as it is; at full depth (9.6) the cap holds the shadow at 16 px down instead of 24.
+ */
+export function faderCasterHeight(input: Pick<FaderInput, "box" | "slot" | "vertical" | "scale">, light: { azimuth: number; elevation: number }): number {
+  const mean = faderParts(input.vertical, input.scale).carriage.height / 2;
+  const [bx, by, bw, bh] = input.box, low = faderFootprint(input.slot, input.vertical, 0), high = faderFootprint(input.slot, input.vertical, 1);
+  const room: [Vec2, number][] = [
+    [[-1, 0], Math.min(low[0], high[0]) - bx], [[1, 0], bx + bw - Math.max(low[0] + low[2], high[0] + high[2])],
+    [[0, -1], Math.min(low[1], high[1]) - by], [[0, 1], by + bh - Math.max(low[1] + low[3], high[1] + high[3])],
+  ];
+  // `faderShadowReach` at the depth scale 1 is the reach of a caster 6 high: `k · 6 + 1`.
+  let cap = Infinity;
+  for (const [direction, space] of room) {
+    const k = (faderShadowReach(1, light, direction) - 1) / (faderCarriage.height / 2);
+    if (k > 0) cap = Math.min(cap, Math.max(0, space - 1) / k);
+  }
+  return Math.min(mean, Math.floor(cap * 1000) / 1000);
+}
+
 /** A fader as an Instrument object; `profile` registers a shape and returns its name. */
 export function faderObject(input: FaderInput, profile: (name: string, shape: FaderPrism) => string): FaderObject {
   const { carriage, top, grip } = faderParts(input.vertical, input.scale);
@@ -108,12 +143,15 @@ export function faderObject(input: FaderInput, profile: (name: string, shape: Fa
   const centre: Vec3 = [round(sx + sw / 2), round(sy + sh / 2), 0];
   const half = round(travel / 2);
   const pose = input.vertical ? { from: { slide: [0, half] as Vec2 }, to: { slide: [0, -half] as Vec2 } } : { from: { slide: [-half, 0] as Vec2 }, to: { slide: [half, 0] as Vec2 } };
-  const h = carriage.height, state = { hover: input.state.hover, disabled: input.state.disabled };
+  const h = carriage.height, state = { hover: input.state.hover, disabled: input.state.disabled }, t = Math.min(1, Math.max(0, input.t));
+  // Core's caster follows the carriage's pose; a capped one is the footprint where the carriage stands now.
+  const height = input.light ? faderCasterHeight(input, input.light) : h / 2;
+  const caster = height < h / 2 ? { caster: { rect: faderFootprint(input.slot, input.vertical, t), radius: carriage.radius, height } } : {};
   return {
-    id: input.id, rect: input.box, bounds: { rect: input.box, radius: 0 }, t: Math.min(1, Math.max(0, input.t)),
+    id: input.id, rect: input.box, bounds: { rect: input.box, radius: 0 }, t,
     parts: [
       { kind: "carriage", profile: profile("fader-carriage", { type: "prism", width: carriage.width, length: carriage.length, radius: carriage.radius, height: h, taper: carriage.taper, chamfer: carriage.chamfer }),
-        at: centre, pose, material: "faderCap", state },
+        at: centre, pose, material: "faderCap", ...caster, state },
       // The chamfer band again in polished metal: a prism whose 2 px chamfer lies a hair outside the carriage's own,
       // its top covered by the cap.
       { kind: "chamfer", profile: profile("fader-chamfer", { type: "prism", width: round(carriage.width - 2 * carriage.taper + 0.04), length: round(carriage.length - 2 * carriage.taper + 0.04),
@@ -133,7 +171,8 @@ export function faderObject(input: FaderInput, profile: (name: string, shape: Fa
  * px, by the Rendering Model's cast shadow (2.8) for the caster core derives from it (2D.7: the carriage's footprint at
  * its mean height): the offset away from the light (negative towards it) plus the softening `1.5 · h + 1`. With the
  * default light (323° / 41°) at 50% depth it is 15.5 px down and 14.2 px to the right (4.5 up, 5.9 left), which the
- * 16 px margin at each stop and the scale on the right (or below) hold. At full depth it is 24 px down: past the margin.
+ * 16 px margin at each stop and the scale on the right (or below) hold. At full depth it would be 24 px down, past the
+ * margin, so the caster is capped there (`faderCasterHeight`).
  */
 export function faderShadowReach(scale: number, light: { azimuth: number; elevation: number }, direction: Vec2): number {
   const h = (faderCarriage.height * scale) / 2, a = (light.azimuth * Math.PI) / 180, e = (light.elevation * Math.PI) / 180;
