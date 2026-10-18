@@ -27,6 +27,7 @@
 import { cssVariable, flatten, numeric, strataTokens } from "../tokens/index.ts";
 import { isSceneObject, type SceneEntry, type SceneFace, type SceneMaterial, type StrataScene } from "../tokens/scene.ts";
 import { panelMotion, type PanelMover } from "../dom/motion.ts";
+import { switchFormEntries } from "./switch-forms.ts";
 import { strataStage, type StagePresenter } from "../dom/stage.ts";
 import type { EnvironmentMap, StageScene } from "../tokens/stage.ts";
 import { advance, asParticle, decodeHdr, environmentFrom, launch, spring, type BurstOptions, type Confetto } from "./scene.ts";
@@ -289,6 +290,11 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     if (rect[2] <= 0 || rect[3] <= 0) continue;
     const state = states(element);
     const radius = radiusOf(element, rect[2]);
+    // A Switch's hardware form (`switch-forms.ts`): its parts, inside the input's box, shadows included.
+    const form = switchFormEntries(element, { rect, radius, state, objects: objects(element), base: baseOf(element), rectOf: part => rectWithin(part, panel), material: materialFor, well: level(element, "well"),
+      knob: { material: material(tokens.raw("material.roles.knob") || "satin"), colour: tokens.colour("knob") }, hoverHeight: tokens.number("state.hoverHeight", 1.6),
+      light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, domes: options.domes });
+    if (form) { entries.push(...form); continue; }
     if (objects(element) && face !== "ring" && face !== "flat") {
       const base = baseOf(element);
       if (element.matches("input[type='range']")) {
