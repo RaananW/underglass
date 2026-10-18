@@ -17,10 +17,10 @@
  * - Faders: `attachStrataFaders` gives every `.ug-fader` its carriage, wheel, mark and reset behaviour (anatomy page `fader.md`);
  * - Carousels: `attachStrataCarousels` runs every `.ug-carousel`'s buttons and reports `strata-slide`;
  * - Menus: `attachStrataMenus` runs the Menu Button pattern's keys, and reports `strata-select` from a chosen item;
- * - Knobs: `attachStrataKnobs` gives every `.ug-knob` its round pointer, wheel and reset behaviour (anatomy page `knob.md`);
- * - Lamps: `attachStrataLamps` lights a momentary `.ug-lamp` while it is pressed and plays opt-in feedback (anatomy page `lamp.md`);
  * - Push buttons: `attachStrataPushButtons` holds a `form="momentary"` or `"latching"` button down (`data-strata-down`) while it is pressed and plays opt-in feedback (anatomy pages `button.md`, `toggle-button.md`);
  * - Rotary selectors: `attachStrataRotarySelectors` gives every `.ug-rotary` its detented pointer, wheel and tap behaviour (anatomy page `rotary-selector.md`);
+ * - Knobs: `attachStrataKnobs` gives every `.ug-knob` its round pointer, wheel and reset behaviour (anatomy page `knob.md`);
+ * - Lamps: `attachStrataLamps` lights a momentary `.ug-lamp` while it is pressed and plays opt-in feedback (anatomy page `lamp.md`);
  * - Toolbars: the first time focus enters one, its controls get a roving tabindex (one tab stop), and the arrow keys,
  *   Home and End move between them;
  * - Tabs: a click on a tab selects it, and the arrow keys, Home and End move between tabs and select them (only move,

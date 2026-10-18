@@ -13,11 +13,11 @@
           "emitter.lamp.strength",
           "emitter.led.height",
           "emitter.led.strength",
-          "emitter.pushButton",
           "emitter.guardFeather",
           "colour.glowOn",
           "lamp.lens",
           "statusLight.lens",
+          "emitter.pushButton",
           "display.backlight",
           "material.presets.chrome",
           "instrument.material.chrome"
@@ -1151,6 +1151,17 @@
         }
       }
     },
+    "guardFeather": {
+      "$type": "dimension",
+      "$value": "4px",
+      "$description": "The guard's feather outside a protected rect.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 16
+        }
+      }
+    },
     "pushButton": {
       "radius": {
         "$type": "number",
@@ -1183,17 +1194,6 @@
             "min": 0,
             "max": 32000
           }
-        }
-      }
-    },
-    "guardFeather": {
-      "$type": "dimension",
-      "$value": "4px",
-      "$description": "The guard's feather outside a protected rect.",
-      "$extensions": {
-        "dev.underglass.strata": {
-          "min": 0,
-          "max": 16
         }
       }
     }

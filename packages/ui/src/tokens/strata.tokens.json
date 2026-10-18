@@ -2316,6 +2316,18 @@
         }
       }
     },
+    "guardFeather": {
+      "$type": "dimension",
+      "$value": "4px",
+      "$description": "Width over which the guard eases off outside a protected rect.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 0,
+          "max": 16
+        }
+      }
+    },
     "pushButton": {
       "radius": {
         "$type": "number",
@@ -2351,18 +2363,6 @@
             "min": 0,
             "max": 32000
           }
-        }
-      }
-    },
-    "guardFeather": {
-      "$type": "dimension",
-      "$value": "4px",
-      "$description": "Width over which the guard eases off outside a protected rect.",
-      "$extensions": {
-        "dev.underglass.strata": {
-          "scope": true,
-          "min": 0,
-          "max": 16
         }
       }
     }
