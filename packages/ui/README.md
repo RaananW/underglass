@@ -178,6 +178,29 @@ Instant under `prefers-reduced-motion`. In face mode (GPU on) the same calls mov
 motion does, while the panel's relief height travels from the modal level so its shadow follows. Native hits follow
 the moving panel, and it stays inert until it has entered.
 
+## Switch forms and feedback
+
+The Switch's hardware forms: `form="slide" | "rocker" | "bat" | "wall"` (or `data-strata-form` on the row) draws the
+same native `<input type="checkbox" role="switch">` as a slide switch, a rocker, a bat-handle toggle or a wall switch,
+over a transparent box that covers the whole throw. A click or tap anywhere on it, the label and Space throw it, as
+native; a drag released past centre throws it too, and one held short of centre springs back (`attachStrataSwitches`
+in `@underglass/ui/dom`, which `attachStrata` and the components attach). The throw animates on the form's spring
+(instant under reduced motion). Any other `form` value is still the native form owner.
+
+```tsx
+<Switch form="rocker" checked={power} onChange={event => setPower(event.target.checked)}>Power</Switch>
+```
+
+On the GPU the parts are Relief primitives or Objects-level slabs and domes, every part and shadow inside the box; the
+Instrument parts (`gpu/instrument-switch.ts`) wait for the helper's `instrument` level.
+[Anatomy](../../docs/ui-library/components/switch.md#11-forms).
+
+**Feedback** is opt-in and off by default: `createStrataTheme({ feedback: { sound: true, haptics: true } })`, a
+scope's `feedback`, or `attachStrataFeedback({ sound, haptics, muted })`. Sounds (click, tick, thunk, snap) are
+synthesised from three tokens each, with no assets, and audio starts only on the visitor's first gesture on a control
+whose sound is on; pulses use the Vibration API and stop under reduced motion. A switch form plays `snap` on every
+throw; `strataFeedback(element, kind)` is the hook other controls call.
+
 ## React
 
 ```tsx

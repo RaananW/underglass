@@ -545,3 +545,6 @@ One concern per PR, each based on `main`:
 9. Knob. 10. Fader. 11. Switch forms, with sound and haptics as the opt-in option.
 12. Wave 2 components, one or two per PR. 13. Everyday forms, a few per PR. 14. Instrument gallery and showpiece.
 15. Wave 3 components. 16. Characters: studio, hifi, playful, one per PR.
+
+PR 11, the Switch forms ([anatomy](components/switch.md#11-forms)): `slide`, `rocker`, `bat` and `wall` done in CSS, Relief and
+Objects, with sound and haptics as the opt-in option; their Instrument parts are defined for the helper's `instrument` level.
