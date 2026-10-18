@@ -2428,7 +2428,7 @@
     "display": {
       "radius": {
         "$type": "number",
-        "$value": 3,
+        "$value": 2.5,
         "$description": "Reach R of a display's backlight, in window heights.",
         "$extensions": {
           "dev.underglass.strata": {
@@ -2452,7 +2452,7 @@
       },
       "strength": {
         "$type": "number",
-        "$value": 1400,
+        "$value": 2200,
         "$description": "Intensity I at the reference window (36 px high), shared between the emitters along its length.",
         "$extensions": {
           "dev.underglass.strata": {

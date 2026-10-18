@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { BACKLIGHT_TINT, backlightColour, defaultBacklight, displayAttributes, displayClasses, displayEmitterCount, displayEmitterDefaults, displayEmitterReference, displayEmitters,
-  displayMarkup, isDisplayBacklight, isTextForm, MAX_DISPLAY_EMITTERS, windowColour } from "../../packages/ui/src/shared/display.ts";
+  displayMarkup, FINISH_REACH, finishAllowed, isDisplayBacklight, isTextForm, MAX_DISPLAY_EMITTERS, windowColour } from "../../packages/ui/src/shared/display.ts";
 import { lampColours } from "../../packages/ui/src/shared/lamp.ts";
 import { bezelCaster, bezelShape, displayGeometry, displayHeight, displayMaterials, displayObject, paneShape } from "../../packages/ui/src/gpu/instrument-display.ts";
 import { displayFormEntries } from "../../packages/ui/src/gpu/display-forms.ts";
@@ -57,9 +57,9 @@ test("the backlight is a few emitters along the window, in the role's colour, th
   assert.equal(lit.length, 3);
   assert.deepEqual(lit.map(emitter => emitter.position), off.map(emitter => emitter.position), "the unlit display keeps its lights in place");
   assert.ok(lit.every(emitter => emitter.strength > 0) && off.every(emitter => emitter.strength === 0));
-  // Along the window's middle, evenly, at the token's height (0.5 window heights) and reach (3).
+  // Along the window's middle, evenly, at the token's height (0.5 window heights) and reach (2.5).
   assert.deepEqual(lit.map(emitter => emitter.position[0]), [11 + 214 / 6, 11 + 214 / 2, 11 + (5 * 214) / 6].map(round));
-  assert.ok(lit.every(emitter => emitter.position[1] === 29 && emitter.position[2] === 18 && emitter.radius === 108 && emitter.reach === "outset" && emitter.face === 1));
+  assert.ok(lit.every(emitter => emitter.position[1] === 29 && emitter.position[2] === 18 && emitter.radius === 90 && emitter.reach === "outset" && emitter.face === 1));
   // The role scaled so its brightest channel is 1.
   assert.deepEqual(backlightColour("#ff9228"), [1, 0.573, 0.157]);
   assert.deepEqual(lit[0].colour, [1, 0.573, 0.157]);
@@ -155,7 +155,7 @@ test("a display is a polished bezel and a glass pane over its window, with the p
   const [bezel, pane] = object.parts;
   assert.equal(pane.glass, "window");
   assert.equal(pane.caster, null);
-  assert.deepEqual(pane.finish, { band: 0.3, horizon: 0.25 });
+  assert.equal(pane.finish, undefined, "no finish where text can reach the zone");
   assert.equal(bezel.glass, undefined);
   assert.equal(object.t, 0, "no pose: the emitters light, nothing moves");
   assert.deepEqual(object.bounds, { rect: [0, 0, 236, 58], radius: 0 });
@@ -167,9 +167,9 @@ test("a display is a polished bezel and a glass pane over its window, with the p
   assert.equal(paneShape([0, 0, 100, 40], 4, 1.6).height, 3.84);
   assert.equal(paneShape([0, 0, 100, 40], 4, 1.6).chamfer, 2.6);
   assert.deepEqual(displayGeometry.finish, { band: 0.3, horizon: 0.25 });
-  // A finish the page names (the `display.finish` tokens) replaces the premium one.
-  const finished = displayObject({ id: "d", box: [0, 0, 236, 58], bezel: [4, 4, 228, 50], bezelRadius: 8, window: [11, 11, 214, 36], windowRadius: 4, scale: 1, finish: { band: 0, horizon: 0 }, relief: { height: 3, material: "displayBezel" } }, registry().profile);
-  assert.deepEqual(finished.parts[1].finish, { band: 0, horizon: 0 });
+  // A finish the page gives (the `display.finish` tokens, where no text can reach the zone) is the pane's.
+  const finished = displayObject({ id: "d", box: [0, 0, 236, 58], bezel: [4, 4, 228, 50], bezelRadius: 8, window: [11, 11, 214, 36], windowRadius: 4, scale: 1, finish: { band: 0.3, horizon: 0.25 }, relief: { height: 3, material: "displayBezel" } }, registry().profile);
+  assert.deepEqual(finished.parts[1].finish, { band: 0.3, horizon: 0.25 });
   // Lit or not is the emitters' strength alone: the same parts, the same materials.
   const { profile: again } = registry();
   assert.deepEqual(displayAt(again, { light: keyLight }).parts, object.parts);
@@ -185,6 +185,18 @@ test("a display is a polished bezel and a glass pane over its window, with the p
   assert.equal(displayMaterials.displayGlass.glass.reflection, 1.5);
   assert.equal(displayHeight(1), 2.5);
   assert.equal(displayHeight(1.6), round(2.4 * 1.6 + 0.1));
+});
+
+test("the finish zone is turned off wherever text can reach it, as key tops do", () => {
+  assert.equal(FINISH_REACH, 0.31);
+  // An input's text can be anywhere in its content box (its top is the window's); an output's line in a 34 px window starts about 8 px down.
+  assert.equal(finishAllowed(34, 0), false);
+  assert.equal(finishAllowed(34, 8), false);
+  // A window 100 px high with its text 40 px down (past the horizon at 31 px, and the guard's 2 px): the zone may draw.
+  assert.equal(finishAllowed(100, 40), true);
+  assert.equal(finishAllowed(100, 33), false, "the text's guarded rect would touch the horizon line");
+  assert.equal(finishAllowed(100, 33.1 + 2, 2), true);
+  assert.equal(finishAllowed(100, Number.POSITIVE_INFINITY), true, "no text at all");
 });
 
 test("the bezel's caster is core's own unless its shadow would leave the box, then the same footprint at the tallest height that fits", () => {

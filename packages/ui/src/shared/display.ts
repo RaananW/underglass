@@ -71,7 +71,7 @@ export interface DisplayEmitterTokens { radius: number; height: number; strength
 /** The reference window each `strength` is for, px high (the control's height at medium). */
 export const displayEmitterReference = 36;
 /** The premium tokens' defaults (`emitter.display.*`). */
-export const displayEmitterDefaults: DisplayEmitterTokens = { radius: 3, height: 0.5, strength: 1400 };
+export const displayEmitterDefaults: DisplayEmitterTokens = { radius: 2.5, height: 0.5, strength: 2200 };
 /** The most emitters one display carries: a long window is lit along its length by one per window-height-and-a-half. */
 export const MAX_DISPLAY_EMITTERS = 6;
 
@@ -101,6 +101,15 @@ export function displayEmitters(window: readonly [number, number, number, number
     colour, strength, radius: fixed(tokens.radius * height), reach: "outset", face: 1,
   }));
 }
+
+/**
+ * The window's finish zone (a reflection band and a dark horizon line, `display.finish`) reaches this share of the window's height from
+ * its top (the horizon ends at 31%). The glass keeps text exact, so a display whose text can reach the zone turns it off (design language
+ * section 4, *Display windows, the finish-zone rule*, as key tops do): `textTop` is the top of the text's room in the window, px from the
+ * window's top (an input's text can be anywhere in its content box, an output's is its first run), `grow` the guard's growth of the text rect.
+ */
+export const FINISH_REACH = 0.31;
+export const finishAllowed = (windowHeight: number, textTop: number, grow = 2) => textTop - grow > FINISH_REACH * windowHeight;
 
 /** The tint a backlit window takes from its role, as a share of the colour over the field (static: it is part of the capture). */
 export const BACKLIGHT_TINT = 0.1;

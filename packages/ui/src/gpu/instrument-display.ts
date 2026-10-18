@@ -7,9 +7,9 @@
  * - **bezel:** a polished prism (the frame round the window; 2.4 high, a 2 px chamfer, radius 8) standing 4 px inside the box
  *   (the box rule's room for its cast shadow);
  * - **window:** a glass pane (a prism with a 2.6 px bevel, 2.4 high, clear) over the window, with the premium finish zone
- *   (`display.finish`: a band 0.3, a dark horizon 0.25). Its flat region is the capture itself, so the text printed under it is
- *   exact; inside the text's protected rect (the content box, grown by `display.textGrow`) the finish and the bevel never draw
- *   (Rendering Model 2D.6), so the pane shows its glass only in the padding round the text.
+ *   (`display.finish`: a band 0.3, a dark horizon 0.25) where no text can reach its zone, and none where it can (`finishAllowed`). Its flat
+ *   region is the capture itself, so the text printed under it is exact; inside the text's protected rect (the content box, grown by
+ *   `display.textGrow`) the finish never draws (Rendering Model 2D.6), and the bevel at the window's edge stays glass (it refracts the face).
  * - **backlight:** the display's emitters (`shared/display.ts`), a light behind the glass; lit or unlit is only their strength,
  *   so the parts never depend on the state: a toggle changes uniforms, never the layer's structure.
  * Heights scale with depth (× 0.6, 1, 1.6 at 0, 50 and 100%); widths and radii do not. Under `prefers-reduced-transparency`
@@ -43,7 +43,7 @@ const round = (value: number) => Math.round(value * 1000) / 1000;
 
 /** The premium display's materials: the polished bezel and the clear glass of the window (the `display` role, `glass`). */
 export const displayMaterials: Record<"displayBezel" | "displayGlass", InstrumentRecipe> = {
-  displayBezel: { base: { colour: "#fafafb", metallic: 1, roughness: 0.04, direct: 1 } },
+  displayBezel: { base: { colour: "#eff0f1", metallic: 1, roughness: 0.28, direct: 1 } },
   displayGlass: { base: { roughness: 0.05 }, glass: { ior: 1.5, tint: "#e8f0ee", absorption: 0.03, reflection: 1.5 } },
 };
 
@@ -62,7 +62,7 @@ export interface DisplayInput {
   windowRadius: number;
   /** The depth scale of heights (0.6, 1, 1.6 at depth 0, 0.5, 1). */
   scale: number;
-  /** The finish band and horizon (`display.finish`); the premium numbers when absent. */
+  /** The finish band and horizon (`display.finish`), where no text can reach the finish zone; none when absent. */
   finish?: { band: number; horizon: number };
   /** Opaque, not glass (`prefers-reduced-transparency`): the window shows the plain capture. */
   opaque?: boolean;
@@ -92,7 +92,7 @@ export function displayObject(input: DisplayInput, profile: (name: string, shape
     ...(input.caster !== undefined ? { caster: input.caster } : {}) });
   if (!input.opaque) {
     parts.push({ kind: "window", profile: profile("display-window", paneShape(input.window, input.windowRadius, input.scale)), at: centre(input.window), material: "displayGlass", glass: "window",
-      finish: input.finish ?? { ...displayGeometry.finish }, caster: null });
+      ...(input.finish ? { finish: input.finish } : {}), caster: null });
   }
   return { id: input.id, rect: input.box, bounds: { rect: input.box, radius: 0 }, t: 0, parts,
     relief: { face: "raised", rect: input.bezel, radius: input.bezelRadius, height: input.relief.height, material: input.relief.material } };

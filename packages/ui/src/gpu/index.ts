@@ -75,7 +75,7 @@ import { switchHeight, switchMaterials, switchObject } from "./instrument-switch
 import type { StrataSwitchForm } from "../shared/switch-forms.ts";
 import { displayFormEntries } from "./display-forms.ts";
 import { bezelCaster, displayHeight, displayMaterials, displayObject } from "./instrument-display.ts";
-import { displayEmitterDefaults, displayEmitters, type DisplayEmitterTokens } from "../shared/display.ts";
+import { displayEmitterDefaults, displayEmitters, finishAllowed, type DisplayEmitterTokens } from "../shared/display.ts";
 
 export type { CustomPartInput, CustomPartSource, InstrumentMeshProfile, InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentRecipe, KnobSpring } from "./instrument.ts";
 export { customPart } from "./instrument.ts";
@@ -285,6 +285,8 @@ interface DisplayInfo {
   native: HTMLElement;
   box: [number, number, number, number];
   pane: [number, number, number, number];
+  /** Whether the finish zone may draw: no text can reach it. */
+  finish: boolean;
 }
 /** What a scene's faces loop found for the displays of a panel, for its Instrument scene. */
 const foundDisplays = new WeakMap<HTMLElement, { infos: Map<HTMLElement, DisplayInfo>; instrument: Set<HTMLElement> }>();
@@ -513,7 +515,15 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     if (emitters.length + lights.length > MAX_EMITTERS) continue;
     lamps.set(root, { kind: "led", role, lit, lens: paneBox[3], index: emitters.length, box, control: native, feather: displayTokens.number("emitter.guardFeather", emitterDefaults.guardFeather) });
     emitters.push(...lights);
-    mineDisplays.infos.set(root, { native, box, pane: paneBox });
+    // The finish zone is for a window no text can reach: an input's text can be anywhere in its content box, an output's is its first run.
+    let textTop = 0;
+    if (!(native instanceof HTMLInputElement)) {
+      const range = document.createRange();
+      range.selectNodeContents(native);
+      const [run] = range.getClientRects(), scale = panel.getBoundingClientRect().width / Math.max(panel.offsetWidth, 1) || 1;
+      textTop = run ? (run.top - panel.getBoundingClientRect().top) / scale - paneBox[1] : Number.POSITIVE_INFINITY;
+    }
+    mineDisplays.infos.set(root, { native, box, pane: paneBox, finish: finishAllowed(paneBox[3], textTop) });
   }
   if (objects(panel)) {
     entries.push({ object: "slab", rect: [0, 0, width, height], radius: radiusOf(panel, width), height: panelHeight, taper, material: materialFor(panel, "raised") });
@@ -940,7 +950,7 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     if (bezelBox[2] <= 0 || bezelBox[3] <= 0) continue;
     const caster = bezelCaster(bezelBox, info.box, bezelRadius, scale, light);
     objects.push(displayObject({ id: idOf(info.native.id ? info.native : root, "display"), box: info.box, bezel: bezelBox, bezelRadius, window: info.pane, windowRadius: paneRadius, scale,
-      finish: { band: displayTokens.number("display.finish.band", 0.3), horizon: displayTokens.number("display.finish.horizon", 0.25) }, opaque, ...(caster ? { caster } : {}),
+      ...(info.finish ? { finish: { band: displayTokens.number("display.finish.band", 0.3), horizon: displayTokens.number("display.finish.horizon", 0.25) } } : {}), opaque, ...(caster ? { caster } : {}),
       relief: { height: raised, material: "displayBezel" } }, profile) as unknown as InstrumentObject);
     for (const name of ["displayBezel", "displayGlass"] as const) materials[name] ??= displayMaterials[name];
     tallest = Math.max(tallest, displayHeight(scale));

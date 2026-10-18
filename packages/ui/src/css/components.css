@@ -1616,9 +1616,11 @@
     /* The window is the control's height, or a line and a half of the text at large sizes; the bezel and its room are added. */
     min-height: calc(max(calc(var(--strata-control-height) + var(--strata-control-offset)), var(--strata-target-min), calc(1lh + 12px)) + 2 * (var(--_room) + var(--_bz)));
     margin: 0;
-    padding: 0 var(--_pad);
+    /* The content box is the window's inside: the text's room, which is what the guard protects (the bezel round it is lit in full). */
+    padding: calc(var(--_room) + var(--_bz)) var(--_pad);
     border: 0;
-    border-radius: var(--strata-display-bezel-radius);
+    /* Square: the native element is the whole box, so a press anywhere in it, the corners included, lands on it. */
+    border-radius: 0;
     background: transparent;
     color: var(--strata-colour-text);
     font-family: var(--strata-font-family-mono, ui-monospace, monospace);
