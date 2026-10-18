@@ -2,10 +2,16 @@
 /**
  * RadioGroup (anatomy page `radio.md`): native radios in a `<fieldset>` named by its `<legend>`. Astro has no component
  * context, so the group renders its radios from `options`; `value` selects one. An error marks every radio invalid and
- * joins the help in the fieldset's description. Arrow keys, Tab and Space are native.
+ * joins the help in the fieldset's description. Arrow keys, Tab and Space are native. `form="bank"` draws the group as a preset
+ * bank (*Latching forms*): interlocking latching buttons on one plinth, one down at a time, each label printed on its cap, with a
+ * `colour` for the LEDs; `flush`, or no `form`, is the look it had before, and any other string is the native `form` attribute of
+ * the fieldset, as before.
  */
 import { nextId } from "./field.ts";
 import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+import { bankForm, bankMarkup, nativeForm } from "../shared/latching-forms.ts";
+import type { StrataLampColour } from "../shared/lamp.ts";
+import Behaviour from "./Behaviour.astro";
 
 interface Option { value: string; label: string; disabled?: boolean }
 
@@ -18,6 +24,10 @@ interface Props {
   error?: string;
   required?: boolean;
   errorPrefix?: string;
+  /** The form: `bank`; `flush` is today's look; any other string is the native `form` attribute of the fieldset. */
+  form?: "bank" | "flush" | (string & {});
+  /** The LEDs' colour of a bank. */
+  colour?: StrataLampColour;
   size?: StrataSize;
   material?: string;
   level?: StrataLevel;
@@ -25,14 +35,20 @@ interface Props {
   [attribute: string]: unknown;
 }
 
-const { legend, options, name = nextId("radio"), value, help, error, required, errorPrefix = "Error:", size, material, level, class: className, ...rest } = Astro.props;
+const { legend, options, name = nextId("radio"), value, help, error, required, errorPrefix = "Error:", form, colour, size, material, level, class: className, ...rest } = Astro.props;
+const bank = bankForm(form), owner = nativeForm(form, "bank");
 const describedBy = [help ? `${name}-help` : "", error ? `${name}-error` : ""].filter(Boolean).join(" ") || undefined;
 ---
-<fieldset class={classes("ug-radio-group", className)} aria-describedby={describedBy} {...strataAttributes({ size, material, level })} {...rest}>
+<fieldset class={classes("ug-radio-group", className)} aria-describedby={describedBy} data-strata-form={bank} form={owner} {...strataAttributes({ size, material, level })} {...rest}>
   <legend class="ug-radio-group__legend">{legend}</legend>
-  {options.map(option => (
-    <label class="ug-radio"><input class="ug-radio__input" data-strata-face="well" type="radio" name={name} value={option.value} checked={option.value === value} disabled={option.disabled} required={required} aria-invalid={error ? "true" : undefined} /><span class="ug-radio__dot" data-strata-face="knob" aria-hidden="true"></span><span class="ug-radio__label">{option.label}</span></label>
-  ))}
+  {bank
+    ? <div class="ug-bank__plinth" data-strata-face="raised">{options.map(option => (
+        <label class="ug-radio"><span class="ug-push ug-latch ug-latch--bank" data-strata-colour={colour}><input class="ug-radio__input" type="radio" name={name} value={option.value} checked={option.value === value} disabled={option.disabled} required={required} aria-invalid={error ? "true" : undefined} /><span class="ug-push__object ug-latch__object" aria-hidden="true">{bankMarkup.map(part => <span class={part.className} data-strata-face={part.face}></span>)}</span><span class="ug-push__cap" data-strata-face="raised"><span class="ug-radio__label">{option.label}</span></span></span></label>
+      ))}</div>
+    : options.map(option => (
+        <label class="ug-radio"><input class="ug-radio__input" data-strata-face="well" type="radio" name={name} value={option.value} checked={option.value === value} disabled={option.disabled} required={required} aria-invalid={error ? "true" : undefined} /><span class="ug-radio__dot" data-strata-face="knob" aria-hidden="true"></span><span class="ug-radio__label">{option.label}</span></label>
+      ))}
   {help && <p class="ug-field__help" id={`${name}-help`}>{help}</p>}
   {error && <p class="ug-field__error" id={`${name}-error`}>{`${errorPrefix} ${error}`}</p>}
 </fieldset>
+{bank && <Behaviour />}

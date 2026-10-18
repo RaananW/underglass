@@ -2,12 +2,16 @@
 /**
  * Checkbox (anatomy page `checkbox.md`): a native checkbox in its label row; the slot is the label. `class` and
  * `style` go on the row, other attributes on the input. `indeterminate` is applied in the browser by `attachStrata`.
- * `help` and `error` render a Field without a label around it.
+ * `help` and `error` render a Field without a label around it. `form="latching"` draws it as a small latching square button
+ * (*Latching forms*): a key whose ring lights when it is checked, with a lit ring `colour`; `flush`, or no `form`, is the look it had
+ * before, and any other string is the native `form` attribute, as before.
  */
 import Behaviour from "./Behaviour.astro";
 import Field from "./Field.astro";
 import { fieldControl } from "./field.ts";
 import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+import { checkboxMarkup, latchForm, nativeForm } from "../shared/latching-forms.ts";
+import type { StrataLampColour } from "../shared/lamp.ts";
 
 interface Props {
   id?: string;
@@ -19,6 +23,10 @@ interface Props {
   disabled?: boolean;
   invalid?: boolean;
   errorPrefix?: string;
+  /** The form: `latching`; `flush` is today's look; any other string is the native `form` attribute. */
+  form?: "latching" | "flush" | (string & {});
+  /** The lit ring's colour of a latching checkbox. */
+  colour?: StrataLampColour;
   size?: StrataSize;
   material?: string;
   level?: StrataLevel;
@@ -27,10 +35,13 @@ interface Props {
   [attribute: string]: unknown;
 }
 
-const { id, checked, indeterminate, help, error, required, disabled, invalid, errorPrefix, size, material, level, class: className, style, ...rest } = Astro.props;
+const { id, checked, indeterminate, help, error, required, disabled, invalid, errorPrefix, form, colour, size, material, level, class: className, style, ...rest } = Astro.props;
 const field = fieldControl({ id, help, error, required, disabled, invalid }, "checkbox");
+const latching = latchForm(form), owner = nativeForm(form, "latching");
 ---
 <Field wrap={field.wrap} controlId={field.id} help={help} error={error} errorPrefix={errorPrefix}>
-  <label class={classes("ug-checkbox", className)} style={style} {...strataAttributes({ size, material, level })}><input class="ug-checkbox__input" data-strata-face="well" type="checkbox" checked={checked} data-strata-indeterminate={indeterminate ? "" : undefined} {...field.attrs} {...rest} /><span class="ug-checkbox__mark" data-strata-face="mark" aria-hidden="true"></span><span class="ug-checkbox__label"><slot /></span></label>
+  {latching
+    ? <label class={classes("ug-checkbox", className)} style={style} {...strataAttributes({ size, material, level })} data-strata-form={latching}><span class="ug-push ug-latch ug-latch--key" data-strata-colour={colour}><input class="ug-checkbox__input" type="checkbox" checked={checked} data-strata-indeterminate={indeterminate ? "" : undefined} form={owner} {...field.attrs} {...rest} /><span class="ug-push__object ug-latch__object" aria-hidden="true">{checkboxMarkup.map(part => <span class={part.className} data-strata-face={part.face}></span>)}</span><span class="ug-push__cap" data-strata-face="raised" aria-hidden="true"><span class="ug-checkbox__mark"></span></span></span><span class="ug-checkbox__label"><slot /></span></label>
+    : <label class={classes("ug-checkbox", className)} style={style} {...strataAttributes({ size, material, level })}><input class="ug-checkbox__input" data-strata-face="well" type="checkbox" checked={checked} data-strata-indeterminate={indeterminate ? "" : undefined} form={owner} {...field.attrs} {...rest} /><span class="ug-checkbox__mark" data-strata-face="mark" aria-hidden="true"></span><span class="ug-checkbox__label"><slot /></span></label>}
 </Field>
-{indeterminate && <Behaviour />}
+{(indeterminate || latching) && <Behaviour />}
