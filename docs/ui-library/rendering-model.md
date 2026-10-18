@@ -832,7 +832,8 @@ encodePart(c) = x + 0.2 · (x² · (3 − 2x) − x),   x = clamp((0.8 · c)^(1/
   Lite's HDR loader sets exposure 0.8 and contrast 1.2 when it loads the studio; core's own setting of 1 and 1 is made
   before the load and so does not hold (a core finding). If core sets them again after the load, the model changes
   this transform in a new version.
-- **Emitters** (`lamp`) are not yet drawn on parts by core; the term keeps 2D.4's light with this lobe, uncalibrated.
+- **Emitters** (`lamp`) keep 2D.4's light with this lobe; at the suite's two emitter-lit sampled points (a lamp's and
+  the pointer light's plate) core's emitters agree with it within 1.
 
 **The studio.** With `L` the light direction (2.1), `ℓ = √(L.x² + L.z²)`, `up(ω) = −ω.y` (the screen's up) and
 `∠(a, b) = acos(clamp(a · b, −1, 1))`:
@@ -1006,7 +1007,7 @@ checks parts at named points within a tolerance, and checks the layers it does n
     `reflectance` and `emissive`, with `page` off. A case places each material's points where the materials it compares
     differ by at least 24 levels in some channel, so a wrong material fails.
   - **Why 16, measured:** with 2D.5 calibrated to Lite, core's parts (Canary 158.0.8110.0, one RTX 3080, DPR 1 and
-    2) lie within these residuals of the reference at the suite's 59 sampled points: median 1, 95th percentile 5,
+    2) lie within these residuals of the reference at the suite's 61 sampled points: median 1, 95th percentile 5,
     maximum 16. Over every unshadowed part pixel 2 px clear of an edge in six of the cases (3,577 pixels, every third
     pixel), the median is 2, the 95th percentile 11 and the 99th 16; per material the median is 0 to 3, and the 95th
     percentile 1 to 15, except polished mirrors (36), whose reflections of the strip's sharp edges move tens of levels
@@ -1016,7 +1017,8 @@ checks parts at named points within a tolerance, and checks the layers it does n
 - **Presence.** For `brush`, `grain`, `sheen`, `iridescence`, `subsurface`, `dispersion`, page reflections, a lens's
   reflection, emitter light on parts and the shadow map, a case renders the feature on and off. At least the case's
   share of the part's pixels changes by at least its number of levels, and nothing changes outside the object's
-  `bounds` or inside protected rects.
+  `bounds` or inside protected rects. Emitter light is the exception: an emitter lights the face too (2D.4), so its
+  check counts the parts only, and the face is checked by the exact points.
 - **Mapped shadow.** A part point the map shadows is darker with the map on than off, at most 0.95 of its lit value
   in every channel; a lit part point changes by at most 3.
 
@@ -1188,8 +1190,9 @@ version 4 is geometric and sampled (2D):
 
 - **Underglass's GPU presentation must conform.** Phase 4 step 2 runs this suite against decoded GPU pixels. For
   version 4, `tests/browser/ui-instrument-conformance.test.mjs` runs `instrument-4.json` the same way against core's
-  `instrument` material, at DPR 1 and 2. It asserts the checks whose parts core draws today and records the others
-  (emitters, the guard's face factor, the shadow map, the post chain and glass: core work items 2 to 4) as pending.
+  `instrument` material, at DPR 1 and 2. It asserts the checks whose parts core draws today, emitters and the guard
+  included, and records the others (the shadow map and the post chain, and glass: core work items 3 and 4) as
+  pending.
 - **The CSS presentation is a declared approximation.** It is bound by the P0.6 parity budget, not by this suite. At
   the Instrument level it is bound by the per-component budgets of [I0.6](instrument-phase0.md#i06-css-parity).
 
@@ -1204,9 +1207,9 @@ version 4 is geometric and sampled (2D):
   order and clip, and sampled guarantees. `light.intensity` and `light.ambient` are used in Instrument scenes.
   **Status (2026-10-18):** the reference is implemented (`instrument.ts`), the conformance suite is present
   (`instrument-4.json`), and GPU conformance runs against core's `instrument` material: containment, captured caps,
-  unchanged text and the clip, Relief step-downs, the face without emitters, brush and grain by presence, and every
-  sampled point (with 2D.5 calibrated to Lite, within 16) pass at DPR 1 and 2; the checks that need core work items 2
-  to 4 are pending.
+  unchanged text and the clip, Relief step-downs, the face with emitters, the pointer light and the guard, brush,
+  grain and emitter light by presence, and every sampled point (with 2D.5 calibrated to Lite, within 16) pass at DPR 1
+  and 2; the checks that need core work items 3 and 4 are pending.
 - **Reserved:** `light.colour` (one white light, as in version 1), `light.intensity` and `light.ambient` outside
   Instrument scenes, the inner shadow of wells, and particle shadows.
 - **Not in version 4:** shadows cast by emitters; emitter light on captured caps; a specular term for the pointer
@@ -1242,9 +1245,9 @@ version 4 is geometric and sampled (2D):
     and chrome parts' 13-level offset: with it they agree with core within 1.
   - **The coat** follows Lite's clear coat (`clearcoat-fragment.js`): the base's F0 remapped under the coat, a Kelemen
     visibility for the key light, its own lobe and table in the environment, the base attenuated by the coat's Fresnel.
-  - **Results** (Canary 158.0.8110.0, RTX 3080, core with PR #143's prism winding): every one of the 59 sampled points,
-    at DPR 1 and 2, lies within 16 (median 1, 95th percentile 5); before the calibration none lay within 12. The
-    tolerance is 16 (2D.10). A new case, `preset-domes`, samples the presets at normals up to about 50°.
+  - **Results** (Canary 158.0.8110.0, RTX 3080, core with PR #143's prism winding and #145's emitters): every one of the
+    61 sampled points, at DPR 1 and 2, lies within 16 (median 1, 95th percentile 5); before the calibration none lay
+    within 12. The tolerance is 16 (2D.10). A new case, `preset-domes`, samples the presets at normals up to about 50°.
   - **Findings for core and Lite:** core's exposure and contrast do not hold (it sets them before Lite's loader
     overrides them); Lite's prefiltered mips are turned against mip 0. Either fix changes these expectations, in a new
     version of the draft.

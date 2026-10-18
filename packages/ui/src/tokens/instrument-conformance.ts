@@ -22,7 +22,7 @@ import type { Rgb01 } from "./shade.ts";
 
 /**
  * The tolerances of version 4, per channel in 0–255: exact as version 1; sampled set from the residuals of core's Lite
- * parts against the calibrated reference (2D.10): at the suite's 59 sampled points the median is 1, the 95th percentile 5
+ * parts against the calibrated reference (2D.10): at the suite's 61 sampled points the median is 1, the 95th percentile 5
  * and the maximum 16 (one tilted metal paddle), at DPR 1 and 2, so 16 holds every measured point.
  */
 export const instrumentTolerance = { exact: 3, sampled: 16 } as const;
