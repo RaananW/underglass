@@ -7,7 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { faderDetentStep, faderFraction, faderGeometry, faderMarks, faderModel, faderNotch, faderNumber, faderOffset, faderSnap, faderStyle, faderValueAt, faderValueText } from "../../packages/ui/src/shared/fader.ts";
-import { faderCarriage, faderMaterials, faderObject, faderParts, faderShadowReach, faderSpring, faderTravel } from "../../packages/ui/src/gpu/instrument-fader.ts";
+import { faderCarriage, faderCasterHeight, faderFootprint, faderMaterials, faderObject, faderParts, faderShadowReach, faderSpring, faderTravel } from "../../packages/ui/src/gpu/instrument-fader.ts";
 
 // Core's sources import siblings as `./x.js`, which only exist as `.ts` in the source tree.
 const sourceImports = registerHooks({
@@ -192,8 +192,40 @@ test("the carriage's shadow on the face stays in the box at 50% depth under the 
         `${layout.vertical ? "vertical" : "horizontal"} at t ${t}: shadow ${[x - reach.left, y - reach.up, x + cw + reach.right, y + ch + reach.down].map(round)} in ${layout.box}`);
     }
   }
-  // At full depth the carriage is 19.2 high and its shadow reaches 24 px down: past the 16 px margin at the bottom stop.
+  // At full depth the carriage is 19.2 high and its shadow would reach 24 px down: past the 16 px margin at the bottom stop.
   assert.ok(faderShadowReach(1.6, light, [0, 1]) > faderGeometry.margin);
+});
+
+test("at full depth the carriage's caster is capped where it stands, so its shadow stays in the box; below that it is core's own", () => {
+  const light = { azimuth: 323, elevation: 41 };
+  // The cap: the tallest mean height whose reach stays inside the box from either stop (6.2 for 16 px down; a
+  // horizontal fader's tightest side is its 16 px right of the maximum, 14.2 px at 6 high).
+  assert.equal(faderCasterHeight({ ...vertical, scale: 1 }, light), 6);
+  assert.equal(faderCasterHeight({ ...vertical, scale: 1.6 }, light), 6.201);
+  assert.equal(faderCasterHeight({ ...horizontal, scale: 1.6 }, light), 6.842);
+  assert.equal(faderCasterHeight({ ...vertical, scale: 0.6 }, light), 3.6);
+  assert.deepEqual(faderFootprint(vertical.slot, true, 0), [8, 196, 30, 42]);
+  assert.deepEqual(faderFootprint(horizontal.slot, false, 1), [196, 8, 42, 30]);
+  for (const layout of [vertical, horizontal]) {
+    // 50% depth: no caster of its own, so core's follows the pose.
+    assert.equal(fader(registry().profile, layout, { light }).parts[0].caster, undefined);
+    for (const t of [0, 0.37, 1]) {
+      const { profiles, profile } = registry();
+      const object = fader(profile, layout, { light, scale: 1.6, t });
+      const caster = object.parts[0].caster;
+      // The capped caster is the footprint core would derive at t, at the capped height, and the scene stays valid.
+      const own = partCaster({ ...object.parts[0], caster: undefined }, profiles[object.parts[0].profile], t);
+      assert.deepEqual(caster.rect, own.rect.map(round));
+      assert.equal(caster.radius, own.radius);
+      assert.equal(caster.height, layout.vertical ? 6.201 : 6.842);
+      validateInstrumentScene(sceneOf([object], profiles));
+      const k = direction => (faderShadowReach(1, light, direction) - 1) / 6;
+      const reach = { left: k([-1, 0]) * caster.height + 1, right: k([1, 0]) * caster.height + 1, up: k([0, -1]) * caster.height + 1, down: k([0, 1]) * caster.height + 1 };
+      const [x, y, cw, ch] = caster.rect, [bx, by, bw, bh] = layout.box;
+      assert.ok(x - reach.left >= bx && y - reach.up >= by && x + cw + reach.right <= bx + bw + 1e-9 && y + ch + reach.down <= by + bh + 1e-9,
+        `${layout.vertical ? "vertical" : "horizontal"} at t ${t}, full depth: shadow ${[x - reach.left, y - reach.up, x + cw + reach.right, y + ch + reach.down].map(round)} in ${layout.box}`);
+    }
+  }
 });
 
 test("spring.fader is critically damped: the carriage settles on its value in fixed steps without overshoot", () => {
