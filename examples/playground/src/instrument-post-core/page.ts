@@ -32,10 +32,11 @@ const pattern: ControlKind[] = ["knob", "key", "fader", "switch", "knob", "lamp"
 const prefix: Record<ControlKind, string> = { knob: "N", fader: "F", key: "K", switch: "S", lamp: "L", bat: "B", thin: "P" };
 const pressed = new Set<HTMLElement>();
 const queryPost = params.get("post");
-const options: { meshes: boolean; casters: boolean; plain: boolean; lights: boolean; dark?: boolean; post?: InstrumentScene["post"]; map?: SceneOptions["map"] } = {
+const options: { meshes: boolean; casters: boolean; plain: boolean; lights: boolean; dark?: boolean; page?: boolean; post?: InstrumentScene["post"]; map?: SceneOptions["map"] } = {
   meshes: true, casters: true, plain: false, lights: true,
   post: queryPost === "off" ? { smaa: false, bloom: false, taa: false, contact: false, ssgi: false }
     : queryPost ? Object.fromEntries(queryPost.split(",").map(stage => [stage.trim(), true])) : undefined,
+  page: params.get("page") === "off" ? false : undefined,
   map: params.get("map") === "off" ? { darkness: 1 } : undefined,
 };
 
@@ -191,7 +192,7 @@ const handles = new Map<string, MaterialHandle>();
 // Panels drawn with their face only (no objects), for pixel references.
 const faceOnly = new Set<string>();
 const sceneOf = (panel: HTMLElement) => panelScene(panel, theme, stage(), pressed,
-  { casters: options.casters, objects: options.meshes && !faceOnly.has(panel.id), lights: options.lights, post: options.post, map: options.map, dark: options.dark });
+  { casters: options.casters, objects: options.meshes && !faceOnly.has(panel.id), lights: options.lights, post: options.post, map: options.map, dark: options.dark, page: options.page });
 /** Rebuilds a panel's scene from the DOM and hands it to core (`setMaterial` once, then `update`). */
 // Panels whose material is cancelled (`api.cancel`) until `api.restore`.
 const cancelled = new Set<string>();

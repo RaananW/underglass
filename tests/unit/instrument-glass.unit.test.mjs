@@ -74,6 +74,10 @@ test("a probe's placement key ignores sub-texel moves and its refreshes are thro
   const key = (matrix = m, s = stage, c = content) => glass.probeKey(matrix, s, c, quantum, extent);
   assert.equal(key({ ...m }, { ...stage }, { ...content }), key(), "the same placement is the same key (poses, emitters and idle frames refresh nothing)");
   assert.equal(key({ ...m, e: 40 + quantum * 0.3 }), key(), "a move below a quarter texel keeps the key");
+  // The bucket edge: the key rounds to the nearest multiple of the quantum, so the edge lies half a quantum from a multiple.
+  const at = 40 / quantum, edge = (Math.floor(at) + 0.5) * quantum;
+  assert.notEqual(key({ ...m, e: edge - quantum * 0.01 }), key({ ...m, e: edge + quantum * 0.01 }), "just below and just above a bucket edge are different keys");
+  assert.equal(key({ ...m, e: edge + quantum * 0.01 }), key({ ...m, e: edge + quantum * 0.49 }), "and a whole bucket shares one");
   assert.notEqual(key({ ...m, e: 41 }), key(), "a move of a pixel");
   assert.notEqual(key({ ...m, a: 1.1, d: 1.1 }), key(), "a scale");
   assert.equal(key({ ...m, a: 1 + 1e-5 }), key(), "a scale change below a quarter texel across the layer");

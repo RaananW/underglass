@@ -1093,7 +1093,8 @@ or the stage): Lite fixes the projection box when the scene registers, so the cu
 that moves (a scroll). (c) is not in the plan; without it a moved layer would reflect a page it no longer shows. **Its rule
 (review fix S1):** the placement is quantised to a quarter of the cube's texel footprint (`2 · height / size / 4`, 0.29 px at
 the defaults; a sub-texel move is invisible after the mip blur), and a placement refresh happens at most once per 100 ms
-while the layer keeps moving, with a trailing refresh (a timer asks for a frame) once it settles, so a scrolling layer costs
+while the layer keeps moving (a resize or a DPR change changes the key too, through the stage and the content size, and is
+throttled the same way unless it replaces the capture texture, which refreshes at once), with a trailing refresh (a timer asks for a frame) once it settles, so a scrolling layer costs
 about 10 refreshes a second however fast it moves, and its reflection lags by at most 100 ms. A pose, a pointer light, an
 emitter write or any number of idle frames refresh nothing.
 
@@ -1314,10 +1315,10 @@ without the fix where a test is possible (before / after on the same page, Canar
   the face: two pixels met it the other way round). A changed pixel now counts as a face pixel only where the parts' coverage
   mask shows the face, the mask being the same parts lit by nothing (no key light, no environment: near black, never the
   face's colour; `setDark` in the page), so the post chain keeps covering PBR parts with the default probe under SMAA, bloom
-  and the clip mask. The same run showed the probe also weakens the map's band on the thin plates' plinths (the page
-  brightens them and the output transform compresses levels near white): the "one connected component" check, which counts
+  and the clip mask. The same run showed the "one connected component" check failing with the probe on (the first reading, that the probe weakens
+  the band, is corrected below): the "one connected component" check, which counts
   pixels the map darkens by at least 6 levels, found 4 components at DPR 2 (159, 15, 4 and 2 pixels) and one with a threshold
-  of 2: the threshold is now 3 (the shadow is intact, only a few levels weaker). The post chain's page: the override
+  of 2: the threshold is now 3 for that check (see the second review below for the strength check). The post chain's page: the override
   `page: { enabled: false }` is reverted.
 - **S3, a resize and a DPR change mid-run.** `core-glass` resizes the viewport (1600 × 900) and changes the emulated DPR and
   back: GPU on, the probe refreshed (a resize or a DPR change changes the key or the texture), text under the window 0 pixels
@@ -1340,7 +1341,39 @@ without the fix where a test is possible (before / after on the same page, Canar
   own (asserted). With an index of 1.5 the rim is only 1.2 times the centre (15.2 against 12.7 levels), not 3: the centre also
   reflects, F0 = 4% of a bright studio (its ceiling and strip) times the recipe's 1.5, so the glass's edge is brighter than its
   centre mainly by what it refracts and sees (the stand: 79 levels), and the angle term adds the rest.
-- **Limits recorded (N1, N4, N6, N7)** in SCOPE-009 and above: the probe's error scopes stay open across an await (safe because
-  builds are serialised); a GPU error during a refresh is not diagnosed; and the two nits the review listed as N6 and N7 are
-  recorded there as the probe's lag during movement and the exact twin's unlit texel (their text was not in the message I
-  worked from, so these two entries are my reading of them).
+- **Limits recorded (N1, N4, N6, N7)** in SCOPE-009 and here:
+  - **N1:** the probe's error scopes stay open across an await (safe because builds are serialised).
+  - **N4:** a GPU error during a refresh is not diagnosed.
+  - **N6:** `glassInstance` and `partCaster` run for every glass part on every frame and compare the result with the instance
+    data buffer, allocating per part, so a layer with many glass parts pays a per-frame CPU cost growing with their number (not
+    measured beyond the fixture; fix later by running them only when the part's data changed).
+  - **N7:** the probe samples the layer's capture with hardware bilinear filtering on straight-alpha texels, so colour bleeds
+    dark at alpha edges and at the content edge of a retained texture larger than the content (the cube's mips blur it; low
+    impact).
+  The probe's lag while a layer moves (up to 100 ms and a quarter texel, S1) and the exact twin's opaque-only texel (S4) are
+  consequences of those fixes, described in their own bullets above, not N6 or N7.
+
+## Second review fixes (item 4, 2026-10-18)
+
+- **N6 and N7** are recorded as the review found them (see the first review's limits bullet). The probe's lag during movement
+  and the exact twin's opaque-only texel stay consequences of S1 and S4.
+- **Translucent texels under a window.** `windowExact` covers the whole flat region; opaque texels are drawn by the twin, and
+  translucent ones (alpha below 1) by neither shader, so they come from the face pass and the chain. Test (`core-glass`, DPR 1
+  and 2): a translucent faceplate, stripes and field with the default chain on (the map, SMAA, bloom) and the lamp's light on:
+  text under the window against the layer without objects, **0 of 12,960 and 0 of 51,840 pixels differ**. The wording is now
+  "exact against SMAA for opaque capture texels; translucent texels follow the face pass" (changeset, API, SCOPE-009).
+- **The map's depth with the probe on and off** (`core-post`, `?page=off` for the studio alone; the largest luminance drop the
+  map makes in each band, in the test's luminance units): thin plinths 13 to 41 (DPR 1) and 27 to 42 (DPR 2) with the probe on,
+  14 to 41 and 28 to 42 off; bats' plates 40 to 46 on and 39 to 47 off at both. The probe moves a band's depth by a few levels
+  in either direction (plinth by plinth: 31/33, 13/14, 15/16, 18/19, 21/22, 38/39, 25/27, 27/27, 31/30, 34/31, 32/32, 39/37,
+  34/33, 22/24, 34/36, 41/41 at DPR 1), and the plinths' mean luminance is about 13 higher with it (385 against 372). So the
+  review's hypothesis, that the page's reflection is not occluded by the map and so weakens the band, is **not supported as
+  a cause of a weaker band**: the depth does not fall systematically. (By construction the map scales the key term only, as
+  2D.5 says, so neither the studio's nor the page's reflection is shadowed; that is behaviour, and the page adds light the
+  map does not touch, but the measured band is as deep.) What the probe changes is a plinth's penumbra: pixels there fall a few
+  levels under the 6-level threshold of the connectedness check, which is why the check now uses 3. The strength is asserted
+  separately: each thin plinth's depth is at least 10 levels and each bat's plate at least 35 (the probe-on minimums are 13
+  and 40, less a margin). My earlier explanation (the output transform compresses levels near white) was a guess and is
+  withdrawn.
+- **Nits:** a retired scene clears its probe's throttle timer (no stray frame request); the unit test checks both sides of a
+  bucket edge of the placement key; resize and DPR changes are documented as going through the throttle (above).

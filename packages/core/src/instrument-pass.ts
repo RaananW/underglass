@@ -1140,6 +1140,8 @@ export function createInstrumentController(options: InstrumentControllerOptions)
 
   /** Takes a scene off the surface now and releases it after a queue fence (or device loss). */
   function retirePass(pass: Pass) {
+    // A throttled probe refresh waits on a timer that asks for a frame: a retired scene never fires it.
+    if (pass.probe?.timer !== undefined) { clearTimeout(pass.probe.timer); pass.probe.timer = undefined; }
     scenes.delete(pass.scene);
     if (pass.registered) { unregisterScene(pass.scene); pass.registered = false; }
     const release = () => { try { disposeScene(pass.scene); } catch (error) { console.error("Underglass instrument scene disposal failed", error); } };

@@ -456,6 +456,25 @@ for (const dpr of [1, 2]) {
   });
 }
 
+for (const dpr of [1, 2]) {
+  test(`translucent texels under a window with the shadow map, SMAA and bloom on, DPR ${dpr}`, async ({ browser }) => {
+    test.setTimeout(300000);
+    const { context, page, call } = await open(browser, dpr);
+    // The default chain (SMAA, bloom, the map) and the lamp's light on: only the window's own exact path is under test.
+    await call("set", { lights: true, casters: true, translucent: true });
+    const on = await shot(page, `${directory}/translucent-chain-dpr${dpr}.png`);
+    await call("set", { objects: false });
+    const bare = await shot(page);
+    const patterns = await call("patterns");
+    // Edges: the glyphs' antialiased pixels, where the texel's alpha is below 1 (the field is 0.6 over a 0.55 faceplate).
+    const text = diffIn(on, bare, patterns.text, dpr);
+    console.log(`translucent text with the chain DPR ${dpr}: ${JSON.stringify(text)}`);
+    expect(text.compared).toBeGreaterThan(1000);
+    expect(text.max, "text under the window over a translucent capture, the default chain on: within 1 level of the layer without objects").toBeLessThanOrEqual(1);
+    await context.close();
+  });
+}
+
 test("a refresh that throws turns the page off, rebuilds the layer without it and frees the cube", async ({ browser }) => {
   test.setTimeout(300000);
   const { context, page, errors, call } = await open(browser, 1);
