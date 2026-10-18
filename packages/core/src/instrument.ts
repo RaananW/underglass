@@ -10,6 +10,8 @@
  */
 import { validateReliefScene, type ReliefPrimitive, type ReliefScene } from "./relief.js";
 import { validateLight, type ProtectedRects, type SceneEmitter } from "./emitters.js";
+import { capCasterHeight, meshFootprint, meshGeometry, placeholderGeometry, validateMeshProfile, type InstrumentMeshProfile, type MeshProfile, type PartGeometry } from "./instrument-mesh.js";
+export type { InstrumentMeshProfile, InstrumentMeshSource, PartGeometry } from "./instrument-mesh.js";
 
 /** Parts one layer may draw (I0.1); above it the layer is drawn at the Relief level and reported. */
 export const INSTRUMENT_PARTS_PER_LAYER = 2048;
@@ -36,9 +38,9 @@ export const CONTAINMENT_MARGIN = 0.5;
 /** The camera rule's floor (2D.3, design language section 6). */
 export const CAMERA_FLOOR = 2400;
 
-/** The part vocabulary of design language section 6. `custom` waits for custom parts (core work item 5). */
+/** The part vocabulary of design language section 6; `custom` is a part whose profile is a `mesh` (core work item 5). */
 export const PART_KINDS = ["cap", "skirt", "collar", "chamfer", "pointer", "carriage", "slot", "grip", "lever", "pivot", "ball", "nut",
-  "bushing", "plate", "paddle", "bezel", "lens", "window", "needle", "dial", "segment", "plinth"] as const;
+  "bushing", "plate", "paddle", "bezel", "lens", "window", "needle", "dial", "segment", "plinth", "custom"] as const;
 
 type Vec2 = [number, number];
 type Vec3 = [number, number, number];
@@ -65,7 +67,9 @@ export type InstrumentProfile =
   /** A rounded rectangle raised to `height`, its top inset by `taper`, with a `chamfer` at the top edge. */
   | { type: "prism"; width: number; length: number; radius?: number; height: number; taper?: number; chamfer?: number }
   /** An `[x, z]` side outline (star-shaped from its mean point) extruded across `width` along y. */
-  | { type: "extrude"; outline: Vec2[]; width: number };
+  | { type: "extrude"; outline: Vec2[]; width: number }
+  /** Explicit triangles, inline or a glB/glTF reference (custom parts, `instrument-mesh.ts`). */
+  | InstrumentMeshProfile;
 /** What a part casts on the face (2D.7), in layer px. */
 export interface InstrumentCaster { rect: Box; radius: number; height: number }
 export interface InstrumentPart {
@@ -76,7 +80,7 @@ export interface InstrumentPart {
   /** Moving parts only: the poses at the two stops. */
   pose?: { from: InstrumentPose; to: InstrumentPose };
   material: string;
-  /** A cap that carries the layer's capture (2D.8); it may only travel. */
+  /** A cap that carries the layer's capture (2D.8); it may only travel. Not for custom parts. */
   captured?: boolean;
   /** Glass parts (2D.6): accepted, not drawn until core work item 4. */
   glass?: "lens" | "window";
@@ -306,9 +310,10 @@ export function validateInstrumentScene(input: InstrumentScene): InstrumentScene
 /** One part (2D.2), with its pose's stops checked against each other. */
 function validatePart(part: Record<string, unknown>, at: string, profiles: Record<string, InstrumentProfile>, materials: string[], emitters: number): InstrumentPart {
   known(part, at, ["kind", "profile", "at", "pose", "material", "captured", "glass", "stand", "finish", "caster", "emitter", "state"]);
-  if (part.kind === "custom") fail(`${at}.kind`, "custom parts need core work item 5 (custom parts)");
   const kind = choice(part.kind, `${at}.kind`, PART_KINDS);
   if (typeof part.profile !== "string" || !(part.profile in profiles)) fail(`${at}.profile`, "requires one of the scene's profiles");
+  const shape = profiles[part.profile as string]!;
+  if (kind === "custom" && shape.type !== "mesh") fail(`${at}.profile`, 'of a custom part requires a profile of type "mesh"');
   if (typeof part.material !== "string" || !materials.includes(part.material)) fail(`${at}.material`, "requires one of the scene's materials");
   const position = tuple(part.at, `${at}.at`, 3) as Vec3;
   let pose: InstrumentPart["pose"];
@@ -319,15 +324,20 @@ function validatePart(part: Record<string, unknown>, at: string, profiles: Recor
     // 2D.2: `axis` and `pivot` are the same at both stops; a pose only mixes travel, slide, turn and tilt.
     if (from.axis !== to.axis) fail(`${at}.pose.to.axis`, "must equal pose.from.axis");
     if (from.pivot!.some((value, index) => value !== to.pivot![index])) fail(`${at}.pose.to.pivot`, "must equal pose.from.pivot");
+    // A mesh profile's pivot is the default of a pose that gives none.
+    const given = (stop: unknown) => (stop as Record<string, unknown>).pivot !== undefined;
+    if (shape.type === "mesh" && shape.pivot && !given(stops.from) && !given(stops.to)) { from.pivot = [...shape.pivot]; to.pivot = [...shape.pivot]; }
     pose = { from, to };
   }
   const captured = flag(part.captured, `${at}.captured`);
+  if (shape.type === "mesh" && captured) fail(`${at}.captured`, "is not for custom parts: a custom part carries no captured content");
   // Design language section 6: only parts that stay parallel to the face carry captured content.
   if (captured && pose && [pose.from, pose.to].some(stop => stop.turn || stop.tilt || stop.slide![0] || stop.slide![1])) {
     fail(`${at}.captured`, "is only for parts that travel: turning, tilting and sliding parts never carry captured content");
   }
   const glass = part.glass === undefined ? undefined : choice(part.glass, `${at}.glass`, ["lens", "window"] as const);
   if (part.stand !== undefined && glass !== "lens") fail(`${at}.stand`, "is only for lenses");
+  if (part.stand !== undefined && shape.type === "mesh") fail(`${at}.stand`, "is not for custom parts");
   const stand = part.stand === undefined ? undefined : record(part.stand, `${at}.stand`);
   let finish: InstrumentPart["finish"];
   if (part.finish === undefined || typeof part.finish === "boolean") finish = part.finish === true;
@@ -360,7 +370,7 @@ function validatePose(pose: Record<string, unknown>, at: string): Required<Instr
 }
 /** One profile (2D.2). */
 function profile(value: Record<string, unknown>, at: string): InstrumentProfile {
-  if (value.type === "mesh") fail(`${at}.type`, "mesh needs core work item 5 (custom parts)");
+  if (value.type === "mesh") return validateMeshProfile(value, at);
   const type = choice(value.type, `${at}.type`, ["lathe", "prism", "extrude"] as const);
   if (type === "lathe") {
     known(value, at, ["type", "points", "segments"]);
@@ -435,13 +445,12 @@ export const STUDIO_DEFAULTS: StudioTokens = { key: 12, keyRadius: 0.24, fill: 1
 // ---------------------------------------------------------------------------------------------------------------------
 // Geometry (2D.2): the triangles are the part.
 
-/** A part's triangles in part-local px (x right, y down, z up), with normals and UVs. */
-export interface PartGeometry { positions: Float32Array; normals: Float32Array; uvs: Float32Array; indices: Uint32Array }
 const geometries = new Map<string, PartGeometry>();
 const normalise = (x: number, y: number, z: number): Vec3 => { const length = Math.hypot(x, y, z) || 1; return [x / length, y / length, z / length]; };
 
 /** The tallest point of a profile above its base. */
 export function profileHeight(shape: InstrumentProfile): number {
+  if (shape.type === "mesh") return shape.source ? (shape.bounds?.high[2] ?? 0) : profileBounds(shape).high[2];
   if (shape.type === "lathe") return Math.max(...shape.points.map(point => point[1]));
   if (shape.type === "prism") return shape.height;
   return Math.max(...shape.outline.map(point => point[1]));
@@ -455,6 +464,8 @@ export function profileHeight(shape: InstrumentProfile): number {
  * lit. `face` orients each triangle by its vertices' normals, whatever order a builder lists them in.
  */
 export function profileGeometry(shape: InstrumentProfile): PartGeometry {
+  // A mesh brings its triangles (already in core's winding): inline ones from validation, a reference's once loaded.
+  if (shape.type === "mesh") return meshGeometry(shape) ?? placeholderGeometry(shape, shape.bounds);
   const key = JSON.stringify(shape);
   const cached = geometries.get(key);
   if (cached) return cached;
@@ -758,26 +769,51 @@ export function checkContainment(object: InstrumentObject, profiles: Record<stri
 // Casters (2D.7) and the face.
 
 /** A profile's local bounds: x, y and z ranges, and its largest radius about the z axis. */
+const boundsCache = new WeakMap<PartGeometry, { low: Vec3; high: Vec3; radius: number }>();
 export function profileBounds(shape: InstrumentProfile) {
-  const values = profileGeometry(shape).positions;
+  const geometry = profileGeometry(shape), cached = boundsCache.get(geometry);
+  if (cached) return cached;
+  const values = geometry.positions;
   const low: Vec3 = [Infinity, Infinity, Infinity], high: Vec3 = [-Infinity, -Infinity, -Infinity];
   let radius = 0;
   for (let index = 0; index < values.length; index += 3) {
     for (let axis = 0; axis < 3; axis++) { low[axis] = Math.min(low[axis]!, values[index + axis]!); high[axis] = Math.max(high[axis]!, values[index + axis]!); }
     radius = Math.max(radius, Math.hypot(values[index]!, values[index + 1]!));
   }
-  return { low, high, radius };
+  const result = { low, high, radius };
+  boundsCache.set(geometry, result);
+  return result;
 }
 /**
  * What a part casts on the face at `t` (2D.7): its `caster`, `null` for none, or (omitted) the rounded box bounding the
  * posed part's orthographic footprint at the part's mean height. A lathe that does not tilt is a disc about its posed
  * axis; any other part takes the box around its posed local bounds (exact for parts that slide or travel, slightly
- * larger for a turned prism). Constant time per part, so casters follow poses every frame.
+ * larger for a turned prism). A mesh takes the xy extent of its posed convex hull (`meshFootprint`), a rounded box as round
+ * as the hull, and `limit` (the object's bounds and the light's offset per px of height) caps its height so that the
+ * shadow stays inside the box, as the Fader's helper does (`capCasterHeight`). Constant time per part (the hull's
+ * points, not the mesh's), so casters follow poses every frame.
  */
-export function partCaster(part: InstrumentPart, shape: InstrumentProfile, t: number, bounds = profileBounds(shape)): InstrumentCaster | null {
+export function partCaster(part: InstrumentPart, shape: InstrumentProfile, t: number, bounds = profileBounds(shape),
+  limit?: { box: Box; light: [number, number] }): InstrumentCaster | null {
   if (part.caster !== undefined) return part.caster;
   const m = partMatrix(part, t), tilted = (part.pose?.from.tilt ?? 0) !== 0 || (part.pose?.to.tilt ?? 0) !== 0;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  if (shape.type === "mesh") {
+    const footprint = meshFootprint(profileGeometry(shape));
+    for (const z of tilted ? [footprint.low[2], footprint.high[2]] : [footprint.low[2]]) for (let at = 0; at < footprint.hull.length; at += 2) {
+      const [px, py] = transform(m, footprint.hull[at]!, footprint.hull[at + 1]!, z);
+      minX = Math.min(minX, px); maxX = Math.max(maxX, px); minY = Math.min(minY, py); maxY = Math.max(maxY, py);
+    }
+    for (const x of [footprint.low[0], footprint.high[0]]) for (const y of [footprint.low[1], footprint.high[1]]) for (const z of [footprint.low[2], footprint.high[2]]) {
+      const [, , pz] = transform(m, x, y, z);
+      minZ = Math.min(minZ, pz); maxZ = Math.max(maxZ, pz);
+    }
+    const height = (minZ + maxZ) / 2, width = maxX - minX, length = maxY - minY;
+    if (!(height > 0) || !(width > 0) || !(length > 0)) return null;
+    const rect: Box = [minX, minY, width, length];
+    const capped = limit ? capCasterHeight(rect, height, limit.box, limit.light) : height;
+    return capped > 0 ? { rect, radius: footprint.roundness * Math.min(width, length) / 2, height: capped } : null;
+  }
   if (shape.type === "lathe" && !tilted) {
     const [cx, cy, z0] = transform(m, 0, 0, bounds.low[2]);
     minX = cx - bounds.radius; maxX = cx + bounds.radius; minY = cy - bounds.radius; maxY = cy + bounds.radius;
@@ -893,5 +929,24 @@ export function instrumentPartCount(scene: InstrumentScene): number {
 }
 /** A key for what an object's containment depends on, apart from where its layer stands: everything but `t` and states. */
 export function containmentKey(object: InstrumentObject, profiles: Record<string, InstrumentProfile>): string {
-  return JSON.stringify([object.bounds ?? object.rect, object.parts.map(part => [profiles[part.profile], part.at, part.pose ?? null])]);
+  // A reference counts once its triangles are there: the same shape is a different thing to check.
+  return JSON.stringify([object.bounds ?? object.rect, object.parts.map(part => [profiles[part.profile], meshReady(profiles[part.profile]!), part.at, part.pose ?? null])]);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Custom parts (core work item 5).
+
+/** Whether a profile has its triangles: always, except a mesh reference whose file is not loaded (yet, or at all). */
+export const meshReady = (shape: InstrumentProfile): boolean => shape.type !== "mesh" || meshGeometry(shape) !== undefined;
+/** Whether a part is drawn as a part: not glass (item 4), and not a custom part waiting for (or failed on) its file. */
+export const partDrawn = (part: InstrumentPart, profiles: Record<string, InstrumentProfile>): boolean => !part.glass && meshReady(profiles[part.profile]!);
+/** A mesh profile of a scene, by name. */
+export interface MeshReference { name: string; shape: MeshProfile }
+/** The scene's mesh profiles that are references to a file (the asset store loads these). */
+export function meshReferences(scene: InstrumentScene): MeshReference[] {
+  return Object.entries(scene.profiles).flatMap(([name, shape]) => (shape.type === "mesh" && shape.source ? [{ name, shape: shape as MeshProfile }] : []));
+}
+/** The custom parts of a scene: each part whose profile is a mesh, with the profile's name. */
+export function customParts(scene: InstrumentScene): { object: number; part: number; profile: string }[] {
+  return scene.objects.flatMap((object, objectIndex) => object.parts.flatMap((part, partIndex) => (scene.profiles[part.profile]?.type === "mesh" ? [{ object: objectIndex, part: partIndex, profile: part.profile }] : [])));
 }
