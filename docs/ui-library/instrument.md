@@ -315,7 +315,7 @@ Each item is its own PR with GPU tests, in order:
 2. **Done** ([design note](instrument-phase2.md#core-work-item-2-emitters-and-the-pointer-light)). **Emitters** as clustered lights in the `instrument` material and as the analytic term in the `objects` and
    `relief` materials, with protected rects and the outset glow. The pointer light is an emitter whose position
    the helper rewrites each frame, through the one call this step adds (`handle.setEmitters`, uniform writes only).
-3. **Shadows and post chain:** contact shadows, the per-layer PCF map from the key light masked to parts, TAA and
+3. **Done** ([design note](instrument-phase2.md#core-work-item-3-shadows-and-the-post-chain)). **Shadows and post chain:** contact shadows, the per-layer PCF map from the key light masked to parts, TAA and
    bloom on the mesh pass.
 4. **Reflections and glass over the capture:** the layer's capture as a local environment probe, and transmission
    that refracts it.
