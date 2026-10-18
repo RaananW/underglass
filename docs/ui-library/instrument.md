@@ -544,8 +544,8 @@ One concern per PR, each based on `main`:
 4. Core: `instrument` material and the mesh pass. 5. Core: emitters. 6. Core: object-on-object shadows.
 7. Core: transmission over the capture. 8. Core: custom parts.
 9. Knob (wave 1: [anatomy](components/knob.md); CSS, Relief, Objects and Instrument done, with the helper's `instrument` level).
-10. Fader (wave 1: [anatomy](components/fader.md); CSS, Relief and Objects done, its Instrument parts defined for the
-   helper's `instrument` level). 11. Switch forms, with sound and haptics as the opt-in option.
+10. Fader (wave 1: [anatomy](components/fader.md); CSS, Relief, Objects and Instrument done, with the helper's
+   `instrument` level, and its detents' `tick`). 11. Switch forms, with sound and haptics as the opt-in option.
 12. Wave 2 components, one or two per PR. 13. Everyday forms, a few per PR. 14. Instrument gallery and showpiece.
 15. Wave 3 components. 16. Characters: studio, hifi, playful, one per PR.
 
