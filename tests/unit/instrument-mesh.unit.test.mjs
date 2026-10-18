@@ -84,7 +84,7 @@ test("an inline mesh validates, keeps its triangles and is wound against its nor
   assert.equal(windingErrors(geometry), 0);
   assert.deepEqual(customParts(scene), [{ object: 0, part: 0, profile: "piece" }]);
   assert.equal(meshReady(shape), true);
-  assert.equal(partDrawn(scene.objects[0].parts[0], scene.profiles), true);
+  assert.equal(partDrawn(scene.objects[0], 0, scene.profiles), true);
   // Computed normals of a closed box point out of it: the top's normal is +z, up from the face.
   const top = [...geometry.normals].filter((_, at) => at % 3 === 2 && geometry.positions[at] === 10).length;
   assert.ok(top >= 4, "the top's vertices face +z");
@@ -214,7 +214,7 @@ test("a pending reference is neither drawn nor checked, and a loaded one is chec
   const scene = validateInstrumentScene(withPart(reference));
   const shape = scene.profiles.piece;
   assert.equal(meshReady(shape), false);
-  assert.equal(partDrawn(scene.objects[0].parts[0], scene.profiles), false);
+  assert.equal(partDrawn(scene.objects[0], 0, scene.profiles), false);
   assert.equal(profileGeometry(shape).positions.length, 9, "the placeholder is one triangle");
   assert.deepEqual([...profileGeometry(shape).positions], [-18, -18, 0, 18, 18, 11, 18, 18, 11], "spanning the declared box, with no area");
   const keyBefore = instrumentStructure(scene);
@@ -222,7 +222,7 @@ test("a pending reference is neither drawn nor checked, and a loaded one is chec
   mesh.setMeshGeometry(shape, geometry);
   assert.equal(meshReady(shape), true);
   assert.equal(instrumentStructure(scene), keyBefore, "a load is not a structure change: no rebuild");
-  assert.equal(partDrawn(scene.objects[0].parts[0], scene.profiles), true);
+  assert.equal(partDrawn(scene.objects[0], 0, scene.profiles), true);
   assert.equal(profileGeometry(shape), geometry);
   // The containment key changes with readiness: the frontier is computed again with the real vertices.
   assert.notEqual(instrument.containmentKey(scene.objects[0], scene.profiles), instrument.containmentKey(scene.objects[0], { piece: { ...shape, id: shape.id } }) + "x");
@@ -340,8 +340,8 @@ test("the reader refuses what it cannot honour, with the reason, and caps before
   assert.throws(() => read(gltf(json => { json.asset.version = "1.0"; })), /not glTF 2.0/);
   assert.throws(() => read(gltf(json => { json.nodes[0].children = [0]; })), /too deep or loops/);
   // The caps come before any read: a count above the cap is refused though the buffer holds nothing like it.
-  assert.throws(() => read(gltf(json => { json.accessors[0].count = 20000; })), /20000 vertices or more, above the 16384/);
-  assert.throws(() => read(gltf(json => { json.meshes[0].primitives[0].indices = 1; json.accessors.push({ bufferView: 0, componentType: 5125, count: 3 * 40000, type: "SCALAR" }); })), /more than 32768 triangles/);
+  assert.throws(() => read(gltf(json => { json.accessors[0].count = 20000; })), /POSITION: 20000 elements, above the 16384/);
+  assert.throws(() => read(gltf(json => { json.meshes[0].primitives[0].indices = 1; json.accessors.push({ bufferView: 0, componentType: 5125, count: 3 * 40000, type: "SCALAR" }); })), /indices: 120000 elements, above the 98304/);
   // A hand-made glB with a binary chunk works the same as the fixture's.
   assert.equal(readGltf(bytes, request).indices.length / 3, 12);
   // A node transform places the mesh: translated 5 in glTF x, 2 in y.

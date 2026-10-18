@@ -91,6 +91,13 @@ export interface InstrumentPart {
   caster?: InstrumentCaster | null;
   /** The emitter this part is the lens of. */
   emitter?: number;
+  /**
+   * A custom part only: parametric parts core draws in its place while its file is `loading` and after it `failed` (the built-in
+   * part standing in), and stops drawing in the frame the mesh is. Validation expands them into `fallbackFor` parts before it.
+   */
+  fallback?: InstrumentPart[];
+  /** Set by validation on an expanded stand-in: shown while the next part without this mark (its custom part) has no triangles. */
+  fallbackFor?: true;
   state?: { hover?: boolean; pressed?: boolean; focus?: boolean; disabled?: boolean };
 }
 export interface InstrumentObject {
@@ -261,9 +268,13 @@ export function validateInstrumentScene(input: InstrumentScene): InstrumentScene
     // 2D.2: `t` stays within the travel, so a pose never passes a stop.
     const t = Math.min(1, Math.max(0, optional(entry.t, `${at}.t`, -1e6, 1e6, 0)));
     if (!Array.isArray(entry.parts) || !entry.parts.length || entry.parts.length > INSTRUMENT_OBJECT_PARTS) fail(`${at}.parts`, `requires 1..${INSTRUMENT_OBJECT_PARTS} parts`);
-    partCount += (entry.parts as unknown[]).length;
+    // A validated scene is valid input: the stand-ins validation expanded are dropped and expanded again from their custom part.
+    const given = (entry.parts as unknown[]).filter(part => !(typeof part === "object" && part !== null && (part as { fallbackFor?: unknown }).fallbackFor === true));
+    const checked = given.map((part, partIndex) => validatePart(record(part, `${at}.parts[${partIndex}]`), `${at}.parts[${partIndex}]`, shapes, names, emitters.length));
+    const parts = checked.flatMap(part => (part.fallback ? [...part.fallback.map((stand): InstrumentPart => ({ ...stand, fallbackFor: true })), part] : [part]));
+    if (parts.length > INSTRUMENT_OBJECT_PARTS) fail(`${at}.parts`, `and their fallbacks hold ${parts.length} parts, above ${INSTRUMENT_OBJECT_PARTS}`);
+    partCount += parts.length;
     if (partCount > INSTRUMENT_SCENE_PARTS) fail("objects", `hold more than ${INSTRUMENT_SCENE_PARTS} parts`);
-    const parts = (entry.parts as unknown[]).map((part, partIndex) => validatePart(record(part, `${at}.parts[${partIndex}]`), `${at}.parts[${partIndex}]`, shapes, names, emitters.length));
     return { id: entry.id as string, rect, bounds: { rect: boundsRect, radius: Math.min(radius, boundsRect[2] / 2, boundsRect[3] / 2) }, t, parts,
       relief: entry.relief as ReliefPrimitive | undefined };
   });
@@ -308,8 +319,8 @@ export function validateInstrumentScene(input: InstrumentScene): InstrumentScene
 }
 
 /** One part (2D.2), with its pose's stops checked against each other. */
-function validatePart(part: Record<string, unknown>, at: string, profiles: Record<string, InstrumentProfile>, materials: string[], emitters: number): InstrumentPart {
-  known(part, at, ["kind", "profile", "at", "pose", "material", "captured", "glass", "stand", "finish", "caster", "emitter", "state"]);
+function validatePart(part: Record<string, unknown>, at: string, profiles: Record<string, InstrumentProfile>, materials: string[], emitters: number, inFallback = false): InstrumentPart {
+  known(part, at, ["kind", "profile", "at", "pose", "material", "captured", "glass", "stand", "finish", "caster", "emitter", "state", "fallback"]);
   const kind = choice(part.kind, `${at}.kind`, PART_KINDS);
   if (typeof part.profile !== "string" || !(part.profile in profiles)) fail(`${at}.profile`, "requires one of the scene's profiles");
   const shape = profiles[part.profile as string]!;
@@ -353,11 +364,22 @@ function validatePart(part: Record<string, unknown>, at: string, profiles: Recor
   }
   if (part.emitter !== undefined && (!Number.isInteger(part.emitter) || (part.emitter as number) < 0 || (part.emitter as number) >= emitters)) fail(`${at}.emitter`, "requires an index into emitters");
   const states = part.state === undefined ? {} : record(part.state, `${at}.state`);
+  let fallback: InstrumentPart[] | undefined;
+  if (part.fallback !== undefined) {
+    if (shape.type !== "mesh") fail(`${at}.fallback`, "is only for custom parts (a part with a mesh profile)");
+    if (inFallback) fail(`${at}.fallback`, "may not nest");
+    if (!Array.isArray(part.fallback) || !part.fallback.length || part.fallback.length > 8) fail(`${at}.fallback`, "requires 1..8 parts");
+    fallback = (part.fallback as unknown[]).map((stand, index) => {
+      const checked = validatePart(record(stand, `${at}.fallback[${index}]`), `${at}.fallback[${index}]`, profiles, materials, emitters, true);
+      if (profiles[checked.profile]!.type === "mesh") fail(`${at}.fallback[${index}].profile`, "requires a parametric profile: a stand-in is drawn while the mesh is not there");
+      return checked;
+    });
+  }
   return { kind, profile: part.profile as string, at: position, ...(pose ? { pose } : {}), material: part.material as string,
     ...(captured ? { captured } : {}), ...(glass ? { glass } : {}),
     ...(stand ? { stand: { radius: number(stand.radius, `${at}.stand.radius`, 0), colour: hex(stand.colour, `${at}.stand.colour`) } } : {}),
     ...(finish ? { finish } : {}), ...(caster !== undefined ? { caster } : {}),
-    ...(part.emitter !== undefined ? { emitter: part.emitter as number } : {}),
+    ...(part.emitter !== undefined ? { emitter: part.emitter as number } : {}), ...(fallback ? { fallback } : {}),
     state: { hover: flag(states.hover, `${at}.state.hover`), pressed: flag(states.pressed, `${at}.state.pressed`),
       focus: flag(states.focus, `${at}.state.focus`), disabled: flag(states.disabled, `${at}.state.disabled`) } };
 }
@@ -446,6 +468,7 @@ export const STUDIO_DEFAULTS: StudioTokens = { key: 12, keyRadius: 0.24, fill: 1
 // Geometry (2D.2): the triangles are the part.
 
 const geometries = new Map<string, PartGeometry>();
+const byShape = new WeakMap<InstrumentProfile, PartGeometry>();
 const normalise = (x: number, y: number, z: number): Vec3 => { const length = Math.hypot(x, y, z) || 1; return [x / length, y / length, z / length]; };
 
 /** The tallest point of a profile above its base. */
@@ -466,9 +489,12 @@ export function profileHeight(shape: InstrumentProfile): number {
 export function profileGeometry(shape: InstrumentProfile): PartGeometry {
   // A mesh brings its triangles (already in core's winding): inline ones from validation, a reference's once loaded.
   if (shape.type === "mesh") return meshGeometry(shape) ?? placeholderGeometry(shape, shape.bounds);
+  // A validated shape never changes: looked up by the object, so no frame serializes it (the key below is for equal shapes).
+  const own = byShape.get(shape);
+  if (own) return own;
   const key = JSON.stringify(shape);
   const cached = geometries.get(key);
-  if (cached) return cached;
+  if (cached) { byShape.set(shape, cached); return cached; }
   const positions: number[] = [], normals: number[] = [], uvs: number[] = [], indices: number[] = [];
   const vertex = (p: Vec3, n: Vec3, uv: Vec2) => { positions.push(...p); normals.push(...n); uvs.push(...uv); return positions.length / 3 - 1; };
   const face = (a: number, b: number, c: number) => {
@@ -542,6 +568,7 @@ export function profileGeometry(shape: InstrumentProfile): PartGeometry {
   }
   const result = { positions: new Float32Array(positions), normals: new Float32Array(normals), uvs: new Float32Array(uvs), indices: new Uint32Array(indices) };
   geometries.set(key, result);
+  byShape.set(shape, result);
   return result;
 }
 
@@ -675,8 +702,8 @@ const BUCKETED_SAMPLES = 20000;
 const HEIGHT_BUCKET = 0.05;
 const HEIGHT_BUCKETS = 4096;
 /**
- * The witnesses of a dense part without a pair per vertex and step: for each height bucket (0.05 px, the height rounded up
- * in magnitude, so the drift it implies is never underestimated) the least inset any vertex has at that height over the
+ * The witnesses of a dense part without a pair per vertex and step: for each height bucket (0.05 px; the height magnitude rounded up, on
+ * both sides of the face, which is conservative on both: the drift r|h| / (D − h) grows with |h|) the least inset any vertex has there over the
  * whole travel. The frontier of those is the same as the frontier of all of them, to within the 0.05 px of height, and a
  * 16,384-vertex mesh costs tens of milliseconds, not hundreds. Heights past the buckets are kept as they are.
  */
@@ -981,8 +1008,31 @@ export function containmentKey(object: InstrumentObject, profiles: Record<string
 
 /** Whether a profile has its triangles: always, except a mesh reference whose file is not loaded (yet, or at all). */
 export const meshReady = (shape: InstrumentProfile): boolean => shape.type !== "mesh" || meshGeometry(shape) !== undefined;
-/** Whether a part has its triangles to draw: every part does, except a custom part waiting for (or failed on) its file. */
-export const partDrawn = (part: InstrumentPart, profiles: Record<string, InstrumentProfile>): boolean => meshReady(profiles[part.profile]!);
+const twins = new WeakMap<InstrumentPart[], Int16Array>();
+/** For each stand-in part (`fallbackFor`) the index of its custom part, the next part without the mark; -1 for any other part. */
+function twinsOf(parts: InstrumentPart[]): Int16Array {
+  let result = twins.get(parts);
+  if (!result) {
+    result = new Int16Array(parts.length).fill(-1);
+    for (let index = 0; index < parts.length; index++) {
+      if (!parts[index]!.fallbackFor) continue;
+      let next = index + 1;
+      while (next < parts.length && parts[next]!.fallbackFor) next++;
+      result[index] = next < parts.length ? next : -1;
+    }
+    twins.set(parts, result);
+  }
+  return result;
+}
+/**
+ * Whether part `index` of `object` is drawn: a custom part once it has its triangles, a stand-in only until then, every other
+ * part always.
+ */
+export function partDrawn(object: InstrumentObject, index: number, profiles: Record<string, InstrumentProfile>): boolean {
+  const part = object.parts[index]!;
+  if (part.fallbackFor) { const twin = twinsOf(object.parts)[index]!; return twin < 0 || !meshReady(profiles[object.parts[twin]!.profile]!); }
+  return meshReady(profiles[part.profile]!);
+}
 /** A mesh profile of a scene, by name. */
 export interface MeshReference { name: string; shape: MeshProfile }
 /** The scene's mesh profiles that are references to a file (the asset store loads these). */

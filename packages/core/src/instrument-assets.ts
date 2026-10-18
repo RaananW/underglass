@@ -9,7 +9,7 @@
  * No GPU and no Lite: the geometry on the GPU belongs to the layer's scene (`instrument-pass.ts`).
  */
 import { readGltf, GltfError } from "./instrument-gltf.js";
-import { checkDeclaredBounds, geometryBytes, meshGeometry, setMeshGeometry, type MeshProfile, type PartGeometry } from "./instrument-mesh.js";
+import { checkDeclaredBounds, geometryBytes, meshGeometry, meshOwner, setMeshGeometry, type MeshProfile, type PartGeometry } from "./instrument-mesh.js";
 import { meshReferences, type InstrumentScene } from "./instrument.js";
 
 /** Parsed geometry the store keeps per engine; a load that would pass it with every entry referenced fails (`budget`). */
@@ -36,6 +36,8 @@ interface Entry {
   bytes: number;
   referenced: boolean;
   used: number;
+  /** The profiles this entry's triangles were attached to: let go of when it is evicted. */
+  shapes: WeakRef<object>[];
   /** Timings of the load, ms: the request (or 0 for bytes in hand) and the glTF read. */
   fetchMs?: number;
   parseMs?: number;
@@ -55,6 +57,13 @@ export function createAssetStore(options: AssetStoreOptions) {
   const stats = { loads: 0, hits: 0, failures: 0, evictions: 0 };
   let clock = 0, disposed = false, inFlight = 0;
 
+  // This store's identity: a profile's triangles belong to the store that loaded them (a second engine, or a controller enabled again,
+  // loads its own).
+  const token = {};
+  /** Takes an entry's triangles off the profiles they were attached to, so evicting it frees them. */
+  function release(entry: Entry) {
+    for (const ref of entry.shapes.splice(0)) { const shape = ref.deref(); if (shape && meshOwner(shape) === token) setMeshGeometry(shape, undefined); }
+  }
   const total = () => { let sum = 0; for (const entry of entries.values()) sum += entry.bytes; return sum; };
   /** Makes room for `bytes` by evicting the least recently used ready entries nobody references; false if it cannot. */
   function room(bytes: number): boolean {
@@ -62,6 +71,7 @@ export function createAssetStore(options: AssetStoreOptions) {
       let oldest: Entry | undefined;
       for (const entry of entries.values()) if (entry.status === "ready" && !entry.referenced && (!oldest || entry.used < oldest.used)) oldest = entry;
       if (!oldest) return false;
+      release(oldest);
       entries.delete(oldest.id);
       stats.evictions++;
     }
@@ -121,6 +131,8 @@ export function createAssetStore(options: AssetStoreOptions) {
       const started = performance.now();
       const bytes = await bytesOf(shape);
       if (disposed) return;
+      // Bytes in hand are held to the same cap as a download.
+      if (bytes.byteLength > fileBytes) throw new GltfError(`the file is ${bytes.byteLength} bytes, above the ${fileBytes} a custom part's file may have`);
       const fetched = performance.now();
       const geometry = readGltf(bytes, { ...(shape.source!.mesh !== undefined ? { mesh: shape.source!.mesh } : {}), scale: shape.scale ?? 1, offset: shape.offset ?? [0, 0, 0] });
       const size = geometryBytes(geometry);
@@ -146,13 +158,14 @@ export function createAssetStore(options: AssetStoreOptions) {
       for (const { shape } of meshReferences(scene)) {
         let entry = entries.get(shape.id);
         if (!entry) {
-          entry = { id: shape.id, status: "loading", bytes: 0, referenced: true, used: ++clock };
+          entry = { id: shape.id, status: "loading", bytes: 0, referenced: true, used: ++clock, shapes: [] };
           entries.set(shape.id, entry);
           void load(entry, shape);
         } else if (!seen.has(shape)) stats.hits++;
         seen.add(shape);
         entry.referenced = true; entry.used = ++clock;
-        if (entry.status !== "ready" || !entry.geometry) continue;
+        // Triangles another store attached are not this store's: until it has loaded the mesh itself the profile has none.
+        if (entry.status !== "ready" || !entry.geometry) { if (meshOwner(shape) !== undefined && meshOwner(shape) !== token) setMeshGeometry(shape, undefined); continue; }
         let verdict = checked.get(shape);
         if (!verdict || verdict.geometry !== entry.geometry) {
           const error = checkDeclaredBounds(entry.geometry, shape.bounds!);
@@ -160,11 +173,14 @@ export function createAssetStore(options: AssetStoreOptions) {
           checked.set(shape, verdict);
         }
         const wanted = verdict.error ? undefined : entry.geometry;
-        if (meshGeometry(shape) !== wanted) setMeshGeometry(shape, wanted);
+        if (meshGeometry(shape) !== wanted || (wanted && meshOwner(shape) !== token)) {
+          setMeshGeometry(shape, wanted, token);
+          if (wanted) entry.shapes.push(new WeakRef(shape));
+        }
       }
     },
     /** Ends the frame's references: a failed entry nobody references is forgotten, so a scene that asks again retries. */
-    end() { for (const [id, entry] of entries) if (!entry.referenced && entry.status === "failed") entries.delete(id); },
+    end() { for (const [id, entry] of entries) if (!entry.referenced && entry.status === "failed") { release(entry); entries.delete(id); } },
     /** A reference's state, for `state().instrument`. */
     info(shape: MeshProfile): AssetInfo {
       const entry = entries.get(shape.id), verdict = checked.get(shape);
@@ -186,6 +202,7 @@ export function createAssetStore(options: AssetStoreOptions) {
       disposed = true;
       for (const controller of controllers) controller.abort();
       controllers.clear();
+      for (const entry of entries.values()) release(entry);
       entries.clear();
       fetching.clear();
     },

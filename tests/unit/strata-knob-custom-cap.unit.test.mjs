@@ -62,3 +62,13 @@ test("customPart: a named part keeps its kind, the default is custom, and buffer
   assert.equal(profileKey("custom-Cap", shape(a)), profileKey("custom-Cap", shape(a)));
   assert.equal(Object.keys(profiles).length, 1, "the same reference is one profile");
 });
+
+test("the custom cap carries the built-in cap, chamfer and pointer as its stand-in, so a failed file shows the standard knob", () => {
+  const { profile } = registry();
+  const standard = knobObject(input(), profile).parts.slice(1);
+  const custom = knobObject(input({ customCap: cap }), profile).parts[1];
+  assert.deepEqual(custom.fallback, standard);
+  const r = registry(), object = knobObject(input({ customCap: cap }), r.profile);
+  const validated = validateInstrumentScene(sceneOf(r, object));
+  assert.deepEqual(validated.objects[0].parts.map(p => [p.kind, !!p.fallbackFor]), [["skirt", false], ["cap", true], ["chamfer", true], ["pointer", true], ["cap", false]]);
+});

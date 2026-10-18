@@ -101,7 +101,13 @@ function mean(png, dpr, point, radius = 3) {
 }
 const centre = control => ({ x: control.x + control.width / 2, y: control.y + control.height / 2 });
 const GLB_BASED = ["c-cap", "c-lever", "c-block", "c-dense", "c-slab", "c-tall-cap", "c-lamp", "c-glass-dome"];
-const DRAWN = ["c-bar-inline", "c-disc-inline", "c-cap", "c-lever", "c-block", "c-dense", "c-prism-ref", "c-tall-cap", "c-lamp", "c-glass-dome"];
+const DRAWN = ["c-bar-inline", "c-disc-inline", "c-cap", "c-lever", "c-block", "c-dense", "c-prism-ref", "c-tall-cap", "c-lamp", "c-glass-dome", "c-fb-missing", "c-fb-cap"];
+/**
+ * The most a neighbour's pixel may move when a file arrives. The key light's shadow map is fitted to its casters' box (Lite fits the map to the
+ * casters), so new casters change the texel size and a shadow on a neighbour's plate moves by about one texel: 7 levels measured with 17 controls
+ * (4 at DPR 2). 10 leaves headroom for a larger panel; the `?map=off` test below proves it is the map, with 0.
+ */
+const ARRIVAL_LEVELS = 10;
 const REFUSED = ["c-slab", "c-long-bar"];
 const FAILED = ["c-missing", "c-malformed", "c-wrong-scale"];
 
@@ -116,7 +122,7 @@ for (const dpr of [1, 2]) {
       try {
         const parts = await call("loaded");
         expect(parts.map(part => [part.object, part.status])).toEqual([["c-bar-inline", "ready"], ["c-disc-inline", "ready"], ["c-cap", "ready"], ["c-lever", "ready"], ["c-block", "ready"],
-          ["c-dense", "ready"], ["c-slab", "ready"], ["c-long-bar", "ready"], ["c-missing", "failed"], ["c-malformed", "failed"], ["c-wrong-scale", "failed"], ["c-tall-cap", "ready"], ["c-lamp", "ready"], ["c-glass-dome", "ready"]]);
+          ["c-dense", "ready"], ["c-slab", "ready"], ["c-long-bar", "ready"], ["c-missing", "failed"], ["c-malformed", "failed"], ["c-wrong-scale", "failed"], ["c-tall-cap", "ready"], ["c-lamp", "ready"], ["c-glass-dome", "ready"], ["c-fb-missing", "failed"], ["c-fb-cap", "ready"]]);
         await stillGpu(call, "after the loads");
         const controls = await call("controls"), panel = await call("panel");
         // Parts only: no face shadows, so every changed pixel is a part.
@@ -285,8 +291,8 @@ for (const dpr of [1, 2]) {
         // The other controls' parts are not redrawn differently. The key light's shadow map is fitted to its casters' box, which
         // grows with the new parts, so a shadow the map casts on a neighbour's plate may move by a texel: up to 7 levels measured, 10 allowed.
         report.arrival = { byControl: change.byControl, maxDelta: change.maxDelta };
-        for (const id of ["c-bar-inline", "c-disc-inline", "c-prism-ref", "c-missing", "c-malformed", "c-wrong-scale"]) {
-          expect(change.maxDelta[id], `${id} is not redrawn differently (${change.byControl[id]} px moved by up to ${change.maxDelta[id]} levels)`).toBeLessThanOrEqual(10);
+        for (const id of ["c-bar-inline", "c-disc-inline", "c-prism-ref", "c-missing", "c-malformed", "c-wrong-scale", "c-fb-missing"]) {
+          expect(change.maxDelta[id], `${id} is not redrawn differently (${change.byControl[id]} px moved by up to ${change.maxDelta[id]} levels)`).toBeLessThanOrEqual(ARRIVAL_LEVELS);
         }
         // While loading, the loading controls showed exactly their base plates: no stale pixels, no blank box.
         await call("setCustom", false);
@@ -330,6 +336,57 @@ for (const dpr of [1, 2]) {
         for (const id of GLB_BASED) expect(change.byControl[id], `${id} appears`).toBeGreaterThan(100);
         expect(change.outside).toBe(0);
         await stillGpu(call, "without a shadow map");
+      } finally { release?.(); await context.close(); }
+    });
+
+    test(`a stand-in is drawn while a file loads and after it fails, and the mesh replaces it on arrival (DPR ${dpr})`, async ({ browser }) => {
+      test.setTimeout(180000);
+      let release;
+      const gate = new Promise(resolve => { release = resolve; });
+      const { context, errors, call, page } = await open(browser, dpr, { routes: page => page.route("**/custom/parts.glb", async route => { await gate; await route.continue(); }) });
+      try {
+        await call("setShadows", false);
+        await call("poseAll", 0.5);
+        const showing = async () => Object.fromEntries((await call("instrument")).layers[0].customParts.filter(part => part.object.startsWith("c-fb-")).map(part => [part.object, [part.status, part.showing]]));
+        // The 404 has failed and the held file is loading: both show the stand-in.
+        expect(await showing()).toEqual({ "c-fb-missing": ["failed", "fallback"], "c-fb-cap": ["loading", "fallback"] });
+        const controls = await call("controls"), panel = await call("panel");
+        const standIn = await shot(page, `${directory}/fallback-standin-dpr${dpr}.png`);
+        // ...and the stand-in is the built-in cap: the same pixels as the lathe cap drawn on its own.
+        await call("setParametric", true);
+        const builtIn = await shot(page);
+        await call("setParametric", false);
+        const same = diff(standIn, builtIn, dpr, controls, panel);
+        expect(same.byControl["c-fb-missing"], "the failed file's control: the stand-in is the built-in cap, pixel for pixel").toBe(0);
+        expect(same.byControl["c-fb-cap"], "the loading file's control: the same").toBe(0);
+        // Sample every frame through the arrival: the object keeps its parts in every frame.
+        await page.evaluate(() => {
+          window.samples = [];
+          const tick = async () => {
+            const api = await window.customCore.ready, layer = api.instrument().layers[0];
+            window.samples.push({ drawn: layer.drawnParts, fb: layer.customParts.find(part => part.object === "c-fb-cap").showing, status: layer.status });
+            if (!window.stopSampling) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        });
+        release();
+        await call("loaded");
+        await page.waitForTimeout(300);
+        const samples = await page.evaluate(() => { window.stopSampling = true; return window.samples; });
+        expect(samples.every(sample => sample.status === "ready")).toBe(true);
+        expect(new Set(samples.map(sample => sample.fb)), "the cap shows its stand-in, then its mesh").toEqual(new Set(["fallback", "mesh"]));
+        const order = samples.map(sample => sample.fb);
+        expect(order.lastIndexOf("fallback"), "once the mesh is shown the stand-in does not come back").toBeLessThan(order.indexOf("mesh"));
+        expect(await showing()).toEqual({ "c-fb-missing": ["failed", "fallback"], "c-fb-cap": ["ready", "mesh"] });
+        await call("poseAll", 0.5);
+        const after = await shot(page, `${directory}/fallback-arrived-dpr${dpr}.png`);
+        const change = diff(standIn, after, dpr, controls, panel, { relief: REFUSED });
+        expect(change.byControl["c-fb-missing"], "the failed one still shows its stand-in: unchanged").toBe(0);
+        expect(change.byControl["c-fb-cap"], "the arrived mesh replaced the stand-in in its box (the flutes and the brush)").toBeGreaterThan(50);
+        expect(change.outside).toBe(0);
+        await writeFile(`${directory}/fallback-dpr${dpr}.json`, JSON.stringify({ dpr, standInVersusBuiltInPx: [same.byControl["c-fb-missing"], same.byControl["c-fb-cap"]], arrivalChangedPx: change.byControl["c-fb-cap"], samples: samples.length, drawn: [Math.min(...samples.map(sample => sample.drawn)), Math.max(...samples.map(sample => sample.drawn))] }, null, 2));
+        await stillGpu(call, "after the stand-in test");
+        expect(errors).toEqual([]);
       } finally { release?.(); await context.close(); }
     });
 
@@ -412,7 +469,7 @@ for (const dpr of [1, 2]) {
         expect(atLimit.parts).toBe(2048);
         expect(atLimit.status).toBe("ready");
         expect(atLimit.steppedDown.every(entry => entry.reason === "containment"), "at 2,048 only the containment refusals").toBe(true);
-        expect(atLimit.drawnParts).toBeGreaterThan(2048 - 8);
+        expect(atLimit.drawnParts, "7 parts of refused and failed objects, a stand-in whose mesh is there, a custom part that failed").toBeGreaterThan(2048 - 12);
         await stillGpu(call, "at 2,048 parts");
         const over = (await call("budget", 2049)).layers[0];
         expect(over.status).toBe("stepped-down");

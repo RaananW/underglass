@@ -591,8 +591,8 @@ part is not drawn and core reports it in `state().instrument`.
   of value 0 on a turning part) and `travel` (the axis it slides or travels along). Fitting by anchors is the helper's and
   is **not implemented yet**: core's custom part takes a uniform `scale` and an `offset` on a glTF reference, in part-local px.
 - **The `bounds` check.** The part is checked as a built-in one is, over the whole travel, on the mesh's own vertices. A part
-  that fails is not drawn and its object is drawn at the Relief level, with a diagnostic naming it. (The built-in part
-  standing in for a custom one that is missing is not done: the helper does not read core's state yet.)
+  that fails is not drawn and its object is drawn at the Relief level, with a diagnostic naming it. While the file loads and if it fails, the built-in part stands in: the custom part's `fallback` (the built-in parts, which the
+  helper passes) is drawn until the mesh is, and the swap is in the frame the mesh is drawn.
 - **Limits:** a custom part carries no captured content, counts as one part kind in the budgets and takes its material
   from its role, so themes and characters still apply.
 

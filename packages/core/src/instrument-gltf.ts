@@ -4,14 +4,14 @@
  * indices of `TRIANGLES` primitives and the transforms of the nodes that place the mesh, and nothing else: materials,
  * textures, cameras, lights, animations and morph targets are ignored (the part takes its look from the scene's recipe),
  * and Draco, meshopt, quantization, sparse accessors, external buffers and skins are refused with a reason. Every accessor
- * count is checked against the part caps before a byte of it is read. No GPU, no DOM, no network: `instrument-assets.ts`
+ * count is checked against the part caps before an array is allocated or a byte is read. No GPU, no DOM, no network: `instrument-assets.ts`
  * brings the bytes.
  *
  * Axes: glTF is right-handed, y up, +z towards the viewer. A vertex `(gx, gy, gz)` becomes `(gx, gz, gy) · scale + offset`
  * in the part's frame (x right, y down, z up from the face): the model stands on the face with its front towards the
  * bottom of the screen. The change of handedness reverses the winding; `buildGeometry` puts every triangle right.
  */
-import { buildGeometry, INSTRUMENT_MESH_TRIANGLES, INSTRUMENT_MESH_VERTICES, type PartGeometry } from "./instrument-mesh.js";
+import { buildGeometry, INSTRUMENT_MESH_COORDINATE, INSTRUMENT_MESH_TRIANGLES, INSTRUMENT_MESH_VERTICES, type PartGeometry } from "./instrument-mesh.js";
 
 type Vec3 = [number, number, number];
 /** A file that cannot be a part: the message is the reason `state()` reports. */
@@ -81,25 +81,33 @@ export function readGltf(bytes: ArrayBuffer, request: GltfRequest): PartGeometry
   if (!mesh.primitives?.length) throw new GltfError("the mesh has no primitives");
 
   // Primitive by primitive: counts first, then the data.
-  const accessor = (id: number, types: string[], components: number[], what: string) => {
+  const nat = (value: unknown, label: string, fallback?: number): number => {
+    if (value === undefined && fallback !== undefined) return fallback;
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new GltfError(`${label} is not a non-negative integer`);
+    return value;
+  };
+  // Every count is checked against the caps before any array is allocated or any byte is read.
+  const accessor = (id: number, types: string[], components: number[], what: string, max = INSTRUMENT_MESH_VERTICES) => {
     const entry = gltf.accessors?.[id];
     if (!entry) throw new GltfError(`${what}: accessor ${id} does not exist`);
     if (entry.sparse !== undefined) throw new GltfError(`${what}: sparse accessors are not supported`);
     if (!types.includes(entry.type ?? "")) throw new GltfError(`${what}: expected ${types.join(" or ")}, got ${entry.type}`);
     if (!components.includes(entry.componentType ?? 0)) throw new GltfError(`${what}: component type ${entry.componentType} is not supported (quantized or integer data)`);
     if (entry.normalized) throw new GltfError(`${what}: normalized integer data is not supported`);
-    if (!Number.isInteger(entry.count) || entry.count! < 1) throw new GltfError(`${what}: the count is not a positive integer`);
+    if (nat(entry.count, `${what}: the count`) < 1) throw new GltfError(`${what}: the count is not a positive integer`);
+    if (entry.count! > max) throw new GltfError(`${what}: ${entry.count} elements, above the ${max} a custom part may have`);
     return entry as { bufferView?: number; byteOffset?: number; componentType: number; count: number; type: string };
   };
-  const read = (id: number, types: string[], components: number[], what: string): Float64Array => {
-    const entry = accessor(id, types, components, what), n = TYPE_COMPONENTS[entry.type]!, size = COMPONENT_BYTES[entry.componentType]!;
+  const read = (id: number, types: string[], components: number[], what: string, max?: number): Float64Array => {
+    const entry = accessor(id, types, components, what, max), n = TYPE_COMPONENTS[entry.type]!, size = COMPONENT_BYTES[entry.componentType]!;
     const out = new Float64Array(entry.count * n);
     if (entry.bufferView === undefined) return out;
     const view = gltf.bufferViews?.[entry.bufferView];
     if (!view || view.buffer === undefined || !buffers[view.buffer]) throw new GltfError(`${what}: its buffer view is missing`);
-    const buffer = buffers[view.buffer]!, stride = view.byteStride || n * size, start = (view.byteOffset ?? 0) + (entry.byteOffset ?? 0);
+    const buffer = buffers[view.buffer]!, viewStart = nat(view.byteOffset, `${what}: byteOffset`, 0), stride = nat(view.byteStride, `${what}: byteStride`, 0) || n * size;
+    const start = viewStart + nat(entry.byteOffset, `${what}: accessor byteOffset`, 0), length = nat(view.byteLength, `${what}: byteLength`, Number.MAX_SAFE_INTEGER);
     const end = start + stride * (entry.count - 1) + n * size;
-    if (start < 0 || end > buffer.byteLength || end > (view.byteOffset ?? 0) + (view.byteLength ?? Infinity)) throw new GltfError(`${what}: it reads past its buffer`);
+    if (end > buffer.byteLength || end > viewStart + length) throw new GltfError(`${what}: it reads past its buffer`);
     const data = new DataView(buffer);
     for (let element = 0; element < entry.count; element++) for (let c = 0; c < n; c++) {
       const at = start + element * stride + c * size;
@@ -122,26 +130,36 @@ export function readGltf(bytes: ArrayBuffer, request: GltfRequest): PartGeometry
     const count = accessor(attributes.POSITION, ["VEC3"], [5126], `${what} POSITION`).count;
     vertices += count;
     if (vertices > INSTRUMENT_MESH_VERTICES) throw new GltfError(`the mesh has ${vertices} vertices or more, above the ${INSTRUMENT_MESH_VERTICES} a custom part may have`);
-    const triangles = primitive.indices !== undefined ? accessor(primitive.indices, ["SCALAR"], [5121, 5123, 5125], `${what} indices`).count / 3 : count / 3;
+    const triangles = primitive.indices !== undefined ? accessor(primitive.indices, ["SCALAR"], [5121, 5123, 5125], `${what} indices`, INSTRUMENT_MESH_TRIANGLES * 3).count / 3 : count / 3;
     if (!Number.isInteger(triangles)) throw new GltfError(`${what}: the index count is not a multiple of 3`);
     if (indices.length / 3 + triangles > INSTRUMENT_MESH_TRIANGLES) throw new GltfError(`the mesh has more than ${INSTRUMENT_MESH_TRIANGLES} triangles, the most a custom part may have`);
+    // The other attributes must name as many elements as POSITION before anything is allocated for them.
+    for (const [name, type] of [["NORMAL", "VEC3"], ["TEXCOORD_0", "VEC2"]] as const) {
+      if (attributes[name] === undefined) continue;
+      if (accessor(attributes[name]!, [type], [5126], `${what} ${name}`).count !== count) throw new GltfError(`${what}: its attributes disagree on the vertex count (${name})`);
+    }
     const position = read(attributes.POSITION, ["VEC3"], [5126], `${what} POSITION`);
     const normal = attributes.NORMAL !== undefined ? read(attributes.NORMAL, ["VEC3"], [5126], `${what} NORMAL`) : undefined;
     const uv = attributes.TEXCOORD_0 !== undefined ? read(attributes.TEXCOORD_0, ["VEC2"], [5126], `${what} TEXCOORD_0`) : undefined;
-    if (normal && normal.length !== position.length || uv && uv.length / 2 !== count) throw new GltfError(`${what}: its attributes disagree on the vertex count`);
     const base = positions.length / 3;
     for (let vertex = 0; vertex < count; vertex++) {
       // The glTF point, through the node, then the part's axes: (x, y, z) -> (x, z, y), scaled and offset.
       const [x, y, z] = apply(matrix, position[vertex * 3]!, position[vertex * 3 + 1]!, position[vertex * 3 + 2]!);
-      positions.push(x * request.scale + request.offset[0], z * request.scale + request.offset[1], y * request.scale + request.offset[2]);
+      const px = x * request.scale + request.offset[0], py = z * request.scale + request.offset[1], pz = y * request.scale + request.offset[2];
+      // Same range as inline meshes: a node matrix or a scale that overflows is refused, not drawn.
+      if (![px, py, pz].every(value => Number.isFinite(value) && Math.abs(value) <= INSTRUMENT_MESH_COORDINATE)) {
+        throw new GltfError(`${what}: vertex ${vertex} is at (${px}, ${py}, ${pz}) after the node's transform and the fit: positions must be finite and within ±${INSTRUMENT_MESH_COORDINATE}`);
+      }
+      positions.push(px, py, pz);
       if (normal) {
-        const [nx, ny, nz] = apply3(normalMatrix, normal[vertex * 3]!, normal[vertex * 3 + 1]!, normal[vertex * 3 + 2]!), length = Math.hypot(nx, ny, nz) || 1;
+        const [nx, ny, nz] = apply3(normalMatrix, normal[vertex * 3]!, normal[vertex * 3 + 1]!, normal[vertex * 3 + 2]!), length = Math.hypot(nx, ny, nz);
+        if (!(length > 1e-12) || !Number.isFinite(length)) throw new GltfError(`${what}: normal ${vertex} is zero or not finite`);
         normals.push(nx / length, nz / length, ny / length);
       }
       if (uv) uvs.push(uv[vertex * 2]!, uv[vertex * 2 + 1]!);
     }
     withNormals &&= !!normal; withUvs &&= !!uv;
-    const order = primitive.indices !== undefined ? read(primitive.indices, ["SCALAR"], [5121, 5123, 5125], `${what} indices`) : undefined;
+    const order = primitive.indices !== undefined ? read(primitive.indices, ["SCALAR"], [5121, 5123, 5125], `${what} indices`, INSTRUMENT_MESH_TRIANGLES * 3) : undefined;
     for (let t = 0; t < triangles; t++) {
       const [a, b, c] = order ? [order[t * 3]!, order[t * 3 + 1]!, order[t * 3 + 2]!] : [t * 3, t * 3 + 1, t * 3 + 2];
       if (a >= count || b >= count || c >= count) throw new GltfError(`${what}: index ${Math.max(a, b, c)} is past its ${count} vertices`);

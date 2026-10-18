@@ -1,6 +1,6 @@
 /**
  * Core's custom parts on plain DOM (no UI framework), for `tests/browser/core-custom.test.mjs` and a headful look
- * (`docs/ui-library/instrument-phase2.md`, core work item 5). One enrolled panel of fifteen native range inputs, each with
+ * (`docs/ui-library/instrument-phase2.md`, core work item 5). One enrolled panel of seventeen native range inputs, each with
  * an Instrument object of a base plate and a custom part (inline meshes and references to `public/custom/parts.glb`,
  * three of them failing on purpose; see `scene.ts`), a heading and a caption under each: the text the contrast guard
  * protects. The panel's material is `{ kind: "instrument", scene }` through the public `setMaterial`; a control's value
@@ -226,6 +226,8 @@ const api = {
   hits: (points: { x: number; y: number }[]) => points.map(point => { const hit = document.elementFromPoint(point.x, point.y); return hit?.closest<HTMLElement>("[data-part]")?.id ?? hit?.closest<HTMLElement>("section")?.id ?? hit?.id ?? ""; }),
   /** The scene's objects with every custom part (or only their base plates). */
   async setCustom(on: boolean) { options.custom = on; refresh(); await settle(); },
+  /** The `fb-*` controls as the plain lathe cap their fallback is, or as they are. */
+  async setParametric(on: boolean) { options.asParametric = on; refresh(); await settle(); },
   async setShadows(on: boolean) { options.casters = on; refresh(); await settle(); },
   /** No objects at all: the face only. */
   async setObjects(on: boolean) { options.objects = on; refresh(); await settle(); },

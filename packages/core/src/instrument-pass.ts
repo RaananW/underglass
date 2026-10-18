@@ -821,7 +821,6 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           // written from that frame on. Until then (and if it fails) the kind is empty: no instance is written.
           const shape = current.profiles[entry.kind.profile]!, shapeKey = shapeKeyOf(shape);
           const rewrite = all || shapeKey !== entry.shapeKey;
-          const live = meshReady(shape);
           if (shapeKey !== entry.shapeKey) {
             const geometry = profileGeometry(shape), started = performance.now();
             for (const target of [entry.mesh, entry.lens?.mesh, entry.glass?.twin]) {
@@ -836,6 +835,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           }
           let dirty = rewrite || count !== entry.count;
           entry.kind.instances.forEach(({ object, part }, index) => {
+            const live = partDrawn(current.objects[object]!, part, current.profiles);
             if (!hidden.has(object) && live) drawn++;
             if (entry.cap) {
               const factor = hidden.has(object) ? 0 : capFactor(current, current.objects[object]!.parts[part]!);
@@ -927,9 +927,9 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           reaches.fill(0, index * 4, index * 4 + 4);
           if (hidden.has(index)) return;
           const limit = { box: (object.bounds ?? { rect: object.rect }).rect, light: [L[0] / L[2], L[1] / L[2]] as [number, number] };
-          const casters = object.parts.flatMap(part => {
-            // A custom part that is not there yet draws nothing and casts nothing; nor do glass kinds left out (the fallback).
-            if (!partDrawn(part, current.profiles)) return [];
+          const casters = object.parts.flatMap((part, partIndex) => {
+            // A custom part that is not there yet draws nothing and casts nothing (its stand-in does); nor do glass kinds left out.
+            if (!partDrawn(object, partIndex, current.profiles)) return [];
             if (part.glass && skipped.has(partKindKey(part))) return [];
             const caster = partCaster(part, current.profiles[part.profile]!, object.t ?? 0, boundsOf(part.profile, current), limit);
             return caster && caster.height > 0 ? [caster] : [];
@@ -1189,7 +1189,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     const [bx, by] = bounds.rect;
     const relative: InstrumentObject = { ...object, rect: [object.rect[0] - bx, object.rect[1] - by, object.rect[2], object.rect[3]],
       bounds: { rect: [0, 0, bounds.rect[2], bounds.rect[3]], radius: bounds.radius ?? 0 },
-      parts: object.parts.filter(part => partDrawn(part, scene.profiles)).map(part => ({ ...part, at: [part.at[0] - bx, part.at[1] - by, part.at[2]] })) };
+      parts: object.parts.filter((_, partIndex) => partDrawn(object, partIndex, scene.profiles)).map(part => ({ ...part, at: [part.at[0] - bx, part.at[1] - by, part.at[2]] })) };
     if (!relative.parts.length) return { contained: true, part: 0, inset: Infinity, overshoot: 0, exact: false } satisfies Containment;
     const key = containmentKey(relative, scene.profiles as Record<string, InstrumentProfile>);
     let frontier = state.frontiers.get(key);
@@ -1291,16 +1291,16 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           }
           const result = contain(state!, scene, object, placementKey, placement);
           if (result.contained) return;
-          const drawnParts = object.parts.filter(part => partDrawn(part, scene.profiles));
+          const drawnParts = object.parts.filter((_, partIndex) => partDrawn(object, partIndex, scene.profiles));
           stepped.push(index);
           steppedDown.push({ object: object.id, reason: "containment", part: drawnParts[result.part]?.kind ?? "", inset: Math.round(result.inset * 100) / 100,
             overshoot: Math.round(result.overshoot * 100) / 100 });
         });
         // The triangle budget of custom parts: past it the last objects holding any step down, until the layer fits.
         const done = new Set(stepped);
-        const triangles = scene.objects.map((object, index) => (done.has(index) ? 0 : object.parts.reduce((sum, part) => {
+        const triangles = scene.objects.map((object, index) => (done.has(index) ? 0 : object.parts.reduce((sum, part, partIndex) => {
           const shape = scene.profiles[part.profile]!;
-          return sum + (shape.type === "mesh" && partDrawn(part, scene.profiles) ? profileGeometry(shape).indices.length / 3 : 0);
+          return sum + (shape.type === "mesh" && partDrawn(object, partIndex, scene.profiles) ? profileGeometry(shape).indices.length / 3 : 0);
         }, 0)));
         let total = triangles.reduce((sum, value) => sum + value, 0);
         for (let index = scene.objects.length - 1; index >= 0 && total > INSTRUMENT_CUSTOM_TRIANGLES_PER_LAYER; index--) {
@@ -1456,7 +1456,9 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         customParts: state.scene ? customParts(state.scene).map(({ object, part, profile }) => {
           const shape = state.scene!.profiles[profile] as MeshProfile;
           const info = shape.source ? assets.info(shape) : { status: "ready" as const, vertices: profileGeometry(shape).positions.length / 3, triangles: profileGeometry(shape).indices.length / 3 };
-          return { object: state.scene!.objects[object]!.id, part, profile, source: shape.source ? (shape.source.url ?? "buffer") : "inline", ...info };
+          // `showing`: what is drawn for the part now: its mesh, its stand-in (`fallback`) while the mesh is not there, or nothing.
+          const showing = meshReady(shape) ? "mesh" : state.scene!.objects[object]!.parts[part]!.fallback ? "fallback" : "none";
+          return { object: state.scene!.objects[object]!.id, part, profile, source: shape.source ? (shape.source.url ?? "buffer") : "inline", showing, ...info };
         }) : [],
         // The parts' clustered lights: whether the scene has them, and how many the emitters lit this frame.
         lights: { clustered: !!state.pass?.lights, lit: state.pass?.lights && state.status === "ready" ? state.pass.litLights : 0 },

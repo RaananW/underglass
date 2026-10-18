@@ -56,6 +56,8 @@ export interface CustomPartInput extends CustomPartSource {
   pose?: InstrumentPart["pose"];
   caster?: InstrumentPart["caster"];
   state?: InstrumentPart["state"];
+  /** Drawn in its place while the file loads and if it fails, and until the mesh is there: the built-in part. */
+  fallback?: InstrumentPart[];
 }
 const buffers = new WeakMap<ArrayBuffer, number>();
 let bufferCount = 0;
@@ -74,9 +76,9 @@ export function profileKey(name: string, shape: InstrumentProfile): string {
  * loaded or does not stay in its object's box) the part is not drawn and `state().instrument` says why.
  */
 export function customPart(input: CustomPartInput, profile: (name: string, shape: InstrumentProfile) => string): InstrumentPart {
-  const { at, material, kind = "custom", pose, caster, state, ...source } = input;
+  const { at, material, kind = "custom", pose, caster, state, fallback, ...source } = input;
   const name = profile(`custom-${source.source.mesh ?? "mesh"}`, { type: "mesh", ...source });
-  return { kind, profile: name, at, material, ...(pose ? { pose } : {}), ...(caster !== undefined ? { caster } : {}), ...(state ? { state } : {}) };
+  return { kind, profile: name, at, material, ...(pose ? { pose } : {}), ...(caster !== undefined ? { caster } : {}), ...(state ? { state } : {}), ...(fallback ? { fallback } : {}) };
 }
 export interface InstrumentPart {
   kind: "custom" | "cap" | "skirt" | "chamfer" | "pointer" | "plinth" | "carriage" | "grip" | "segment" | "bezel" | "paddle" | "nut" | "bushing" | "lever" | "ball" | "plate";
@@ -88,6 +90,8 @@ export interface InstrumentPart {
   /** Omitted: core's own, from the posed part; `null`: none; given: this footprint at this mean height (2.8). */
   caster?: null | { rect: Box; radius: number; height: number };
   state?: { hover?: boolean; pressed?: boolean; focus?: boolean; disabled?: boolean };
+  /** A custom part only: the parametric parts core draws while its file loads and if it fails (the built-in part standing in). */
+  fallback?: InstrumentPart[];
 }
 export interface InstrumentObject {
   id: string;
@@ -195,13 +199,15 @@ export function knobObject(input: KnobInput, profile: (name: string, shape: Inst
   const base: Vec3 = [round(cx), round(cy), 0], onSkirt: Vec3 = [round(cx), round(cy), round(skirt.height)];
   const skirtPart: InstrumentPart = { kind: "skirt", profile: profile("knob-skirt", skirtShape), at: base, material: "knobSkirt", state };
   // A custom cap is the whole cap: it replaces the cap, its chamfer and the pointer, and turns with the value.
+  const builtIn: InstrumentPart[] = [
+    { kind: "cap", profile: profile("knob-cap", capShape), at: onSkirt, material: "knobCap", state },
+    { kind: "chamfer", profile: profile("knob-chamfer", chamferShape), at: onSkirt, material: "knobChamfer", caster: null, state },
+    { kind: "pointer", profile: profile("knob-pointer", pointerShape), at: onSkirt, material: "knobInk", caster: null, state,
+      pose: { from: { turn: round(-input.sweep / 2 - 90) }, to: { turn: round(input.sweep / 2 - 90) } } }];
+  // The built-in cap, chamfer and pointer stand in while the file loads and if it fails (core swaps them for the mesh in the frame it arrives).
   const parts: InstrumentPart[] = input.customCap
-    ? [skirtPart, customPart({ ...input.customCap, kind: "cap", at: onSkirt, material: "knobCap", state, pose: { from: { turn: round(-input.sweep / 2) }, to: { turn: round(input.sweep / 2) } } }, profile)]
-    : [skirtPart,
-      { kind: "cap", profile: profile("knob-cap", capShape), at: onSkirt, material: "knobCap", state },
-      { kind: "chamfer", profile: profile("knob-chamfer", chamferShape), at: onSkirt, material: "knobChamfer", caster: null, state },
-      { kind: "pointer", profile: profile("knob-pointer", pointerShape), at: onSkirt, material: "knobInk", caster: null, state,
-        pose: { from: { turn: round(-input.sweep / 2 - 90) }, to: { turn: round(input.sweep / 2 - 90) } } }];
+    ? [skirtPart, customPart({ ...input.customCap, kind: "cap", at: onSkirt, material: "knobCap", state, pose: { from: { turn: round(-input.sweep / 2) }, to: { turn: round(input.sweep / 2) } }, fallback: builtIn }, profile)]
+    : [skirtPart, ...builtIn];
   return {
     id: input.id, rect: input.box, bounds: { rect: input.box, radius: 0 }, t: Math.min(1, Math.max(0, input.t)),
     parts,

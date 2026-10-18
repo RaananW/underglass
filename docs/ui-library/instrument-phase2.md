@@ -1511,7 +1511,7 @@ hierarchies whose CPU geometry exists only if the mesh retained it, and it canno
 positions, normals, indices and UVs of one named mesh, a cap checked before any allocation, errors it can name and a test in
 Node. **Decision: a small reader in core**: glB or glTF with embedded buffers; `FLOAT` positions, normals and UVs
 (`TEXCOORD_0`); `u8`/`u16`/`u32` indices or none; interleaved views; triangle lists (`TRIANGLES`; other modes are
-refused); node transforms; every accessor count is checked against the caps before a byte is read. Refused with a reason:
+refused); node transforms; every accessor count is checked against the caps before an array is allocated or a byte is read. Refused with a reason:
 Draco, meshopt, `KHR_mesh_quantization`, sparse accessors, external buffers, skins. Ignored: materials, textures, cameras,
 lights, animations, morph targets (the base shape is used). Lite's loader is the alternative if a later item wants
 materials or textures from the file.
@@ -1654,6 +1654,23 @@ refused for a mesh). See [open issues](../open-issues.md) (SCOPE-009).
 - **No anchors.** The design language's five anchors and `fitCustomPart` are not core's: a reference has a uniform `scale` and an `offset`.
 - **The budget at the limit.** The brief expected the layer to drop its lowest-priority parts at the parts budget "as today"; today
   the whole layer steps down (item 1's note, decision 9), which is kept. The new triangle budget drops objects from the last of the scene.
-- **No built-in stand-in.** The design language has the built-in part stand in for a custom one that cannot be drawn; core draws no part and
-  reports it, and the helper does not read core's state yet.
+- **The built-in stand-in** was first not done (core drew no part while a file loaded) and is now core's `fallback` (see the review fixes below).
 - **`captured` and `stand`** are refused for a mesh part; **any kind** may use a mesh profile.
+
+## Review fixes (item 5)
+
+An independent review found no blocker. Its fixes, each with a unit test (`tests/unit/instrument-custom-fixes.unit.test.mjs`) that fails on the code before it:
+
+- **The reader's caps are real.** A NORMAL or TEXCOORD_0 accessor must name as many elements as POSITION, and every accessor at most 16,384 elements
+  (indices 98,304), *before* an array is allocated for it (a 1e9 count used to allocate gigabytes); `byteOffset`, `byteLength`, `byteStride` and
+  `count` must be non-negative integers.
+- **NaN and overflow.** The declared-box test is written so that NaN fails it; glB positions (after the node's transform, `scale` and `offset`) must be
+  finite and within ±10,000 like inline ones, and a zero or non-finite normal is refused.
+- **Bytes in hand** (`source.data`) are held to the 8 MiB cap like a download.
+- **No per-frame serialization.** `profileGeometry` looks a shape up by its object first (`WeakMap`), so `profileBounds` (per glass instance and per posed part
+  every frame) no longer `JSON.stringify`s it; a test counts the calls across 500 repeats (0 after the first).
+- **Stand-ins** (`fallback`), above: the helper's knob passes the built-in cap, chamfer and pointer, so a 404 shows the standard knob.
+- **Triangles belong to a store.** A profile's loaded triangles carry the store that attached them; another store (a second engine, a controller enabled
+  again) does not draw them and loads for itself, and evicting an entry (or ending a store) takes its triangles off the profiles, so the 32 MiB budget is a real bound.
+- **Nits.** The triangle budget counts base meshes; the caster cap is 0 within 1 px of the box; `bucketedWitnesses` rounds the height magnitude up on both
+  sides of the face, which is conservative on both (the drift grows with the magnitude), and says so; L37 names what is undocumented.

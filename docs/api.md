@@ -653,20 +653,28 @@ profiles: {
 - **Loading.** A reference loads once, outside any frame, with Core's own glB reader (positions, normals, `TEXCOORD_0`,
   indices, node transforms; no Draco, meshopt, quantization, sparse accessors, external buffers or skins; materials,
   textures, animations and morph targets are ignored). Until it is ready, and if it fails, the part is not drawn and is not
-  checked; every other part of the layer draws, no object steps down, and no scene is rebuilt: the file's triangles replace
-  the mesh's placeholder in place (`resizeMeshGeometry`) in the frame after it arrives. A failure (a 404 or other HTTP status, a
+  checked (or, with a `fallback`, its stand-in draws: below); every other part of the layer draws, no scene is rebuilt and no object
+  steps down *for the load itself*: the file's triangles replace the mesh's placeholder in place (`resizeMeshGeometry`) in the
+  frame that binds them, the frame the finished load asks for. (What the real triangles then show is checked like any part's: they
+  may refuse the object's containment, or push the layer's custom triangles over their budget.) A failure (a 404 or other HTTP status, a
   server answering with an HTML page, a body over 8 MiB, 15 s, a malformed file, a mesh that is not there, a cap, a mesh
   that leaves its declared `bounds`, the asset budget) leaves the part out and reports its reason; GPU stays on.
+- **Stand-ins (`fallback`).** A custom part may carry `fallback: [part, …]`, up to 8 parametric parts (any of its own `kind`,
+  `profile`, `at`, `pose`, `material`, `caster`, `state`; a mesh profile or a nested `fallback` is refused). Core draws them while the
+  part is `loading` and after it `failed`, and stops drawing them in the very frame it draws the mesh (the in-place swap above), so
+  there is no frame with both and none with neither. Validation expands each into a part marked `fallbackFor` placed before its
+  custom part (validated scenes validate again), so they count as parts in the budgets. `customParts[].showing` reports `mesh`,
+  `fallback` or `none`. The Strata knob's custom cap uses it with the built-in cap, chamfer and pointer.
 - **Cache.** Parsed triangles are cached per engine by `url`, `mesh`, `scale` and `offset` (a buffer by identity) under 32 MiB;
   the least recently used entry no scene uses is evicted first, and a load that would pass the budget with every entry in use
   fails (`budget`). A failed entry is forgotten once no scene uses it, so a scene that asks again retries. The store goes
   with the controller (in-flight requests are aborted); the geometry on the GPU goes with its scene.
-- **Budgets.** Custom parts count as parts (2,048 per layer, 6,000 per stage) and each distinct mesh with each material is a
+- **Budgets.** The triangle budget counts each part's base mesh, not the glow copy of a lens or the exact twin of a glass window. Custom parts count as parts (2,048 per layer, 6,000 per stage) and each distinct mesh with each material is a
   part kind. Above 1,000,000 drawn triangles of custom parts in a layer (instances times triangles), the last objects that
   hold custom parts step down (`reason: "budget"`, the triangle count in `detail`) until the layer fits.
 - **Casters.** Without `caster`, a mesh casts the xy extent of its posed convex hull at its mean height, as round as the hull,
-  with the height capped so that the shadow stays inside the object's `bounds` (the Fader's rule); an explicit `caster` is
-  honoured as given.
+  with the height capped so that the shadow stays inside the object's `bounds` (the Fader's rule; a footprint within 1 px of the box
+  leaves no room for a shadow, so the cap is 0 and the part casts nothing); an explicit `caster` is honoured as given.
 - **Diagnostics.** `state().instrument.layers[].customParts` lists each custom part (`object`, `part`, `profile`, `source`,
   `status`: `loading`, `ready` or `failed`, `error`, `vertices`, `triangles`); `state().instrument.assets` the store
   (`entries` with their `bytes`, `fetchMs` and `parseMs`, `bytes`, `budgetBytes`, `loads`, `hits`, `failures`, `evictions`, `inFlight`,

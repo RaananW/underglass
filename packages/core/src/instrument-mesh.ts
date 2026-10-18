@@ -75,6 +75,8 @@ const record = (value: unknown, path: string): Record<string, unknown> => {
 // Geometry state: a mesh profile's triangles live beside the profile, not in it, so the profile stays a small value.
 
 const geometries = new WeakMap<object, PartGeometry>();
+/** Which asset store attached a reference's triangles (an inline mesh has none): a store never draws a mesh another one loaded. */
+const owners = new WeakMap<object, object>();
 /** A mesh profile's triangles: inline ones from validation, a reference's once the store has loaded it. */
 export const meshGeometry = (shape: object): PartGeometry | undefined => geometries.get(shape);
 const placeholders = new WeakMap<object, PartGeometry>();
@@ -93,9 +95,12 @@ export function placeholderGeometry(shape: object, bounds: { low: Vec3; high: Ve
   return geometry;
 }
 /** Hands a reference its loaded triangles (or takes them away). */
-export function setMeshGeometry(shape: object, geometry: PartGeometry | undefined) {
+export function setMeshGeometry(shape: object, geometry: PartGeometry | undefined, owner?: object) {
   if (geometry) geometries.set(shape, geometry); else geometries.delete(shape);
+  if (geometry && owner) owners.set(shape, owner); else owners.delete(shape);
 }
+/** The store that attached a reference's triangles, if any. */
+export const meshOwner = (shape: object): object | undefined => owners.get(shape);
 /** The bytes of a geometry. */
 export const geometryBytes = (geometry: PartGeometry) => geometry.positions.byteLength + geometry.normals.byteLength + geometry.uvs.byteLength + geometry.indices.byteLength;
 
@@ -246,7 +251,8 @@ const slackOf = (bounds: { low: Vec3; high: Vec3 }, axis: number) => (bounds.hig
 export function checkDeclaredBounds(geometry: PartGeometry, bounds: { low: Vec3; high: Vec3 }): string | undefined {
   for (let vertex = 0; vertex < geometry.positions.length / 3; vertex++) for (let axis = 0; axis < 3; axis++) {
     const v = geometry.positions[vertex * 3 + axis]!, slack = slackOf(bounds, axis);
-    if (v < bounds.low[axis]! - slack || v > bounds.high[axis]! + slack) {
+    // Written so that NaN fails it: a comparison with NaN is false.
+    if (!(v >= bounds.low[axis]! - slack && v <= bounds.high[axis]! + slack)) {
       const box = geometryBox(geometry);
       return `the mesh leaves its declared bounds: vertex ${vertex} is ${v} on axis ${"xyz"[axis]}, outside ${bounds.low[axis]}..${bounds.high[axis]} (it spans ${box.low[axis]}..${box.high[axis]}); check the asset and its scale`;
     }
