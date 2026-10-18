@@ -1644,6 +1644,189 @@
       }
     }
   },
+  "feedback": {
+    "$description": "Feedback (section 20): opt-in synthesised sound and haptics, off by default, per application or scope; and the premium sound set, three parameters per sound.",
+    "sound": {
+      "$type": "number",
+      "$value": 0,
+      "$description": "Synthesised sound on Instrument controls: 1 on, 0 off (the default). Sound starts only after a user gesture and is never the only feedback.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 0,
+          "max": 1
+        }
+      }
+    },
+    "haptics": {
+      "$type": "number",
+      "$value": 0,
+      "$description": "A vibration pulse on Instrument controls, where the device has one: 1 on, 0 off (the default). Off under reduced motion.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 0,
+          "max": 1
+        }
+      }
+    },
+    "click": {
+      "$description": "A push button's press and release.",
+      "pitch": {
+        "$type": "number",
+        "$value": 2400,
+        "$description": "The click's tone, Hz.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 8000
+          }
+        }
+      },
+      "decay": {
+        "$type": "number",
+        "$value": 4,
+        "$description": "How fast the click dies away, ms (its envelope's time constant; the sound lasts five of them).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.5,
+            "max": 60
+          }
+        }
+      },
+      "noise": {
+        "$type": "number",
+        "$value": 0.6,
+        "$description": "How much of the click is noise rather than tone, 0–1.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    },
+    "tick": {
+      "$description": "A detent passed.",
+      "pitch": {
+        "$type": "number",
+        "$value": 3200,
+        "$description": "The tick's tone, Hz.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 8000
+          }
+        }
+      },
+      "decay": {
+        "$type": "number",
+        "$value": 2,
+        "$description": "How fast the tick dies away, ms (its envelope's time constant; the sound lasts five of them).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.5,
+            "max": 60
+          }
+        }
+      },
+      "noise": {
+        "$type": "number",
+        "$value": 0.3,
+        "$description": "How much of the tick is noise rather than tone, 0–1.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    },
+    "thunk": {
+      "$description": "A latch.",
+      "pitch": {
+        "$type": "number",
+        "$value": 140,
+        "$description": "The thunk's tone, Hz.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 8000
+          }
+        }
+      },
+      "decay": {
+        "$type": "number",
+        "$value": 18,
+        "$description": "How fast the thunk dies away, ms (its envelope's time constant; the sound lasts five of them).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.5,
+            "max": 60
+          }
+        }
+      },
+      "noise": {
+        "$type": "number",
+        "$value": 0.25,
+        "$description": "How much of the thunk is noise rather than tone, 0–1.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    },
+    "snap": {
+      "$description": "A lever, rocker or paddle thrown.",
+      "pitch": {
+        "$type": "number",
+        "$value": 1800,
+        "$description": "The snap's tone, Hz.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 8000
+          }
+        }
+      },
+      "decay": {
+        "$type": "number",
+        "$value": 6,
+        "$description": "How fast the snap dies away, ms (its envelope's time constant; the sound lasts five of them).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.5,
+            "max": 60
+          }
+        }
+      },
+      "noise": {
+        "$type": "number",
+        "$value": 0.75,
+        "$description": "How much of the snap is noise rather than tone, 0–1.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    }
+  },
   "target": {
     "min": {
       "$type": "dimension",

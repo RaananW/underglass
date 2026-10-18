@@ -8,8 +8,8 @@ interface Props extends ScopeOverrides {
   [attribute: string]: unknown;
 }
 
-const { depth, theme, density, size, level, material, colour, tokens, base, ...rest } = Astro.props;
-const resolved = resolveStrataScope({ depth, theme, density, size, level, material, colour, tokens }, base);
+const { depth, theme, density, size, level, material, colour, tokens, feedback, base, ...rest } = Astro.props;
+const resolved = resolveStrataScope({ depth, theme, density, size, level, material, colour, tokens, feedback }, base);
 if (resolved.issues.length) console.error(`Strata scope: ${resolved.issues.map(({ path, message }) => `${path}: ${message}`).join("; ")}`);
 const style = [...resolved.properties].map(([name, value]) => `${name}: ${value}`).join("; ") || undefined;
 ---
