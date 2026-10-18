@@ -303,10 +303,6 @@ const api = {
   async resize(id: string, by: number) { const panel = layers().find(layer => layer.id === id)!; panel.style.width = `${panel.offsetWidth + by}px`; refresh(panel); await settle(); },
   async setProtection(id: string, mode: "runs" | "extent" | "overflow" | "overlap") { protection.set(id, mode); refresh(layers().find(layer => layer.id === id)!); await settle(); return state().emitters.layers.find(layer => layer.id === id); },
   /**
-   * A writer in the usual idiom: each animation frame it first asks for its next frame, then moves a light on B with
-   * `setEmitters`; returns the writes and the GPU frames core drew meanwhile.
-   */
-  /**
    * A light written in one frame, then an ordinary `update` in the next (B's shadow strength `strength`), while core's lead
    * frame is pending: returns the GPU frames core drew in the two frames after the update (the update must be drawn).
    */
@@ -327,6 +323,10 @@ const api = {
     await nextFrame();
     return { framesAfterUpdate: counts().gpuFrames - before, paints: metrics().paintNotifications - paints };
   },
+  /**
+   * A writer in the usual idiom: each animation frame it first asks for its next frame, then moves a light on B with
+   * `setEmitters`; returns the writes and the GPU frames core drew meanwhile.
+   */
   async writerRun(frames: number) {
     const b = panels[1]!, before = counts();
     let writes = 0;

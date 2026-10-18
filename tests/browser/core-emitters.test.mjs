@@ -212,6 +212,8 @@ for (const dpr of [1, 2]) for (const level of levels) test(`emitters at ${level}
     report.leadThenUpdate = await call("leadThenUpdate", 0.6);
     const afterUpdate = await shot(page);
     report.leadThenUpdate.darker = -gain(beforeUpdate, afterUpdate, belowB, dpr);
+    // No browser paint drew those frames: the draw is core's own, for the update.
+    expect(report.leadThenUpdate.paints, "no paint during the update check").toBe(0);
     expect(report.leadThenUpdate.framesAfterUpdate, "core draws the update made while its lead frame was pending").toBeGreaterThanOrEqual(1);
     expect(report.leadThenUpdate.darker, "the update's pixels: a stronger shadow below B").toBeGreaterThan(2);
     await call("setTheme", "light");
