@@ -233,10 +233,26 @@ input's box and validated by core: the slide's chamfered brushed `carriage`, pol
 `grip` and lit `segment`; the rocker's polished `bezel`, faceted `paddle` (an extrusion turned onto its length, tilting
 about its pivot on the bezel) and lit `segment`; the bat's polished `nut`, `bushing`, `lever` and `ball`; the wall's
 `plate` (brushed aluminium on light faceplates, gunmetal on dark), chamfered `paddle`, its `chamfer`, a crowned `cap` and
-lit `segment`. Every moving part of a form slides or tilts about one pivot, `mix(from, to, t)` with `t` from the
-spring. The helper's `instrument` level (the Knob's pull request) is not on main yet, so the parts are not drawn yet;
-they wait for it, as the Fader's do. The lit flags use the premium `glowOn` amber; the CSS and Relief flags use the
-theme's accent until characters bring `glowOn` into the tokens.
+lit `segment`. Every moving part of a form slides or tilts about one pivot, `mix(from, to, t)`.
+
+The helper's `instrument` level draws each form with it. `t` is the CSS throw itself (`--strata-switch-t`, read each
+frame from the root's computed style, transitioned on the form's spring), so CSS, Relief, Objects and Instrument move on
+one spring, and the frames of a throw are uniform updates: the native change is captured once, and the frames after it
+add no capture, upload or hit-geometry update. The CSS paint and motion of the parts the GPU draws (everything but the
+slot, which stays a groove on the face) is hidden and held (`data-strata-dome`), so a throw repaints nothing. The
+object takes the input's hover and disabled state; pressing does not sink the parts, and the GPU draws no focus edge
+(the input's outline is captured content), as for the Knob and the Fader.
+- **The structure never depends on the state**, which would rebuild the layer: both lit flags of a rocker or wall switch
+  are always parts (the lit one on its facet or crown, the unlit one sunk 1 px into the solid under it, out of sight, its
+  pivot kept), and the slide's flag (a hair inside the block's base at its Off stop, `flagAt` −13) is always there,
+  covered by the block while it is off and shown as the block leaves it. The lit flags use the premium `glowOn` amber;
+  the CSS and Relief flags use the theme's accent until characters bring `glowOn` into the tokens.
+- **Shadows stay in the box.** The parts that stand still or slide (the slide's block, the rocker's bezel, the bat's nut,
+  the wall plate) cast their footprint at their mean height (core's own caster) unless that shadow (2.8) would leave the
+  input's box, 1 px short of the edge: then the caster is the same footprint at the tallest height that fits (the slide's
+  block, 4 px inside its box above and below, casts at under a pixel). The tilting parts (paddles, lever, ball) cast
+  none: their shadows fall on the bezel, plate or nut they stand on, whose own cast the face's. The wall plate is
+  gunmetal on a dark faceplate.
 
 ### Feedback
 
@@ -265,6 +281,13 @@ part in it.
   At 320 and 390 px: no overflow, boxes of at least 28 px, labels whole.
 - **Preferences:** axe in light, dark and face mode and under forced colours (every part drawn, Highlight when on),
   more contrast, reduced motion (instant).
+- **Instrument** (`ui-switch-forms-instrument.test.mjs`, DPR 1 and 2, headless and headful): the scene is version 4 with
+  the documented parts per form and the same parts off and on; at t = 0, 0.5 and 1 at depth 0, 0.5 and 1, and in flight,
+  every pixel the objects draw (against them hidden) lies inside an input's box and native hits on those pixels find an
+  input; a control run without the casters' caps puts 1,240 shadow pixels outside the boxes at full depth (0 with them); real clicks and
+  drags give fresh pixels inside the boxes only; the frames of a throw add 0 captures and 0 hit-geometry updates and
+  nothing is stepped down; hover and disabled reach the parts and pressing does not; reduced motion snaps at once; touch
+  at 390 and 320 px throws every form; the accessibility snapshot equals the DOM's and axe passes.
 - **GPU** at Relief and Objects: the documented primitives; 0 hit mismatches on every form at DPR 1 and 2; fresh pixels
   after each throw, only in the boxes; 0 px outside the boxes at nine poses along the throw and in flight; the
   accessibility snapshot equal in DOM and GPU modes; axe on the GPU page.

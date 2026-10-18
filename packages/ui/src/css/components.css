@@ -2415,6 +2415,12 @@
      value change repaints nothing (the focus ring round the skirt stays). */
   :where([data-strata-mode="face"]) :is(.ug-knob__skirt, .ug-knob__cap)[data-strata-dome] { border-color: transparent; }
   :where([data-strata-mode="face"]) .ug-knob__cap[data-strata-dome] .ug-knob__pointer { display: none; }
+  /* At the Instrument level the GPU draws a Switch form's moving parts, bezel, plate, nut, bushing and lit flag as parts:
+     their CSS paint is hidden and their CSS motion (the block's translation, the lever's scale, the ball's translation, the slide flag's
+     opacity) held, so a throw repaints nothing (the slot printed on the face and the focus ring stay). */
+  :where([data-strata-mode="face"]) .ug-switch__object [data-strata-dome] { border-color: transparent; }
+  :where([data-strata-mode="face"][data-strata-instrument], [data-strata-mode="face"][data-strata-instrument] *) .ug-switch__object [data-strata-dome] { translate: none; scale: none; opacity: 1; }
+  :where([data-strata-mode="face"]) .ug-switch__block[data-strata-dome] .ug-switch__grip { display: none; }
   /* Under the GPU, an enrolled panel's boundary never carries a CSS transform: the GPU presentation moves it. */
   :where([data-strata-mode="face"]):is(.ug-panel, .ug-card)[data-strata-motion], :where([data-strata-mode="face"]) :is(.ug-panel, .ug-card)[data-strata-motion] { animation: none; }
 

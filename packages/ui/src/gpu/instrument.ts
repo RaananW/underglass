@@ -25,7 +25,7 @@ export type InstrumentProfile =
   | { type: "prism"; width: number; length: number; radius?: number; height: number; taper?: number; chamfer?: number }
   | { type: "extrude"; outline: Vec2[]; width: number };
 export interface InstrumentPart {
-  kind: "cap" | "skirt" | "chamfer" | "pointer" | "plinth" | "carriage" | "grip";
+  kind: "cap" | "skirt" | "chamfer" | "pointer" | "plinth" | "carriage" | "grip" | "segment" | "bezel" | "paddle" | "nut" | "bushing" | "lever" | "ball" | "plate";
   profile: string;
   at: Vec3;
   pose?: { from: InstrumentPose; to: InstrumentPose };

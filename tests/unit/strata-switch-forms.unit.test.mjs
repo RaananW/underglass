@@ -121,15 +121,16 @@ const switchAt = (profile, form, options = {}) => {
 
 test("every form is a valid Instrument object of the part vocabulary, at every depth, off and on", () => {
   const expected = {
-    slide: { off: ["carriage:switchCap", "chamfer:switchChamfer", "cap:switchCap", "grip:switchInk"], on: ["segment:switchFlagOn", "carriage:switchCap", "chamfer:switchChamfer", "cap:switchCap", "grip:switchInk"] },
-    rocker: { off: ["bezel:switchBezel", "paddle:switchCap", "segment:switchFlagOff"], on: ["bezel:switchBezel", "paddle:switchCap", "segment:switchFlagOn"] },
-    bat: { off: ["nut:switchBezel", "bushing:switchBezel", "lever:switchLever", "ball:switchLever"], on: ["nut:switchBezel", "bushing:switchBezel", "lever:switchLever", "ball:switchLever"] },
-    wall: { off: ["plate:switchPlate", "paddle:switchCap", "chamfer:switchChamfer", "cap:switchCap", "segment:switchFlagOff"], on: ["plate:switchPlate", "paddle:switchCap", "chamfer:switchChamfer", "cap:switchCap", "segment:switchFlagOn"] },
+    // The parts never depend on the state, so a throw never rebuilds the layer: a form's two lit flags are both always there.
+    slide: ["segment:switchFlagOn", "carriage:switchCap", "chamfer:switchChamfer", "cap:switchCap", "grip:switchInk"],
+    rocker: ["bezel:switchBezel", "paddle:switchCap", "segment:switchFlagOn", "segment:switchFlagOff"],
+    bat: ["nut:switchBezel", "bushing:switchBezel", "lever:switchLever", "ball:switchLever"],
+    wall: ["plate:switchPlate", "paddle:switchCap", "chamfer:switchChamfer", "cap:switchCap", "segment:switchFlagOn", "segment:switchFlagOff"],
   };
   for (const form of switchForms) for (const scale of [0.6, 1, 1.6]) for (const on of [false, true]) {
     const { profiles, profile } = registry();
     const object = switchAt(profile, form, { t: on ? 1 : 0, checked: on, scale });
-    assert.deepEqual(object.parts.map(part => `${part.kind}:${part.material}`), expected[form][on ? "on" : "off"], `${form} ${on ? "on" : "off"} at ${scale}`);
+    assert.deepEqual(object.parts.map(part => `${part.kind}:${part.material}`), expected[form], `${form} ${on ? "on" : "off"} at ${scale}`);
     assert.deepEqual(object.bounds, { rect: [0, 0, ...switchBoxes[form]], radius: 0 });
     const scene = validateInstrumentScene(sceneOf([object], profiles));
     assert.equal(scene.objects[0].parts.length, object.parts.length);
@@ -222,4 +223,46 @@ test("feedback is off by default and set per application or scope through its to
   assert.equal(scope.properties.has("--strata-feedback-sound"), false);
   // A sound's parameters stay in range.
   assert.ok(createStrataTheme({ tokens: { "feedback.click.noise": 2 } }).issues.some(issue => issue.path === "feedback.click.noise"));
+});
+
+test("a throw changes no profile, material or part kind: the unlit flag is sunk out of sight and the lit one stands on its part", () => {
+  for (const form of ["rocker", "wall"]) {
+    const [off, on] = [false, true].map(checked => { const { profiles, profile } = registry(); return { object: switchAt(profile, form, { checked, t: checked ? 1 : 0 }), profiles }; });
+    assert.deepEqual(Object.keys(off.profiles), Object.keys(on.profiles), `${form}: the same profiles`);
+    const flags = ({ object }) => object.parts.filter(part => part.kind === "segment");
+    assert.equal(flags(off).length, 2);
+    // Off: the lit flag is the one sunk; on: the unlit one is. Their pivots stay where they were, so they tip with the paddle.
+    const [litOff, dimOff] = flags(off), [litOn, dimOn] = flags(on);
+    assert.equal(litOff.material, "switchFlagOn");
+    assert.ok(litOff.at[2] < litOn.at[2] && dimOff.at[2] > dimOn.at[2], `${form}: the state sinks one flag`);
+    assert.equal(round(litOff.at[2] + litOff.pose.from.pivot[2]) - round(litOn.at[2] + litOn.pose.from.pivot[2]), 0, `${form}: the pivot's world place is unchanged`);
+  }
+  // The slide's flag is always there, flush under the block's base while it is off.
+  const { profile } = registry(), slide = switchAt(profile, "slide"), flag = slide.parts[0];
+  assert.deepEqual(flag.at.slice(0, 2), [32 - 13, 14]);
+  assert.ok(flag.at[0] + 21 / 2 <= 32 - 14 + 12 - 0.4, "the flag ends inside the off block's base");
+});
+
+test("with the key light, the parts that stand still or slide cast only shadows that stay in their box, and the tilting parts cast none", () => {
+  const light = { azimuth: 323, elevation: 41 };
+  const reach = (height, direction) => { const a = (light.azimuth * Math.PI) / 180, e = (light.elevation * Math.PI) / 180, lx = Math.sin(a) * Math.cos(e), ly = -Math.cos(a) * Math.cos(e), lz = Math.sin(e);
+    return Math.max(0, (-(lx * direction[0] + ly * direction[1]) / lz) * height + 1.5 * height + 1); };
+  for (const form of switchForms) for (const scale of [0.6, 1, 1.6]) for (const t of [0, 0.5, 1]) {
+    const { profile } = registry(), box = [0, 0, ...switchBoxes[form]];
+    const object = switchAt(profile, form, { t, scale, light });
+    for (const part of object.parts) {
+      if (part.caster === null || !part.caster) continue;
+      const [x, y, w, h] = part.caster.rect, c = part.caster;
+      assert.ok(x - reach(c.height, [-1, 0]) >= box[0] && x + w + reach(c.height, [1, 0]) <= box[2] && y - reach(c.height, [0, -1]) >= box[1] && y + h + reach(c.height, [0, 1]) <= box[3],
+        `${form} ${part.kind}, scale ${scale}, t ${t}: the shadow stays in the box`);
+    }
+    for (const part of object.parts) if (["paddle", "lever", "ball"].includes(part.kind)) assert.equal(part.caster, null, `${form} ${part.kind}`);
+  }
+  // The slide's block is 4 px inside its box above and below: at every depth its caster is capped under its mean height.
+  const { profile } = registry(), block = switchAt(profile, "slide", { light }).parts.find(part => part.kind === "carriage");
+  assert.ok(block.caster && block.caster.height < 3, `capped at ${block.caster?.height}`);
+  assert.deepEqual(block.caster.rect, [6, 4, 24, 20], "the footprint where the block stands at t 0");
+  assert.deepEqual(switchAt(profile, "slide", { light, t: 1 }).parts.find(part => part.kind === "carriage").caster.rect, [34, 4, 24, 20]);
+  // Without the light nothing is capped: core's own casters.
+  assert.equal(switchAt(profile, "slide").parts.find(part => part.kind === "carriage").caster, undefined);
 });

@@ -3,7 +3,8 @@
  * *Forms*) with `@underglass/ui/css` and the plain-DOM behaviour (`attachStrata` from `@underglass/ui/dom`), in a Strata
  * panel that is a direct child of an Underglass root, presented on the GPU by `attachStrataGpu`.
  * `window.strataSwitchProbe` is the hook for `tests/browser/ui-switch-forms.test.mjs` and `ui-switch-forms-feedback`.
- * - `?dom` starts in the CSS presentation; `?level=objects` presents the panel at the Objects level.
+ * - `?dom` starts in the CSS presentation; `?level=objects` presents the panel at the Objects level, and
+ *   `?level=instrument` at the Instrument level (core's `instrument` material: the forms' parts as objects).
  * - `?plain` puts the panel in the page's flow with no Underglass at all, as a plain HTML page uses it.
  * - `?sound`, `?haptics` and `?muted` set the page's feedback options (`attachStrataFeedback`); without them each
  *   control's `feedback.*` tokens decide (off by default).
@@ -82,7 +83,8 @@ if (params.has("plain")) {
     return () => container.replaceChildren();
   } });
   attachStrata();
-  strata = attachStrataGpu(controller, { level: params.get("level") === "objects" ? "objects" : undefined });
+  const level = params.get("level");
+  strata = attachStrataGpu(controller, { level: level === "objects" || level === "instrument" ? level : undefined });
   host("enable").addEventListener("click", () => void controller!.enable());
   host("disable").addEventListener("click", () => void controller!.disable());
   if (!params.has("dom")) void controller.enable().then(() => strata?.refresh());
@@ -91,13 +93,14 @@ if (params.has("plain")) {
 window.strataSwitchProbe = {
   controller, panel: () => panel, scene: () => strata?.scene(panel), refresh: () => strata?.refresh(),
   events: () => [...events], clearEvents: () => { events.length = 0; }, feedback,
+  instrument: () => (controller?.state() as unknown as { instrument: unknown } | undefined)?.instrument,
   counts: () => { const state = controller?.state() as unknown as { mode: string; metrics: { captures: number; uploads: number; geometryUpdates: number } } | undefined;
     return state ? { mode: state.mode, captures: state.metrics.captures, uploads: state.metrics.uploads, geometryUpdates: state.metrics.geometryUpdates } : undefined; },
 };
 declare global {
   interface Window { strataSwitchProbe: {
     controller: CanvasController | undefined; panel(): HTMLElement; scene(): ReturnType<StrataGpu["scene"]>; refresh(): void;
-    events(): { id: string; type: string; checked: boolean }[]; clearEvents(): void; feedback: ReturnType<typeof attachStrataFeedback>;
+    events(): { id: string; type: string; checked: boolean }[]; clearEvents(): void; feedback: ReturnType<typeof attachStrataFeedback>; instrument(): unknown;
     counts(): { mode: string; captures: number; uploads: number; geometryUpdates: number } | undefined;
   } }
 }

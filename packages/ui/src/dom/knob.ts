@@ -17,9 +17,12 @@
  * - **Double-click** returns to `data-strata-default`, or the input's default value. **Keys** stay native.
  * Every change goes through the input's `value`, firing `input` and, at the end of a gesture, `change`, so forms and
  * framework bindings see native events. On every `input`, the knob's pointer angle (`--strata-knob-value` on its root)
- * and, when the input has `data-strata-unit`, its `aria-valuetext` follow the value.
+ * and, when the input has `data-strata-unit`, its `aria-valuetext` follow the value, and a detented knob's pointer
+ * passing a detent plays `tick` through `strataFeedback` (sound and haptics, both off unless the page or scope turns
+ * them on).
  */
-import { knobDefaults, knobDrag, knobFraction, knobNotch, knobRegion, knobValueAtAngle, knobValueText, type KnobRange, type KnobTokens } from "../shared/knob.ts";
+import { knobDefaults, knobDetentsCrossed, knobDrag, knobFraction, knobNotch, knobRegion, knobValueAtAngle, knobValueText, type KnobRange, type KnobTokens } from "../shared/knob.ts";
+import { listenForStrataFeedback, strataFeedback } from "./feedback.ts";
 
 const knobInputs = ".ug-knob__input";
 
@@ -92,6 +95,7 @@ const attached = new WeakSet<Document>();
 export function attachStrataKnobs(doc: Document = document): void {
   if (attached.has(doc)) return;
   attached.add(doc);
+  listenForStrataFeedback(doc);
   const gestures = new Map<number, Gesture>();
   const knobInput = (target: EventTarget | null) => {
     const input = (target as Element | null)?.closest?.(knobInputs);
@@ -169,6 +173,14 @@ export function attachStrataKnobs(doc: Document = document): void {
   // the page's own listeners already see the new value text.
   doc.addEventListener("input", event => {
     const input = (event.target as Element | null)?.closest?.(knobInputs);
-    if (input instanceof HTMLInputElement) syncStrataKnob(input);
+    if (!(input instanceof HTMLInputElement)) return;
+    // A detented knob's pointer passing a detent ticks (feedback, off by default): the pointer's last place, read before
+    // it follows, against the new value.
+    const root = input.closest(".ug-knob");
+    if (root?.matches(".ug-knob--detented") && root instanceof HTMLElement) {
+      const before = Number.parseFloat(root.style.getPropertyValue("--strata-knob-value"));
+      if (Number.isFinite(before) && knobDetentsCrossed(before, Number(input.value), rangeOf(input))) strataFeedback(input, "tick");
+    }
+    syncStrataKnob(input);
   }, true);
 }
