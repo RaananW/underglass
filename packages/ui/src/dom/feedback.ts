@@ -107,9 +107,15 @@ function stateOf(doc: Document): FeedbackState {
   // The first gesture on a control with sound on creates the audio context (and every gesture resumes it), inside the
   // gesture, as browsers allow. A trusted gesture also marks the control as the visitor's own input, for haptics.
   const gesture = (event: Event) => {
-    const control = (event.target as Element | null)?.closest?.(controls);
+    // A press on a latching form's label (a Checkbox's row) is a press on its key.
+    const target = event.target as Element | null;
+    const control = target?.closest?.(controls) ?? target?.closest?.("label")?.querySelector?.(":scope > .ug-latch");
     if (!control || !event.isTrusted) return;
-    created.gesture.set(control, event.timeStamp || performance.now());
+    const at = event.timeStamp || performance.now();
+    created.gesture.set(control, at);
+    // An arrow key on a radio selects its neighbour: the keys of a bank or a segmented control share the visitor's gesture.
+    const radio = control.matches(".ug-latch") ? control.querySelector<HTMLInputElement>(":scope > input[type=radio]") : null;
+    if (radio?.name) for (const other of doc.querySelectorAll<HTMLInputElement>(".ug-latch > input[type=radio]")) if (other.name === radio.name && other.form === radio.form && other.parentElement) created.gesture.set(other.parentElement, at);
     if (!soundOn(created, control)) return;
     try {
       const Context = (globalThis as { AudioContext?: typeof AudioContext }).AudioContext;

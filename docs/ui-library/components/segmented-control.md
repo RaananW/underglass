@@ -106,3 +106,63 @@ key is `Highlight`.
   the value is submitted with a form; each key is at least 24 px.
 - **GPU:** each key is a raised primitive (a key object at Objects); the selected key is held down; a real click on
   another key selects it, and GPU stays on.
+
+## 11. Latching form: `latching`
+
+Instrument, everyday forms ([plan](../instrument.md#everyday-components-at-the-instrument-level)). `form="latching"` draws the same native radios as
+**interlocking latching buttons on one plinth**: the [RadioGroup's preset bank](radio.md#11-latching-form-the-preset-bank-bank) with a segmented
+control's short options, the selected segment down with its LED lit. The plinth is a single part. `flush`, or no `form`, is the control above, in the
+markup and the look it had before, pixel for pixel; any other `form` string is the native `form` attribute of the fieldset, as before. `colour` names the
+LEDs' role (`glowOn` by default). As with the Switch's hardware forms, the premium character's default form is reached by naming it: with no `form` the control is its flush look, so a page that does not opt in is unchanged.
+
+| Part | Shape | Moves |
+| --- | --- | --- |
+| Plinth | `ug-segmented__plinth ug-bank__plinth`: one polished part, 2.4 high at 50% depth, 2 px larger than the keys all round; the fieldset has 8 px of padding for its shadow | No |
+| Segment | The bank's key: a cap (28, 34 or 40 px high, `radius.control`) on a 5 high body with the captured label; box = cap + 6 px each side and 14 above | Travel 4 px at 50% depth: 0.45 while selected, 1 while held, 0 at rest |
+| LED | A 6 px lens on the plinth above the cap | Lit while selected |
+
+- Everything the bank does (the native radio group, Tab, the arrow keys, one `change` per real selection, the lights, the emitters, the GPU at every level,
+  the preferences, reflow, feedback) is the [RadioGroup bank's](radio.md#11-latching-form-the-preset-bank-bank); only the markup differs, as the
+  keys sit directly on the existing `ug-segmented__plinth` and carry the `ug-segmented__key` class on their caps.
+- The selected segment's flush look (an accent underline and tint) is replaced by the key's travel and its LED; there is no ring.
+
+```html
+<fieldset class="ug-segmented" data-strata-form="latching">
+  <legend class="ug-segmented__legend">View</legend>
+  <div class="ug-segmented__plinth ug-bank__plinth" data-strata-face="raised">
+    <label class="ug-segmented__item">
+      <span class="ug-push ug-latch ug-latch--bank">
+        <input class="ug-segmented__input" type="radio" name="view" value="day">
+        <span class="ug-push__object ug-latch__object" aria-hidden="true">
+          <span class="ug-push__led-socket"></span>
+          <span class="ug-push__led"></span>
+        </span>
+        <span class="ug-push__cap ug-segmented__key" data-strata-face="raised">Day</span>
+      </span>
+    </label>
+    <label class="ug-segmented__item">
+      <span class="ug-push ug-latch ug-latch--bank">
+        <input class="ug-segmented__input" type="radio" name="view" value="week">
+        <span class="ug-push__object ug-latch__object" aria-hidden="true">
+          <span class="ug-push__led-socket"></span>
+          <span class="ug-push__led"></span>
+        </span>
+        <span class="ug-push__cap ug-segmented__key" data-strata-face="raised">Week</span>
+      </span>
+    </label>
+    <label class="ug-segmented__item">
+      <span class="ug-push ug-latch ug-latch--bank">
+        <input class="ug-segmented__input" type="radio" name="view" value="month">
+        <span class="ug-push__object ug-latch__object" aria-hidden="true">
+          <span class="ug-push__led-socket"></span>
+          <span class="ug-push__led"></span>
+        </span>
+        <span class="ug-push__cap ug-segmented__key" data-strata-face="raised">Month</span>
+      </span>
+    </label>
+  </div>
+</fieldset>
+```
+
+- React: `<SegmentedControl form="latching" colour="success" options value onChange>`; Vue: the same with `v-model`; Astro: `<SegmentedControl form="latching" options value>`.
+- **Tests:** `ui-latching-forms.test.mjs`, `ui-latching-forms-bindings.test.mjs`, `ui-latching-forms-astro.test.mjs`.

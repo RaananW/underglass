@@ -47,8 +47,8 @@ function segment({ id, label, checked }: { id: string; label: string; checked?: 
 const markup = `
   <h2 id="latch-title" style="margin:0 0 12px;font-size:18px">Channel strip</h2>
   <form id="latch-form">
+    <div id="solo-row" style="margin-bottom:28px">${checkbox({ id: "cb-monitor", label: "Monitor" })}</div>
     <div id="check-row" style="display:flex;flex-wrap:wrap;gap:4px 24px;align-items:center">
-      ${checkbox({ id: "cb-monitor", label: "Monitor" })}
       ${checkbox({ id: "cb-phantom", label: "Phantom", checked: true, colour: "info" })}
       ${checkbox({ id: "cb-mixed", label: "Pad group" })}
       ${checkbox({ id: "cb-locked", label: "Locked", disabled: true })}

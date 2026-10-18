@@ -2690,7 +2690,7 @@
     vertical-align: middle;
     cursor: pointer;
   }
-  /* The native input covers the key (an invisible overlay): every press and every key lands on it. */
+  /* The native input covers the key (an invisible overlay, square so that its hit area is the key's whole box): every press and every key lands on it. */
   .ug-latch > :is(.ug-checkbox__input, .ug-radio__input, .ug-segmented__input) {
     position: absolute;
     inset: 0;
@@ -2701,7 +2701,7 @@
     margin: 0;
     padding: 0;
     border: 0;
-    border-radius: inherit;
+    border-radius: 0;
     background: transparent;
     appearance: none;
     opacity: 0;
@@ -2763,10 +2763,11 @@
 
   /* Lit, down, held and disabled: the numbers the ring, the LED and the cap follow (GPU and CSS alike). */
   :where(.ug-latch:has(> input:checked)) { --strata-lit: 1; --strata-led: 1; --strata-push-t: 0.45; }
-  :where(.ug-latch:has(> input:indeterminate)) { --strata-lit: 0.5; --strata-led: 0.5; --strata-push-t: 0.2; }
+  /* Only a checkbox is mixed: a radio is `:indeterminate` while no radio of its group is checked. */
+  :where(.ug-latch:has(> .ug-checkbox__input:indeterminate)) { --strata-lit: 0.5; --strata-led: 0.5; --strata-push-t: 0.2; }
   :where(.ug-latch:is(:has(> input:active):not([data-strata-down="false"]), [data-strata-down="true"], [data-strata-preview~="active"]):not(:has(> input:disabled))) { --strata-lit: 1; --strata-push-t: 1; }
   :where(.ug-latch:has(> input:disabled)) { --strata-lit: 0; --strata-led: 0; --strata-push-t: 0; }
-  :where(.ug-latch:has(> input:disabled:checked:not(:indeterminate))) { --strata-push-t: 0.45; }
+  :where(.ug-latch:has(> input:disabled:checked:not(.ug-checkbox__input:indeterminate))) { --strata-push-t: 0.45; }
   /* Hover and press lift the parts as a push button's do; focus is a ring round the bezel (the cap, in a bank), in every presentation. */
   :where(.ug-latch:is(:hover, [data-strata-preview~="hover"]):not(:has(> input:disabled))) :where(.ug-push__bezel, .ug-push__cap) {
     --_lift: var(--strata-state-hover-height);

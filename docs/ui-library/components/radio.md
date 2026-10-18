@@ -133,3 +133,77 @@ when disabled, a `Highlight` focus outline. The dot's presence shows the state.
   accessibility snapshot equal in DOM and GPU modes (group name, checked, position); focus ring in decoded
   pixels; dot contrast against the lit well floor.
 - **Parity:** Relief and CSS within the P0.6 budget at rest, hover, focus and selected.
+
+## 11. Latching form: the preset bank (`bank`)
+
+Instrument, everyday forms ([plan](../instrument.md#everyday-components-at-the-instrument-level)). `form="bank"` on a RadioGroup draws the
+same native radios as a **preset bank**: interlocking latching buttons on one plinth, exactly one down at a time (the radio buttons of
+a car radio, where the name comes from), each label printed on its cap, and an LED above the key that is down. The group's `<legend>`
+stays on the faceplate above the plinth. `flush`, or no `form`, is the group above, in the markup and the look it had before, pixel for pixel;
+any other `form` string is the native `form` attribute of the fieldset, as before. The `selector` form (a RotarySelector over the group) is not
+built yet: it is a later change, and `form="selector"` is for now the native form owner's id, as any other string. `colour` names the LEDs' role. As with the Switch's hardware forms, the premium character's default form is reached by naming it: with no `form` the control is its flush look, so a page that does not opt in is unchanged.
+
+| Part | Shape | Moves |
+| --- | --- | --- |
+| Plinth | One polished part, `ug-bank__plinth`: a rounded box 2 px larger than the keys all round, 2.4 high at 50% depth, on a fieldset with 8 px of padding for its shadow | No |
+| Key | A button-sized cap (`control` height, at least `target.min`: 28, 34 or 40 px high), `radius.control`, as wide as its label plus 32 px (at least 24), on a body 5 high with the captured label. The key's box (the native `<input>`'s) is the cap plus 6 px each side and 14 above, so neighbours touch and the hit areas leave no gap | Travel 4 px at 50% depth: 0.45 while selected, 1 while held, 0 at rest |
+| LED | A 6 px glass lens (8 px socket) on the plinth, centred above the cap | Lit 0 to 1 by `--strata-led`: lit while selected |
+
+- **Interlocking.** The native radio group is the interlock: one `name`, one selected, the others up. Selecting another key brings the one that was
+  down back up (both are CSS numbers on their own key, so both are uniform writes). Tab lands on the selected key (or the first), the arrow keys move
+  and select (wrapping, skipping a disabled key, one `change` per real selection), Space selects, exactly as the group above.
+- **Cues.** The selected key is down, its LED is lit, and `checked` is native; under more contrast and forced colours it also has a bar under its label
+  (`Highlight` fill in forced colours). A disabled key is never held or lit, and a selected disabled one stays down. A group with nothing
+  selected has every key up and every LED dark (a radio is `:indeterminate` then, and the form does not treat it as mixed).
+- **The native controls stay the controls.** Each `<input type="radio">` covers its key (`opacity: 0`, `z-index: 1`) inside its `<label>`, whose text is
+  the cap's label (the accessible name); the group is the `<fieldset>`, named by its `<legend>`. The plinth, the LEDs and the keys' bodies are
+  decoration (`aria-hidden`, `pointer-events: none`).
+- **Emitters.** Each key's LED is an emitter at every GPU level (`emitter.led.*`), so a bank has one per key; there is no ring. At the Instrument
+  level the plinth is an object of its own (one `bezel` part in the polished bezel material, its shadow fitted to the fieldset's box), and each key an
+  object of a body, a captured cap and an LED lens (`pushObject` with a `base` on the plinth). Relief and Objects: the plinth a raised face or a slab, the caps
+  raised faces or keys standing on it.
+- **Presentation.** As the Checkbox's (section 11 of its page), with the bank wrapping to rows in a narrow viewport (320 px) or at 200% text, the caps growing and
+  wrapping their labels.
+
+```html
+<fieldset class="ug-radio-group" data-strata-form="bank">
+  <legend class="ug-radio-group__legend">Preset</legend>
+  <div class="ug-bank__plinth" data-strata-face="raised">
+    <label class="ug-radio">
+      <span class="ug-push ug-latch ug-latch--bank">
+        <input class="ug-radio__input" type="radio" name="preset" value="piano">
+        <span class="ug-push__object ug-latch__object" aria-hidden="true">
+          <span class="ug-push__led-socket"></span>
+          <span class="ug-push__led"></span>
+        </span>
+        <span class="ug-push__cap" data-strata-face="raised"><span class="ug-radio__label">Piano</span></span>
+      </span>
+    </label>
+    <label class="ug-radio">
+      <span class="ug-push ug-latch ug-latch--bank">
+        <input class="ug-radio__input" type="radio" name="preset" value="organ">
+        <span class="ug-push__object ug-latch__object" aria-hidden="true">
+          <span class="ug-push__led-socket"></span>
+          <span class="ug-push__led"></span>
+        </span>
+        <span class="ug-push__cap" data-strata-face="raised"><span class="ug-radio__label">Organ</span></span>
+      </span>
+    </label>
+    <label class="ug-radio">
+      <span class="ug-push ug-latch ug-latch--bank">
+        <input class="ug-radio__input" type="radio" name="preset" value="strings">
+        <span class="ug-push__object ug-latch__object" aria-hidden="true">
+          <span class="ug-push__led-socket"></span>
+          <span class="ug-push__led"></span>
+        </span>
+        <span class="ug-push__cap" data-strata-face="raised"><span class="ug-radio__label">Strings</span></span>
+      </span>
+    </label>
+  </div>
+</fieldset>
+```
+
+- The group's `help` and `error` stay below the plinth (in the fieldset's description), and the group's `required` and an `error` mark every radio, as above.
+- `attachStrataPushButtons` adds only the held state and the feedback (`click` once per real selection, including an arrow key's).
+  React: `<RadioGroup form="bank" colour="success" legend="Preset" value onChange>`; Vue: the same with `v-model`; Astro renders the radios from `options`.
+- **Tests:** `ui-latching-forms.test.mjs`, `ui-latching-forms-bindings.test.mjs`, `ui-latching-forms-astro.test.mjs`.

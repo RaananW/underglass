@@ -22,7 +22,8 @@ const pushes = "button.ug-push, .ug-latch";
 
 /** The enabled push button, or latching key, around `target`. */
 function buttonOf(target: EventTarget | null): HTMLElement | undefined {
-  const host = (target as Element | null)?.closest?.(pushes);
+  // A press on a latching form's label (a Checkbox's row) holds its key down, as a press on the label is a press on the input.
+  const host = (target as Element | null)?.closest?.(pushes) ?? (target as Element | null)?.closest?.("label")?.querySelector(":scope > .ug-latch");
   if (host instanceof HTMLButtonElement) return !host.disabled && host.getAttribute("aria-disabled") !== "true" ? host : undefined;
   if (!(host instanceof HTMLElement)) return undefined;
   const input = host.querySelector(":scope > input");
