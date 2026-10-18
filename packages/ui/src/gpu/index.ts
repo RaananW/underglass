@@ -44,13 +44,14 @@ import { switchFormEntries } from "./switch-forms.ts";
 import { strataStage, type StagePresenter } from "../dom/stage.ts";
 import type { EnvironmentMap, StageScene } from "../tokens/stage.ts";
 import { advance, asParticle, decodeHdr, environmentFrom, launch, spring, type BurstOptions, type Confetto } from "./scene.ts";
-import { advanceSpring, depthScale, INSTRUMENT_CAMERA, keyObject, knobObject, knobSprings, premiumMaterials, type InstrumentObject, type InstrumentProfile,
-  type InstrumentRecipe, type KnobSpring } from "./instrument.ts";
+import { advanceSpring, depthScale, INSTRUMENT_CAMERA, keyObject, knobObject, knobSprings, premiumMaterials, profileKey, type CustomPartSource, type InstrumentObject,
+  type InstrumentProfile, type InstrumentRecipe, type KnobSpring } from "./instrument.ts";
 import { faderMaterials, faderObject, faderParts, faderSpring } from "./instrument-fader.ts";
 import { switchHeight, switchMaterials, switchObject } from "./instrument-switch.ts";
 import type { StrataSwitchForm } from "../shared/switch-forms.ts";
 
-export type { InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentRecipe, KnobSpring } from "./instrument.ts";
+export type { CustomPartInput, CustomPartSource, InstrumentMeshProfile, InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentRecipe, KnobSpring } from "./instrument.ts";
+export { customPart } from "./instrument.ts";
 
 export { decodeHdr, environmentFrom, launch, advance, spring } from "./scene.ts";
 export type { BurstOptions, Confetto, HdrImage } from "./scene.ts";
@@ -102,6 +103,8 @@ export interface StrataGpuOptions {
    * step is reported through `onAdjust` and a `strata-adjust` event on the root. GPU stays on.
    */
   adjust?: StrataAdjustPolicy;
+  /** At the Instrument level, glBs for named parts of the built-in components (see `StrataSceneOptions.parts`). */
+  parts?: StrataSceneOptions["parts"];
   /** Called with every step of the adjust policy. */
   onAdjust?(event: StrataAdjustEvent): void;
   /** The Scene level's backdrop: its light pool and vignette (0–1; 0.5 and 0.35 by default) and an optional tint. */
@@ -244,6 +247,12 @@ export interface StrataSceneOptions {
    */
   springs?: WeakMap<Element, KnobSpring>;
   moving?: Set<Element>;
+  /**
+   * At the Instrument level, glBs for named parts of the built-in components (`parts: { knobCap }`, the plan's custom slot):
+   * the part is replaced by core's custom part (`docs/ui-library/instrument-phase2.md`, item 5). Absent, every component
+   * looks as it always did. While the file loads (and if it fails or does not fit its box) the part is not drawn.
+   */
+  parts?: { knobCap?: CustomPartSource };
   /** The time the springs advance to (ms, `performance.now()` by default). */
   now?: number;
 }
@@ -512,7 +521,7 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
   }
   const profiles: Record<string, InstrumentProfile> = {};
   const profile = (name: string, shape: InstrumentProfile) => {
-    const key = `${name}:${JSON.stringify(shape)}`;
+    const key = profileKey(name, shape);
     profiles[key] ??= shape;
     return key;
   };
@@ -553,10 +562,11 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     const state = context.states(skirt);
     const sweep = reader(root).number("knob.sweep", 270);
     objects.push(knobObject({ id: idOf(input, "knob"), box: rectWithin(input, panel), skirt: rectWithin(skirt, panel)[2], cap: rectWithin(cap, panel)[2], t, sweep, scale,
-      state: { hover: state.hover, disabled: state.disabled }, relief: { height: raised, material: use("knobCap") } }, profile));
+      state: { hover: state.hover, disabled: state.disabled }, relief: { height: raised, material: use("knobCap") },
+      ...(options.parts?.knobCap ? { customCap: options.parts.knobCap } : {}) }, profile));
     for (const name of ["knobSkirt", "knobChamfer", "knobInk"]) use(name);
     options.domes?.add(skirt); options.domes?.add(cap);
-    tallest = Math.max(tallest, (2.5 + 16 + 1.2) * scale);
+    tallest = Math.max(tallest, options.parts?.knobCap ? 2.5 * scale + options.parts.knobCap.bounds.high[2] + 1 : (2.5 + 16 + 1.2) * scale);
   }
   const light = { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) };
   for (const root of context.faders) {
@@ -920,7 +930,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     if (element.getAttribute("data-strata-mode") !== "face") element.setAttribute("data-strata-mode", "face");
     const motion = entry.motion;
     const domes = new Set<Element>();
-    const scene = strataScene(element, { level: options.level, cap, stage: stageBox(), domes, environment, springs, moving,
+    const scene = strataScene(element, { level: options.level, cap, stage: stageBox(), domes, environment, springs, moving, ...(options.parts ? { parts: options.parts } : {}),
       ...(motion ? { height: motion.from + (motion.to - motion.from) * motion.ease(Math.min(1, (performance.now() - motion.start) / motion.duration)) } : {}) });
     markDomes(entry, domes);
     // A panel drawn with the instrument material says so, so the CSS can hold the motion of the parts it draws.

@@ -10,6 +10,8 @@
  * - **Key** (`keyObject`): a button as a body and a captured cap (its own label, read from the capture), inset by the
  *   box rule's margin, travelling `object.keyTravel / 2.4` (2.5 px at 50% depth) while pressed.
  * - **Fader** (`faderObject` in `gpu/instrument-fader.ts`): the premium fader's carriage sliding the slot.
+ * - **Custom parts** (`customPart`, `KnobInput.customCap`): a glB the application names for one part (a knob's cap), as a
+ *   `mesh` profile that core loads, checks and draws like any other part; nothing is drawn for it until the file is there.
  * - **Springs** (`advanceSpring`): a knob's `t` follows its value on `spring.knob` or `spring.detent`, a fader's on
  *   `spring.fader` (section 12), in fixed 4 ms steps, clamped at the stops; reduced motion makes it instant.
  */
@@ -23,9 +25,61 @@ export interface InstrumentPose { travel?: number; slide?: Vec2; turn?: number; 
 export type InstrumentProfile =
   | { type: "lathe"; points: [number, number, number, number][]; segments?: number }
   | { type: "prism"; width: number; length: number; radius?: number; height: number; taper?: number; chamfer?: number }
-  | { type: "extrude"; outline: Vec2[]; width: number };
+  | { type: "extrude"; outline: Vec2[]; width: number }
+  | InstrumentMeshProfile;
+/** A `mesh` profile as the helper writes it: a reference to a glB or glTF (core's `InstrumentMeshProfile` also takes inline triangles). */
+export interface InstrumentMeshProfile {
+  type: "mesh";
+  source: { url: string; mesh?: string; data?: undefined } | { data: ArrayBuffer; mesh?: string; url?: undefined };
+  /** The declared box in part-local px, after `scale` and `offset`: core checks the loaded vertices against it. */
+  bounds: { low: Vec3; high: Vec3 };
+  /** glTF units to part-local px (default 1). */
+  scale?: number;
+  /** Added after the axis change and the scale (default `[0, 0, 0]`). */
+  offset?: Vec3;
+  pivot?: Vec3;
+}
+/**
+ * What an application gives for a custom part: a glB (or glTF with embedded buffers) and the box its vertices must lie
+ * in, in part-local px. glTF axes become the part's as core's reader says (a vertex `(x, y, z)` becomes `(x, z, y)` times
+ * `scale` plus `offset`: y up in the file is up from the face, +z in the file is the bottom of the screen), and the mesh
+ * stands on the part's `at` with its base at `z = 0`.
+ */
+export type CustomPartSource = Omit<InstrumentMeshProfile, "type">;
+export interface CustomPartInput extends CustomPartSource {
+  /** Where the profile's origin stands; `z` is the height of the surface below it. */
+  at: Vec3;
+  /** The scene's material for the part's role (themes and characters apply). */
+  material: string;
+  /** The part's name in the vocabulary; `custom` by default, a named one (`cap`) when it replaces that part. */
+  kind?: InstrumentPart["kind"];
+  pose?: InstrumentPart["pose"];
+  caster?: InstrumentPart["caster"];
+  state?: InstrumentPart["state"];
+}
+const buffers = new WeakMap<ArrayBuffer, number>();
+let bufferCount = 0;
+/** The key of a profile in a scene's `profiles`: its name and shape (a buffer by identity, since JSON cannot tell two apart). */
+export function profileKey(name: string, shape: InstrumentProfile): string {
+  if (shape.type === "mesh" && shape.source.data) {
+    let id = buffers.get(shape.source.data);
+    if (id === undefined) { id = ++bufferCount; buffers.set(shape.source.data, id); }
+    return `${name}:buffer${id}:${JSON.stringify({ ...shape, source: { mesh: shape.source.mesh } })}`;
+  }
+  return `${name}:${JSON.stringify(shape)}`;
+}
+/**
+ * A custom part (core work item 5): the mesh profile and the part that uses it. `profile` registers a shape and returns its
+ * name, as the other builders' callers do. The mesh draws once core has loaded it; until then (and if it cannot be
+ * loaded or does not stay in its object's box) the part is not drawn and `state().instrument` says why.
+ */
+export function customPart(input: CustomPartInput, profile: (name: string, shape: InstrumentProfile) => string): InstrumentPart {
+  const { at, material, kind = "custom", pose, caster, state, ...source } = input;
+  const name = profile(`custom-${source.source.mesh ?? "mesh"}`, { type: "mesh", ...source });
+  return { kind, profile: name, at, material, ...(pose ? { pose } : {}), ...(caster !== undefined ? { caster } : {}), ...(state ? { state } : {}) };
+}
 export interface InstrumentPart {
-  kind: "cap" | "skirt" | "chamfer" | "pointer" | "plinth" | "carriage" | "grip" | "segment" | "bezel" | "paddle" | "nut" | "bushing" | "lever" | "ball" | "plate";
+  kind: "custom" | "cap" | "skirt" | "chamfer" | "pointer" | "plinth" | "carriage" | "grip" | "segment" | "bezel" | "paddle" | "nut" | "bushing" | "lever" | "ball" | "plate";
   profile: string;
   at: Vec3;
   pose?: { from: InstrumentPose; to: InstrumentPose };
@@ -100,6 +154,12 @@ export interface KnobInput {
   state: { hover: boolean; disabled: boolean };
   /** The Relief primitive drawn instead if the object cannot be drawn as parts. */
   relief: { height: number; material: string };
+  /**
+   * A glB for the cap (`parts: { knobCap }`): it replaces the cap, its chamfer and the pointer, stands on the skirt in the
+   * `knobCap` material and turns through the sweep about its own axis. Orient the model so that its pointer, if it has one, is
+   * towards the top of the screen (-y, the file's -z) at the middle of the sweep. Without it the knob is unchanged.
+   */
+  customCap?: CustomPartSource;
 }
 
 /** A knob as an Instrument object; `profile` registers a shape and returns its name. */
@@ -133,15 +193,18 @@ export function knobObject(input: KnobInput, profile: (name: string, shape: Inst
   ] };
   const state = { hover: input.state.hover, disabled: input.state.disabled };
   const base: Vec3 = [round(cx), round(cy), 0], onSkirt: Vec3 = [round(cx), round(cy), round(skirt.height)];
-  return {
-    id: input.id, rect: input.box, bounds: { rect: input.box, radius: 0 }, t: Math.min(1, Math.max(0, input.t)),
-    parts: [
-      { kind: "skirt", profile: profile("knob-skirt", skirtShape), at: base, material: "knobSkirt", state },
+  const skirtPart: InstrumentPart = { kind: "skirt", profile: profile("knob-skirt", skirtShape), at: base, material: "knobSkirt", state };
+  // A custom cap is the whole cap: it replaces the cap, its chamfer and the pointer, and turns with the value.
+  const parts: InstrumentPart[] = input.customCap
+    ? [skirtPart, customPart({ ...input.customCap, kind: "cap", at: onSkirt, material: "knobCap", state, pose: { from: { turn: round(-input.sweep / 2) }, to: { turn: round(input.sweep / 2) } } }, profile)]
+    : [skirtPart,
       { kind: "cap", profile: profile("knob-cap", capShape), at: onSkirt, material: "knobCap", state },
       { kind: "chamfer", profile: profile("knob-chamfer", chamferShape), at: onSkirt, material: "knobChamfer", caster: null, state },
       { kind: "pointer", profile: profile("knob-pointer", pointerShape), at: onSkirt, material: "knobInk", caster: null, state,
-        pose: { from: { turn: round(-input.sweep / 2 - 90) }, to: { turn: round(input.sweep / 2 - 90) } } },
-    ],
+        pose: { from: { turn: round(-input.sweep / 2 - 90) }, to: { turn: round(input.sweep / 2 - 90) } } }];
+  return {
+    id: input.id, rect: input.box, bounds: { rect: input.box, radius: 0 }, t: Math.min(1, Math.max(0, input.t)),
+    parts,
     relief: { face: "raised", rect: [round(cx - rs), round(cy - rs), 2 * rs, 2 * rs], radius: rs, height: input.relief.height, material: input.relief.material },
   };
 }
