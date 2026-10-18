@@ -41,13 +41,13 @@ import {
 } from "@babylonjs/lite";
 import { DEFAULT_FEATHER, EMITTERS_PER_LAYER, GUARD_CELLS, guardCells, layerGuard, PROTECTED_PER_LAYER, shadowScales, type Guard, type LayerEmitters } from "./emitters.js";
 import {
-  boundsInside, checkContainment, containmentFrontier, containmentKey, instrumentFaceScene, instrumentLayout, instrumentPartCount, instrumentStructure, multiply, partCaster, partKinds,
+  boundsInside, checkContainment, containmentFrontier, containmentKey, instrumentFaceScene, instrumentLayout, instrumentPartCount, instrumentStructure, multiply, partCaster, partKindKey, partKinds,
   partMatrix, profileBounds, profileGeometry, sameGeometry, similarity, INSTRUMENT_CASTERS_PER_OBJECT, INSTRUMENT_KINDS_CEILING, INSTRUMENT_KINDS_PER_LAYER, INSTRUMENT_OBJECTS, INSTRUMENT_PARTS_PER_LAYER,
   INSTRUMENT_PARTS_PER_STAGE, STUDIO_DEFAULTS, type Containment, type ContainmentFrontier, type InstrumentCaster, type InstrumentObject,
   type InstrumentProfile, type InstrumentRecipe, type InstrumentScene, type Matrix, type PartKind, type StudioTokens,
 } from "./instrument.js";
 import { createCaptureProbe, type CaptureProbe } from "./capture-probe.js";
-import { CAPTURE_WGSL, GLASS_VEC4S, glassConstants, glassFragment, glassInstance, glassVertex, INSTRUMENT_PROBES_PER_STAGE, layerLight, pageSettings, probeKey } from "./instrument-glass.js";
+import { CAPTURE_WGSL, GLASS_VEC4S, glassConstants, glassFragment, glassInstance, glassVertex, INSTRUMENT_PROBES_PER_STAGE, layerLight, pageSettings, probeKey, probeQuantum, probeThrottle } from "./instrument-glass.js";
 import {
   compositeRect, settledAll, INSTRUMENT_CONTRAST, INSTRUMENT_EXPOSURE, liteMapBias, mapSettings, mapWindow, partGlow, placedBox, postFlags, postStructure, POST_SETTINGS,
   POST_STAGE_BUDGET_MS, POST_STAGES, type PostStage,
@@ -74,6 +74,8 @@ export interface InstrumentTestHook {
   failBuild?(layerId: string, minimal: boolean): boolean;
   /** Makes a layer's capture probe fail to build (the layer then reflects the studio alone). */
   failProbe?(layerId: string): boolean;
+  /** Makes a layer's next probe refresh throw (the layer is then rebuilt without its probe). */
+  failProbeRefresh?(layerId: string): boolean;
   /** Makes a layer's glass material fail to build (the layer then draws without its glass). */
   failGlass?(layerId: string): boolean;
 }
@@ -128,7 +130,7 @@ interface ProbeStatus { status: "on" | "off" | "failed" | "budget"; reason?: str
 /** A layer's glass: `none`, `on`, or `fallback` (its material could not be built: its kinds are left out). */
 interface GlassStatus { status: "none" | "on" | "fallback"; error?: string }
 /** The probe a pass holds, and what decides its next refresh. */
-interface PassProbe { probe: CaptureProbe; key: string; revision: number; texture: unknown }
+interface PassProbe { probe: CaptureProbe; key: string; revision: number; texture: unknown; quantum: number; lastAt: number; timer?: ReturnType<typeof setTimeout> }
 
 /** GPU time samples: the last 256, the latest, and how many were taken in all. */
 interface Timing { samples: number[]; last: number | null; total: number }
@@ -196,6 +198,8 @@ interface LayerState {
   checked?: { scene: InstrumentScene; placementKey: string; structure: string };
   /** The layer's latest input: its placement anchors the capture probe when a scene is built. */
   input?: InstrumentLayerInput;
+  /** Why the layer builds without a page probe after a refresh threw (the scene is rebuilt without it, which frees the cube). */
+  probeOff?: string;
 }
 
 export interface InstrumentControllerOptions {
@@ -317,9 +321,10 @@ export function createInstrumentController(options: InstrumentControllerOptions)
    * Validation and out-of-memory errors of its textures and pipelines are caught with error scopes, since WebGPU reports
    * them asynchronously.
    */
-  async function makeProbe(state: LayerState, scene: InstrumentScene, studio: EnvironmentTextures, rotation: number, cubemapError: unknown): Promise<{ probe?: CaptureProbe; status: ProbeStatus }> {
+  async function makeProbe(state: LayerState, scene: InstrumentScene, studio: EnvironmentTextures, rotation: number, cubemapError: unknown): Promise<{ probe?: CaptureProbe; status: ProbeStatus; quantum?: number }> {
     const page = pageSettings(scene);
     if (!page.enabled) return { status: { status: "off" } };
+    if (state.probeOff) return { status: { status: "failed", reason: state.probeOff } };
     const others = [...layers.values()].filter(other => other !== state && other.pass?.probeStatus.status === "on").length;
     if (others >= INSTRUMENT_PROBES_PER_STAGE) return { status: { status: "budget", reason: `${others} other layers hold a page probe (${INSTRUMENT_PROBES_PER_STAGE} per stage)` } };
     const device = options.device();
@@ -337,7 +342,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       const validation = await device.popErrorScope(); scopes = 1;
       const memory = await device.popErrorScope(); scopes = 0;
       if (validation || memory) { probe.dispose(); throw new Error((validation ?? memory)!.message); }
-      return { probe, status: { status: "on" } };
+      return { probe, status: { status: "on" }, quantum: probeQuantum(page) };
     } catch (error) {
       for (; scopes > 0; scopes--) await device.popErrorScope().catch(() => undefined);
       probeCounters.failures++;
@@ -433,7 +438,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
    * `update` writes them every frame. `minimal` leaves the optional stages out (reported failed with that reason).
    */
   function createPass(state: LayerState, sceneContext: SceneContext, camera: FreeCamera, scene: InstrumentScene, structure: string, key: DirectionalLight,
-    mapState: PassPost["map"], page: { probe?: CaptureProbe; status: ProbeStatus }, minimal?: string): Pass {
+    mapState: PassPost["map"], page: { probe?: CaptureProbe; status: ProbeStatus; quantum?: number }, minimal?: string): Pass {
     const label = `instrument:${state.id}`;
     const hook = options.testHook?.failStage;
     const flags = postFlags(scene);
@@ -752,7 +757,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
 
     const pass: Pass = {
       scene: sceneContext, camera, structure, registered: false, lights, litLights: 0, prefix: `${label}:`, post, probeStatus: page.status, glass,
-      ...(page.probe ? { probe: { probe: page.probe, key: "", revision: -1, texture: undefined } } : {}),
+      ...(page.probe ? { probe: { probe: page.probe, key: "", revision: -1, texture: undefined, quantum: page.quantum ?? 1, lastAt: -Infinity } } : {}),
       capacityOk: (next, objects) => [...next.values()].every(kind => skipped.has(kind.key) || meshes.some(entry => entry.kind.key === kind.key && kind.instances.length <= entry.capacity))
         && objects <= objectCapacity,
       update(input, current, hidden, stage, kinds, changed, guard) {
@@ -900,6 +905,8 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           reaches.fill(0, index * 4, index * 4 + 4);
           if (hidden.has(index)) return;
           const casters = object.parts.flatMap(part => {
+            // Glass kinds left out (the fallback) draw nothing, so they cast nothing either.
+            if (part.glass && skipped.has(partKindKey(part))) return [];
             const caster = partCaster(part, current.profiles[part.profile]!, object.t ?? 0, boundsOf(part.profile, current));
             return caster && caster.height > 0 ? [caster] : [];
           }).sort((a, b) => b.height - a.height).slice(0, INSTRUMENT_CASTERS_PER_OBJECT);
@@ -972,23 +979,34 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           if (dirty) markClusteredLightContainerDirty(lights);
           pass.litLights = drawnLights.length;
         }
-        // The capture probe (decision 3 of item 4): refreshed when the capture was uploaded again, its texture was replaced or
-        // the layer moved, and at no other time. A refresh that throws turns the page off for good (the cube then holds the
-        // studio alone, and the layer reports it).
+        // The capture probe (decision 3 of item 4): refreshed at once when the capture was uploaded again or its texture was
+        // replaced, and when the layer moves (its placement key, quantised to a quarter of the cube's texel footprint) at most
+        // once per PROBE_REFRESH_INTERVAL_MS, with a trailing refresh once it settles; at no other time. A refresh that throws
+        // turns the page off: the layer is rebuilt without the probe, which frees the cube and its budget slot.
         const held = pass.probe;
         if (held) {
-          const probeStamp = probeKey(m, stage, content);
-          if (held.texture !== input.texture || held.revision !== input.revision || held.key !== probeStamp) {
-            try {
-              held.probe.refresh({ capture: input.texture.texture as GPUTexture, inverse: [inverse.slice(0, 4), inverse.slice(4, 8)],
-                stage: { halfWidth: stage.width / 2, halfHeight: stage.height / 2, gridX: grid[0]!, gridY: grid[1]! }, content: { width: content.pixelWidth, height: content.pixelHeight } });
-              held.texture = input.texture; held.revision = input.revision; held.key = probeStamp;
-            } catch (error) {
-              pass.probeStatus = { status: "failed", reason: `a refresh threw: ${String(error)}` };
-              pass.probe = undefined;
-              probeCounters.failures++;
-              console.error(`Underglass instrument layer ${state.id}: its page probe was turned off (the parts reflect the studio alone): ${String(error)}`);
-              try { held.probe.refresh(undefined); } catch { /* the cube keeps whatever it held */ }
+          const probeStamp = probeKey(m, stage, content, held.quantum, input.extent);
+          const uploaded = held.texture !== input.texture || held.revision !== input.revision;
+          if (uploaded || held.key !== probeStamp) {
+            const now = performance.now(), throttle = probeThrottle(now, held.lastAt);
+            if (!uploaded && !throttle.due) {
+              // Too soon: a later frame (this one is drawn with the cube as it is) takes the trailing refresh.
+              held.timer ??= setTimeout(() => { held.timer = undefined; options.requestDraw(); }, throttle.wait + 2);
+            } else {
+              try {
+                if (options.testHook?.failProbeRefresh?.(state.id)) throw new Error("the test hook fails the probe refresh");
+                held.probe.refresh({ capture: input.texture.texture as GPUTexture, inverse: [inverse.slice(0, 4), inverse.slice(4, 8)],
+                  stage: { halfWidth: stage.width / 2, halfHeight: stage.height / 2, gridX: grid[0]!, gridY: grid[1]! }, content: { width: content.pixelWidth, height: content.pixelHeight } });
+                held.texture = input.texture; held.revision = input.revision; held.key = probeStamp; held.lastAt = now;
+                if (held.timer !== undefined) { clearTimeout(held.timer); held.timer = undefined; }
+              } catch (error) {
+                pass.probeStatus = { status: "failed", reason: `a refresh threw: ${String(error)}` };
+                pass.probe = undefined;
+                if (held.timer !== undefined) clearTimeout(held.timer);
+                state.probeOff = pass.probeStatus.reason;
+                probeCounters.failures++;
+                console.error(`Underglass instrument layer ${state.id}: its page probe was turned off (the layer is rebuilt without it): ${String(error)}`);
+              }
             }
           }
         }
@@ -1197,7 +1215,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       // The chain's flags, its map and the map's window on this stage, and which kinds have lenses, are structure too
       // (`postStructure`): a stage that outgrows the window rebuilds the scene.
       const lensKinds = kinds.filter(kind => !kind.captured && kind.instances.some(({ object, part }) => scene.objects[object]?.parts[part]?.emitter !== undefined)).map(kind => kind.key);
-      const structure = `${instrumentStructure(scene)}|${postStructure(scene, stage, lensKinds)}`;
+      const structure = `${instrumentStructure(scene)}|${postStructure(scene, stage, lensKinds)}${state.probeOff ? "|noprobe" : ""}`;
       const matrix = similarity(input.matrix);
       // A failed build is retried once the canvas size changes (a transient failure, a target that could not be sized).
       if (state.failed && state.failed.size !== size) state.failed = undefined;

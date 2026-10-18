@@ -67,14 +67,24 @@ test("a probe's memory and budget: 16.8 MB at 512 squared, four per stage", () =
   assert.equal(glass.INSTRUMENT_PROBES_PER_STAGE, 4);
 });
 
-test("a probe refreshes on placement, stage and capture size changes and at no other time", () => {
-  const m = { a: 1, b: 0, c: 0, d: 1, e: 40, f: 40 }, stage = { width: 1920, height: 1080 }, content = { pixelWidth: 800, pixelHeight: 600 };
-  const key = glass.probeKey(m, stage, content);
-  assert.equal(glass.probeKey({ ...m }, { ...stage }, { ...content }), key, "the same placement is the same key (poses, emitters and idle frames refresh nothing)");
-  assert.notEqual(glass.probeKey({ ...m, e: 41 }, stage, content), key, "a move");
-  assert.notEqual(glass.probeKey({ ...m, a: 1.1, d: 1.1 }, stage, content), key, "a scale");
-  assert.notEqual(glass.probeKey(m, { width: 1600, height: 900 }, content), key, "a resize");
-  assert.notEqual(glass.probeKey(m, stage, { pixelWidth: 1600, pixelHeight: 1200 }), key, "a DPR change");
+test("a probe's placement key ignores sub-texel moves and its refreshes are throttled to 100 ms", () => {
+  const m = { a: 1, b: 0, c: 0, d: 1, e: 40, f: 40 }, stage = { width: 1920, height: 1080 }, content = { pixelWidth: 800, pixelHeight: 600 }, extent = { width: 400, height: 300 };
+  const quantum = glass.probeQuantum({ size: 512, height: 300 });
+  assert.equal(quantum, (2 * 300 / 512) / 4, "a quarter of the cube's texel footprint on the face plane: 0.29 px");
+  const key = (matrix = m, s = stage, c = content) => glass.probeKey(matrix, s, c, quantum, extent);
+  assert.equal(key({ ...m }, { ...stage }, { ...content }), key(), "the same placement is the same key (poses, emitters and idle frames refresh nothing)");
+  assert.equal(key({ ...m, e: 40 + quantum * 0.3 }), key(), "a move below a quarter texel keeps the key");
+  assert.notEqual(key({ ...m, e: 41 }), key(), "a move of a pixel");
+  assert.notEqual(key({ ...m, a: 1.1, d: 1.1 }), key(), "a scale");
+  assert.equal(key({ ...m, a: 1 + 1e-5 }), key(), "a scale change below a quarter texel across the layer");
+  assert.notEqual(key(m, { width: 1600, height: 900 }), key(), "a resize");
+  assert.notEqual(key(m, stage, { pixelWidth: 1600, pixelHeight: 1200 }), key(), "a DPR change");
+  // Continuous movement: at most one refresh per interval, then one when it settles.
+  let last = -Infinity, refreshes = 0;
+  for (let frame = 0; frame < 60; frame++) { const now = frame * 17.5, { due } = glass.probeThrottle(now, last); if (due) { refreshes++; last = now; } }
+  assert.ok(refreshes <= Math.floor(60 * 17.5 / glass.PROBE_REFRESH_INTERVAL_MS) + 1, `60 frames over 1.05 s: ${refreshes} refreshes`);
+  assert.deepEqual(glass.probeThrottle(1100, 1000), { due: true, wait: 0 });
+  assert.deepEqual(glass.probeThrottle(1030, 1000), { due: false, wait: 70 }, "the trailing refresh waits for the rest of the interval");
 });
 
 test("the glass constants hold the recipe, the studio and the light as the reference defines them", () => {

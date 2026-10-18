@@ -164,6 +164,7 @@ let releaseHold: () => void = () => {};
 const hold = params.get("hold") === "1" ? new Promise<void>(resolve => { releaseHold = resolve; }) : undefined;
 const instrumentTestHook = failing || failRegistration || failBuild || hold ? {
   failStage: (_id: string, name: string) => name === failing,
+  failProbe: () => failing === "probe",
   failRegistration: (_id: string, minimal: boolean) => failRegistration === "all" || failRegistration === "optional" && !minimal,
   failBuild: (_id: string, minimal: boolean) => failBuild === "minimal" && minimal,
   beforeBuild: () => hold,

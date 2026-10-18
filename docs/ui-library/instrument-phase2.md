@@ -1086,12 +1086,16 @@ box's other walls are 50,000 px away, so the studio stays at infinity). Looking 
 capture; the side faces hold the capture towards the layer's edges and the studio beyond it. Mips 1 and up are a Gaussian
 blur chain in direction space (5 × 5 taps about one texel wide), so rough materials see a blurred page.
 
-**When it refreshes: never per frame.** The probe is rebuilt only when (a) the layer's capture was uploaded again (the
-renderer's per-layer upload counter changed), (b) the capture texture was replaced (a resize or DPR change), or (c) the
-layer's **placement** changed (its similarity matrix or the stage): Lite fixes the projection box when the scene
-registers, so the cube's content, not the box, follows a layer that moves (a scroll). (c) is not in the plan; without it a
-moved layer would reflect a page it no longer shows. A pose, a pointer light, an emitter write or any number of idle frames
-refresh nothing. At most one refresh per layer per frame.
+**When it refreshes: not every frame, and not at the pace a layer moves.** The probe is rebuilt only when (a) the layer's
+capture was uploaded again (the renderer's per-layer upload counter changed) or (b) the capture texture was replaced (a
+resize or DPR change): both at once, one refresh per upload; or (c) the layer's **placement** changed (its similarity matrix
+or the stage): Lite fixes the projection box when the scene registers, so the cube's content, not the box, follows a layer
+that moves (a scroll). (c) is not in the plan; without it a moved layer would reflect a page it no longer shows. **Its rule
+(review fix S1):** the placement is quantised to a quarter of the cube's texel footprint (`2 · height / size / 4`, 0.29 px at
+the defaults; a sub-texel move is invisible after the mip blur), and a placement refresh happens at most once per 100 ms
+while the layer keeps moving, with a trailing refresh (a timer asks for a frame) once it settles, so a scrolling layer costs
+about 10 refreshes a second however fast it moves, and its reflection lags by at most 100 ms. A pose, a pointer light, an
+emitter write or any number of idle frames refresh nothing.
 
 **Budget and degradation.**
 
@@ -1147,7 +1151,7 @@ existing `compile` step-down, as any shader.
 | --- | --- | --- | --- |
 | 1 | **Glass construction** | A custom WGSL shader that traces 2D.6, per pixel, with the capture loaded as a texture | Lite's transmission (L6: validation failures, a swapchain clear, a 1024² grab); a cube sampled for the reflection (L12: not bindable) |
 | 2 | **The capture probe's job** | The page cube of PBR parts (metals, coats, lacquer), box-projected, filled from the capture and the studio | One cube for glass and metal alike: glass cannot bind it; the model traces glass reflections exactly |
-| 3 | **Probe refresh** | On capture upload, texture replacement or a placement change; never per frame; one per layer per frame | Every frame (frame work p50 9.0 against 5.3 ms in I0.4); only on capture (a scrolled layer would reflect a stale page) |
+| 3 | **Probe refresh** | At once on a capture upload or texture replacement; on a placement change (quantised to a quarter texel) at most once per 100 ms with a trailing refresh; nothing else | Every frame (frame work p50 9.0 against 5.3 ms in I0.4); only on capture (a scrolled layer would reflect a stale page) |
 | 4 | **Probe anchor** | The layer's centre at build time; the cube's content follows the layer's current placement | A box rebuilt on every move (`rebuildMaterial` per frame); a canvas-centred anchor (poor resolution for off-centre layers) |
 | 5 | **Probe budget** | 4 per stage at 16.8 MB each at 512²; the rest studio-only with a reported reason | Unbounded (a stage of many layers would hold hundreds of MB) |
 | 6 | **Degradation** | Probe failure: studio-only reflections. Glass failure: glass left out, face shows through. Both reported; GPU on | Step the layer down to Relief (loses every part for a reflection) |
@@ -1202,7 +1206,7 @@ throughout.
 | Chrome knob, page probe on against studio alone: px differing / the stripes (a face) | 3,821 of 10,000 / 0 | 15,020 of 40,000 / 0 |
 | 300 frames, pointer moving and a knob posed: captures, uploads, geometry updates, probe refreshes | 0, 0, 0, 0 (300 frames drawn) | 0, 0, 0, 0 (300) |
 | Typing into the display: uploads / probe refreshes | 1 / 1 | 1 / 1 |
-| Moving the layer: probe refreshes | 1 | 1 |
+| Moving the layer once: probe refreshes (within 300 ms) | 1 | 1 |
 
 The lens knobs differ from the lacquer by about 18% of their box because the lens fills 46 of 100 px; the plate and the
 display differ almost entirely, since the lacquer hides the capture.
@@ -1232,8 +1236,8 @@ ms (cold clocks); over 21 refreshes, 1.97 ms p50 and 3.41 p95 at DPR 1 and 1.04 
 size at both); a layer's first build was 221 to 222 ms, and rebuilds took 37 to 40 ms with a probe against 20 to 32 ms
 without (the cube, its 60 passes' bind groups and the error-scope round trip; not broken down). By the budget rule (a
 stage is on by default only at about 2 ms task p95 at DPR 2 or less) the probe fits: it costs a refresh, not a frame, and
-a refresh is one command buffer. A layer that scrolls refreshes every frame it moves: about 1 to 2 ms GPU per frame per
-layer.
+a refresh is one command buffer. A layer that keeps moving refreshes at most every 100 ms (review fix S1: 60 frames of movement
+over 1.05 s took 10 refreshes, bound 11, at DPR 1 and 2, where the first version took 60); about 1 to 2 ms GPU each.
 
 **Failures:** with `?failProbe=1` (core's internal test hook) the layer reports `probe: failed` with the hook's reason, holds
 no probe, draws its glass as before (0 pixels of the lens differ from a page-off render) and its chrome knob exactly as a
@@ -1291,3 +1295,48 @@ budget and the refresh key.
   chain of the capture, which the layer's texture does not have).
 - **The probe's default is on** for scenes that omit `environment.page`, as 2D.5 says; no existing scene opted in.
 - **`core-post`'s scene turns the probe off** (above).
+
+## Review fixes (item 4, 2026-10-18)
+
+An independent review found no blocker. Its four should-fix items and the cheap nits are fixed, each with a test that fails
+without the fix where a test is possible (before / after on the same page, Canary 158.0.8110.0):
+
+- **S1, the probe refreshed on every frame a layer moved.** The placement key is quantised to a quarter of the cube's texel
+  footprint and a placement refresh is throttled to once per 100 ms with a trailing refresh (rule above). Test (`core-glass`,
+  DPR 1 and 2): 60 frames of movement over about 1.05 s, **60 refreshes before, 10 after, against the bound
+  `floor(elapsed / 100) + 1` = 11**; nothing refreshes once it settles, and the dragged panel's chrome knob equals a fresh
+  build at the same place (0 of 10,000 / 40,000 pixels differ; the test allows 2 levels for a sub-quantum difference).
+- **S2, the `core-post` change was unverified.** The override is reverted (the post chain is tested with the default probe).
+  The experiment (`core-post`, DPR 2, probe on) printed the three offending pixels, all interior part pixels with their four
+  neighbours part pixels (not silhouette edges): parts with the map (224,226,229), (225,226,229) and (225,226,229) equal the
+  face's colour exactly, while the map-off render reads (224,226,230), (226,227,230) and (226,227,231), one level off the
+  face: a polished part reflecting the light face. Two takes of the parts render differ in 0 pixels (deterministic), and with
+  `?fail=probe` (no probe anywhere; a new hook in the page) the map assertion passes (the run failed only on the hook's own
+  logged errors). So the map changes no face pixel: the test's proxy (a changed pixel counts as a face pixel when the map-on
+  render equals the face) was wrong for parts whose colour meets the face's. A changed pixel now counts as a face pixel only
+  when the **map-off** render shows the face there.
+- **S3, a resize and a DPR change mid-run.** `core-glass` resizes the viewport (1600 × 900) and changes the emulated DPR and
+  back: GPU on, the probe refreshed (a resize or a DPR change changes the key or the texture), text under the window 0 pixels
+  mismatched against the layer without objects after each, no page error and no warning but Chromium's powerPreference one.
+- **S4, a translucent texel was composited twice at an exact pixel.** The main shader drew it and so did the exact twin
+  (`caps + (1 − caps.a) · parts`). The main shader now discards at exact pixels, and the twin draws only opaque texels
+  (alpha at least 0.999): a translucent texel is already on the face (the layer's pass drew the capture over what lies
+  beneath), so nothing more is composited there. Test (a faceplate, stripes and display field with alpha below 1): text and
+  field under the window against the layer without objects, **11,640 of 12,960 pixels mismatched (up to 19 levels) before, 0
+  after** at DPR 1; 45,957 of 51,840 before, 0 after at DPR 2.
+- **N2:** the timestamp read's callback returns when the probe was disposed in between, and a failed read is caught (no
+  unhandled rejection). **N3:** a refresh that throws sets the layer's `probeOff`, which changes its structure: the scene is
+  rebuilt without the probe, the cube is released (it cannot be destroyed under live materials) and the budget slot is free,
+  since the budget is counted from the other layers' passes at each build, not kept. Test (a test hook that fails a refresh):
+  status `failed` with the reason, 0 probes, 0 bytes, glass on, GPU on; before, the status stayed `on`.
+  **N5:** a glass kind left out by the fallback casts no face shadow (test with `?failGlass=1` and casters on: 2,060 pixels
+  around the plate differed before, 0 after). **N8:** the retext assertion allows coalesced uploads (1 to the uploads' count).
+- **N9, the Fresnel control.** With an index of 1 (F0 = 0, only Schlick's angle term left) the reflection adds 0 at the lens
+  centre and 7.1 (DPR 1) and 6.9 (DPR 2) levels at its rim: the rim gains at least 3 times the centre, the Fresnel edge on its
+  own (asserted). With an index of 1.5 the rim is only 1.2 times the centre (15.2 against 12.7 levels), not 3: the centre also
+  reflects, F0 = 4% of a bright studio (its ceiling and strip) times the recipe's 1.5, so the glass's edge is brighter than its
+  centre mainly by what it refracts and sees (the stand: 79 levels), and the angle term adds the rest.
+- **Limits recorded (N1, N4, N6, N7)** in SCOPE-009 and above: the probe's error scopes stay open across an await (safe because
+  builds are serialised); a GPU error during a refresh is not diagnosed; and the two nits the review listed as N6 and N7 are
+  recorded there as the probe's lag during movement and the exact twin's unlit texel (their text was not in the message I
+  worked from, so these two entries are my reading of them).

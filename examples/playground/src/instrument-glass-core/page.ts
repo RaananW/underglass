@@ -23,6 +23,10 @@ const status = document.getElementById("status")!;
 const options = { glass: params.get("glass") !== "off", page: params.get("page") !== "off", lights: true, casters: true, objects: true,
   /** The glass recipes' `reflection` (2D.6, default 1.5); 0 leaves no reflection. */
   reflection: 1.5,
+  /** The glass recipes' index of refraction (1 leaves no Fresnel reflection and no refraction). */
+  ior: 1.5,
+  /** The faceplate and the display's field are translucent: the capture has texels with alpha below 1 under the window. */
+  translucent: false,
   post: params.get("post") === "off" ? { smaa: false, bloom: false } as InstrumentScene["post"] : undefined };
 const DISTANCE = 2400;
 const round = (value: number) => Math.round(value * 100) / 100;
@@ -162,7 +166,7 @@ function sceneOf(): InstrumentScene {
     backdrop: "#e3e5e9", light: { azimuth: 323, elevation: 41 },
     bevel: { width: 3, gain: 1, profile: "quarter-round" }, shadow: { strength: 0.24 }, interior: { max: 0.04 },
     state: { hoverHeight: 1.6, pressHeight: 0.25, hoverLift: 0.02, pressSink: 0.03 }, focus: { colour: "#2563eb", width: 2, offset: 2 },
-    materials: Object.fromEntries(Object.entries(materials).map(([name, recipe]) => [name, recipe.glass ? { ...recipe, glass: { ...recipe.glass, reflection: options.reflection } } : recipe])),
+    materials: Object.fromEntries(Object.entries(materials).map(([name, recipe]) => [name, recipe.glass ? { ...recipe, glass: { ...recipe.glass, reflection: options.reflection, ior: options.ior } } : recipe])),
     primitives: [{ face: "raised", rect: [0, 0, panel.offsetWidth, panel.offsetHeight], radius: 14, height: 6, material: "face" }],
     profiles, objects: options.objects ? objects : [], emitters: emittersOf(), protected: protectedRects(),
     ...(options.post ? { post: options.post } : {}),
@@ -171,8 +175,9 @@ function sceneOf(): InstrumentScene {
 
 const hosts = createCanvasHosts(frame);
 const failProbe = params.get("failProbe") === "1", failGlass = params.get("failGlass") === "1";
+let failRefresh = false;
 const runtimeOptions = { ...hosts, budgets: { layers: 4, pixels: 4_000_000 },
-  instrumentTestHook: failProbe || failGlass ? { failProbe: () => failProbe, failGlass: () => failGlass } : undefined,
+  instrumentTestHook: { failProbe: () => failProbe, failGlass: () => failGlass, failProbeRefresh: () => failRefresh },
   onStatusChange: (value: { mode: string; reason: string }) => { status.dataset.core = `${value.mode}: ${value.reason}`; } };
 const controller: CanvasController = mountApplicationModule(runtimeOptions, { mount({ container, enroll }) {
   panel = document.createElement("section");
@@ -186,6 +191,10 @@ const controller: CanvasController = mountApplicationModule(runtimeOptions, { mo
 let scene: InstrumentScene;
 let handle: MaterialHandle | undefined;
 function refresh() {
+  // A translucent faceplate: every texel under the window has alpha below 1 (the glyphs' edges and the field's 0.6 included).
+  document.getElementById("display")!.style.background = options.translucent ? "rgba(18, 38, 24, 0.6)" : "";
+  panel.style.background = options.translucent ? "rgba(223, 225, 229, 0.55)" : "";
+  panel.querySelector<HTMLElement>(".igc-stripes")!.style.opacity = options.translucent ? "0.5" : "";
   scene = sceneOf();
   if (handle?.state().active) handle.update(scene);
   else handle = controller.setMaterial(panel.id, { kind: "instrument", scene, bounds: "layer", interaction: "material", media: "identity", fallback: "static" });
@@ -238,6 +247,8 @@ const api = {
   hits: (points: { x: number; y: number }[]) => points.map(point => { const hit = document.elementFromPoint(point.x, point.y); return hit?.closest<HTMLElement>("[data-part]")?.id ?? hit?.id ?? ""; }),
   /** Rebuilds the scene from the DOM with other options and waits for the frame. */
   async set(next: Partial<typeof options>) { Object.assign(options, next); refresh(); await settle(); },
+  /** Makes the next probe refresh throw (core's internal test hook). */
+  setFailRefresh(on: boolean) { failRefresh = on; },
   async setLamp(on: boolean) { const lamp = document.getElementById("lamp") as HTMLInputElement; lamp.checked = on; lamp.dispatchEvent(new Event("change", { bubbles: true })); await settle(); },
   /** Types into the display (a real capture of the panel): returns the counters. */
   async retext(value: string) { const display = document.getElementById("display") as HTMLInputElement; display.value = value; await settle(); },
@@ -257,6 +268,15 @@ const api = {
     return { frames, captures: after.captures - before.captures, uploads: after.uploads - before.uploads, geometryUpdates: after.geometryUpdates - before.geometryUpdates,
       gpuFrames: after.gpuFrames - before.gpuFrames, probeRefreshes: (state().instrument?.probes.refreshes ?? 0) - probe, mode: after.mode, reason: after.reason };
   },
+  /** Moves the panel a little every frame for `frames` frames (transforms only: no capture); returns the probe's refreshes over it. */
+  async drag(frames: number, step = 1.5) {
+    await settle();
+    const before = state().instrument?.probes.refreshes ?? 0, started = performance.now();
+    for (let index = 1; index <= frames; index++) { controller.setTransform(panel.id, { x: index * step, y: index * step * 0.5 }); await nextFrame(); }
+    return { frames, elapsedMs: performance.now() - started, refreshes: (state().instrument?.probes.refreshes ?? 0) - before, x: frames * step, y: frames * step * 0.5 };
+  },
+  /** After a DPR change (CDP fires no resize here): a controller operation makes core reconcile the backing grid. */
+  async render() { controller.setTransform(panel.id, { opacity: 0.999 }); await settle(); controller.setTransform(panel.id, { opacity: 1 }); refresh(); await settle(); },
   async move(x: number, y: number) { controller.setTransform(panel.id, { x, y }); await settle(); },
   async setOpacity(opacity: number) { controller.setTransform(panel.id, { opacity }); await settle(); },
 };

@@ -339,7 +339,10 @@ for (const dpr of [1, 2]) test(`post chain: text safety, the clip, hits, exact o
       for (let offset = 0, index = 0; offset < parts.data.length; offset += 4, index++) {
         if (same(parts, unmapped, offset)) continue;
         changed++;
-        if (same(parts, face, offset)) outsideParts++;
+        // A changed pixel is a face pixel only if the map-off render shows the face there. Comparing the map-on render with the
+        // face instead miscounts part pixels whose map-on colour equals the face's by chance (a polished part reflecting the light
+        // face with the page probe: 3 interior pixels at DPR 2, whose map-off colour differs from the face by 1 level).
+        if (same(unmapped, face, offset)) outsideParts++;
         const point = { x: (index % parts.width + 0.5) / dpr, y: (Math.floor(index / parts.width) + 0.5) / dpr };
         if (!controls.some(control => rounded(point, control) <= 0)) outsideControls++;
       }

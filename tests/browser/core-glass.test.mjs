@@ -86,7 +86,7 @@ for (const dpr of [1, 2]) {
   test(`core's glass and capture probe, DPR ${dpr}`, async ({ browser }) => {
     test.setTimeout(600000);
     await mkdir(directory, { recursive: true });
-    const { context, page, errors, call } = await open(browser, dpr);
+    const { context, page, errors, warnings, call } = await open(browser, dpr);
     const report = { dpr };
     const instrument = await stillGpu(call, "start");
     expect(instrument.layers[0].probe.status, "the page probe is built").toBe("on");
@@ -247,17 +247,63 @@ for (const dpr of [1, 2]) {
     const countsAfter = await call("counts"), refreshesAfter = (await call("instrument")).probes.refreshes;
     report.refresh = { uploads: countsAfter.uploads - countsBefore.uploads, probeRefreshes: refreshesAfter - refreshesBefore };
     expect(countsAfter.uploads - countsBefore.uploads, "typing recaptured the panel").toBeGreaterThanOrEqual(1);
-    expect(refreshesAfter - refreshesBefore, "one probe rebuild per capture refresh").toBe(countsAfter.uploads - countsBefore.uploads);
+    // Uploads may coalesce (the browser paints once for several changes) but a refresh never outnumbers them.
+    expect(refreshesAfter - refreshesBefore, "a probe rebuild per capture refresh").toBeGreaterThanOrEqual(1);
+    expect(refreshesAfter - refreshesBefore).toBeLessThanOrEqual(countsAfter.uploads - countsBefore.uploads);
     await stillGpu(call, "after retext");
     // A moved layer re-renders the probe's content (the projection box is fixed at registration): once per move.
     const movedBefore = (await call("instrument")).probes.refreshes;
     await call("move", 24, 16);
+    await page.waitForTimeout(300);
     const movedAfter = (await call("instrument")).probes.refreshes;
     report.moved = { probeRefreshes: movedAfter - movedBefore };
     expect(movedAfter - movedBefore, "a move refreshes the probe").toBeGreaterThanOrEqual(1);
-    expect(movedAfter - movedBefore).toBeLessThanOrEqual(3);
+    expect(movedAfter - movedBefore).toBeLessThanOrEqual(2);
     await call("move", 0, 0);
     await stillGpu(call, "after move");
+
+    // ---- A viewport resize and a DPR change mid-run: GPU on, the probe follows, text under the window stays the capture texel.
+    const exactText = async label => {
+      await call("set", { lights: false, casters: false });
+      const shown = await shot(page);
+      await call("set", { objects: false });
+      const bare = await shot(page);
+      await call("set", { objects: true });
+      const result = diffIn(shown, bare, (await call("patterns")).text, dpr);
+      expect(result.compared, label).toBeGreaterThan(1000);
+      expect(result.mismatched, `${label}: text under the window is the capture texel`).toBe(0);
+      return result;
+    };
+    const refreshesNow = async () => (await call("instrument")).probes.refreshes;
+    const beforeResize = await refreshesNow();
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.waitForFunction(() => window.innerWidth === 1600);
+    await page.waitForTimeout(300);
+    await call("settle");
+    await stillGpu(call, "after a resize");
+    const afterResize = await refreshesNow();
+    report.resize = { probeRefreshes: afterResize - beforeResize, text: await exactText("after a resize") };
+    expect(afterResize - beforeResize, "a resize refreshes the probe").toBeGreaterThan(0);
+    await page.setViewportSize(viewport);
+    await page.waitForFunction(width => window.innerWidth === width, viewport.width);
+    await page.waitForTimeout(300);
+    await call("settle");
+    const cdp = await context.newCDPSession(page), other = dpr === 1 ? 2 : 1, beforeDpr = await refreshesNow();
+    await cdp.send("Emulation.setDeviceMetricsOverride", { width: viewport.width, height: viewport.height, deviceScaleFactor: other, mobile: false });
+    await page.waitForFunction(value => window.devicePixelRatio === value, other);
+    await call("render");
+    await page.waitForTimeout(300);
+    await stillGpu(call, "after a DPR change");
+    expect((await refreshesNow()) - beforeDpr, "a DPR change refreshes the probe").toBeGreaterThan(0);
+    await cdp.send("Emulation.setDeviceMetricsOverride", { width: viewport.width, height: viewport.height, deviceScaleFactor: dpr, mobile: false });
+    await page.waitForFunction(value => window.devicePixelRatio === value, dpr);
+    await call("render");
+    await page.waitForTimeout(300);
+    await stillGpu(call, "after the DPR change back");
+    report.dprChange = { probeRefreshes: (await refreshesNow()) - beforeDpr, text: await exactText("after a DPR change and back") };
+    await cdp.detach();
+    const loud = warnings.filter(message => !/powerPreference/.test(message));
+    expect(loud, "no WebGPU or other warnings through the resize and the DPR change").toEqual([]);
 
     // ---- Costs: per stage (headless p50 and p95, 300 frames of poses), the glass against the same parts without glass.
     const stages = async label => {
@@ -322,5 +368,124 @@ test("a glass that cannot be built leaves the face showing through, GPU on", asy
   const plate = diffIn(shown, face, controls.find(control => control.id === "plate"), 1);
   expect(plate.mismatched, "the plate's glass is left out: the face shows through").toBe(0);
   expect(errors.filter(error => !/glass was left out|test hook/.test(error))).toEqual([]);
+  await context.close();
+});
+
+for (const dpr of [1, 2]) {
+  test(`the reflection is Fresnel-weighted: no index contrast, no reflection, DPR ${dpr}`, async ({ browser }) => {
+    test.setTimeout(300000);
+    const { context, page, call } = await open(browser, dpr);
+    const k2 = (await call("controls")).find(control => control.id === "k2");
+    await call("set", { lights: false, casters: false, page: false });
+    const gain = async ior => {
+      await call("set", { ior, reflection: 1.5 });
+      const on = await shot(page);
+      await call("set", { reflection: 0 });
+      const off = await shot(page);
+      const band = (image, from, to) => {
+        const cx = (k2.x + k2.width / 2) * dpr, cy = (k2.y + k2.height / 2) * dpr;
+        let sum = 0, count = 0;
+        for (let y = Math.floor(cy - to * dpr); y <= Math.ceil(cy + to * dpr); y++) for (let x = Math.floor(cx - to * dpr); x <= Math.ceil(cx + to * dpr); x++) {
+          const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / dpr;
+          if (d >= from && d <= to) { sum += luminance(image.data, (y * image.width + x) * 4); count++; }
+        }
+        return sum / count;
+      };
+      return { rim: band(on, 17, 22) - band(off, 17, 22), centre: band(on, 0, 6) - band(off, 0, 6) };
+    };
+    const glass = await gain(1.5), air = await gain(1.0);
+    console.log(`fresnel control DPR ${dpr}: ${JSON.stringify({ glass, air })}`);
+    await writeFile(`${directory}/fresnel-dpr${dpr}.json`, JSON.stringify({ glass, air }, null, 2));
+    // With an index of 1, F0 is 0 and only Schlick's angle term (1 - cos)^5 is left: nothing at normal incidence (the centre) and
+    // a gain towards grazing angles (the rim), which is the Fresnel edge on its own: the rim gains at least 3 times the centre.
+    // With an index of 1.5 the centre gains too (F0 = 4% of a bright studio, 1.5 times), so the glass's rim is 1.2 times its
+    // centre, not 3: the 3x contrast is the angle term's alone, and it is there.
+    expect(glass.rim, "glass: the reflection gains levels at the rim").toBeGreaterThan(10);
+    expect(Math.abs(air.centre), "index 1: no reflection at the centre").toBeLessThan(1);
+    expect(air.rim, "index 1: the rim gains at least 3 times the centre (the angle term alone)").toBeGreaterThanOrEqual(3 * Math.max(1, Math.abs(air.centre)));
+    expect(glass.centre, "index 1.5: the centre's F0 reflection exists").toBeGreaterThan(5);
+    await context.close();
+  });
+
+  test(`moving a layer refreshes its probe at a bounded rate, and once more when it settles, DPR ${dpr}`, async ({ browser }) => {
+    test.setTimeout(300000);
+    const { context, page, errors, call } = await open(browser, dpr);
+    await call("set", { lights: false, casters: false });
+    await call("settle");
+    const run = await call("drag", 60);
+    // At most one refresh per 100 ms while it moves, plus the first: the bound is floor(elapsed / 100) + 1.
+    const bound = Math.floor(run.elapsedMs / 100) + 1;
+    console.log(`drag DPR ${dpr}: ${JSON.stringify({ ...run, bound })}`);
+    expect(run.refreshes, `${run.frames} frames of movement over ${Math.round(run.elapsedMs)} ms: at most ${bound} refreshes`).toBeLessThanOrEqual(bound);
+    expect(run.refreshes).toBeGreaterThanOrEqual(1);
+    await page.waitForTimeout(400);
+    await call("settle");
+    const settled = (await call("instrument")).probes.refreshes;
+    await page.waitForTimeout(400);
+    expect((await call("instrument")).probes.refreshes, "nothing refreshes once it has settled").toBe(settled);
+    await stillGpu(call, "after the drag");
+    // The final pixels equal a fresh build at the same place.
+    const dragged = await shot(page, `${directory}/dragged-dpr${dpr}.png`), controls = await call("controls"), chrome = controls.find(control => control.id === "chrome");
+    const fresh = await open(browser, dpr);
+    await fresh.call("set", { lights: false, casters: false });
+    await fresh.call("move", run.x, run.y);
+    const reference = await shot(fresh.page);
+    const same = diffIn(dragged, reference, chrome, dpr);
+    console.log(`drag final against fresh DPR ${dpr}: ${JSON.stringify(same)}`);
+    expect(same.max, "the chrome knob after the drag equals a fresh build at the same place (a sub-texel quantum may differ by a level or two)").toBeLessThanOrEqual(2);
+    expect(errors).toEqual([]);
+    await fresh.context.close();
+    await context.close();
+  });
+
+  test(`text under a window over a translucent capture is the capture texel, DPR ${dpr}`, async ({ browser }) => {
+    test.setTimeout(300000);
+    const { context, page, call } = await open(browser, dpr);
+    await call("set", { lights: false, casters: false, translucent: true });
+    const on = await shot(page, `${directory}/translucent-dpr${dpr}.png`);
+    await call("set", { objects: false });
+    const bare = await shot(page);
+    const patterns = await call("patterns");
+    const text = diffIn(on, bare, patterns.text, dpr);
+    console.log(`translucent text DPR ${dpr}: ${JSON.stringify(text)}`);
+    { const o = (Math.floor((patterns.text.y + 4) * dpr) * on.width + Math.floor((patterns.text.x + 4) * dpr)) * 4; console.log(`translucent sample DPR ${dpr}: on ${[...on.data.subarray(o, o + 3)]} bare ${[...bare.data.subarray(o, o + 3)]}`); }
+    expect(text.compared).toBeGreaterThan(1000);
+    expect(text.max, "text and field under the window equal the capture within 1 level").toBeLessThanOrEqual(1);
+    await stillGpu(call, "translucent");
+    await context.close();
+  });
+}
+
+test("a refresh that throws turns the page off, rebuilds the layer without it and frees the cube", async ({ browser }) => {
+  test.setTimeout(300000);
+  const { context, page, errors, call } = await open(browser, 1);
+  const before = await stillGpu(call, "before");
+  expect(before.probes.bytes).toBeGreaterThan(16e6);
+  await call("setFailRefresh", true);
+  await call("retext", "442.00 Hz");
+  await page.waitForTimeout(500);
+  await call("settle");
+  const instrument = await stillGpu(call, "after a failed refresh");
+  expect(instrument.layers[0].probe.status).toBe("failed");
+  expect(instrument.layers[0].probe.reason).toMatch(/test hook fails the probe refresh/);
+  expect(instrument.probes.live, "no probe is left").toBe(0);
+  expect(instrument.probes.bytes, "the cube is released").toBe(0);
+  expect(instrument.layers[0].glass.status, "the glass is unaffected").toBe("on");
+  expect(errors.filter(error => !/page probe was turned off/.test(error))).toEqual([]);
+  await context.close();
+});
+
+test("a glass left out casts no face shadow", async ({ browser }) => {
+  test.setTimeout(300000);
+  const { context, page, call } = await open(browser, 1, "?failGlass=1");
+  await call("set", { lights: false, casters: true });
+  const shown = await shot(page);
+  await call("set", { objects: false });
+  const bare = await shot(page);
+  const plate = (await call("controls")).find(control => control.id === "plate");
+  const around = { x: plate.x - 14, y: plate.y - 14, width: plate.width + 28, height: plate.height + 28 };
+  const diff = diffIn(shown, bare, around, 1);
+  console.log(`fallback plate surroundings: ${JSON.stringify(diff)}`);
+  expect(diff.mismatched, "the plate's window is not drawn, so it casts nothing on the face around it").toBe(0);
   await context.close();
 });

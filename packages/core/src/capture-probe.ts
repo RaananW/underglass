@@ -235,11 +235,13 @@ export function createCaptureProbe(device: GPUDevice, studio: EnvironmentTexture
       if (timed) {
         timed.pending = true;
         timed.read.mapAsync(BUFFER_USAGE.MAP_READ).then(() => {
+          // The probe may have been disposed between the map resolving and this callback (its buffers are then destroyed).
+          if (destroyed) return;
           const [start, end] = new BigUint64Array(timed.read.getMappedRange().slice(0));
           timed.read.unmap();
           if (gpuMs.length === 256) gpuMs.shift();
           gpuMs.push(Number(end! - start!) / 1e6);
-        }, () => undefined).finally(() => { timed.pending = false; });
+        }).catch(() => undefined).finally(() => { timed.pending = false; });
       }
     },
     /** Releases the cube and the probe's buffers; the caller has fenced the GPU (or the device is lost). */

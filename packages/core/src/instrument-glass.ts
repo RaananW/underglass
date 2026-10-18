@@ -40,13 +40,31 @@ export function pageSettings(scene: Pick<InstrumentScene, "environment">): { ena
   const size = Math.max(128, Math.min(1024, 2 ** Math.floor(Math.log2(page.size ?? 512))));
   return { enabled: page.enabled !== false, size, height: page.height ?? 300 };
 }
+/** A layer that keeps moving refreshes its probe at most this often (ms), and once more when it settles. */
+export const PROBE_REFRESH_INTERVAL_MS = 100;
+/**
+ * The placement step a probe ignores (CSS px): a quarter of the cube's texel footprint on the face plane, which is
+ * `2 · height / size` (the +z face spans `±height`): a move below it is invisible after the mip blur.
+ */
+export function probeQuantum(page: { size: number; height: number }): number {
+  return (2 * page.height / page.size) / 4;
+}
 /**
  * What a probe's content depends on besides the capture itself: the layer's placement (its similarity and the stage), since
- * the projection box is fixed when the scene registers and the cube's content follows a layer that moves. A probe is
- * refreshed when this key, the capture's upload count or the capture texture changes, and at no other time.
+ * the projection box is fixed when the scene registers and the cube's content follows a layer that moves. The translation
+ * is quantised to `quantum` px and the linear part to the same distance across the layer's longest side, so sub-texel
+ * moves keep the key. A probe is refreshed when the capture's upload count or texture changes, and when this key changes at
+ * most once per `PROBE_REFRESH_INTERVAL_MS` (with a trailing refresh); at no other time.
  */
-export function probeKey(matrix: { a: number; b: number; c: number; d: number; e: number; f: number }, stage: { width: number; height: number }, content: { pixelWidth: number; pixelHeight: number }): string {
-  return `${matrix.a},${matrix.b},${matrix.c},${matrix.d},${matrix.e},${matrix.f}|${stage.width}x${stage.height}|${content.pixelWidth}x${content.pixelHeight}`;
+export function probeKey(matrix: { a: number; b: number; c: number; d: number; e: number; f: number }, stage: { width: number; height: number }, content: { pixelWidth: number; pixelHeight: number },
+  quantum: number, extent: { width: number; height: number }): string {
+  const linear = quantum / Math.max(1, extent.width, extent.height), step = (value: number, size: number) => Math.round(value / size);
+  return `${step(matrix.a, linear)},${step(matrix.b, linear)},${step(matrix.c, linear)},${step(matrix.d, linear)},${step(matrix.e, quantum)},${step(matrix.f, quantum)}|${stage.width}x${stage.height}|${content.pixelWidth}x${content.pixelHeight}`;
+}
+/** Whether a throttled placement refresh is due: `wait` ms remain until it is (0 when due). */
+export function probeThrottle(now: number, lastAt: number, interval = PROBE_REFRESH_INTERVAL_MS): { due: boolean; wait: number } {
+  const wait = Math.max(0, interval - (now - lastAt));
+  return { due: wait === 0, wait };
 }
 
 /**
@@ -293,10 +311,9 @@ ${entry === "main" ? /* wgsl */ `
   let s = surfaceOf(input);
   let glow = glows[input.slot];
   if (shaderUniforms.g3.w > 0.5) { return lens(s, input.slot, glow); }
-  if (windowExact(s, p, input.slot)) {
-    let plain = capture4(p);
-    return vec4<f32>(plain.rgb * plain.a, plain.a);
-  }
+  // An exact pixel is drawn by the window's twin in the caps target (so SMAA never reaches it), not here: drawing it in both
+  // would composite a translucent texel twice.
+  if (windowExact(s, p, input.slot)) { discard; }
   return windowShade(s, p, input.slot, glow);
 }` : /* wgsl */ `
 @fragment fn mainFragment(input: VertexOutput) -> @location(0) vec4<f32> {
@@ -304,7 +321,11 @@ ${entry === "main" ? /* wgsl */ `
   if (!insideClip(p)) { discard; }
   let s = surfaceOf(input);
   if (!windowExact(s, p, input.slot)) { discard; }
-  return capture4(p);
+  // A translucent texel is already on the face (the layer's pass drew the capture over what lies beneath), and compositing it
+  // again would double it: only opaque texels are drawn here, so what stands over the face is the texel itself.
+  let plain = capture4(p);
+  if (plain.a < 0.999) { discard; }
+  return plain;
 }`}`;
 }
 const vertexOutputWGSL = /* wgsl */ `struct VertexOutput {

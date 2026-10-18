@@ -211,8 +211,7 @@ export function panelScene(panel: HTMLElement, theme: Theme, stage: { width: num
   return {
     format: "strata-scene", version: 4, kind: "instrument",
     camera: { distance: CAMERA_DISTANCE, vanish: [stage.width / 2, stage.height / 2] },
-    // The page probe is core work item 4's (tested in core-glass); this page tests the post chain on the studio alone.
-    environment: { source: "studio", strength: 1, page: { enabled: false } },
+    environment: { source: "studio", strength: 1 },
     extent: { width: panel.offsetWidth, height: panel.offsetHeight }, outset: { top: 16, right: 16, bottom: 16, left: 16 },
     backdrop: theme.stage, light: { azimuth: 323, elevation: 41 },
     bevel: { width: 3, gain: 1, profile: "quarter-round" }, shadow: { strength: 0.24, ...(options.map ? { map: options.map } : {}) }, interior: { max: 0.04 },
