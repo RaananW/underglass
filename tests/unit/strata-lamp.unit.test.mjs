@@ -58,7 +58,7 @@ test("every part is styled, the lens is a knob face and the bezel a raised one",
   // Preferences: reduced motion stops the blink, forced colours flatten the lens to Highlight or Canvas, more contrast edges it.
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[^]*?:where\(\.ug-status-light\[data-strata-blink\]\) \{ animation: none; \}/);
   assert.match(css, /@media \(forced-colors: active\) \{[^]*?\.ug-lamp__lens, \.ug-status-light__lens\) \{ forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas;/);
-  assert.match(css, /@media \(prefers-contrast: more\) \{\n\s+:where\(\.ug-lamp__socket\) \{ background: var\(--_glass\); \}/);
+  assert.match(css, /@media \(prefers-contrast: more\) \{\n\s+:where\(\.ug-lamp__socket, \.ug-status-light__socket\) \{ background: var\(--_glass\); \}/);
   // The glow colour is a token, and the lamp's default.
   assert.equal(strataTokens.colour.glowOn.$value, "#ff9228");
   assert.match(css, /--_c: var\(--strata-colour-glow-on\);/);
