@@ -1,0 +1,5 @@
+---
+"@underglass/ui": minor
+---
+
+Add the reference implementation of the Strata Rendering Model's version 4 (Instrument, part 2D) to `@underglass/ui/tokens`: `validateInstrumentScene` (the scenes core's `instrument` material accepts, with the same error paths), `profileMesh`, `poseAt`, `poseMatrix`, `objectContained` (containment over the whole travel), `bindingVertex`, `cameraDistance`, `boxForTravel`, `emitterTerm`, `partCaster`, `faceFactor` (the guarded face factor), `studioRadiance`, `studioHdr`, `shadePart` (the reference shading of a part in linear light), `glassSample`, `shadeInstrument` and `instrumentSettings`. The conformance suite `@underglass/ui/conformance/instrument-4.json` ships with it (13 cases at device scales 1 and 2, with exact, sampled, contained, unchanged, presence, ratio and relief checks; the sampled tolerance of 12 is provisional). The first character, `premium` (design language section 19), is a validated theme layer: `createStrataTheme({ character: "premium" })` lays its Instrument tokens over the defaults, reports what a character may not set, and lists its provisional values in `theme.character.provisional`.

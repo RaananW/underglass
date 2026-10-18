@@ -539,7 +539,8 @@ One concern per PR, each based on `main`:
 
 1. This plan (docs only).
 2. Phase I0 probes and the Phase I1 prototype page, with the probe report.
-3. Design-language sections, version 4 of the Rendering Model, `premium.json` and the reference implementation.
+3. Design-language sections and version 4 of the Rendering Model (3a); 3b: its reference implementation,
+   `instrument-4.json` with its GPU conformance test, and `premium.json` with the character runtime.
 4. Core: `instrument` material and the mesh pass. 5. Core: emitters. 6. Core: object-on-object shadows.
 7. Core: transmission over the capture. 8. Core: custom parts.
 9. Knob. 10. Fader. 11. Switch forms, with sound and haptics as the opt-in option.

@@ -44,7 +44,8 @@ test("the stylesheet is layered and honours every user preference", () => {
 // Strata is standalone-first (design language section 18): the framework-neutral layers import no framework, and
 // each binding imports only its own.
 test("Strata's neutral layers import no UI framework and each binding imports only its own", () => {
-  const sources = directory => readdirSync(new URL(`../../packages/ui/src/${directory}/`, import.meta.url)).map(name => ({ name: `${directory}/${name}`, text: readFileSync(new URL(`../../packages/ui/src/${directory}/${name}`, import.meta.url), "utf8") }));
+  // Files only: a layer may keep data in a subdirectory (tokens/characters).
+  const sources = directory => readdirSync(new URL(`../../packages/ui/src/${directory}/`, import.meta.url), { withFileTypes: true }).filter(entry => entry.isFile()).map(({ name }) => ({ name: `${directory}/${name}`, text: readFileSync(new URL(`../../packages/ui/src/${directory}/${name}`, import.meta.url), "utf8") }));
   const imports = (text, pattern) => [...text.matchAll(/from "([^"]+)"/g)].map(match => match[1]).filter(name => pattern.test(name));
   for (const file of [...sources("tokens"), ...sources("dom"), ...sources("gpu"), ...sources("shared")]) {
     if (!file.name.endsWith(".ts")) continue;

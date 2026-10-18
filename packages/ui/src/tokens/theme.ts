@@ -3,6 +3,7 @@
  * changes applied, validated against every invariant. It serialises to the W3C Design Tokens format, so it can be
  * shared, versioned and loaded at runtime.
  */
+import { applyCharacter, isProvisional, type StrataCharacter } from "./character.ts";
 import { tokensToCss } from "./css.ts";
 import { strataSource } from "./source.ts";
 import { flatten, namespace, themesOf, type TokenGroup, type TokenNode, type TokenValue } from "./model.ts";
@@ -13,6 +14,11 @@ export type ThemedColour = string | Partial<Record<string, string>>;
 
 /** What an application may change, all optional. */
 export interface StrataThemeInput {
+  /**
+   * The Instrument character (design language section 19), by name (`"premium"`) or as its token layer. It is laid over
+   * the base before every other change here, so the rest of the input still overrides any of its tokens.
+   */
+  character?: string | TokenGroup;
   /** Depth, 0 (subtle) to 1 (bold); 0.5 by default. */
   depth?: number;
   /** The one light of the application. */
@@ -36,6 +42,8 @@ export interface StrataTheme {
   css(): string;
   /** The theme as W3C Design Tokens JSON. */
   toJSON(): TokenGroup;
+  /** The character the theme was built with, and the token paths it set whose values are still provisional. */
+  readonly character?: { readonly name: string; readonly status: string; readonly provisional: readonly string[] };
 }
 
 export interface CreateThemeOptions {
@@ -43,6 +51,10 @@ export interface CreateThemeOptions {
   base?: TokenGroup | StrataTheme;
   /** Throw on any broken invariant instead of reporting it in `issues`. */
   strict?: boolean;
+  /** Development: warn (`console.warn`) once with the provisional tokens of the character. */
+  development?: boolean;
+  /** The character is a subtree's, not the application's: its studio and environment are reported and not applied (section 19). */
+  scoped?: boolean;
 }
 
 /** Thrown in strict mode when a theme breaks an invariant. */
@@ -72,8 +84,19 @@ const metaOf = (token: TokenNode) => ((token.$extensions ??= {})[namespace] ??= 
 
 /** Builds a theme from `input` over the defaults (or `options.base`), then validates it. */
 export function createStrataTheme(input: StrataThemeInput = {}, options: CreateThemeOptions = {}): StrataTheme {
-  const source = structuredClone(sourceOf(options.base));
   const issues: Issue[] = [];
+  let source = structuredClone(sourceOf(options.base));
+  // Section 19: the character first, so the application's own changes below override any of its tokens.
+  let character: StrataTheme["character"];
+  if (input.character !== undefined) {
+    const applied = applyCharacter(source, input.character, { scoped: options.scoped });
+    source = applied.source;
+    issues.push(...applied.issues);
+    if (applied.character) character = describe(applied.character, applied.applied);
+    if (character?.provisional.length && options.development) {
+      console.warn(`Strata character ${character.name} (${character.status}): provisional values in ${character.provisional.join(", ")}`);
+    }
+  }
   const themeNames = Object.keys(themesOf(source));
 
   const set = (path: string, value: TokenValue) => {
@@ -120,7 +143,13 @@ export function createStrataTheme(input: StrataThemeInput = {}, options: CreateT
     issues,
     css: () => tokensToCss(source, { layer: "strata.theme" }),
     toJSON: () => structuredClone(source),
+    ...(character ? { character } : {}),
   };
+}
+
+/** A character's name and status, and the provisional paths among the tokens it set. */
+function describe(character: StrataCharacter, applied: readonly string[]): NonNullable<StrataTheme["character"]> {
+  return { name: character.name, status: character.status, provisional: applied.filter(path => isProvisional(character, path)) };
 }
 
 /** Loads a theme serialised with `toJSON()` (or any W3C Design Tokens source in Strata's shape) and validates it. */

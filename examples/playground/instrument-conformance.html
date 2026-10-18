@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Instrument conformance</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body { background: white; color: black; font: 14px system-ui; }
+    [hidden] { display: none !important; }
+    /* The stage fills the window: core's instrument camera stands at the canvas centre, so each case's layer is placed
+       where the canvas centre is the scene's vanishing point. */
+    #frame { position: fixed; inset: 0; }
+    #status { position: fixed; right: 8px; bottom: 6px; margin: 0; font: 11px/1.3 system-ui; white-space: pre-wrap; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div id="frame"></div>
+  <pre id="status" role="status"></pre>
+  <script type="module" src="/src/demo/instrument-conformance.ts"></script>
+</body>
+</html>

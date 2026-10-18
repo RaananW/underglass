@@ -1,10 +1,10 @@
 # The Strata Rendering Model
 
 **Version 4 (Instrument), which includes versions 3 (Scene), 2 (Objects) and 1 (Relief).** Status: versions 1 to 3
-are normative; version 4 (part 2D) is a draft for review (2026-10-17) and becomes normative when its reference
-implementation and `instrument-4.json` land. This document defines how Strata looks, independently of any engine,
-shading language or graphics API. Underglass's GPU presentation is one implementation of it; any other renderer that
-passes the [conformance suite](#4-conformance) is another.
+are normative; version 4 (part 2D) is a draft. Its reference implementation and `instrument-4.json` have landed
+(2026-10-18); it becomes normative once the suite's sampled tolerance is settled against core (2D.10). This document
+defines how Strata looks, independently of any engine, shading language or graphics API. Underglass's GPU presentation
+is one implementation of it; any other renderer that passes the [conformance suite](#4-conformance) is another.
 
 It has four parts:
 
@@ -672,6 +672,11 @@ A profile resolves to triangles through the reference builders (section 3), and 
 renderer draws those triangles, or a refinement whose vertices lie on them, never a finer tessellation of the ideal
 surface, which would bulge past the triangles that containment checked.
 
+**Normals and winding.** A part is shaded with its vertex normals, which point out of the part (2D.5); its winding
+never decides its light. Every triangle is wound the same way against those normals: in layer axes,
+`(b − a) × (c − a)` points against the outward normal. A renderer that culls back faces, or flips their normals (double-sided shading),
+relies on that: a triangle wound the other way is shaded as if it faced inward.
+
 **Poses.** A pose is `{ travel, slide, turn, tilt, axis, pivot }`, each default 0:
 
 - `travel`: px along the face normal (negative sinks);
@@ -1001,23 +1006,29 @@ the oracle: written to be read next to this document, not to be fast. Its commen
 | `resolveObject`, `objectDistance`, `sideNormal`, `domeHit`, `objectDrawable`, `reliefEquivalent`, `environmentTerm` | The Objects part (2B), in [`objects.ts`](../../packages/ui/src/tokens/objects.ts) |
 | `shadeStage`, `backdropColour`, `particleAt`, `particleOrder`, `environmentSample`, `validateStageScene` | The Scene part (2C), in [`stage.ts`](../../packages/ui/src/tokens/stage.ts) |
 
-**Version 4** adds `instrument.ts` to `@underglass/ui/tokens`. Its exports are named here and land with the reference
-implementation, before core's Instrument work:
+**Version 4** is [`instrument.ts`](../../packages/ui/src/tokens/instrument.ts), with the premium character's settings in
+[`character.ts`](../../packages/ui/src/tokens/character.ts):
 
 | Export | Purpose |
 | --- | --- |
-| `validateScene(scene)` | Extended to version 4: the fields and limits of 2D.1 |
-| `profileMesh(profile)` | A profile's triangles (2D.2): `lathe`, `prism`, `extrude` and `mesh` |
-| `poseAt(part, t)`, `poseMatrix(part, pose)`, `fitCustomPart(part, builtIn)` | Poses, placements and custom parts (2D.2) |
-| `drift(camera, point)`, `bindingVertex(object, camera)`, `cameraDistance(stage, objects)` | Drift and the camera rule (2D.3) |
-| `travelFootprint(object)`, `boxForTravel(object)` | The design language's box rule, for validating forms |
-| `objectContained(object, camera)` | Containment over the whole travel, with the binding vertex and the closest approach (2D.9) |
-| `emitterTerm(emitter, point, normal)`, `partCaster(part, t)`, `faceFactor(scene, x, y)` | Emitters, part shadows on the face and the guarded face factor `Φ` (2D.4, 2D.7) |
-| `studioRadiance(direction, studio, light)`, `studioHdr(studio, light, width)` | The studio (2D.5), and the same function as an equirectangular HDR image for engines that load one |
-| `shadePart(scene, part, point, normal)` | The reference shading of a part, for sampled expectations (2D.5) |
-| `glassSample(scene, captured, part, x, y)` | Glass (2D.6) |
-| `shadeInstrument(scene, captured, x, y)` | The exactly defined colour at a point (the face with `Φ`, captured caps, flat glass), or none where only sampling applies |
+| `validateInstrumentScene(scene)` | The fields and limits of 2D.1 and 2D.2: exactly the scenes core's `instrument` material accepts, with its error paths (`InstrumentSceneError`), returning the same normalized copy ([change log](#change-log)) |
+| `profileMesh(profile)` | A profile's triangles (2D.2): `lathe`, `prism` and `extrude`, triangle for triangle as core builds them, with a smoothing group per triangle |
+| `poseAt(part, t)`, `poseMatrix(part, pose)`, `partMatrix(part, t)`, `posedVertices(part, profile, t)` | Poses and rigid placements (2D.2), `t` clamped at the stops |
+| `project(camera, point)`, `drift(camera, point)`, `bindingVertex(object, profiles)`, `cameraDistance(stage, objects, profiles)` | Projection, drift and the camera rule (2D.3) |
+| `travelFootprint(object, profiles)`, `boxForTravel(object, profiles)` | The design language's box rule, for validating forms |
+| `objectContained(object, scene)`, `steppedDown(scene)` | Containment over the whole travel (2D.9), with the closest approach (part, `t`, vertex, projected inset) and the layer-extent check |
+| `emitterTerm(emitter, point, normal)`, `partCaster(part, profile, t)`, `partShadow(scene, x, y)`, `faceFactor(scene, captured, x, y)` | Emitters, part shadows on the face and the guarded face factor `Φ` (2D.4, 2D.7) |
+| `studioRadiance(direction, studio, light)`, `studioHdr(studio, light, width)`, `studioRotation(light)` | The studio (2D.5), and the same function as an equirectangular Radiance image (core's canonical frame) with the rotation that brings it to the key light |
+| `shadePart(scene, part, point, normal)`, `partTerms(…)` | The reference shading of a part (2D.5), and its terms; the integral by deterministic multiple-importance quadrature (`ENVIRONMENT_SAMPLES`) |
+| `partHit(scene, x, y)`, `mapShadowed(scene, point)` | The part the camera sees at a screen point (its interpolated normal), and whether the shadow map shadows a part point (2D.7) |
+| `glassSample(scene, captured, hit, x, y, scale)`, `captureTexture(captured, scale)` | Glass (2D.6), reading the capture as texels at a device scale |
+| `shadeFace(scene, captured, x, y)`, `capColour(…)`, `instrumentFaceScene(scene)` | Steps 1, 2 and 6 of 2D.8: the face with `Φ` (stepped-down objects in its list) and captured caps |
+| `shadeInstrument(scene, captured, x, y, scale)` | The exactly defined colour at a point (the face with `Φ`, captured caps, flat glass), or the part where only sampling applies |
 | `instrumentSettings(tokens, { depth, theme, character })` | An Instrument scene's settings from a token source and a character |
+
+`validateScene` stays at versions 1 to 3: core accepts version 4 only as Instrument scenes, so a version 4 Relief or
+Objects scene (emitters and protected rects at those levels) is not validated yet. `fitCustomPart` and `mesh` profiles
+wait for core's custom parts.
 
 **Where the standard and the reference implementation disagree:** the standard is authoritative. Fix the
 implementation, regenerate the suite, and record the change in the [change log](#change-log).
@@ -1032,8 +1043,8 @@ There are four suites, exported from `@underglass/ui/conformance/`:
 - [`scene-3.json`](../../packages/ui/conformance/scene-3.json): version 3, Scene: backdrops, particles and an
   environment map. A renderer conforms to version 3 when it passes all three. Stage scenes have no capture and are
   rendered over white.
-- `instrument-4.json` (to come with the version 4 reference implementation): version 4, Instrument. A renderer
-  conforms to version 4 when it passes all four ([below](#the-instrument-suite)).
+- [`instrument-4.json`](../../packages/ui/conformance/instrument-4.json): version 4, Instrument. A renderer conforms to
+  version 4 when it passes all four ([below](#the-instrument-suite)).
 
 **What a case holds:**
 
@@ -1106,35 +1117,46 @@ version 4 is geometric and sampled (2D):
 | `ratio` | Shadowed points and the map variant | At most 0.95 of the lit value with the map on |
 | `relief` | Objects that fail containment | Drawn as their `relief` primitive, and reported |
 
-- **Variants:** a case may list patches of its scene (another `t`, a `post` flag, a layer or the map off) that the
-  renderer also renders. Every case is rendered at device scales 1 and 2, since the probes saw differences between
-  them.
-- **The cases cover:**
-  - a knob at three turns, continuous and detented, with its pointer and skirt sampled;
-  - a fader's carriage at both stops and mid-travel;
-  - the `slide`, `rocker`, `bat` and `wall` switches at both stops and mid-travel, with a bat whose ball binds at
-    mid-travel;
-  - push buttons, held and latched, with captured labels;
-  - a lamp beside a label, on and off: the face pool, the outset past the panel's edge and the guard;
-  - an LED, and the pointer light over text;
-  - a display window with text under flat glass and its finish band, and a lens on a polished stand over a printed
-    target (refraction, magnification, the dark rim, dispersion, the stand's reflection);
-  - the `metal`, `polished`, `lacquer`, `gold`, `gunmetal` and `chrome` presets at sampled points;
-  - a lever's shadow on its plate, and a 2 px plate's shadow;
-  - the shadows of parts on the face;
-  - the post chain on and off, and the clip;
-  - a custom part outside its bounds, drawn as its Relief primitive;
-  - the dark theme, and another light direction.
-- **Where expectations come from:** the reference implementation (`buildInstrumentConformance`, run by the same
-  `npm run build:conformance`). Hand checks in the unit test cover the face pool at a point, the guard's limit, flat
-  glass returning the capture texel, a binding vertex's projection, and the studio's softbox lying at `L`.
-- **The sampled tolerance** is checked against Lite when core's Instrument material first runs the suite (2D.10).
+- **Variants:** a case lists named variants of its scene, each a set of dotted paths and values (`objects.0.t`,
+  `post`, `shadow.map.darkness`, a material layer); a check names the variant it is rendered in (`base` is the scene
+  itself). The map off is `shadow.map.darkness: 1`, which keeps the whole key term.
+- **Device scales:** every case is rendered at device scales 1 and 2, since the probes saw differences between them.
+  At scale `s` a sample's pixel is the device pixel `floor(at · s)`, layer-local, and `expect[s]` is the reference at
+  that pixel's centre. The layer stands on whole device pixels with its vanishing point at `camera.vanish`.
+- **Where sampled points go:** each sampled point is placed by the generator from a seed, at the nearest pixel within
+  4 px where 2D.10's rule holds at both scales (3 px from silhouettes, smoothing-group edges, mapped-shadow edges and
+  protected rects; at most 4 levels per px), and the generator refuses a case whose seed has none. Sampled parts use
+  only `base`, `coat`, `reflectance` and `emissive` (brushed metals are sampled in a variant without brush and grain),
+  with the page reflection off.
+- **The cases** (13): `knob` (a large knob at t = 0, 0.5 and 1, and a detented one on a detent; the cap and the
+  polished skirt cone sampled, brush and grain by presence; the parts' shadows on the dial exact), `fader` (both stops
+  and mid-travel), `switches` (the `slide`, `rocker`, `bat` and `wall` forms at 0, 0.5 and 1, with a bat whose ball
+  binds at mid-travel), `push-buttons` (held and latched, captured labels, the post chain), `lamp` (on and off: the
+  face pool, the outset past the panel's edge and the guard), `led-pointer` (an LED and the pointer light over text),
+  `glass` (text under a display window, its flat region, its finish band by presence; a lens on a polished stand over
+  a printed hub: refraction and magnification sampled, dispersion and its reflection by presence), `presets` (`metal`,
+  `polished`, `lacquer`, `gold`, `gunmetal` and `chrome` at points where each differs from the others by 24 levels),
+  `shadows` (a lever's mapped shadow on its plate by ratio; a 2 px plate's mapped band, 2.3 px wide, by presence),
+  `post-and-clip`, `relief-step-down` (an object whose drift leaves its box and one whose bounds leave the layer, both
+  drawn as Relief), `dark` and `light-direction`. Custom parts are not in the suite: core does not accept them yet.
+- **Not checked at points,** because the placement rule cannot hold there: the 2.2 px knob pointer and 2 px chamfers
+  (containment checks them), a window's finish band (it changes by more than 4 levels per px on a dark display) and
+  a 2 px plate's mapped band.
+- **Where expectations come from:** the reference implementation (`buildInstrumentConformance` in
+  [`instrument-conformance.ts`](../../packages/ui/src/tokens/instrument-conformance.ts), run by the same
+  `npm run build:conformance`). `tests/unit/instrument-reference.unit.test.mjs` checks by hand the face pool at a
+  point, the guard's limit, flat glass returning the capture texel, the lens's magnification and total internal
+  reflection, a binding vertex's projection and the studio's softbox lying at `L`, and fails while the committed suite
+  differs from what the reference produces.
+- **The sampled tolerance** is checked against Lite by `tests/browser/ui-instrument-conformance.test.mjs` (2D.10). Its
+  first run (2026-10-18, Canary 158.0.8110.0) found no sampled point within 12: see the [change log](#change-log).
 
 **Underglass and CSS:**
 
 - **Underglass's GPU presentation must conform.** Phase 4 step 2 runs this suite against decoded GPU pixels. For
-  version 4, core's Instrument work (Phase I2 of the [Instrument plan](instrument.md)) runs `instrument-4.json` the
-  same way.
+  version 4, `tests/browser/ui-instrument-conformance.test.mjs` runs `instrument-4.json` the same way against core's
+  `instrument` material, at DPR 1 and 2. It asserts the checks whose parts core draws today and records the others
+  (emitters, the guard's face factor, the shadow map, the post chain and glass: core work items 2 to 4) as pending.
 - **The CSS presentation is a declared approximation.** It is bound by the P0.6 parity budget, not by this suite. At
   the Instrument level it is bound by the per-component budgets of [I0.6](instrument-phase0.md#i06-css-parity).
 
@@ -1147,6 +1169,11 @@ version 4 is geometric and sampled (2D):
 - **Version 4 adds the Instrument level** (part 2D): parts and poses, containment over the whole travel, emitters and
   protected text at every level, the studio as radiance, glass over the capture, shadows of parts, the post chain's
   order and clip, and sampled guarantees. `light.intensity` and `light.ambient` are used in Instrument scenes.
+  **Status (2026-10-18):** the reference is implemented (`instrument.ts`), the conformance suite is present
+  (`instrument-4.json`), and GPU conformance runs against core's `instrument` material: containment, captured caps,
+  unchanged text and the clip, Relief step-downs, the face without emitters and brush and grain by presence pass at
+  DPR 1 and 2; sampled checks are pending (no point within 12 on the first run), and the checks that need core work
+  items 2 to 4 are pending with them.
 - **Reserved:** `light.colour` (one white light, as in version 1), `light.intensity` and `light.ambient` outside
   Instrument scenes, the inner shadow of wells, and particle shadows.
 - **Not in version 4:** shadows cast by emitters; emitter light on captured caps; a specular term for the pointer
@@ -1159,8 +1186,37 @@ version 4 is geometric and sampled (2D):
 
 ## Change log
 
+- 2026-10-18: version 4, draft: the reference implementation (`instrument.ts`, section 3), the conformance suite
+  (`instrument-4.json`, 13 cases with all seven check kinds at device scales 1 and 2, section 4) and its first run on
+  decoded GPU pixels against core's `instrument` material. No expected colour of versions 1 to 3 changes.
+  - **The reference follows core where the draft and core differ,** so it accepts exactly the scenes core accepts
+    (checked scene for scene by the unit test):
+    - `mesh` profiles and `custom` parts are refused until core's custom parts (work item 5), so `fitCustomPart` is not
+      exported and the suite's step-down case uses built-in parts;
+    - a profile's type field is `type` (`{ type: "lathe", … }`); the protected rects are `protected`;
+    - a scene may describe up to 8,192 parts; the 2,048-part budget is a renderer's step-down with a diagnostic, not a
+      validation error;
+    - `light.ambient` defaults to 0 (2D.1 already says so; the design note's table said 0.55);
+    - objects whose `bounds` leave the layer's box by more than half a pixel are not contained (core's rule, added to
+      2D.9's check);
+    - a `#rrggbb` glass tint (core accepts one) is its channels over 255, not decoded;
+    - core draws with its camera at the canvas centre, so a renderer conforms with the layer placed where the canvas
+      centre is `camera.vanish`; the suite's cases put the vanishing point where a layer on a 1920 × 1080 stage has it.
+  - **Choices the draft left open:** the travel is sampled at core's `travelSteps` (at least 32, a chord within
+    0.45 px of its arc); the integral of 2D.5 is a multiple-importance quadrature (diffuse, the base and coat lobes and
+    the softbox cone, 2,048 Hammersley points each), within a level of 4,096 at every sampled point; a part's normal
+    is turned towards the viewer before shading (as Lite's double-sided PBR does); a sampled point must keep its
+    smoothing group, part and mapped-shadow state within 3 px at both scales.
+  - **The first GPU run (Canary 158.0.8110.0, RTX 3080, DPR 1 and 2): no sampled point is within 12.** Polished and
+    chrome parts are 13–14 levels darker than the reference everywhere; brushed metal tops facing the viewer are about
+    120 darker (the reference saturates them through the studio's strip and front); lacquer 56–58, gold 39–142 and
+    gunmetal 73 off; and core draws the tops of `prism` and `extrude` parts near black (1–7 levels) where the reference
+    gives 170–200, which looks like a winding or normal problem in core's prism and extrude meshes under Lite's
+    double-sided PBR rather than a shading difference. The tolerance is not raised: the sampled checks are recorded,
+    not asserted, until the model or core is corrected (2D.10).
+
 - 2026-10-17: version 4, draft, from the second iteration of the
-  [I1 prototype](instrument-phase0.md#i1-prototype):
+  [I1 prototype](instrument-phase0.md#i1-prototype-second-iteration):
   - **Glass (2D.6)** is computed in linear light with its reflection traced: a ray towards the face meets the part's
     polished `stand` or the face, a ray away from it sees the studio. A lens refracts in at its surface and out at its
     flat bottom (total internal reflection gives a dark rim) instead of being shifted against a flat pane; light is
