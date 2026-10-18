@@ -16,7 +16,7 @@ const sourceImports = registerHooks({
 });
 const post = await import("../../packages/core/src/instrument-post.ts");
 sourceImports.deregister();
-const { postFlags, mapSettings, mapWindow, liteMapBias, partGlow, compositeRect, placedBox, postStructure, POST_DEFAULTS, MAP_DEFAULTS, INSTRUMENT_EXPOSURE, INSTRUMENT_CONTRAST } = post;
+const { settledAll, postFlags, mapSettings, mapWindow, liteMapBias, partGlow, compositeRect, placedBox, postStructure, POST_DEFAULTS, MAP_DEFAULTS, INSTRUMENT_EXPOSURE, INSTRUMENT_CONTRAST } = post;
 
 test("a scene's post flags take 2D.1's defaults: SMAA and bloom on, the options off", () => {
   assert.deepEqual(postFlags({}), { taa: false, contact: false, ssgi: false, smaa: true, bloom: true });
@@ -91,4 +91,27 @@ test("the chain's structure follows the flags, the map, its window and the lens 
 test("the output transform is the loader's and the Rendering Model's: exposure 0.8, contrast 1.2", () => {
   assert.equal(INSTRUMENT_EXPOSURE, 0.8);
   assert.equal(INSTRUMENT_CONTRAST, 1.2);
+});
+
+test("the targets wait for every retired scene's fence, those added while waiting included", async () => {
+  // Fence A is pending when the last layer leaves; a layer comes, goes again, and its scene retires with fence B while A
+  // is still pending; A settles first. A snapshot of the set (the first review fix) settles then, before B.
+  const pending = new Set(), settle = {};
+  const fence = name => { const promise = new Promise(resolve => { settle[name] = () => { pending.delete(promise); resolve(); }; }); pending.add(promise); return promise; };
+  fence("A");
+  let snapshotDone = false, allDone = false;
+  void Promise.all([...pending]).then(() => { snapshotDone = true; });
+  void settledAll(pending).then(() => { allDone = true; });
+  fence("B");
+  settle.A();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(snapshotDone, true, "the snapshot settles with A alone");
+  assert.equal(allDone, false, "settledAll still waits for B");
+  settle.B();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(allDone, true, "and settles after B");
+  // A rejected fence counts as settled; an empty set settles at once.
+  const failing = new Set([Promise.reject(new Error("lost"))]);
+  await settledAll(failing);
+  await settledAll(new Set());
 });

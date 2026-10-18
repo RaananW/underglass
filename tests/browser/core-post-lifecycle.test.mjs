@@ -1,11 +1,12 @@
 /**
  * The Instrument post chain's lifecycle (core work item 3, `docs/ui-library/instrument-phase2.md`, the review fixes) on
  * `instrument-post-core.html` (`window.postCore`):
- * - the last instrument layer leaving while the scenes still build (`?dropAt=ms`) leaves no shared target allocated and
- *   no failed build, GPU on;
+ * - the last instrument layer leaving while a build is held in core's `beforeBuild` hook (`?hold=1`), and 300 ms after the
+ *   page starts (`?dropAt=300`), leaves no shared target allocated and no failed build, GPU on;
  * - a registration that fails with the optional stages on is rebuilt once without them (`?failRegistration=optional`):
  *   the layers draw, the stages read failed with the registration's error; a failure of the minimal chain too
- *   (`?failRegistration=all`) is the `post` step-down, and it is retried once the canvas size changes (a DPR change);
+ *   (`?failRegistration=all`) is the `post` step-down, and it is retried once the canvas size changes (a DPR change); an
+ *   ordinary failure of the minimal build (`?failBuild=minimal`) stays `compile`, its reason naming the cause;
  * - an instrument layer added and removed beside two live layers keeps the targets and draws nothing outside the
  *   controls, under reduced motion too; the targets are released when the last layer leaves.
  * Reports go to the `core-post` evidence directory.
@@ -66,25 +67,47 @@ async function outsideControls(call, page, dpr) {
   return { changed, outside };
 }
 
-test("post chain: the last layer leaving while the scenes build leaves no target and no failed build", async ({ browser }) => {
+test("post chain: the last layer leaving while a build is held leaves no target and no failed build", async ({ browser }) => {
   test.setTimeout(300000);
   await mkdir(directory, { recursive: true });
   const runs = [];
-  for (const dropAt of [300, 600, 900, 1200, 1500]) {
-    const { context, page, call, errors, warnings } = await open(browser, 1, `?dropAt=${dropAt}`);
+  /** The state once every instrument material is gone and the builds have ended: targets, layers, builds and errors. */
+  const result = async (call, page, label, errors, warnings) => {
+    for (let tries = 0; tries < 50 && Object.keys((await call("post"))?.targets ?? {}).length; tries++) await page.waitForTimeout(100);
+    await call("settle");
+    const post = await call("post"), instrument = await call("instrument"), state = await counts(call);
+    const run = { label, boot: await call("boot"), targets: Object.keys(post?.targets ?? {}), layers: instrument?.layers.length ?? 0, compile: instrument?.compile ?? null,
+      mode: state.mode, warnings: warnings.filter(warning => gpuWarning.test(warning)), errors: [...errors] };
+    runs.push(run);
+    expect(run.layers, `${label}: no instrument layer left`).toBe(0);
+    expect(run.targets, `${label}: no shared target left allocated`).toEqual([]);
+    expect(run.compile?.failures ?? 0, `${label}: no build failed`).toBe(0);
+    expect(run.warnings, `${label}: no WebGPU warning`).toEqual([]);
+    expect(errors, `${label}: no page error`).toEqual([]);
+    return run;
+  };
+  {
+    // The regression guard: a build is held in core's `beforeBuild` hook (its gate taken), every material is cancelled,
+    // then the hold is released, so the build runs to its end with no layer left.
+    const { context, page, call, errors, warnings } = await open(browser, 1, "?hold=1");
     try {
-      await page.waitForTimeout(3000);
-      await call("settle");
-      const post = await call("post"), instrument = await call("instrument"), state = await counts(call);
-      const run = { dropAt, boot: await call("boot"), targets: Object.keys(post?.targets ?? {}), layers: instrument?.layers.length ?? 0, compile: instrument?.compile ?? null,
-        mode: state.mode, warnings: warnings.filter(warning => gpuWarning.test(warning)), errors };
-      runs.push(run);
-      expect(run.layers, `dropAt ${dropAt}: no instrument layer left`).toBe(0);
-      expect(run.targets, `dropAt ${dropAt}: no shared target left allocated`).toEqual([]);
-      expect(run.compile?.failures ?? 0, `dropAt ${dropAt}: no build failed`).toBe(0);
-      expect(run.warnings, `dropAt ${dropAt}: no WebGPU warning`).toEqual([]);
-      expect(errors, `dropAt ${dropAt}: no page error`).toEqual([]);
+      for (let tries = 0; tries < 600 && (await call("instrument"))?.compile.building !== true; tries++) await page.waitForTimeout(50);
+      const held = await call("instrument");
+      await call("cancelAll");
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const dropped = await call("instrument");
+      await call("releaseHold");
+      const run = await result(call, page, "held", errors, warnings);
+      run.held = { building: held.compile.building, builds: held.compile.builds, layersWhileHeld: held.layers.length, layersAfterCancel: dropped.layers.length };
+      expect(run.held.layersWhileHeld, "the layers existed while the build was held").toBe(3);
+      expect(run.held.layersAfterCancel, "and left while it was held").toBe(0);
+      expect(run.compile.builds, "the held build ran after the layers left").toBeGreaterThanOrEqual(1);
     } finally { await context.close(); }
+  }
+  {
+    // A second sample, timed: every material cancelled 300 ms after the page starts.
+    const { context, page, call, errors, warnings } = await open(browser, 1, "?dropAt=300");
+    try { await page.waitForTimeout(2000); await result(call, page, "dropAt 300", errors, warnings); } finally { await context.close(); }
   }
   await writeFile(`${directory}/lifecycle-drop.json`, JSON.stringify(runs, null, 2));
 });
@@ -110,6 +133,21 @@ test("post chain: a failed registration is rebuilt without the optional stages, 
     } finally { await context.close(); }
   }
   {
+    // An ordinary error in the minimal rebuild (a mesh or shader would) is not the chain's: it stays `compile`, naming it.
+    const { context, call } = await open(browser, 1, "?failRegistration=optional&failBuild=minimal");
+    try {
+      await call("settle");
+      await counts(call);
+      const instrument = await call("instrument");
+      report.ordinary = instrument.layers.map(layer => [layer.id, layer.status, [...new Set(layer.steppedDown.map(entry => entry.reason))], layer.steppedDown[0]?.detail]);
+      for (const layer of instrument.layers) {
+        expect(layer.status, `${layer.id}: failed, drawn at Relief`).toBe("failed");
+        expect([...new Set(layer.steppedDown.map(entry => entry.reason))], `${layer.id}: an ordinary failure stays compile`).toEqual(["compile"]);
+        expect(layer.steppedDown[0].detail, `${layer.id}: the reason names the cause`).toMatch(/test hook fails the build of the minimal chain/);
+      }
+    } finally { await context.close(); }
+  }
+  {
     const { context, page, call } = await open(browser, 1, "?failRegistration=all");
     try {
       await call("settle");
@@ -119,6 +157,7 @@ test("post chain: a failed registration is rebuilt without the optional stages, 
       for (const layer of failed.layers) {
         expect(layer.status, `${layer.id}: failed, drawn at Relief`).toBe("failed");
         expect([...new Set(layer.steppedDown.map(entry => entry.reason))], `${layer.id}: a failed minimal chain is a post step-down`).toEqual(["post"]);
+        expect(layer.steppedDown[0].detail, `${layer.id}: the reason names the cause`).toMatch(/registered without its optional stages: .*test hook fails the registration of the minimal chain/);
       }
       // The failure is no longer forced; a DPR change (the same CSS layout, so the same scene structure) retries it.
       await call("setFailRegistration", null);

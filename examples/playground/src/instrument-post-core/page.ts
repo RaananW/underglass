@@ -157,9 +157,16 @@ const failing = params.get("fail");
 // `?failRegistration=optional` (or `all`): core's internal test hook fails each scene's registration with its optional
 // stages (or every registration, the minimal chain's too) while `failRegistration` is set (`api.setFailRegistration`).
 let failRegistration = params.get("failRegistration") as "optional" | "all" | null;
-const instrumentTestHook = failing || failRegistration ? {
+// `?failBuild=minimal`: the minimal chain's build fails with an ordinary error (as a mesh or shader would), not its registration.
+const failBuild = params.get("failBuild");
+// `?hold=1`: every scene build waits in core's `beforeBuild` hook until `api.releaseHold()`.
+let releaseHold: () => void = () => {};
+const hold = params.get("hold") === "1" ? new Promise<void>(resolve => { releaseHold = resolve; }) : undefined;
+const instrumentTestHook = failing || failRegistration || failBuild || hold ? {
   failStage: (_id: string, name: string) => name === failing,
   failRegistration: (_id: string, minimal: boolean) => failRegistration === "all" || failRegistration === "optional" && !minimal,
+  failBuild: (_id: string, minimal: boolean) => failBuild === "minimal" && minimal,
+  beforeBuild: () => hold,
 } : undefined;
 const runtimeOptions = { ...hosts, budgets: { layers: 8, pixels: 4_000_000 }, instrumentTestHook,
   onStatusChange: (value: { mode: string; reason: string }) => { status.dataset.core = `${value.mode}: ${value.reason}`; } };
@@ -357,7 +364,8 @@ if (params.get("race") === "1") {
 // `?dropAt=ms`: every instrument material is cancelled that long after the page started, while the scenes still build.
 const dropAt = params.get("dropAt");
 if (dropAt !== null) setTimeout(() => { options.plain = true; refreshAll(); }, Math.max(0, Number(dropAt) - (performance.now() - boot.started)));
-try { await settle(); } catch (error) { boot.reason = String(error); }
+// Held builds never settle until released: the boot waits for core only.
+try { if (hold) await controller.settle(); else await settle(); } catch (error) { boot.reason = String(error); }
 boot.readyMs = performance.now() - boot.started;
 boot.mode = counts().mode;
 if (!boot.reason) boot.reason = counts().reason;
@@ -406,6 +414,10 @@ const api = {
   async cancel(id: string) { cancelled.add(id); handles.get(id)?.cancel(); handles.delete(id); await settle(); },
   async restore(id: string) { cancelled.delete(id); refresh(panels().find(panel => panel.id === id)!); await settle(); },
   setFailRegistration(mode: "optional" | "all" | null) { failRegistration = mode; },
+  /** Lets the builds held by `?hold=1` go on. */
+  releaseHold() { releaseHold(); },
+  /** Cancels every instrument material at once, without waiting for the builds (`?hold=1`). */
+  cancelAll() { options.plain = true; refreshAll(); },
   async disable() { await controller.disable(); return counts(); },
   async enable() { await controller.enable(); await settle(); return counts(); },
 };
