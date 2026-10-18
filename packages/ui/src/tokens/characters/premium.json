@@ -500,12 +500,12 @@
       "box": {
         "width": {
           "$type": "dimension",
-          "$value": "38px",
-          "$description": "Box width."
+          "$value": "54px",
+          "$description": "Box width: room for the tipped paddle's corners and their drift (#146)."
         },
         "length": {
           "$type": "dimension",
-          "$value": "62px",
+          "$value": "70px",
           "$description": "Box length."
         }
       },
@@ -590,6 +590,18 @@
               "max": 4
             }
           }
+        }
+      },
+      "bezelSize": {
+        "width": {
+          "$type": "dimension",
+          "$value": "38px",
+          "$description": "Bezel width."
+        },
+        "length": {
+          "$type": "dimension",
+          "$value": "62px",
+          "$description": "Bezel length."
         }
       }
     },
@@ -712,6 +724,16 @@
         }
       },
       "plate": {
+        "width": {
+          "$type": "dimension",
+          "$value": "58px",
+          "$description": "Plate width, inside the box (4 px for its edge and shadow)."
+        },
+        "length": {
+          "$type": "dimension",
+          "$value": "84px",
+          "$description": "Plate length."
+        },
         "height": {
           "$type": "dimension",
           "$value": "3px",

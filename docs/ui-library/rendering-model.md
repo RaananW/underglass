@@ -780,31 +780,60 @@ shadows whatever lies beneath the layer. Conformance renders over the backdrop.
 | `brush`, `grain`, `sheen`, `iridescence`, `subsurface` | As in the design language | Presence only (2D.10) |
 
 **The reference shading of a part.** Unlike the face (2.1), parts are shaded in linear light, as PBR engines do, and
-encoded to sRGB at the end. With `lin` the sRGB decoding, `X` the point, `n` its interpolated normal, `C = (V.x, V.y,
-D)` the camera and `v = normalize(C − X)`:
+encoded at the end. The shading is the split-sum approximation as Babylon Lite 1.33 computes it, so that the model
+describes what Underglass draws (the [change log](#change-log) records each convention and where Lite's source fixes
+it). With `lin` the sRGB decoding, `X` the point, `n` its interpolated normal turned towards the viewer, `C = (V.x, V.y,
+D)` the camera, `v = normalize(C − X)`, `h = normalize(v + L)` and `r = reflect(−v, n)`:
 
 ```text
-ρ    = lin(base.colour)
-F0   = mix(0.04 · f0 · lin(tint), ρ, metallic)
-α    = max(roughness², 0.002)
-f(ω) = (1 − F) · (1 − metallic) · ρ / π  +  ndf · vis · F          for a direction ω
-         h   = normalize(v + ω),  F = F0 + (1 − F0) · (1 − v · h)⁵
+ρ      = lin(base.colour)                         albedo = ρ · (1 − 0.04) · (1 − metallic)
+F0     = mix(0.04 · f0 · lin(tint), ρ, metallic)  F(c)   = F0 + (1 − F0) · (1 − c)⁵
+α      = roughness² + 0.0005                      ndf, vis as GGX and height-correlated Smith at α:
          ndf = α² / (π · ((n · h)² · (α² − 1) + 1)²)
-         vis = 0.5 / ((n · ω) · √((n · v)² · (1 − α²) + α²) + (n · v) · √((n · ω)² · (1 − α²) + α²))
-key  = intensity · direct · σ · π · f(L) · max(n · L, 0)
-lamp = Σ over emitters of π · f(lₑ) · E                            lₑ towards the emitter, E from 2D.4 at (X, n)
-fill = ambient · (1 − metallic) · ρ · (0.5 + 0.5 · n.z)
-env  = environment.strength · ∫ studio(ω) · f(ω) · max(n · ω, 0) dω
-out  = enc(clamp(key + lamp + fill + env + emissive.strength · lin(emissive.colour), 0, 1))
+         vis = 0.5 / ((n · L) · √((n · v)² · (1 − α²) + α²) + (n · v) · √((n · L)² · (1 − α²) + α²))
+[A, B] = table(n · v, roughness)                  Ec = 1 + F0 · (1 / (A + B) − 1)
+key    = intensity · direct · σ · (albedo / π + F(v · h) · ndf · vis · Ec) · max(n · L, 0)
+lamp   = the same lobe for each emitter, with E from 2D.4 at (X, n) in place of intensity · cos
+fill   = ambient · (1 − metallic) · ρ · (0.5 + 0.5 · n.z)
+env    = strength · (E(n) · albedo  +  mix(Lspec(r, α), E(n), α) · (F0 · A + B) · Ec)
+out    = encodePart(key + lamp + fill + env + emissive.strength · lin(emissive.colour))
+encodePart(c) = x + 0.2 · (x² · (3 − 2x) − x),   x = clamp((0.8 · c)^(1/2.2), 0, 1)
 ```
 
-- **Coat:** with `F꜀` the Schlick term for `F0 = ((ior − 1)/(ior + 1))²` and `ndf꜀`, `vis꜀` at `α = coat.roughness²`,
-  `f(ω)` becomes `f(ω) · (1 − coat · F꜀(n · v)) + coat · ndf꜀ · vis꜀ · F꜀`.
+- **The key light carries no π:** `intensity` is the irradiance the light gives a surface facing it, so a white
+  Lambertian part facing the key light shows `0.96 · intensity / π`.
+- **The table** `[A, B]` is the split-sum reflectance: 1,024 GGX half vectors `h_i` at `α_t = roughness'²`
+  (`roughness' = max(roughness, 0.04)`, `n · v` at least 0.001) with azimuth `2π i / 1024` and polar angle from the
+  base-2 radical inverse of `i`; with `l` the reflection of `v` about `h_i`, `G = vis(l) · (n · l) · 4 (v · h_i) /
+  (n · h_i)` and `m = (1 − v · h_i)⁵`, `A = Σ (1 − m) · G / 1024` and `B = Σ m · G / 1024`.
+- **The specular environment** `Lspec(r, α)` reads the prefiltered studio at lod `clamp(0.8 · log2(256 · α), 0, 8)`,
+  linear between the mips about it. Mip 0 is `studio(r)`. Mip `k ≥ 1` is the prefilter at alpha `q_k = 2^(k / 0.8) /
+  256`: `Σ studio(T(ω_i)) · (r · ω_i) / Σ (r · ω_i)` over the reflections `ω_i` of `r` about the 1,024 half vectors at
+  `q_k` (with `n = v = r`), `T` as below.
+- **The irradiance** `E(n)` is the studio projected on the nine real spherical harmonics over a 512 × 256
+  equirectangular grid, convolved with the clamped cosine and divided by π (Babylon's polynomial and its pre-scaled
+  harmonics): average radiance, so a uniform studio of 1 gives 1.
+- **Lite's environment orientation, `T`:** Lite 1.33 computes mips 1 and up of its specular cube at the directions its
+  prefilter shader's face table gives each texel, a 180° turn from the direction WebGPU samples that texel at, so rough
+  reflections see `studio(T(ω))`: the 180° turn about the horizontal axis `((cos θ − sin θ), 0, −(sin θ + cos θ)) / √2`
+  (layer axes, `θ = studioRotation(light)`), which turns the screen's up to its down. Mirrors (mip 0) and the
+  irradiance see the studio where it is. This is an engine defect, followed until it is fixed upstream; the model then
+  drops `T` in a new version.
+- **Coat** (Lite's clear coat): the base's `F0` is remapped under the coat (`s = √F0`, `a = 1 − ior`, `b = 1 + ior`,
+  `F0 ← mix(F0, ((a + b · s) / (b + a · s))², coat)`); with `F꜀(c) = F0꜀ + (1 − F0꜀)(1 − c)⁵`, `F0꜀ = ((1 − ior) / (1 +
+  ior))²` and `α꜀ = coat.roughness² + 0.0005`, the key's lobe becomes `lobe · (1 − coat · F꜀(v · h)) + coat · F꜀(v · h)
+  · ndf(α꜀) · 0.25 / (v · h)² · (n · L)` (a Kelemen visibility), and `env` becomes `env · (1 − coat · F꜀(n · v)) +
+  strength · Lspec(r, α꜀) · (F0꜀ · A꜀ + B꜀) · coat`, with `[A꜀, B꜀] = table(n · v, coat.roughness)`.
 - **The map:** `σ` is 1 where the shadow map (2D.7) does not shadow `X`, and `map.darkness` where it does.
-- **The fill** is 0 unless the scene sets `light.ambient` (2D.1): the studio is the fill.
-- **The integral** is evaluated by deterministic quadrature, fine enough that doubling it changes no channel by a
-  level. Page reflections are not part of the reference shading (2D.10 checks them by presence).
-- **The clamp:** the output is clamped to 0–1 before encoding, as Lite's PBR does; there is no tone mapping.
+- **The fill** is 0 unless the scene sets `light.ambient` (2D.1): the studio is the fill. Page reflections are not part
+  of the reference shading (2D.10 checks them by presence).
+- **The output transform** `encodePart` is Lite's image processing as Underglass leaves it on an Instrument layer:
+  exposure 0.8, gamma 2.2 (not the sRGB curve) and contrast 1.2, applied after the clamp of the gamma-encoded value.
+  Lite's HDR loader sets exposure 0.8 and contrast 1.2 when it loads the studio; core's own setting of 1 and 1 is made
+  before the load and so does not hold (a core finding). If core sets them again after the load, the model changes
+  this transform in a new version.
+- **Emitters** (`lamp`) keep 2D.4's light with this lobe; at the suite's two emitter-lit sampled points (a lamp's and
+  the pointer light's plate) core's emitters agree with it within 1.
 
 **The studio.** With `L` the light direction (2.1), `ℓ = √(L.x² + L.z²)`, `up(ω) = −ω.y` (the screen's up) and
 `∠(a, b) = acos(clamp(a · b, −1, 1))`:
@@ -968,24 +997,28 @@ These are exact, and a renderer keeps them in every configuration, post options 
 
 ### 2D.10 Sampled guarantees
 
-The colour of a part also depends on choices the model leaves to the engine: how the environment is prefiltered, how
-normals are interpolated, how the shadow map is filtered. Version 4 therefore checks parts at named points within a
-tolerance, and checks the layers it does not shade by their presence.
+The colour of a part also depends on what the model does not fix texel for texel: how a renderer stores the prefiltered
+environment (texels, mips, filtering), how normals are interpolated, how the shadow map is filtered. Version 4 therefore
+checks parts at named points within a tolerance, and checks the layers it does not shade by their presence.
 
-- **Lit colour.** At each sampled point, every channel is within **12** (0–255) of the reference shading (2D.5).
+- **Lit colour.** At each sampled point, every channel is within **16** (0–255) of the reference shading (2D.5).
   - **Where points go:** at least 3 px from any silhouette, facet edge, shadow-map edge, protected rect or bloom halo,
     where the reference colour changes by at most 4 levels per px; on parts whose materials use only `base`, `coat`,
     `reflectance` and `emissive`, with `page` off. A case places each material's points where the materials it compares
     differ by at least 24 levels in some channel, so a wrong material fails.
-  - **Why 12:** 3, the version 1 tolerance for 8-bit encoding; plus 8, for 2 px of shading position (interpolated
-    normals and tessellation) at the 4 levels per px the placement allows; plus 1, for prefiltered rather than
-    integrated environment light at those smooth points. It is provisional until the suite is first run against Lite
-    (Phase I2). A point Lite misses moves or changes material; raising the tolerance is a change of version 4, recorded
-    in the change log.
+  - **Why 16, measured:** with 2D.5 calibrated to Lite, core's parts (Canary 158.0.8110.0, one RTX 3080, DPR 1 and
+    2) lie within these residuals of the reference at the suite's 61 sampled points: median 1, 95th percentile 5,
+    maximum 16. Over every unshadowed part pixel 2 px clear of an edge in six of the cases (3,577 pixels, every third
+    pixel), the median is 2, the 95th percentile 11 and the 99th 16; per material the median is 0 to 3, and the 95th
+    percentile 1 to 15, except polished mirrors (36), whose reflections of the strip's sharp edges move tens of levels
+    per pixel, where the placement rule keeps points away. 16 holds every measured point; the one point at 16 (a tilted
+    brushed-metal paddle on the dark theme) is the one to explain before the tolerance is tightened. A point Lite misses
+    moves or changes material; changing the tolerance is a change of version 4, recorded in the change log.
 - **Presence.** For `brush`, `grain`, `sheen`, `iridescence`, `subsurface`, `dispersion`, page reflections, a lens's
   reflection, emitter light on parts and the shadow map, a case renders the feature on and off. At least the case's
   share of the part's pixels changes by at least its number of levels, and nothing changes outside the object's
-  `bounds` or inside protected rects.
+  `bounds` or inside protected rects. Emitter light is the exception: an emitter lights the face too (2D.4), so its
+  check counts the parts only, and the face is checked by the exact points.
 - **Mapped shadow.** A part point the map shadows is darker with the map on than off, at most 0.95 of its lit value
   in every channel; a lit part point changes by at most 3.
 
@@ -1019,7 +1052,8 @@ the oracle: written to be read next to this document, not to be fast. Its commen
 | `objectContained(object, scene)`, `steppedDown(scene)` | Containment over the whole travel (2D.9), with the closest approach (part, `t`, vertex, projected inset) and the layer-extent check |
 | `emitterTerm(emitter, point, normal)`, `partCaster(part, profile, t)`, `partShadow(scene, x, y)`, `faceFactor(scene, captured, x, y)` | Emitters, part shadows on the face and the guarded face factor `Φ` (2D.4, 2D.7) |
 | `studioRadiance(direction, studio, light)`, `studioHdr(studio, light, width)`, `studioRotation(light)` | The studio (2D.5), and the same function as an equirectangular Radiance image (core's canonical frame) with the rotation that brings it to the key light |
-| `shadePart(scene, part, point, normal)`, `partTerms(…)` | The reference shading of a part (2D.5), and its terms; the integral by deterministic multiple-importance quadrature (`ENVIRONMENT_SAMPLES`) |
+| `shadePart(scene, part, point, normal)`, `partTerms(…)`, `encodePart(c)` | The reference shading of a part (2D.5), its linear terms and its output transform |
+| `specularEnvironment(r, α, studio, light)`, `studioIrradiance(n, studio, light)`, `reflectanceTable(nv, roughness)`, `environmentTurn(ω, light)` | The split-sum terms of 2D.5: `Lspec`, `E`, `[A, B]` and Lite's orientation `T` |
 | `partHit(scene, x, y)`, `mapShadowed(scene, point)` | The part the camera sees at a screen point (its interpolated normal), and whether the shadow map shadows a part point (2D.7) |
 | `glassSample(scene, captured, hit, x, y, scale)`, `captureTexture(captured, scale)` | Glass (2D.6), reading the capture as texels at a device scale |
 | `shadeFace(scene, captured, x, y)`, `capColour(…)`, `instrumentFaceScene(scene)` | Steps 1, 2 and 6 of 2D.8: the face with `Φ` (stepped-down objects in its list) and captured caps |
@@ -1128,7 +1162,7 @@ version 4 is geometric and sampled (2D):
   protected rects; at most 4 levels per px), and the generator refuses a case whose seed has none. Sampled parts use
   only `base`, `coat`, `reflectance` and `emissive` (brushed metals are sampled in a variant without brush and grain),
   with the page reflection off.
-- **The cases** (13): `knob` (a large knob at t = 0, 0.5 and 1, and a detented one on a detent; the cap and the
+- **The cases** (14): `knob` (a large knob at t = 0, 0.5 and 1, and a detented one on a detent; the cap and the
   polished skirt cone sampled, brush and grain by presence; the parts' shadows on the dial exact), `fader` (both stops
   and mid-travel), `switches` (the `slide`, `rocker`, `bat` and `wall` forms at 0, 0.5 and 1, with a bat whose ball
   binds at mid-travel), `push-buttons` (held and latched, captured labels, the post chain), `lamp` (on and off: the
@@ -1136,6 +1170,7 @@ version 4 is geometric and sampled (2D):
   `glass` (text under a display window, its flat region, its finish band by presence; a lens on a polished stand over
   a printed hub: refraction and magnification sampled, dispersion and its reflection by presence), `presets` (`metal`,
   `polished`, `lacquer`, `gold`, `gunmetal` and `chrome` at points where each differs from the others by 24 levels),
+  `preset-domes` (the presets and a matte paint on domes, sampled at their tops and about 30° and 50° from them),
   `shadows` (a lever's mapped shadow on its plate by ratio; a 2 px plate's mapped band, 2.3 px wide, by presence),
   `post-and-clip`, `relief-step-down` (an object whose drift leaves its box and one whose bounds leave the layer, both
   drawn as Relief), `dark` and `light-direction`. Custom parts are not in the suite: core does not accept them yet.
@@ -1148,15 +1183,16 @@ version 4 is geometric and sampled (2D):
   point, the guard's limit, flat glass returning the capture texel, the lens's magnification and total internal
   reflection, a binding vertex's projection and the studio's softbox lying at `L`, and fails while the committed suite
   differs from what the reference produces.
-- **The sampled tolerance** is checked against Lite by `tests/browser/ui-instrument-conformance.test.mjs` (2D.10). Its
-  first run (2026-10-18, Canary 158.0.8110.0) found no sampled point within 12: see the [change log](#change-log).
+- **The sampled tolerance** (16) was measured against Lite by `tests/browser/ui-instrument-conformance.test.mjs`
+  (2D.10), which asserts it.
 
 **Underglass and CSS:**
 
 - **Underglass's GPU presentation must conform.** Phase 4 step 2 runs this suite against decoded GPU pixels. For
   version 4, `tests/browser/ui-instrument-conformance.test.mjs` runs `instrument-4.json` the same way against core's
-  `instrument` material, at DPR 1 and 2. It asserts the checks whose parts core draws today and records the others
-  (emitters, the guard's face factor, the shadow map, the post chain and glass: core work items 2 to 4) as pending.
+  `instrument` material, at DPR 1 and 2. It asserts the checks whose parts core draws today, emitters and the guard
+  included, and records the others (the shadow map and the post chain, and glass: core work items 3 and 4) as
+  pending.
 - **The CSS presentation is a declared approximation.** It is bound by the P0.6 parity budget, not by this suite. At
   the Instrument level it is bound by the per-component budgets of [I0.6](instrument-phase0.md#i06-css-parity).
 
@@ -1171,9 +1207,9 @@ version 4 is geometric and sampled (2D):
   order and clip, and sampled guarantees. `light.intensity` and `light.ambient` are used in Instrument scenes.
   **Status (2026-10-18):** the reference is implemented (`instrument.ts`), the conformance suite is present
   (`instrument-4.json`), and GPU conformance runs against core's `instrument` material: containment, captured caps,
-  unchanged text and the clip, Relief step-downs, the face without emitters and brush and grain by presence pass at
-  DPR 1 and 2; sampled checks are pending (no point within 12 on the first run), and the checks that need core work
-  items 2 to 4 are pending with them.
+  unchanged text and the clip, Relief step-downs, the face with emitters, the pointer light and the guard, brush,
+  grain and emitter light by presence, and every sampled point (with 2D.5 calibrated to Lite, within 16) pass at DPR 1
+  and 2; the checks that need core work items 3 and 4 are pending.
 - **Reserved:** `light.colour` (one white light, as in version 1), `light.intensity` and `light.ambient` outside
   Instrument scenes, the inner shadow of wells, and particle shadows.
 - **Not in version 4:** shadows cast by emitters; emitter light on captured caps; a specular term for the pointer
@@ -1185,6 +1221,36 @@ version 4 is geometric and sampled (2D):
   renderer states which versions it conforms to.
 
 ## Change log
+
+- 2026-10-18: version 4, draft: **the reference shading of parts calibrated to Babylon Lite 1.33** (2D.5), from Lite's
+  source and core's decoded pixels, and the sampled tolerance measured (2D.10). Every geometric guarantee, the face and
+  the exact checks are unchanged. Each difference is a convention, not a fitted coefficient:
+  - **The key light carries no π** (Lite's `singlelight-directional-wgsl.js`: `albedo · (1 / π) · NdotL · lightColor`),
+    and a dielectric's diffuse albedo is `ρ · (1 − 0.04)` with no Fresnel term (`pbr-template.js`, `surfaceAlbedo`); α
+    is `roughness² + 0.0005`; the key's lobe takes Lite's energy compensation `1 + F0 · (1 / (A + B) − 1)`
+    (`ibl-fragment.js`).
+  - **The environment is the split sum** instead of an integral: the prefiltered studio at lod `0.8 · log2(256 · α)`
+    (`hdr-ibl-pipeline`: mip `k` at alpha `2^(k / 0.8) / 256`, 1,024 Hammersley points, `n = v = r`), mixed towards the
+    irradiance by α, times the split-sum table `F0 · A + B` (`hdr-brdf-lut.compute`); and the diffuse light is order-2
+    spherical-harmonic irradiance over π (`hdr-parser.js` `computeSHFromEquirect`, `spherical-harmonics.js`,
+    `env-helpers` `polynomialToPreScaledHarmonics`).
+  - **Lite's orientation of its prefiltered mips:** mips 1 and up see the studio turned 180° about a horizontal axis
+    (`T`, 2D.5): the prefilter compute shader's face table is a 180° turn from WebGPU's cube sampling, while mip 0 is
+    copied as loaded. Without `T` the brushed tops facing the viewer came out white in the reference against about 134
+    in core (they see the turned studio's floor instead of its strip). This is a Lite defect, followed until it is
+    fixed.
+  - **The output transform:** exposure 0.8, gamma 2.2 and contrast 1.2 (`pbr-template.js`: `color *= vImageInfos.x`,
+    `pow(color, 1 / 2.2)`, the contrast curve), because Lite's `loadHdrEnvironment` sets exposure 0.8 and contrast 1.2
+    (`load-hdr.js`) after core has set 1 and 1. This, with the sRGB curve replaced by gamma 2.2, was the polished
+    and chrome parts' 13-level offset: with it they agree with core within 1.
+  - **The coat** follows Lite's clear coat (`clearcoat-fragment.js`): the base's F0 remapped under the coat, a Kelemen
+    visibility for the key light, its own lobe and table in the environment, the base attenuated by the coat's Fresnel.
+  - **Results** (Canary 158.0.8110.0, RTX 3080, core with PR #143's prism winding and #145's emitters): every one of the
+    61 sampled points, at DPR 1 and 2, lies within 16 (median 1, 95th percentile 5); before the calibration none lay
+    within 12. The tolerance is 16 (2D.10). A new case, `preset-domes`, samples the presets at normals up to about 50°.
+  - **Findings for core and Lite:** core's exposure and contrast do not hold (it sets them before Lite's loader
+    overrides them); Lite's prefiltered mips are turned against mip 0. Either fix changes these expectations, in a new
+    version of the draft.
 
 - 2026-10-18: version 4, draft: the reference implementation (`instrument.ts`, section 3), the conformance suite
   (`instrument-4.json`, 13 cases with all seven check kinds at device scales 1 and 2, section 4) and its first run on

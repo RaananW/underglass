@@ -624,9 +624,9 @@ keep their Objects object, drawn as meshes of the same shapes. Lit parts give th
 | Knob, detented | As Knob | As Knob | Turn in `detents` steps, 11 | 0.8 × the knob's size |
 | Fader | `slot`, printed (5 wide); the scale | `carriage` with its `grip` (an index line, 1.6 wide) | Slide along `fader.travel`, 180 | Box 46 wide and the travel plus the carriage long. Carriage 30 × 42, 12 high, taper 0.6, radius 3: a brushed body, a 2 px polished chamfer and a brushed top |
 | Switch `slide` | `slot` | `carriage` (a block), with an accent flag when on | Slide 28 | Box 64 × 28. Block 24 × 20, 6 high, taper 0.4, chamfer 2. Flag lit 1.0 when on, hidden when off |
-| Switch `rocker` | `bezel`, 2 high | `paddle`: a two-facet plate (facets 12 / 4) on a `pivot`, with an accent flag on its On end | Tilt ±17.7° | Box 38 × 62. Paddle 28 × 50. Flag 18 × 9, 1.0 / 0.12. The paddle's shadow moves to its raised end |
+| Switch `rocker` | `bezel`, 2 high | `paddle`: a two-facet plate (facets 12 / 4) on a `pivot`, with an accent flag on its On end | Tilt ±17.7° | Box 54 × 70 (the bezel stays 38 × 62: the tipped paddle's raised corners stand about 29 px at full depth and drift up to 12 px at the stage's edge, so a 38 × 62 box leaves them 6.7 px outside it). Paddle 28 × 50. Flag 18 × 9, 1.0 / 0.12. The paddle's shadow moves to its raised end |
 | Switch `bat` | `nut` Ø24, 3 high; `bushing` Ø14, 7 high | `lever` with its `ball`, on a `pivot` | Tilt ±40° | Box 48 × 92. Lever 40 long (it scales with depth, at most × 1.15), pivot 5 up, base r 3.4, neck r 2.7, ball r 5.6: about 28 px head-on, with its shadow |
-| Switch `wall` | `plate`, 3 high, radius 6 | `paddle`, with a lit dot near its On end | Tilt ±9° | Box 66 × 92. Paddle 30 × 54, 7 high, taper 0.6, chamfer 2, its top crowned 1.6 along its length (the reflection band moves as it tips). Dot 12 × 4, 1.0 / 0.12 |
+| Switch `wall` | `plate`, 3 high, radius 6 | `paddle`, with a lit dot near its On end | Tilt ±9° | Box 66 × 92, the plate 58 × 84 inside it (4 px for its edge and shadow). Paddle 30 × 54, 7 high, taper 0.6, chamfer 2, its top crowned 1.6 along its length (the reflection band moves as it tips). Dot 12 × 4, 1.0 / 0.12 |
 | PushButton `momentary` | `bezel` (r 27 → 22.6, 3.2 high); the lit ring, a `lens` (r 22.6 → 20.6), 1.0 / 0.22, in the bloom | `cap`, carrying its captured label | Travel 4, while held; a contact gap darkens round the cap as it goes in | Box 64 (room for the halo). Cap Ø40, 6 high, taper 0.6, chamfer 2 |
 | PushButton `latching` | As momentary, with an LED | `cap` | Travel 4 held, 1.8 latched | As momentary |
 | Lamp | `bezel`; `lens`, an emitter | None | The emitter turns on | Lens 28† ([I0.3](instrument-phase0.md#i03-emitters-and-the-pointer-light)); the box leaves room for the bloom halo |
@@ -1342,3 +1342,6 @@ it.
   - section 19: the premium defaults.
 - 2026-10-18: section 3, the pointer light at the Relief and Objects levels: its highlight now travels across bevels,
   sides and domes (core's point-light specular term, core work item 2). No token or rule changed.
+- 2026-10-18: section 6, the Instrument object table, from the switch forms (#146): the rocker's box is 54 × 70 (v2's
+  38 × 62, which the bezel keeps, leaves the tipped paddle's corners outside it at the stage's edge), and the wall plate
+  is 58 × 84 inside its 66 × 92 box. `premium.json` follows.

@@ -133,3 +133,4 @@ The [Instrument level](../instrument.md)'s components: hardware objects over nat
 | Component | Native element | Object |
 | --- | --- | --- |
 | [Knob](knob.md) | `<input type="range">` over a printed dial | A skirt and a cap with a turning pointer, a scale printed on the face |
+| [Fader](fader.md) | `<input type="range">`, vertical (`writing-mode: vertical-lr`) or horizontal, its thumb the carriage | A slot in the faceplate with a capped carriage, a scale printed beside it |

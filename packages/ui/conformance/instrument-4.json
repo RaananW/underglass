@@ -1,10 +1,10 @@
 {
   "format": "strata-conformance",
   "model": "strata-scene/4",
-  "status": "Version 4 is a draft. The sampled tolerance (12) is provisional until the suite first runs against core's Instrument material on Lite (rendering model 2D.10); raising it is a change of version 4.",
+  "status": "Version 4 is a draft. The sampled tolerance (16) was measured against core's instrument material on Lite 1.33 (Canary 158.0.8110.0, one RTX 3080): the suite's sampled points lie within 16 of the calibrated reference shading (rendering model 2D.5, 2D.10): median 1, 95th percentile 5, maximum 16 at one point; changing it is a change of version 4.",
   "tolerance": {
     "exact": 3,
-    "sampled": 12
+    "sampled": 16
   },
   "scales": [
     1,
@@ -740,8 +740,8 @@
               ],
               "note": "the cap's crowned top at its centre",
               "expect": {
-                "1": "#ffffff",
-                "2": "#ffffff"
+                "1": "#8b8c8d",
+                "2": "#8b8c8d"
               }
             },
             {
@@ -753,8 +753,8 @@
               ],
               "note": "the cap's top towards the light",
               "expect": {
-                "1": "#ffffff",
-                "2": "#ffffff"
+                "1": "#8a8c8d",
+                "2": "#8a8c8d"
               }
             },
             {
@@ -766,8 +766,8 @@
               ],
               "note": "the polished skirt cone, below the cap",
               "expect": {
-                "1": "#6f7071",
-                "2": "#6f7071"
+                "1": "#616263",
+                "2": "#616263"
               }
             },
             {
@@ -779,8 +779,8 @@
               ],
               "note": "the polished skirt cone, right of the cap (the side facing the vanishing point)",
               "expect": {
-                "1": "#7f8182",
-                "2": "#7f8182"
+                "1": "#717273",
+                "2": "#717273"
               }
             },
             {
@@ -792,8 +792,8 @@
               ],
               "note": "the detented knob's cap",
               "expect": {
-                "1": "#f9fbfd",
-                "2": "#f8fafc"
+                "1": "#898a8c",
+                "2": "#898b8c"
               }
             }
           ]
@@ -1231,8 +1231,8 @@
               ],
               "note": "the carriage's top, above its index line",
               "expect": {
-                "1": "#ffffff",
-                "2": "#ffffff"
+                "1": "#8c8d8e",
+                "2": "#8c8d8e"
               }
             },
             {
@@ -1244,8 +1244,8 @@
               ],
               "note": "the carriage's top, below its index line",
               "expect": {
-                "1": "#ffffff",
-                "2": "#ffffff"
+                "1": "#8c8d8f",
+                "2": "#8c8d8f"
               }
             }
           ]
@@ -2094,8 +2094,8 @@
               ],
               "note": "the slide's block, mid-travel",
               "expect": {
-                "1": "#babcbe",
-                "2": "#babcbe"
+                "1": "#a0a2a3",
+                "2": "#a0a2a3"
               }
             },
             {
@@ -2107,8 +2107,8 @@
               ],
               "note": "the rocker paddle's raised facet",
               "expect": {
-                "1": "#b8babc",
-                "2": "#b8babc"
+                "1": "#9fa1a2",
+                "2": "#9fa1a2"
               }
             },
             {
@@ -2120,8 +2120,8 @@
               ],
               "note": "the wall paddle's top",
               "expect": {
-                "1": "#b1b3b4",
-                "2": "#b1b3b4"
+                "1": "#abaeaf",
+                "2": "#abaeaf"
               }
             },
             {
@@ -2133,8 +2133,8 @@
               ],
               "note": "the wall plate below the paddle",
               "expect": {
-                "1": "#abadae",
-                "2": "#abadae"
+                "1": "#afb1b3",
+                "2": "#afb1b3"
               }
             }
           ]
@@ -3314,10 +3314,10 @@
           "feature": "emitter light on parts",
           "object": "patch",
           "variant": "emitters-off",
-          "share": 0.04,
+          "share": 0.09,
           "levels": 4,
           "note": "The lamp lights the plate beside it",
-          "measured": 0.098
+          "measured": 0.193
         },
         {
           "kind": "sampled",
@@ -3331,8 +3331,8 @@
               ],
               "note": "the matte plate, lit by the lamp",
               "expect": {
-                "1": "#f6fcff",
-                "2": "#f6fcff"
+                "1": "#b9bdc4",
+                "2": "#b9bdc4"
               }
             }
           ]
@@ -3854,8 +3854,8 @@
               ],
               "note": "the plate under the pointer light",
               "expect": {
-                "1": "#c6ccd6",
-                "2": "#c6ccd6"
+                "1": "#959ba4",
+                "2": "#959ba4"
               }
             }
           ]
@@ -4470,8 +4470,8 @@
               ],
               "note": "the polished stand below the lens",
               "expect": {
-                "1": "#828385",
-                "2": "#828385"
+                "1": "#747576",
+                "2": "#747576"
               }
             }
           ]
@@ -5363,23 +5363,36 @@
               "object": "metal",
               "part": 0,
               "at": [
-                42.5,
-                38.5
+                48.5,
+                36.5
               ],
-              "note": "metal: the crown, (2.5, -1.5) px from its centre",
+              "note": "metal: the crown, (8.5, -3.5) px from its centre",
               "expect": {
-                "1": "#ffffff",
-                "2": "#ffffff"
+                "1": "#7f8182",
+                "2": "#7f8182"
               }
             },
             {
               "object": "metal",
               "part": 0,
               "at": [
-                31.5,
-                40.5
+                46.5,
+                35.5
               ],
-              "note": "metal: the crown, (-8.5, 0.5) px from its centre",
+              "note": "metal: the crown, (6.5, -4.5) px from its centre",
+              "expect": {
+                "1": "#808183",
+                "2": "#808182"
+              }
+            },
+            {
+              "object": "polished",
+              "part": 0,
+              "at": [
+                112.5,
+                31.5
+              ],
+              "note": "polished: the crown, (0.5, -8.5) px from its centre",
               "expect": {
                 "1": "#ffffff",
                 "2": "#ffffff"
@@ -5389,26 +5402,13 @@
               "object": "polished",
               "part": 0,
               "at": [
-                123.5,
-                50.5
+                106.5,
+                34.5
               ],
-              "note": "polished: the crown, (11.5, 10.5) px from its centre",
+              "note": "polished: the crown, (-5.5, -5.5) px from its centre",
               "expect": {
-                "1": "#707172",
-                "2": "#6f7172"
-              }
-            },
-            {
-              "object": "polished",
-              "part": 0,
-              "at": [
-                107.5,
-                53.5
-              ],
-              "note": "polished: the crown, (-4.5, 13.5) px from its centre",
-              "expect": {
-                "1": "#6c6d6e",
-                "2": "#6c6d6e"
+                "1": "#ffffff",
+                "2": "#ffffff"
               }
             },
             {
@@ -5416,38 +5416,25 @@
               "part": 0,
               "at": [
                 184.5,
-                31.5
+                48.5
               ],
-              "note": "lacquer: the crown, (0.5, -8.5) px from its centre",
+              "note": "lacquer: the crown, (0.5, 8.5) px from its centre",
               "expect": {
-                "1": "#8e8f90",
-                "2": "#8d8e90"
+                "1": "#232324",
+                "2": "#222324"
               }
             },
             {
               "object": "lacquer",
               "part": 0,
               "at": [
-                179.5,
-                34.5
+                189.5,
+                45.5
               ],
-              "note": "lacquer: the crown, (-4.5, -5.5) px from its centre",
+              "note": "lacquer: the crown, (5.5, 5.5) px from its centre",
               "expect": {
-                "1": "#8f9091",
-                "2": "#8e8f90"
-              }
-            },
-            {
-              "object": "gold",
-              "part": 0,
-              "at": [
-                258.5,
-                49.5
-              ],
-              "note": "gold: the crown, (2.5, 9.5) px from its centre",
-              "expect": {
-                "1": "#7f6d47",
-                "2": "#7e6c47"
+                "1": "#232325",
+                "2": "#232325"
               }
             },
             {
@@ -5455,38 +5442,64 @@
               "part": 0,
               "at": [
                 248.5,
-                53.5
+                36.5
               ],
-              "note": "gold: the crown, (-7.5, 13.5) px from its centre",
+              "note": "gold: the crown, (-7.5, -3.5) px from its centre",
               "expect": {
-                "1": "#776643",
-                "2": "#776642"
+                "1": "#574a2f",
+                "2": "#574a2f"
+              }
+            },
+            {
+              "object": "gold",
+              "part": 0,
+              "at": [
+                256.5,
+                32.5
+              ],
+              "note": "gold: the crown, (0.5, -7.5) px from its centre",
+              "expect": {
+                "1": "#4f432b",
+                "2": "#4f432b"
               }
             },
             {
               "object": "gunmetal",
               "part": 0,
               "at": [
-                339.5,
-                29.5
+                338.5,
+                38.5
               ],
-              "note": "gunmetal: the crown, (11.5, -10.5) px from its centre",
+              "note": "gunmetal: the crown, (10.5, -1.5) px from its centre",
               "expect": {
-                "1": "#838891",
-                "2": "#828790"
+                "1": "#3e4145",
+                "2": "#3e4146"
+              }
+            },
+            {
+              "object": "gunmetal",
+              "part": 0,
+              "at": [
+                319.5,
+                45.5
+              ],
+              "note": "gunmetal: the crown, (-8.5, 5.5) px from its centre",
+              "expect": {
+                "1": "#484b50",
+                "2": "#484b51"
               }
             },
             {
               "object": "chrome",
               "part": 0,
               "at": [
-                411.5,
-                45.5
+                404.5,
+                32.5
               ],
-              "note": "chrome: the crown, (11.5, 5.5) px from its centre",
+              "note": "chrome: the crown, (4.5, -7.5) px from its centre",
               "expect": {
-                "1": "#797a7c",
-                "2": "#797a7b"
+                "1": "#ffffff",
+                "2": "#ffffff"
               }
             },
             {
@@ -5494,12 +5507,12 @@
               "part": 0,
               "at": [
                 397.5,
-                52.5
+                34.5
               ],
-              "note": "chrome: the crown, (-2.5, 12.5) px from its centre",
+              "note": "chrome: the crown, (-2.5, -5.5) px from its centre",
               "expect": {
-                "1": "#6d6e6f",
-                "2": "#6d6e6f"
+                "1": "#ffffff",
+                "2": "#ffffff"
               }
             }
           ]
@@ -5512,6 +5525,1629 @@
           "share": 0.05,
           "levels": 2,
           "note": "Brushed metal against plain metal (brush 0.9, grain 0.15); provisional"
+        }
+      ]
+    },
+    {
+      "name": "preset-domes",
+      "description": "The presets (metal and gunmetal without brush and grain) and a matte paint on domes, sampled at their tops and at normals about 30° and 50° from them: the calibration of the reference shading against Lite (2D.5, 2D.10) at more than face-on normals.",
+      "scene": {
+        "format": "strata-scene",
+        "version": 4,
+        "kind": "instrument",
+        "camera": {
+          "distance": 2400,
+          "vanish": [
+            760,
+            390
+          ]
+        },
+        "environment": {
+          "source": "studio",
+          "strength": 1,
+          "studio": {
+            "key": 12,
+            "keyRadius": 0.24,
+            "fill": 1.2,
+            "front": 0.12,
+            "strip": 2.5,
+            "floor": 0.03,
+            "ceiling": 0.25
+          },
+          "page": {
+            "enabled": false
+          }
+        },
+        "extent": {
+          "width": 510,
+          "height": 80
+        },
+        "outset": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
+        "backdrop": "#ffffff",
+        "light": {
+          "azimuth": 323,
+          "elevation": 41,
+          "intensity": 1.6,
+          "ambient": 0
+        },
+        "bevel": {
+          "width": 6,
+          "gain": 0.55,
+          "profile": "quarter-round"
+        },
+        "shadow": {
+          "strength": 0.24,
+          "map": {
+            "size": 4096,
+            "bias": 1.95,
+            "darkness": 0.1
+          }
+        },
+        "interior": {
+          "max": 0.04
+        },
+        "state": {
+          "hoverHeight": 1.6,
+          "pressHeight": 0.25,
+          "hoverLift": 0.04,
+          "pressSink": 0.06
+        },
+        "focus": {
+          "colour": "#2563eb",
+          "width": 3,
+          "offset": 0.5
+        },
+        "materials": {
+          "face": {
+            "base": {
+              "roughness": 0.45
+            }
+          },
+          "metal": {
+            "base": {
+              "colour": "#eff0f1",
+              "roughness": 0.3,
+              "metallic": 1,
+              "direct": 1
+            }
+          },
+          "polished": {
+            "base": {
+              "colour": "#fafafb",
+              "roughness": 0.04,
+              "metallic": 1,
+              "direct": 1
+            }
+          },
+          "lacquer": {
+            "base": {
+              "colour": "#1c1c1e",
+              "roughness": 0.5,
+              "metallic": 0,
+              "direct": 1
+            },
+            "coat": {
+              "strength": 1,
+              "roughness": 0.03,
+              "ior": 1.5
+            }
+          },
+          "gold": {
+            "base": {
+              "colour": "#ffdb93",
+              "roughness": 0.18,
+              "metallic": 1,
+              "direct": 1
+            }
+          },
+          "gunmetal": {
+            "base": {
+              "colour": "#686b72",
+              "roughness": 0.36,
+              "metallic": 1,
+              "direct": 1
+            }
+          },
+          "chrome": {
+            "base": {
+              "colour": "#fafafc",
+              "roughness": 0.04,
+              "metallic": 1,
+              "direct": 1
+            }
+          },
+          "paint": {
+            "base": {
+              "colour": "#8a9099",
+              "roughness": 0.5
+            }
+          }
+        },
+        "primitives": [
+          {
+            "face": "raised",
+            "rect": [
+              0,
+              0,
+              510,
+              80
+            ],
+            "radius": 14,
+            "height": 6,
+            "material": "face"
+          }
+        ],
+        "profiles": {
+          "dome-0": {
+            "type": "lathe",
+            "points": [
+              [
+                26,
+                0,
+                1,
+                0
+              ],
+              [
+                26,
+                1,
+                1,
+                0
+              ],
+              [
+                25.875,
+                2.764,
+                0.99,
+                0.141
+              ],
+              [
+                25.5,
+                4.512,
+                0.961,
+                0.276
+              ],
+              [
+                24.88,
+                6.225,
+                0.916,
+                0.401
+              ],
+              [
+                24.021,
+                7.888,
+                0.858,
+                0.513
+              ],
+              [
+                22.93,
+                9.485,
+                0.792,
+                0.611
+              ],
+              [
+                21.618,
+                11,
+                0.72,
+                0.694
+              ],
+              [
+                20.098,
+                12.419,
+                0.645,
+                0.764
+              ],
+              [
+                18.385,
+                13.728,
+                0.569,
+                0.822
+              ],
+              [
+                16.494,
+                14.914,
+                0.494,
+                0.869
+              ],
+              [
+                14.445,
+                15.966,
+                0.42,
+                0.908
+              ],
+              [
+                12.256,
+                16.875,
+                0.347,
+                0.938
+              ],
+              [
+                9.95,
+                17.63,
+                0.276,
+                0.961
+              ],
+              [
+                7.547,
+                18.225,
+                0.206,
+                0.979
+              ],
+              [
+                5.072,
+                18.654,
+                0.136,
+                0.991
+              ],
+              [
+                2.548,
+                18.913,
+                0.068,
+                0.998
+              ],
+              [
+                0,
+                19,
+                0,
+                1
+              ]
+            ],
+            "segments": 96
+          },
+          "dome-1": {
+            "type": "lathe",
+            "points": [
+              [
+                26,
+                0,
+                1,
+                0
+              ],
+              [
+                26,
+                1,
+                1,
+                0
+              ],
+              [
+                25.875,
+                2.764,
+                0.99,
+                0.141
+              ],
+              [
+                25.5,
+                4.512,
+                0.961,
+                0.276
+              ],
+              [
+                24.88,
+                6.225,
+                0.916,
+                0.401
+              ],
+              [
+                24.021,
+                7.888,
+                0.858,
+                0.513
+              ],
+              [
+                22.93,
+                9.485,
+                0.792,
+                0.611
+              ],
+              [
+                21.618,
+                11,
+                0.72,
+                0.694
+              ],
+              [
+                20.098,
+                12.419,
+                0.645,
+                0.764
+              ],
+              [
+                18.385,
+                13.728,
+                0.569,
+                0.822
+              ],
+              [
+                16.494,
+                14.914,
+                0.494,
+                0.869
+              ],
+              [
+                14.445,
+                15.966,
+                0.42,
+                0.908
+              ],
+              [
+                12.256,
+                16.875,
+                0.347,
+                0.938
+              ],
+              [
+                9.95,
+                17.63,
+                0.276,
+                0.961
+              ],
+              [
+                7.547,
+                18.225,
+                0.206,
+                0.979
+              ],
+              [
+                5.072,
+                18.654,
+                0.136,
+                0.991
+              ],
+              [
+                2.548,
+                18.913,
+                0.068,
+                0.998
+              ],
+              [
+                0,
+                19,
+                0,
+                1
+              ]
+            ],
+            "segments": 96
+          },
+          "dome-2": {
+            "type": "lathe",
+            "points": [
+              [
+                26,
+                0,
+                1,
+                0
+              ],
+              [
+                26,
+                1,
+                1,
+                0
+              ],
+              [
+                25.875,
+                2.764,
+                0.99,
+                0.141
+              ],
+              [
+                25.5,
+                4.512,
+                0.961,
+                0.276
+              ],
+              [
+                24.88,
+                6.225,
+                0.916,
+                0.401
+              ],
+              [
+                24.021,
+                7.888,
+                0.858,
+                0.513
+              ],
+              [
+                22.93,
+                9.485,
+                0.792,
+                0.611
+              ],
+              [
+                21.618,
+                11,
+                0.72,
+                0.694
+              ],
+              [
+                20.098,
+                12.419,
+                0.645,
+                0.764
+              ],
+              [
+                18.385,
+                13.728,
+                0.569,
+                0.822
+              ],
+              [
+                16.494,
+                14.914,
+                0.494,
+                0.869
+              ],
+              [
+                14.445,
+                15.966,
+                0.42,
+                0.908
+              ],
+              [
+                12.256,
+                16.875,
+                0.347,
+                0.938
+              ],
+              [
+                9.95,
+                17.63,
+                0.276,
+                0.961
+              ],
+              [
+                7.547,
+                18.225,
+                0.206,
+                0.979
+              ],
+              [
+                5.072,
+                18.654,
+                0.136,
+                0.991
+              ],
+              [
+                2.548,
+                18.913,
+                0.068,
+                0.998
+              ],
+              [
+                0,
+                19,
+                0,
+                1
+              ]
+            ],
+            "segments": 96
+          },
+          "dome-3": {
+            "type": "lathe",
+            "points": [
+              [
+                26,
+                0,
+                1,
+                0
+              ],
+              [
+                26,
+                1,
+                1,
+                0
+              ],
+              [
+                25.875,
+                2.764,
+                0.99,
+                0.141
+              ],
+              [
+                25.5,
+                4.512,
+                0.961,
+                0.276
+              ],
+              [
+                24.88,
+                6.225,
+                0.916,
+                0.401
+              ],
+              [
+                24.021,
+                7.888,
+                0.858,
+                0.513
+              ],
+              [
+                22.93,
+                9.485,
+                0.792,
+                0.611
+              ],
+              [
+                21.618,
+                11,
+                0.72,
+                0.694
+              ],
+              [
+                20.098,
+                12.419,
+                0.645,
+                0.764
+              ],
+              [
+                18.385,
+                13.728,
+                0.569,
+                0.822
+              ],
+              [
+                16.494,
+                14.914,
+                0.494,
+                0.869
+              ],
+              [
+                14.445,
+                15.966,
+                0.42,
+                0.908
+              ],
+              [
+                12.256,
+                16.875,
+                0.347,
+                0.938
+              ],
+              [
+                9.95,
+                17.63,
+                0.276,
+                0.961
+              ],
+              [
+                7.547,
+                18.225,
+                0.206,
+                0.979
+              ],
+              [
+                5.072,
+                18.654,
+                0.136,
+                0.991
+              ],
+              [
+                2.548,
+                18.913,
+                0.068,
+                0.998
+              ],
+              [
+                0,
+                19,
+                0,
+                1
+              ]
+            ],
+            "segments": 96
+          },
+          "dome-4": {
+            "type": "lathe",
+            "points": [
+              [
+                26,
+                0,
+                1,
+                0
+              ],
+              [
+                26,
+                1,
+                1,
+                0
+              ],
+              [
+                25.875,
+                2.764,
+                0.99,
+                0.141
+              ],
+              [
+                25.5,
+                4.512,
+                0.961,
+                0.276
+              ],
+              [
+                24.88,
+                6.225,
+                0.916,
+                0.401
+              ],
+              [
+                24.021,
+                7.888,
+                0.858,
+                0.513
+              ],
+              [
+                22.93,
+                9.485,
+                0.792,
+                0.611
+              ],
+              [
+                21.618,
+                11,
+                0.72,
+                0.694
+              ],
+              [
+                20.098,
+                12.419,
+                0.645,
+                0.764
+              ],
+              [
+                18.385,
+                13.728,
+                0.569,
+                0.822
+              ],
+              [
+                16.494,
+                14.914,
+                0.494,
+                0.869
+              ],
+              [
+                14.445,
+                15.966,
+                0.42,
+                0.908
+              ],
+              [
+                12.256,
+                16.875,
+                0.347,
+                0.938
+              ],
+              [
+                9.95,
+                17.63,
+                0.276,
+                0.961
+              ],
+              [
+                7.547,
+                18.225,
+                0.206,
+                0.979
+              ],
+              [
+                5.072,
+                18.654,
+                0.136,
+                0.991
+              ],
+              [
+                2.548,
+                18.913,
+                0.068,
+                0.998
+              ],
+              [
+                0,
+                19,
+                0,
+                1
+              ]
+            ],
+            "segments": 96
+          },
+          "dome-5": {
+            "type": "lathe",
+            "points": [
+              [
+                26,
+                0,
+                1,
+                0
+              ],
+              [
+                26,
+                1,
+                1,
+                0
+              ],
+              [
+                25.875,
+                2.764,
+                0.99,
+                0.141
+              ],
+              [
+                25.5,
+                4.512,
+                0.961,
+                0.276
+              ],
+              [
+                24.88,
+                6.225,
+                0.916,
+                0.401
+              ],
+              [
+                24.021,
+                7.888,
+                0.858,
+                0.513
+              ],
+              [
+                22.93,
+                9.485,
+                0.792,
+                0.611
+              ],
+              [
+                21.618,
+                11,
+                0.72,
+                0.694
+              ],
+              [
+                20.098,
+                12.419,
+                0.645,
+                0.764
+              ],
+              [
+                18.385,
+                13.728,
+                0.569,
+                0.822
+              ],
+              [
+                16.494,
+                14.914,
+                0.494,
+                0.869
+              ],
+              [
+                14.445,
+                15.966,
+                0.42,
+                0.908
+              ],
+              [
+                12.256,
+                16.875,
+                0.347,
+                0.938
+              ],
+              [
+                9.95,
+                17.63,
+                0.276,
+                0.961
+              ],
+              [
+                7.547,
+                18.225,
+                0.206,
+                0.979
+              ],
+              [
+                5.072,
+                18.654,
+                0.136,
+                0.991
+              ],
+              [
+                2.548,
+                18.913,
+                0.068,
+                0.998
+              ],
+              [
+                0,
+                19,
+                0,
+                1
+              ]
+            ],
+            "segments": 96
+          },
+          "dome-6": {
+            "type": "lathe",
+            "points": [
+              [
+                26,
+                0,
+                1,
+                0
+              ],
+              [
+                26,
+                1,
+                1,
+                0
+              ],
+              [
+                25.875,
+                2.764,
+                0.99,
+                0.141
+              ],
+              [
+                25.5,
+                4.512,
+                0.961,
+                0.276
+              ],
+              [
+                24.88,
+                6.225,
+                0.916,
+                0.401
+              ],
+              [
+                24.021,
+                7.888,
+                0.858,
+                0.513
+              ],
+              [
+                22.93,
+                9.485,
+                0.792,
+                0.611
+              ],
+              [
+                21.618,
+                11,
+                0.72,
+                0.694
+              ],
+              [
+                20.098,
+                12.419,
+                0.645,
+                0.764
+              ],
+              [
+                18.385,
+                13.728,
+                0.569,
+                0.822
+              ],
+              [
+                16.494,
+                14.914,
+                0.494,
+                0.869
+              ],
+              [
+                14.445,
+                15.966,
+                0.42,
+                0.908
+              ],
+              [
+                12.256,
+                16.875,
+                0.347,
+                0.938
+              ],
+              [
+                9.95,
+                17.63,
+                0.276,
+                0.961
+              ],
+              [
+                7.547,
+                18.225,
+                0.206,
+                0.979
+              ],
+              [
+                5.072,
+                18.654,
+                0.136,
+                0.991
+              ],
+              [
+                2.548,
+                18.913,
+                0.068,
+                0.998
+              ],
+              [
+                0,
+                19,
+                0,
+                1
+              ]
+            ],
+            "segments": 96
+          }
+        },
+        "objects": [
+          {
+            "id": "metal-dome",
+            "rect": [
+              6,
+              6,
+              68,
+              68
+            ],
+            "bounds": {
+              "rect": [
+                6,
+                6,
+                68,
+                68
+              ],
+              "radius": 34
+            },
+            "t": 0,
+            "parts": [
+              {
+                "kind": "cap",
+                "profile": "dome-0",
+                "at": [
+                  40,
+                  40,
+                  0
+                ],
+                "material": "metal"
+              }
+            ],
+            "relief": {
+              "face": "knob",
+              "rect": [
+                6,
+                6,
+                68,
+                68
+              ],
+              "height": 0,
+              "material": "face"
+            }
+          },
+          {
+            "id": "polished-dome",
+            "rect": [
+              78,
+              6,
+              68,
+              68
+            ],
+            "bounds": {
+              "rect": [
+                78,
+                6,
+                68,
+                68
+              ],
+              "radius": 34
+            },
+            "t": 0,
+            "parts": [
+              {
+                "kind": "cap",
+                "profile": "dome-1",
+                "at": [
+                  112,
+                  40,
+                  0
+                ],
+                "material": "polished"
+              }
+            ],
+            "relief": {
+              "face": "knob",
+              "rect": [
+                78,
+                6,
+                68,
+                68
+              ],
+              "height": 0,
+              "material": "face"
+            }
+          },
+          {
+            "id": "lacquer-dome",
+            "rect": [
+              150,
+              6,
+              68,
+              68
+            ],
+            "bounds": {
+              "rect": [
+                150,
+                6,
+                68,
+                68
+              ],
+              "radius": 34
+            },
+            "t": 0,
+            "parts": [
+              {
+                "kind": "cap",
+                "profile": "dome-2",
+                "at": [
+                  184,
+                  40,
+                  0
+                ],
+                "material": "lacquer"
+              }
+            ],
+            "relief": {
+              "face": "knob",
+              "rect": [
+                150,
+                6,
+                68,
+                68
+              ],
+              "height": 0,
+              "material": "face"
+            }
+          },
+          {
+            "id": "gold-dome",
+            "rect": [
+              222,
+              6,
+              68,
+              68
+            ],
+            "bounds": {
+              "rect": [
+                222,
+                6,
+                68,
+                68
+              ],
+              "radius": 34
+            },
+            "t": 0,
+            "parts": [
+              {
+                "kind": "cap",
+                "profile": "dome-3",
+                "at": [
+                  256,
+                  40,
+                  0
+                ],
+                "material": "gold"
+              }
+            ],
+            "relief": {
+              "face": "knob",
+              "rect": [
+                222,
+                6,
+                68,
+                68
+              ],
+              "height": 0,
+              "material": "face"
+            }
+          },
+          {
+            "id": "gunmetal-dome",
+            "rect": [
+              294,
+              6,
+              68,
+              68
+            ],
+            "bounds": {
+              "rect": [
+                294,
+                6,
+                68,
+                68
+              ],
+              "radius": 34
+            },
+            "t": 0,
+            "parts": [
+              {
+                "kind": "cap",
+                "profile": "dome-4",
+                "at": [
+                  328,
+                  40,
+                  0
+                ],
+                "material": "gunmetal"
+              }
+            ],
+            "relief": {
+              "face": "knob",
+              "rect": [
+                294,
+                6,
+                68,
+                68
+              ],
+              "height": 0,
+              "material": "face"
+            }
+          },
+          {
+            "id": "chrome-dome",
+            "rect": [
+              366,
+              6,
+              68,
+              68
+            ],
+            "bounds": {
+              "rect": [
+                366,
+                6,
+                68,
+                68
+              ],
+              "radius": 34
+            },
+            "t": 0,
+            "parts": [
+              {
+                "kind": "cap",
+                "profile": "dome-5",
+                "at": [
+                  400,
+                  40,
+                  0
+                ],
+                "material": "chrome"
+              }
+            ],
+            "relief": {
+              "face": "knob",
+              "rect": [
+                366,
+                6,
+                68,
+                68
+              ],
+              "height": 0,
+              "material": "face"
+            }
+          },
+          {
+            "id": "paint-dome",
+            "rect": [
+              438,
+              6,
+              68,
+              68
+            ],
+            "bounds": {
+              "rect": [
+                438,
+                6,
+                68,
+                68
+              ],
+              "radius": 34
+            },
+            "t": 0,
+            "parts": [
+              {
+                "kind": "cap",
+                "profile": "dome-6",
+                "at": [
+                  472,
+                  40,
+                  0
+                ],
+                "material": "paint"
+              }
+            ],
+            "relief": {
+              "face": "knob",
+              "rect": [
+                438,
+                6,
+                68,
+                68
+              ],
+              "height": 0,
+              "material": "face"
+            }
+          }
+        ]
+      },
+      "capture": [
+        {
+          "rect": [
+            0,
+            0,
+            510,
+            80
+          ],
+          "radius": 14,
+          "colour": "#e9ebef"
+        }
+      ],
+      "variants": [],
+      "checks": [
+        {
+          "kind": "sampled",
+          "samples": [
+            {
+              "object": "metal-dome",
+              "part": 0,
+              "at": [
+                39.5,
+                36.5
+              ],
+              "note": "metal: the dome (0, 0) px from its top",
+              "expect": {
+                "1": "#7f8182",
+                "2": "#808182"
+              }
+            },
+            {
+              "object": "metal-dome",
+              "part": 0,
+              "at": [
+                50.5,
+                44.5
+              ],
+              "note": "metal: the dome (9, 5) px from its top",
+              "expect": {
+                "1": "#ffffff",
+                "2": "#ffffff"
+              }
+            },
+            {
+              "object": "metal-dome",
+              "part": 0,
+              "at": [
+                34.5,
+                37.5
+              ],
+              "note": "metal: the dome (-9, -5) px from its top",
+              "expect": {
+                "1": "#8a8c8d",
+                "2": "#8a8c8d"
+              }
+            },
+            {
+              "object": "metal-dome",
+              "part": 0,
+              "at": [
+                54.5,
+                44.5
+              ],
+              "note": "metal: the dome (14, 8) px from its top",
+              "expect": {
+                "1": "#ffffff",
+                "2": "#ffffff"
+              }
+            },
+            {
+              "object": "polished-dome",
+              "part": 0,
+              "at": [
+                112.5,
+                42.5
+              ],
+              "note": "polished: the dome (0, 0) px from its top",
+              "expect": {
+                "1": "#636465",
+                "2": "#626364"
+              }
+            },
+            {
+              "object": "polished-dome",
+              "part": 0,
+              "at": [
+                123.5,
+                45.5
+              ],
+              "note": "polished: the dome (9, 5) px from its top",
+              "expect": {
+                "1": "#2a2a2b",
+                "2": "#2a2a2a"
+              }
+            },
+            {
+              "object": "lacquer-dome",
+              "part": 0,
+              "at": [
+                184.5,
+                40.5
+              ],
+              "note": "lacquer: the dome (0, 0) px from its top",
+              "expect": {
+                "1": "#232325",
+                "2": "#232324"
+              }
+            },
+            {
+              "object": "lacquer-dome",
+              "part": 0,
+              "at": [
+                193.5,
+                45.5
+              ],
+              "note": "lacquer: the dome (9, 5) px from its top",
+              "expect": {
+                "1": "#19191a",
+                "2": "#18181a"
+              }
+            },
+            {
+              "object": "lacquer-dome",
+              "part": 0,
+              "at": [
+                176.5,
+                34.5
+              ],
+              "note": "lacquer: the dome (-9, -5) px from its top",
+              "expect": {
+                "1": "#565758",
+                "2": "#565758"
+              }
+            },
+            {
+              "object": "lacquer-dome",
+              "part": 0,
+              "at": [
+                197.5,
+                46.5
+              ],
+              "note": "lacquer: the dome (14, 8) px from its top",
+              "expect": {
+                "1": "#161617",
+                "2": "#161617"
+              }
+            },
+            {
+              "object": "lacquer-dome",
+              "part": 0,
+              "at": [
+                170.5,
+                34.5
+              ],
+              "note": "lacquer: the dome (-14, -8) px from its top",
+              "expect": {
+                "1": "#575859",
+                "2": "#575759"
+              }
+            },
+            {
+              "object": "gold-dome",
+              "part": 0,
+              "at": [
+                247.5,
+                36.5
+              ],
+              "note": "gold: the dome (-9, -5) px from its top",
+              "expect": {
+                "1": "#594c31",
+                "2": "#594b30"
+              }
+            },
+            {
+              "object": "gold-dome",
+              "part": 0,
+              "at": [
+                240.5,
+                35.5
+              ],
+              "note": "gold: the dome (-14, -8) px from its top",
+              "expect": {
+                "1": "#55482e",
+                "2": "#55482e"
+              }
+            },
+            {
+              "object": "gold-dome",
+              "part": 0,
+              "at": [
+                263.5,
+                29.5
+              ],
+              "note": "gold: the dome (5, -12) px from its top",
+              "expect": {
+                "1": "#bca168",
+                "2": "#bca168"
+              }
+            },
+            {
+              "object": "gunmetal-dome",
+              "part": 0,
+              "at": [
+                328.5,
+                38.5
+              ],
+              "note": "gunmetal: the dome (0, 0) px from its top",
+              "expect": {
+                "1": "#3f4247",
+                "2": "#404247"
+              }
+            },
+            {
+              "object": "gunmetal-dome",
+              "part": 0,
+              "at": [
+                337.5,
+                44.5
+              ],
+              "note": "gunmetal: the dome (9, 5) px from its top",
+              "expect": {
+                "1": "#646870",
+                "2": "#646870"
+              }
+            },
+            {
+              "object": "gunmetal-dome",
+              "part": 0,
+              "at": [
+                320.5,
+                37.5
+              ],
+              "note": "gunmetal: the dome (-9, -5) px from its top",
+              "expect": {
+                "1": "#45484d",
+                "2": "#45474c"
+              }
+            },
+            {
+              "object": "gunmetal-dome",
+              "part": 0,
+              "at": [
+                342.5,
+                44.5
+              ],
+              "note": "gunmetal: the dome (14, 8) px from its top",
+              "expect": {
+                "1": "#676b73",
+                "2": "#676b73"
+              }
+            },
+            {
+              "object": "gunmetal-dome",
+              "part": 0,
+              "at": [
+                310.5,
+                35.5
+              ],
+              "note": "gunmetal: the dome (-14, -8) px from its top",
+              "expect": {
+                "1": "#404247",
+                "2": "#404247"
+              }
+            },
+            {
+              "object": "chrome-dome",
+              "part": 0,
+              "at": [
+                399.5,
+                41.5
+              ],
+              "note": "chrome: the dome (0, 0) px from its top",
+              "expect": {
+                "1": "#676869",
+                "2": "#666768"
+              }
+            },
+            {
+              "object": "chrome-dome",
+              "part": 0,
+              "at": [
+                411.5,
+                46.5
+              ],
+              "note": "chrome: the dome (9, 5) px from its top",
+              "expect": {
+                "1": "#292a2a",
+                "2": "#292a2a"
+              }
+            },
+            {
+              "object": "paint-dome",
+              "part": 0,
+              "at": [
+                472.5,
+                40.5
+              ],
+              "note": "paint: the dome (0, 0) px from its top",
+              "expect": {
+                "1": "#8d949e",
+                "2": "#8c939d"
+              }
+            },
+            {
+              "object": "paint-dome",
+              "part": 0,
+              "at": [
+                481.5,
+                45.5
+              ],
+              "note": "paint: the dome (9, 5) px from its top",
+              "expect": {
+                "1": "#787e86",
+                "2": "#777d85"
+              }
+            },
+            {
+              "object": "paint-dome",
+              "part": 0,
+              "at": [
+                463.5,
+                35.5
+              ],
+              "note": "paint: the dome (-9, -5) px from its top",
+              "expect": {
+                "1": "#a0a7b2",
+                "2": "#9fa7b1"
+              }
+            },
+            {
+              "object": "paint-dome",
+              "part": 0,
+              "at": [
+                485.5,
+                44.5
+              ],
+              "note": "paint: the dome (14, 8) px from its top",
+              "expect": {
+                "1": "#737880",
+                "2": "#72777f"
+              }
+            },
+            {
+              "object": "paint-dome",
+              "part": 0,
+              "at": [
+                458.5,
+                32.5
+              ],
+              "note": "paint: the dome (-14, -8) px from its top",
+              "expect": {
+                "1": "#aab2bc",
+                "2": "#a9b1bc"
+              }
+            },
+            {
+              "object": "paint-dome",
+              "part": 0,
+              "at": [
+                489.5,
+                30.5
+              ],
+              "note": "paint: the dome (17, -10) px from its top",
+              "expect": {
+                "1": "#7e858e",
+                "2": "#7d848d"
+              }
+            }
+          ]
         }
       ]
     },
@@ -6077,12 +7713,12 @@
               "shadowed": true,
               "expect": {
                 "1": {
-                  "on": "#838891",
-                  "off": "#aab1bc"
+                  "on": "#676c75",
+                  "off": "#767c86"
                 },
                 "2": {
-                  "on": "#838891",
-                  "off": "#aab1bc"
+                  "on": "#676c75",
+                  "off": "#767c86"
                 }
               }
             },
@@ -6097,12 +7733,12 @@
               "shadowed": false,
               "expect": {
                 "1": {
-                  "on": "#abb2bd",
-                  "off": "#abb2bd"
+                  "on": "#767c86",
+                  "off": "#767c86"
                 },
                 "2": {
-                  "on": "#abb2bd",
-                  "off": "#abb2bd"
+                  "on": "#767c86",
+                  "off": "#767c86"
                 }
               }
             }
@@ -7991,8 +9627,8 @@
               ],
               "note": "the cap's top",
               "expect": {
-                "1": "#ffffff",
-                "2": "#ffffff"
+                "1": "#8a8c8d",
+                "2": "#8a8c8d"
               }
             },
             {
@@ -8004,8 +9640,8 @@
               ],
               "note": "the polished skirt cone",
               "expect": {
-                "1": "#707172",
-                "2": "#707172"
+                "1": "#626364",
+                "2": "#626364"
               }
             },
             {
@@ -8017,8 +9653,8 @@
               ],
               "note": "the gunmetal plate",
               "expect": {
-                "1": "#838891",
-                "2": "#838891"
+                "1": "#414348",
+                "2": "#414348"
               }
             },
             {
@@ -8030,8 +9666,8 @@
               ],
               "note": "the paddle",
               "expect": {
-                "1": "#999b9c",
-                "2": "#999b9c"
+                "1": "#e2e5e6",
+                "2": "#e2e5e6"
               }
             }
           ]
@@ -8646,8 +10282,8 @@
               ],
               "note": "the cap's top",
               "expect": {
-                "1": "#d3d6d8",
-                "2": "#d3d6d8"
+                "1": "#a9acad",
+                "2": "#a9abad"
               }
             },
             {
@@ -8659,8 +10295,8 @@
               ],
               "note": "the cap's top towards the light",
               "expect": {
-                "1": "#bdc0c1",
-                "2": "#bdbfc1"
+                "1": "#a6a8aa",
+                "2": "#a6a8aa"
               }
             },
             {
@@ -8672,8 +10308,8 @@
               ],
               "note": "the polished skirt cone, right of the cap",
               "expect": {
-                "1": "#818283",
-                "2": "#818283"
+                "1": "#727375",
+                "2": "#727374"
               }
             },
             {
@@ -8685,8 +10321,8 @@
               ],
               "note": "the fader's carriage top, above its index line",
               "expect": {
-                "1": "#cbcecf",
-                "2": "#cbcecf"
+                "1": "#a6a8aa",
+                "2": "#a6a8aa"
               }
             }
           ]

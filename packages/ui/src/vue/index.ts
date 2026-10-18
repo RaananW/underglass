@@ -15,6 +15,8 @@ export type { KnobMark } from "../shared/knob.ts";
 export { Combobox } from "./combobox.ts";
 export type { ComboboxOption } from "./combobox.ts";
 export { DatePicker } from "./date-picker.ts";
+export { Fader } from "./fader.ts";
+export type { FaderMark, FaderOrientation } from "../shared/fader.ts";
 export { StrataProvider, StrataScope } from "./provider.ts";
 export { Tab, TabList, TabPanel, Tabs } from "./tabs.ts";
 export { Accordion, AccordionItem } from "./accordion.ts";

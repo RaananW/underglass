@@ -756,6 +756,194 @@
   :where(.ug-switch--reverse) { flex-direction: row-reverse; justify-content: flex-end; }
   :where(.ug-switch--reverse .ug-switch__knob) { left: auto; right: calc(var(--strata-switch-width) - var(--strata-indicator) + var(--strata-object-taper)); }
 
+  /* ---- Fader: a native range input over a slot in the faceplate, with a capped carriage and a printed scale (anatomy page fader.md) ---- */
+
+  /*
+   * The track is the input's box: a band 46 px across, with the slot in its middle and the carriage (30 × 42) riding it,
+   * and the printed scale beside it on the side the carriage's shadow falls (right of a vertical fader, below a
+   * horizontal one, under the default light from the top left), so the shadow stays in the box. Along the travel the
+   * box is the travel plus the carriage plus a 16 px margin at each stop (room for the carriage's shadow at the
+   * Instrument level), and the native thumb is that footprint (74), so the carriage's centre is the thumb's at every
+   * value. The travel grows by as much as 15em grows past 180 px (the caption size at 12 px), so 200% text doubles a
+   * medium fader's travel and keeps the numerals apart. Everything inside the track is placed in percentages of it,
+   * so a horizontal fader can shrink to its container.
+   * The transparent input covers the whole track and takes every press; the drawn parts take none.
+   */
+  :where(.ug-fader) {
+    --_travel: calc(var(--strata-fader-travel) + max(0px, 15em - 180px));
+    --_across: 30px;
+    --_along: 42px;
+    --_band: 46px;
+    --_margin: 16px;
+    --_thumb: calc(var(--_along) + 2 * var(--_margin));
+    --_scale: calc(2.5em + 14px);
+    --_ink: color-mix(in srgb, var(--strata-colour-edge), black 55%);
+    --_slot: color-mix(in srgb, var(--strata-colour-edge), black 70%);
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--strata-space-1);
+    max-width: 100%;
+    color: var(--strata-colour-text);
+    font-family: var(--strata-font-family);
+    font-size: var(--strata-font-size-caption);
+    line-height: 1;
+  }
+  :where(.ug-fader--horizontal) {
+    --_scale: calc(1.5em + 12px);
+    width: calc(var(--_travel) + var(--_thumb));
+  }
+  :where(.ug-fader__track) {
+    position: relative;
+    flex: none;
+    box-sizing: border-box;
+    width: calc(var(--_band) + var(--_scale));
+    height: calc(var(--_travel) + var(--_thumb));
+  }
+  :where(.ug-fader--horizontal .ug-fader__track) { width: 100%; height: calc(var(--_band) + var(--_scale)); }
+  /* The slot: a dark cut in the faceplate the carriage's centre runs along, 3 px past each end of the travel. */
+  :where(.ug-fader__slot) {
+    position: absolute;
+    left: calc((var(--_band) - 5px) / 2);
+    top: calc(var(--_thumb) / 2 - 3px);
+    bottom: calc(var(--_thumb) / 2 - 3px);
+    box-sizing: border-box;
+    width: 5px;
+    border-radius: 3px;
+    background-color: var(--_slot);
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / calc(0.55 * min(1, var(--_gain)))), 0 1px 0 rgb(255 255 255 / calc(0.5 * min(1, var(--_gain))));
+    pointer-events: none;
+  }
+  :where(.ug-fader--horizontal .ug-fader__slot) {
+    left: calc(var(--_thumb) / 2 - 3px);
+    right: calc(var(--_thumb) / 2 - 3px);
+    top: calc((var(--_band) - 5px) / 2);
+    bottom: auto;
+    width: auto;
+    height: 5px;
+  }
+  /* The carriage: brushed metal across the travel, lit along its top edge, with the cast shadow of a raised face. */
+  :where(.ug-fader__carriage) {
+    --_finish:
+      repeating-linear-gradient(90deg, rgb(255 255 255 / calc(0.05 * min(1, var(--_gain)))) 0 1px, rgb(0 0 0 / calc(0.04 * min(1, var(--_gain)))) 1px 2.5px),
+      linear-gradient(180deg, rgb(255 255 255 / calc(0.6 * min(1, var(--_gain)))), rgb(255 255 255 / 0) 35%, rgb(0 0 0 / 0) 70%, rgb(0 0 0 / calc(0.16 * min(1, var(--_gain)))));
+    position: absolute;
+    left: calc((var(--_band) - var(--_across)) / 2);
+    top: calc(var(--_margin) + (100% - var(--_thumb)) * (1 - var(--strata-fader-value, 0.5)));
+    box-sizing: border-box;
+    width: var(--_across);
+    height: var(--_along);
+    border: 1px solid var(--strata-colour-edge);
+    border-radius: 3px;
+    background-color: var(--strata-colour-knob);
+    pointer-events: none;
+  }
+  :where(.ug-fader--horizontal .ug-fader__carriage) {
+    --_finish:
+      repeating-linear-gradient(0deg, rgb(255 255 255 / calc(0.05 * min(1, var(--_gain)))) 0 1px, rgb(0 0 0 / calc(0.04 * min(1, var(--_gain)))) 1px 2.5px),
+      linear-gradient(180deg, rgb(255 255 255 / calc(0.6 * min(1, var(--_gain)))), rgb(255 255 255 / 0) 35%, rgb(0 0 0 / 0) 70%, rgb(0 0 0 / calc(0.16 * min(1, var(--_gain)))));
+    left: calc(var(--_margin) + (100% - var(--_thumb)) * var(--strata-fader-value, 0.5));
+    top: calc((var(--_band) - var(--_across)) / 2);
+    width: var(--_along);
+    height: var(--_across);
+  }
+  /* The grip: an index line across the carriage at its centre, the value's mark. */
+  :where(.ug-fader__grip) {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    top: calc(50% - 0.8px);
+    height: 1.6px;
+    background: var(--_ink);
+  }
+  :where(.ug-fader--horizontal .ug-fader__grip) { left: calc(50% - 0.8px); right: auto; top: 6px; bottom: 6px; width: 1.6px; height: auto; }
+  /* A detented fader's carriage settles on its detent (never past it); a continuous one follows the pointer at once. */
+  :where(.ug-fader--detented .ug-fader__carriage) {
+    transition: top var(--strata-motion-fast) var(--strata-motion-easing-standard), left var(--strata-motion-fast) var(--strata-motion-easing-standard),
+      box-shadow var(--strata-motion-fast) var(--strata-motion-easing-press), filter var(--strata-motion-fast) var(--strata-motion-easing-press);
+  }
+  :where(.ug-fader__scale) { position: absolute; left: var(--_band); top: 0; bottom: 0; width: var(--_scale); pointer-events: none; }
+  :where(.ug-fader--horizontal .ug-fader__scale) { left: 0; top: var(--_band); right: 0; bottom: auto; width: auto; height: var(--_scale); }
+  /* A mark is a numeral beside its tick (::before), at the carriage centre's place for its value, on whole pixels. */
+  :where(.ug-fader__mark) {
+    position: absolute;
+    left: 14px;
+    top: round(nearest, calc(var(--_thumb) / 2 + (100% - var(--_thumb)) * (1 - var(--strata-fader-at, 0)) - 0.5em), 1px);
+    height: 1em;
+    color: var(--strata-colour-muted);
+    font-weight: var(--strata-font-weight-strong);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  :where(.ug-fader__mark)::before {
+    content: "";
+    position: absolute;
+    right: calc(100% + 6px);
+    top: calc(50% - 0.6px);
+    width: 7px;
+    height: 1.2px;
+    background: var(--strata-colour-text);
+  }
+  :where(.ug-fader--horizontal .ug-fader__mark) {
+    left: round(nearest, calc(var(--_thumb) / 2 + (100% - var(--_thumb)) * var(--strata-fader-at, 0) - 1.5em), 1px);
+    top: 11px;
+    width: 3em;
+    text-align: center;
+  }
+  :where(.ug-fader--horizontal .ug-fader__mark)::before { left: calc(50% - 0.6px); right: auto; top: -10px; width: 1.2px; height: 7px; }
+  :where(.ug-fader__input) {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    appearance: none;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+    /* A vertical range, the minimum at the bottom. A drag along the travel never scrolls the page. */
+    writing-mode: vertical-lr;
+    direction: rtl;
+    touch-action: pan-x;
+  }
+  :where(.ug-fader--horizontal .ug-fader__input) { writing-mode: horizontal-tb; direction: ltr; touch-action: pan-y; }
+  /* The thumb is the carriage's footprint: across the whole track, and the carriage plus its margins along it. */
+  :where(.ug-fader__input)::-webkit-slider-runnable-track { width: 100%; height: 100%; border: 0; background: transparent; }
+  :where(.ug-fader__input)::-webkit-slider-thumb { width: calc(var(--_scale) + var(--_band)); height: var(--_thumb); appearance: none; border: 0; background: transparent; }
+  :where(.ug-fader--horizontal .ug-fader__input)::-webkit-slider-thumb { width: var(--_thumb); height: calc(var(--_band) + var(--_scale)); }
+  :where(.ug-fader__input)::-moz-range-track { width: 100%; height: 100%; border: 0; background: transparent; }
+  :where(.ug-fader__input)::-moz-range-thumb { width: calc(var(--_scale) + var(--_band)); height: var(--_thumb); border: 0; background: transparent; }
+  :where(.ug-fader--horizontal .ug-fader__input)::-moz-range-thumb { width: var(--_thumb); height: calc(var(--_band) + var(--_scale)); }
+  /* The printed legend, on the faceplate under the track. */
+  :where(.ug-fader__label) {
+    max-width: 100%;
+    font-size: var(--strata-font-size-small);
+    font-weight: var(--strata-font-weight-strong);
+    line-height: 1.25;
+    letter-spacing: 0.08em;
+    text-align: center;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+  /* Focus: an accent ring round the track, as round a Slider (captured content on the GPU). */
+  :where(.ug-fader__input):is(:focus-visible, [data-strata-preview~="focus"]) {
+    outline: var(--strata-focus-width) solid var(--strata-colour-accent);
+    outline-offset: var(--strata-focus-offset);
+  }
+  :where(.ug-fader__track:has(> .ug-fader__input:is(:hover, [data-strata-preview~="hover"]):not(:disabled)) .ug-fader__carriage) {
+    --_lift: var(--strata-state-hover-height);
+    --_tone: var(--_hover-tone);
+  }
+  :where(.ug-fader:has(.ug-fader__input:disabled)) { color: color-mix(in srgb, var(--strata-colour-text) 38%, transparent); }
+  :where(.ug-fader:has(.ug-fader__input:disabled)) :where(.ug-fader__track) { opacity: 0.38; }
+  :where(.ug-fader:has(.ug-fader__input:disabled)) :where(.ug-fader__carriage, .ug-fader__slot) { --_h: 0px; --_gain: 0; }
+  :where(.ug-fader__input:disabled) { cursor: not-allowed; }
+
   /* ---- Slider: a groove rail with a knob ---- */
 
   :where(.ug-slider) {
@@ -2212,6 +2400,10 @@
   }
   :where([data-strata-mode="face"]) .ug-slider::-webkit-slider-runnable-track { box-shadow: none; background: var(--strata-colour-track); }
   :where([data-strata-mode="face"]) .ug-slider::-webkit-slider-thumb { box-shadow: none; background: var(--strata-colour-knob); }
+  /* When the GPU draws a fader's carriage as parts (the Instrument level), its CSS paint is hidden, so a value change
+     repaints nothing (the slot, the scale and the focus ring stay). */
+  :where([data-strata-mode="face"]) .ug-fader__carriage[data-strata-dome] { border-color: transparent; }
+  :where([data-strata-mode="face"]) .ug-fader__carriage[data-strata-dome] .ug-fader__grip { display: none; }
   /*
    * At the Objects level the GPU draws knobs, dots and slider pucks as domes in their own colour: their CSS paint is
    * hidden while it does (`data-strata-dome`, set by the GPU helper). A knob keeps its edge ring, for 3:1 on its track.
@@ -2262,8 +2454,24 @@
     }
   }
 
+  /* More contrast: the high-contrast themes apply through the tokens; a fader's grip and scale take the text colour. */
+  @media (prefers-contrast: more) {
+    :where(.ug-fader) { --_ink: var(--strata-colour-text); --_slot: var(--strata-colour-text); }
+    :where(.ug-fader__mark) { color: var(--strata-colour-text); }
+  }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-fader) { --_ink: var(--strata-colour-text); --_slot: var(--strata-colour-text); }
+
   @media (forced-colors: active) {
     :where([data-strata-face]) { box-shadow: none; background-image: none; filter: none; }
+    /* The fader: a CanvasText slot, a Canvas carriage with a CanvasText border and grip, the scale in CanvasText, a
+       Highlight focus ring, GrayText when disabled. */
+    :where(.ug-fader__slot) { forced-color-adjust: none; background: CanvasText; }
+    :where(.ug-fader__carriage) { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; }
+    :where(.ug-fader__grip), :where(.ug-fader__mark)::before { forced-color-adjust: none; background: CanvasText; }
+    :where(.ug-fader__mark) { color: CanvasText; }
+    :where(.ug-fader__input:focus-visible) { outline-color: Highlight; }
+    :where(.ug-fader:has(.ug-fader__input:disabled)) :where(.ug-fader__carriage) { border-color: GrayText; }
+    :where(.ug-fader:has(.ug-fader__input:disabled)) :where(.ug-fader__slot, .ug-fader__grip) { background: GrayText; }
     :where(.ug-panel, .ug-card) { border: 1px solid CanvasText; }
     :where(.ug-scrim) { forced-color-adjust: none; }
     :where(.ug-button, .ug-icon-button, .ug-toggle-button, .ug-select, .ug-button-group, .ug-toolbar) { border: 1px solid ButtonBorder; }

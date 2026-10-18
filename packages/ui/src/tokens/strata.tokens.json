@@ -1446,6 +1446,44 @@
   },
   "size": {
     "$description": "Component sizes (section 13): data-strata-size=\"small\", \"medium\" (default) or \"large\" on a component or a scope.",
+    "fader": {
+      "small": {
+        "$type": "dimension",
+        "$value": "120px",
+        "$description": "Fader travel (the carriage centre's path) at small.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 80,
+            "max": 400
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "180px",
+        "$description": "Fader travel (the carriage centre's path) at medium (the premium fader).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 80,
+            "max": 400
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "240px",
+        "$description": "Fader travel (the carriage centre's path) at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 80,
+            "max": 400
+          }
+        }
+      }
+    },
     "indicator": {
       "small": {
         "$type": "dimension",
@@ -1721,6 +1759,21 @@
           "min": 0,
           "max": 4,
           "scope": true
+        }
+      }
+    }
+  },
+  "fader": {
+    "$description": "Fader interaction (section 14, Instrument controls).",
+    "snap": {
+      "$type": "dimension",
+      "$value": "2px",
+      "$description": "A track click released within this distance of a printed mark sets exactly its value.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 0,
+          "max": 6
         }
       }
     }
