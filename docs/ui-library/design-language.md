@@ -581,15 +581,18 @@ edge, `h` its height and `inset` its distance inside the box, less 0.5 px. At 19
 
 ### Custom parts
 
-An application may replace one named part with its own glTF: `parts: { knobCap: url }`. The GPU helper loads it and
-hands core mesh data; core never fetches at render time.
+An application may replace one named part with its own glTF: `parts: { knobCap }` (the GPU helper's option, a glB URL or
+buffer with the box its vertices must lie in). Core loads it ([core work item 5](instrument-phase2.md#core-work-item-5-custom-parts)):
+asynchronously and never inside a frame, into a per-engine cache under a byte budget; until it is ready, and if it fails, the
+part is not drawn and core reports it in `state().instrument`.
 
 - **Anchors.** A custom part declares five anchors in its own units: `base` (the point that stands on the face or on
   the part below), `pivot` (the point it turns or tilts about), `cap` (the height of its top), `pointer` (the direction
-  of value 0 on a turning part) and `travel` (the axis it slides or travels along). The helper fits it by one uniform
-  scale and a rigid placement that bring its anchors onto the built-in part's.
-- **The `bounds` check.** The fitted part is checked as a built-in one is, over the whole travel. A part that fails is
-  not drawn: the built-in part stands in, and a diagnostic names it.
+  of value 0 on a turning part) and `travel` (the axis it slides or travels along). Fitting by anchors is the helper's and
+  is **not implemented yet**: core's custom part takes a uniform `scale` and an `offset` on a glTF reference, in part-local px.
+- **The `bounds` check.** The part is checked as a built-in one is, over the whole travel, on the mesh's own vertices. A part
+  that fails is not drawn and its object is drawn at the Relief level, with a diagnostic naming it. (The built-in part
+  standing in for a custom one that is missing is not done: the helper does not read core's state yet.)
 - **Limits:** a custom part carries no captured content, counts as one part kind in the budgets and takes its material
   from its role, so themes and characters still apply.
 

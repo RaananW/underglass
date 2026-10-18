@@ -564,7 +564,7 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
 | `camera` | Required: `distance` (`D`, at least 100) and `vanish`; the vanishing point is drawn at the canvas centre |
 | `environment` | Required: `{ source: "studio", strength (0..3), studio? }`, the studio generated in code and turned to the key light |
 | `materials` | At most 16 recipes: `base` (`colour`, `roughness`, `metallic`, `direct`), `coat`, `reflectance` (dielectric F0 only), `emissive` (`strength`, `colour`), `sheen`, `iridescence`, `brush` with a hairline `grain`; `glass`, `dispersion`, `subsurface` validated, not drawn yet |
-| `profiles` | At most 64 shapes by name: `lathe` (`points: [[r, z, nr, nz], …]`, `segments`), `prism` (`width`, `length`, `radius`, `height`, `taper`, `chamfer`), `extrude` (`outline: [[x, z], …]`, `width`) |
+| `profiles` | At most 64 shapes by name: `lathe` (`points: [[r, z, nr, nz], …]`, `segments`), `prism` (`width`, `length`, `radius`, `height`, `taper`, `chamfer`), `extrude` (`outline: [[x, z], …]`, `width`), `mesh` (explicit triangles, inline or a glB/glTF reference: [custom parts](#custom-parts)) |
 | `objects` | At most 256 (with `primitives`, 256 in all): `{ id, rect, bounds: { rect, radius }, t (clamped to 0..1), parts, relief }`. A part is `{ kind, profile, at, pose: { from, to }, material, captured, caster, state }`; a pose mixes `travel`, `slide`, `turn` and `tilt` about a fixed `axis` and `pivot`; only parts that travel may be `captured` |
 | `emitters`, `protected`, `feather` | Lights and the guard, as for every level ([emitters](#emitters-and-the-pointer-light)); the parts are lit by Babylon Lite clustered lights |
 | `shadow.map` | The PCF map of parts on parts: `{ size: 2048 | 4096, bias (world px), darkness (0..1) }`, default `{ 4096, 1.95, 0.1 }`, drawn when omitted; `darkness: 1` draws no map |
@@ -612,6 +612,64 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
   between 0 and 1, the meshes blend as one group over the layer's already faded face: under an opaque part the canvas is
   `α · P + (1 − α) · (α · F + (1 − α) · B)` (`F` the face, `B` what lies beneath the layer), not the layer's true group
   opacity `α · P + (1 − α) · B`, so face content under a part shows through at `α (1 − α)`.
+
+### Custom parts
+
+A `mesh` profile is a part of any shape ([design note](ui-library/instrument-phase2.md#core-work-item-5-custom-parts), Rendering
+Model 2D.2). A part uses it with `kind: "custom"` (or the kind of the part it replaces) and keeps everything a parametric
+part has: `material` (the scene's recipe, so themes apply), `at`, `pose`, `caster`, `emitter`, `finish`, `state`; it carries
+no `captured` content and no `stand`. Units are the profile's: part-local px, x right, y down, z up from the face.
+
+```ts
+profiles: {
+  // inline: the triangles are in the scene
+  bar: { type: "mesh", positions, indices, normals: "compute" },   // or normals: [...]; uvs optional
+  // a reference: core loads it outside any frame
+  cap: { type: "mesh", source: { url: "/parts.glb", mesh: "Cap" }, bounds: { low: [-26, -26, 0], high: [26, 26, 15] }, scale: 1.4 },
+},
+```
+
+| Field | Contract |
+| --- | --- |
+| `positions`, `indices`, `normals`, `uvs` | Inline. At most 16,384 vertices and 32,768 triangles; every value finite (within ±10,000), indices below the vertex count, no triangle that repeats a vertex; one normal per vertex or `"compute"`; planar UVs when omitted. Refused with the path and the reason |
+| `source` | A reference: `{ url, mesh? }` (fetched by core) or `{ data: ArrayBuffer, mesh? }`; a glB, or a glTF with embedded buffers; `mesh` names a glTF mesh or the node holding it (omitted: the file's only mesh) |
+| `scale`, `offset` | A reference: glTF units to part-local px (default 1), and a placement added after the axis change (default `[0, 0, 0]`). A glTF vertex `(x, y, z)` becomes `(x, z, y) · scale + offset`: the model stands on the face, its front towards the bottom of the screen |
+| `bounds` | `{ low, high }` in part-local px **after `scale` and `offset`**. Required on a reference, optional inline; core checks every vertex against it (1/1000 of its size and 0.01 px of slack) |
+| `pivot` | The default `pose.pivot` of a part of this profile whose pose gives none |
+
+- **Winding and normals.** A triangle is wound against its vertex normals, whatever order it was authored in; computed
+  normals come from a closed mesh's winding (a mesh wound the other way is reversed first), so no top is lit as if it
+  faced inward.
+- **Validation is cached.** An update validates its scene each time, so an inline mesh is validated once per input: pass the
+  same arrays (or the same profile object) and nothing is checked again; pass new arrays to change it. A URL reference with
+  the same `url`, `mesh`, `scale`, `offset`, `bounds` and `pivot` is one profile across updates.
+- **Containment.** The check of every part runs on the mesh's own vertices over the whole travel. A mesh that cannot stay in
+  its object's `bounds` steps the object down to its Relief primitive (`reason: "containment"`, `part: "custom"`, with the
+  inset and overshoot): refused, never clipped.
+- **Loading.** A reference loads once, outside any frame, with Core's own glB reader (positions, normals, `TEXCOORD_0`,
+  indices, node transforms; no Draco, meshopt, quantization, sparse accessors, external buffers or skins; materials,
+  textures, animations and morph targets are ignored). Until it is ready, and if it fails, the part is not drawn and is not
+  checked; every other part of the layer draws, no object steps down, and no scene is rebuilt: the file's triangles replace
+  the mesh's placeholder in place (`resizeMeshGeometry`) in the frame after it arrives. A failure (a 404 or other HTTP status, a
+  server answering with an HTML page, a body over 8 MiB, 15 s, a malformed file, a mesh that is not there, a cap, a mesh
+  that leaves its declared `bounds`, the asset budget) leaves the part out and reports its reason; GPU stays on.
+- **Cache.** Parsed triangles are cached per engine by `url`, `mesh`, `scale` and `offset` (a buffer by identity) under 32 MiB;
+  the least recently used entry no scene uses is evicted first, and a load that would pass the budget with every entry in use
+  fails (`budget`). A failed entry is forgotten once no scene uses it, so a scene that asks again retries. The store goes
+  with the controller (in-flight requests are aborted); the geometry on the GPU goes with its scene.
+- **Budgets.** Custom parts count as parts (2,048 per layer, 6,000 per stage) and each distinct mesh with each material is a
+  part kind. Above 1,000,000 drawn triangles of custom parts in a layer (instances times triangles), the last objects that
+  hold custom parts step down (`reason: "budget"`, the triangle count in `detail`) until the layer fits.
+- **Casters.** Without `caster`, a mesh casts the xy extent of its posed convex hull at its mean height, as round as the hull,
+  with the height capped so that the shadow stays inside the object's `bounds` (the Fader's rule); an explicit `caster` is
+  honoured as given.
+- **Diagnostics.** `state().instrument.layers[].customParts` lists each custom part (`object`, `part`, `profile`, `source`,
+  `status`: `loading`, `ready` or `failed`, `error`, `vertices`, `triangles`); `state().instrument.assets` the store
+  (`entries` with their `bytes`, `fetchMs` and `parseMs`, `bytes`, `budgetBytes`, `loads`, `hits`, `failures`, `evictions`, `inFlight`,
+  and `uploads`: how many times, and how long, a mesh's geometry was replaced in place); `state().instrument.budgets` gains
+  `customTrianglesPerLayer`.
+- **Not in this version:** textures from the file, animation, skinning, and the design language's anchor fitting
+  (`fitCustomPart`): fit with `scale` and `offset`, or in the helper.
 
 ### Emitters and the pointer light
 

@@ -325,6 +325,13 @@ objects' bounds and the layer's clip and by the layer's opacity; captured text n
 passes through a stage. A PCF shadow map from the key light shades parts on parts and
 never the face.
 
+**Custom parts** (`mesh` profiles, [design note](ui-library/instrument-phase2.md#core-work-item-5-custom-parts)) add three
+GPU-free modules: `instrument-mesh.ts` validates a mesh, winds it against its normals and measures its footprint,
+`instrument-gltf.ts` reads one named mesh of a glB/glTF (caps checked before any byte is read), and `instrument-assets.ts`
+is the per-engine store that fetches and caches files outside any frame, under a byte budget. Containment and casters run
+on the mesh's own vertices. A file that arrives replaces its kind's placeholder mesh in place (`resizeMeshGeometry`), so
+no scene is rebuilt and no object steps down for a load.
+
 Version 4 scenes of the `relief`, `objects` and `instrument` kinds may carry
 **emitters** (lamps, LEDs, the pointer light) and protected text rects
 (`emitters.ts`, [design note](ui-library/instrument-phase2.md#core-work-item-2-emitters-and-the-pointer-light)).

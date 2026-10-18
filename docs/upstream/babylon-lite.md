@@ -174,6 +174,19 @@ Lite source paths are under `node_modules/@babylonjs/lite/lib/` (shipped as Java
   core places parts rigidly and relies on the taper rule instead (probe I0.1, design language §6 "no-shear rule").
 - **Upstream request:** the inverse-transpose normal matrix when the world matrix is not a similarity.
 
+### L36. No CPU-only glTF parse
+
+- **Need:** the triangles (positions, normals, UVs, indices) of one named mesh of a glTF, with the file's caps checked
+  before anything is allocated, in the unit tests (Node) and without a GPU upload.
+- **What Lite has:** `loadGltf(engine, url | ArrayBuffer | Blob)` returns an `AssetContainer` whose meshes are already on the
+  GPU, with their materials and textures, and `getMeshGeometry(mesh)` returns CPU copies only when the mesh retained them.
+  By its typings it needs no scene (`addToScene` is separate) and works on the shared engine; it was **judged from the typings
+  and not exercised**.
+- **Core today:** a 200-line reader in `instrument-gltf.ts` (item 5 of the plan): `FLOAT` attributes, `TRIANGLES`, node
+  transforms, caps first; Draco, meshopt, quantization, sparse accessors, external buffers and skins are refused by name.
+- **Upstream request:** a `parseGltf(source)` that returns the primitives' typed arrays and the node transforms without
+  touching the engine, so a host can apply its own caps and budgets.
+
 ## Behaviours to know (not defects, but undocumented or surprising)
 
 | # | Behaviour | Found by | What core does |
@@ -191,6 +204,7 @@ Lite source paths are under `node_modules/@babylonjs/lite/lib/` (shipped as Java
 | L31 | Double-sided PBR flips the normal of a back-facing triangle: a face wound against its vertex normals shades as if it faced inward (reads black on a flat top) | I1 second iteration, PR #143 | every triangle is wound against its normals |
 | L32 | Equirectangular layout: file column at longitude *l* lands at direction (sin *l*, ·, cos *l*), the first row is +y; `setEnvironmentRotation` turns about world y | probe I0.4 | the studio generator and its rotation to the key light |
 | L33 | The powerPreference option is ignored by `requestAdapter()` on Windows (a Chromium warning, crbug.com/369219127, surfaced through Lite) | every GPU page | nothing to do |
+| L37 | `resizeMeshGeometry` on a registered mesh replaces its GPU geometry in place and works with thin instances, GPU culling, the PBR material and the shadow caster list: it invalidates the render bundles itself (`mesh/mesh-factories.js` ≈ 214), retains the new CPU arrays, and retires the old buffers after the GPU's frames; it throws (549) for a mesh that does not own its vertex buffers. A zero-area triangle is a valid placeholder mesh | item 5 of the plan (a custom part's file arrives after its scene is built) | relies on it: the kind's mesh is created with a placeholder spanning the declared box and takes the file's triangles in place; core re-assigns the mesh's `boundMin`/`boundMax` arrays after the call, since whether Lite keeps them is not documented |
 
 ## Not Lite's fault, listed so they are not re-investigated
 

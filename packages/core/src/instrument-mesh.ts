@@ -107,8 +107,12 @@ let bufferCount = 0;
 const bufferId = (buffer: ArrayBuffer) => { let id = buffers.get(buffer); if (id === undefined) { id = ++bufferCount; buffers.set(buffer, id); } return id; };
 /** What an input profile was validated to, by the identity of its arrays: updates hand core the same arrays every frame. */
 const references = new WeakMap<object, { key: string; result: MeshProfile }>();
-/** URL references by what they say, so an application that rebuilds its scene's profiles keeps one profile per reference. */
-const urlProfiles = new Map<string, MeshProfile>();
+/**
+ * URL references by what they say, so an application that rebuilds its scene's profiles keeps one profile per reference.
+ * Weakly held: a profile carries its loaded triangles, so one no scene uses any more must be free to go (the asset store's
+ * byte budget counts them).
+ */
+const urlProfiles = new Map<string, WeakRef<MeshProfile>>();
 const validated = new WeakMap<object, { normals: unknown; indices: unknown; uvs: unknown; rest: string; result: MeshProfile }[]>();
 
 const hash = (...arrays: ArrayBufferView[]): string => {
@@ -154,11 +158,14 @@ export function validateMeshProfile(value: Record<string, unknown>, at: string):
     const id = `${where}|${(source.mesh as string | undefined) ?? ""}|${scale}|${offset.join(",")}`;
     // The same input gives the same profile object, so what the store attached to it stays attached across updates.
     const key = JSON.stringify([id, bounds, pivot]);
-    const again = source.url !== undefined ? urlProfiles.get(key) : references.get(value)?.key === key ? references.get(value)!.result : undefined;
+    const again = source.url !== undefined ? urlProfiles.get(key)?.deref() : references.get(value)?.key === key ? references.get(value)!.result : undefined;
     if (again) return again;
     const result: MeshProfile = { type: "mesh", id, source: source.url !== undefined ? { url: source.url as string, ...(source.mesh !== undefined ? { mesh: source.mesh as string } : {}) }
       : { data: source.data as ArrayBuffer, ...(source.mesh !== undefined ? { mesh: source.mesh as string } : {}) }, scale, offset, bounds: bounds!, ...(pivot ? { pivot } : {}) };
-    if (source.url !== undefined) { if (urlProfiles.size >= 256) urlProfiles.clear(); urlProfiles.set(key, result); } else references.set(value, { key, result });
+    if (source.url !== undefined) {
+      if (urlProfiles.size >= 256) for (const [name, ref] of urlProfiles) if (!ref.deref()) urlProfiles.delete(name);
+      urlProfiles.set(key, new WeakRef(result));
+    } else references.set(value, { key, result });
     return withJson(result, { type: "mesh", id, bounds, pivot });
   }
 

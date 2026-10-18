@@ -319,8 +319,12 @@ Each item is its own PR with GPU tests, in order:
    bloom on the mesh pass.
 4. **Reflections and glass over the capture:** the layer's capture as a local environment probe, and transmission
    that refracts it.
-5. **Custom parts:** glTF loading for named parts, anchor fitting and the bounds check. Core never fetches at
-   render time; the helper loads and hands core mesh data.
+5. **Done** ([design note](instrument-phase2.md#core-work-item-5-custom-parts)). **Custom parts:** a `mesh` profile (inline
+   triangles or a glB/glTF reference) and a `custom` part kind in the scene format, validated, wound to core's convention,
+   contained on the real vertices and budgeted like the parametric parts. Core loads references outside any frame
+   (a store with a byte budget; a small glB reader; the part appears when its file arrives, with no rebuild). Anchor fitting
+   stayed with the helper (`scale` and `offset` in core), and the plan's "the helper loads and hands core mesh data"
+   became "core loads".
 
 ### Babylon Lite feature map
 
@@ -542,7 +546,7 @@ One concern per PR, each based on `main`:
 3. Design-language sections and version 4 of the Rendering Model (3a); 3b: its reference implementation,
    `instrument-4.json` with its GPU conformance test, and `premium.json` with the character runtime.
 4. Core: `instrument` material and the mesh pass. 5. Core: emitters. 6. Core: object-on-object shadows.
-7. Core: transmission over the capture. 8. Core: custom parts.
+7. Core: transmission over the capture. 8. Core: custom parts (done: item 5 of the core work).
 9. Knob (wave 1: [anatomy](components/knob.md); CSS, Relief, Objects and Instrument done, with the helper's `instrument` level, and its detents' `tick`).
 10. Fader (wave 1: [anatomy](components/fader.md); CSS, Relief, Objects and Instrument done, with the helper's
    `instrument` level, and its detents' `tick`). 11. Switch forms, with sound and haptics as the opt-in option.
