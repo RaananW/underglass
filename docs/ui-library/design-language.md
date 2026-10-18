@@ -633,7 +633,7 @@ keep their Objects object, drawn as meshes of the same shapes. Lit parts give th
 | StatusLight | `lens`, an emitter | None | `blink`, at most 3 flashes a second | Lens 10† (I0.3); the box is the lens + 16 (26); a glass lens 0.35 of its diameter high over a printed socket, no bezel. `blink.slow`, `normal` and `fast` are 1,600, 1,000 and 400 ms a cycle (never under 334 ms). [Anatomy](components/status-light.md) |
 | Meter `bar` | `window`; `segment`s | Segments, shown or collapsed | — | 16 `segments`† (I0.1) |
 | Meter `needle`, Gauge | `bezel`, `window`, `dial` | `needle` on a `pivot` | Turn through the gauge's sweep, with a damped spring | Phase I4 |
-| RotarySelector | `collar`; the ring of positions, printed | As Knob | Turn to the selected option, one detent per option | As Knob, Ø `size.rotary` (48, 64, 80); the dial as wide as its root (at most 208), each label at r + 12 on the side its angle faces, a numbered legend when narrow. [Anatomy](components/rotary-selector.md) |
+| RotarySelector | `collar`; the ring of positions, printed | As Knob | Turn to the selected option, one detent per option | As Knob |
 | Display | `bezel`, `window`; the text, a native `<output>` printed under the window | None | The backlight, an emitter† | Box 236 × 58 on the prototype. Bezel 7 wide, radius 8, 2.4 high, chamfer 2, polished, standing 0.5 px inside the box ([I0.4](instrument-phase0.md#i04-materials-over-the-capture)); window 2.4 high with a 2.6 bevel; finish band 0.3, horizon 0.25; the rest in Phase I4 |
 | Pad | `plinth` | `cap`: soft (`subsurface`), lit from below | Travel | Phase I5 |
 | JogWheel | `collar` | A large `cap` with a finger dimple | Turn, wrapping | Phase I5 |
