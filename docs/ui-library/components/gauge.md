@@ -138,8 +138,10 @@ A Gauge has no keyboard interaction: it is not focusable and takes no input. Rol
 with the value, minimum, maximum and `aria-valuetext` when a unit or a format gives one (the manual screen-reader script is
 VAL-002's). Meaning never rides on colour alone: the needle's place against the printed scale gives the value, and the red
 zone's extent is the scale's. Under forced colours and more contrast the needle, the scale and the zone band take the text
-colour (the band as a `CanvasText` strip). A Gauge's **live value** follows every write to `value`; update the DOM value at a
-low rate for assistive technology where a signal is faster than people can read.
+colour (the band as a `CanvasText` strip). A Gauge's **live value** goes through `driveStrataMeter(meter, value)`
+(`@underglass/ui/dom`): at the Instrument level it writes nothing to the DOM, the value reaching the GPU as the needle's pose
+(300 frames: 0 captures, 0 uploads, 0 hit-geometry updates), and the native `value` follows at a low rate for assistive technology;
+at Relief and Objects the needle is captured content and the drawing's value is written each time.
 
 ## 9. CSS presentation
 
@@ -159,8 +161,9 @@ caption size, so 200% text keeps the numerals inside the dial. Forced colours, m
 - **GPU** (`ui-gauge.test.mjs`, DPR 1 and 2, Relief, Objects and Instrument): GPU stays on; at Instrument the scene is
   version 4 with a bezel, a window, a needle and a hub per gauge and the needle on `spring.gauge`; at 0, 25, 50, 75 and 100
   of the range and in flight the parts draw inside the boxes only (0 pixels outside) and native hits on every part pixel find
-  the meter; a value change changes pixels in its box only; the printed scale under the glass is the capture itself (0
-  mismatched pixels against the layer without the window); 300 frames of a sweeping value add no capture, upload or
+  the meter; a value change changes pixels in its box only; the printed scale under the glass is the capture itself (the faceplate
+  pixels under the glass are the capture's colour to a level, and a needle at another value leaves the numerals it does not cross
+  pixel for pixel the same); 300 frames of a live value add no capture, upload or
   hit-geometry update while the needle moves on its spring; reduced motion puts the needle on its target in the first
   frame; the accessibility snapshot is the same in DOM and GPU modes. Checked in a headful Canary window as well.
 - **Bindings and Astro:** with the Meter's, `ui-meter-bindings.test.mjs` and `ui-meter-astro.test.mjs`.

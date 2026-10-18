@@ -164,8 +164,8 @@ object is drawn around it.
 | **Switch forms** | The existing Switch, `<input type="checkbox" role="switch">` | `slide` (default in premium): a flush slide switch. `rocker`: two plates on a pivot. `bat`: a lever that snaps over centre. `wall`: a wall plate with a paddle | Tip, throw, slide | 1 |
 | **[Lamp](components/lamp.md)** | `<input type="checkbox" role="switch">` with the lamp as its label, or a `<button aria-pressed>` when it is a momentary control | A lens on a bezel; off it is a dark glass dome, on it glows and **emits** | None; the emitter turns on | 2 (done) |
 | **[StatusLight](components/status-light.md)** (LED) | `<output>` or a `<span role="img" aria-label>`; an optional `aria-live` region names changes | A small lens; `colour` from a role; `blink` is a tempo token, off under reduced motion | None; emitter | 2 (done) |
-| **Meter** | `<meter>` (implicit role meter); `min`, `max`, `low`, `high`, `optimum` | A bar of LED segments behind a window (`segments`), or a needle meter (`form="needle"`) | Segments light; a needle sweeps with a damped spring | 2 |
-| **Gauge** | `<meter>` or `<progress>` with `aria-valuetext` | A round dial under glass with a needle and a printed scale | Needle | 2 |
+| **[Meter](components/meter.md)** | `<meter>` (implicit role meter); `min`, `max`, `low`, `high`, `optimum` | A bar of LED segments in a window (`segments`; the glass covers the printed scale under them), or a needle meter (`form="needle"`) | Segments light; a needle sweeps with a damped spring | 2 (done) |
+| **[Gauge](components/gauge.md)** | `<meter>` (a bounded measurement; indeterminate is not supported) with `aria-valuetext` | A round dial under glass with a needle and a printed scale | Needle | 2 (done) |
 | **RotarySelector** | `<select>`; the native popup stays in the overlay host, as Select does today | A knob with a pointer over a ring of printed positions, one detent per `<option>` | Cap turns to the selected position | 2 |
 | **PushButton** forms | The existing Button and ToggleButton, `<button>` | `momentary`: a machined cap with a lit ring. `latching` (ToggleButton): stays down with an LED on | Travel; ring lights | 2 |
 | **Display** | The existing TextField, `<input>`, as `form="display"`; read-only displays are `<output>` | A glass window in a bezel, backlit, with the text printed under the glass | None; backlight is an emitter | 2 |
@@ -560,3 +560,9 @@ at every presentation: CSS, plain DOM, React, Vue and Astro, and Relief, Objects
 first use of emitters (a version 4 scene with `emitters`, `protected` rects and a `feather`, and `setEmitters` for a toggle or
 a blink), the `blink` tempo tokens and the opt-in `click` feedback. Meter, Gauge, RotarySelector, the PushButton forms and
 Display follow.
+
+PR 13, wave 2, second part: the Meter and the Gauge ([Meter](components/meter.md), [Gauge](components/gauge.md)) at every
+presentation: CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Instrument on the GPU. A bar's segments are the
+Lamp's LED lens with an emitter each (the Lamp's wiring, so this PR is based on the Lamp's); a needle meter and a gauge are a glass
+window, a needle on `spring.meter` or `spring.gauge` and a hub. `driveStrataMeter` drives a live value as a uniform and a pose with
+no capture. RotarySelector, the PushButton forms and Display follow.

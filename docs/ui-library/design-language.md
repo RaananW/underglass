@@ -149,6 +149,9 @@ the face, and lights:
 | `emitter.strength` | 3,200† | 520† | 0–32,000† | Intensity `I` in the falloff below |
 | `emitter.guardFeather` | 4† | 4† | 0–16† | Width, in px, over which the guard eases off outside a protected rect |
 
+A [Meter](components/meter.md)'s lit segment is an LED with its own tokens, `emitter.segment.radius` (3†), `emitter.segment.height`
+(0.8†) and `emitter.segment.strength` (260† for the 10 px lens): a bar throws many small pools, so each reaches less than a lone LED's.
+
 - **Colour by role:** an emitter takes its lens's role colour: `glowOn` for lamps and lit rings, the StatusLight's
   `colour` role, the `display` role's emissive colour for a backlight. As light, it is that colour's channels in 0–1.
 - **Falloff,** Lite's clustered point-light falloff, so the face pass and the mesh lights agree. At a point with
@@ -631,8 +634,8 @@ keep their Objects object, drawn as meshes of the same shapes. Lit parts give th
 | PushButton `latching` | As momentary, with an LED | `cap` | Travel 4 held, 1.8 latched | As momentary |
 | Lamp | `bezel`; `lens`, an emitter | None | The emitter turns on | Lens 28† ([I0.3](instrument-phase0.md#i03-emitters-and-the-pointer-light)); the box is the lens + 28 (56), 10 px each side of the bezel for the bloom halo. Bezel Ø lens + 8, 3 high, polished; the lens a glass plano-convex lens 0.4 of its diameter high over a socket printed on the face. [Anatomy](components/lamp.md) |
 | StatusLight | `lens`, an emitter | None | `blink`, at most 3 flashes a second | Lens 10† (I0.3); the box is the lens + 16 (26); a glass lens 0.35 of its diameter high over a printed socket, no bezel. `blink.slow`, `normal` and `fast` are 1,600, 1,000 and 400 ms a cycle (never under 334 ms). [Anatomy](components/status-light.md) |
-| Meter `bar` | `window`; `segment`s | Segments, shown or collapsed | — | 16 `segments`† (I0.1) |
-| Meter `needle`, Gauge | `bezel`, `window`, `dial` | `needle` on a `pivot` | Turn through the gauge's sweep, with a damped spring | Phase I4 |
+| Meter `bar` | `window` over the printed scale; `segment`s | Each segment an LED lens whose emitter is lit or dark | — | 16 `segments`† (I0.1). Box 286 × 58 (16 segments × 15 + 2 × `max(10 px, 1.6em)` + 8); segment lens Ø `size.meter` 10, 0.35 of its diameter high; window 2.4 high, a 2.2 px bevel. **The glass covers the scale, not the LEDs:** core's glass parts write no depth, and a window's exact pixels cover them where the capture is opaque. [Anatomy](components/meter.md) |
+| Meter `needle`, Gauge | `bezel` (a Gauge's ring), `window`, `dial` (printed) | `needle` on a `pivot` | Turn through `meter.sweep` (100°) or `gauge.sweep` (240°), with a damped spring (`spring.meter`, `spring.gauge`) | Needle meter box 264 × 152, gauge `size.gauge` (160) + 24 square. Needle 2.2 wide from a 12 px tail, standing 2.4 over the glass; hub Ø 12, 4 high; window 2.4 high, a 2.2 px bevel; a gauge's bezel 3 high, polished. [Meter](components/meter.md), [Gauge](components/gauge.md) |
 | RotarySelector | `collar`; the ring of positions, printed | As Knob | Turn to the selected option, one detent per option | As Knob |
 | Display | `bezel`, `window`; the text, a native `<output>` printed under the window | None | The backlight, an emitter† | Box 236 × 58 on the prototype. Bezel 7 wide, radius 8, 2.4 high, chamfer 2, polished, standing 0.5 px inside the box ([I0.4](instrument-phase0.md#i04-materials-over-the-capture)); window 2.4 high with a 2.6 bevel; finish band 0.3, horizon 0.25; the rest in Phase I4 |
 | Pad | `plinth` | `cap`: soft (`subsurface`), lit from below | Travel | Phase I5 |
@@ -843,6 +846,8 @@ into core keyframes: motion never recaptures ([I0.1](instrument-phase0.md#i01-me
 | `spring.bat` | 1,400† | 45† | 0.60 | A bat switch's lever |
 | `spring.wall` | 1,200† | 58† | 0.84 | A wall switch's paddle |
 | `spring.button` | 1,600† | 80† | 1.00 | A push button's cap |
+| `spring.meter` | 360† | 28† | 0.74 | A needle meter's needle |
+| `spring.gauge` | 160† | 20† | 0.79 | A gauge's needle |
 
 Stiffness ranges over 50–4,000† and damping over 5–200†.
 

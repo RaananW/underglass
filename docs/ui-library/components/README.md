@@ -139,3 +139,5 @@ The [Instrument level](../instrument.md)'s components: hardware objects over nat
 | [Fader](fader.md) | `<input type="range">`, vertical (`writing-mode: vertical-lr`) or horizontal, its thumb the carriage | A slot in the faceplate with a capped carriage, a scale printed beside it |
 | [Lamp](lamp.md) | `<input type="checkbox" role="switch">` in its label row, or a `<button aria-pressed>` when `momentary` | A lens on a bezel: dark glass off, glowing and emitting on |
 | [StatusLight](status-light.md) | `<span role="img" aria-label>`, a `<span>` with its label, or a live `<output>` | A small lens with an emitter; `colour` a role, `blink` a tempo token |
+| [Meter](meter.md) | `<meter>` (role `meter`) with `min`, `max`, `low`, `high`, `optimum` | A bar of LED segments lit from the value (each an emitter, in its zone's colour), or a needle on a printed arc on `spring.meter`; a held `peak` |
+| [Gauge](gauge.md) | `<meter>` (a bounded measurement; not `<progress>`) | A round dial under glass: a needle on `spring.gauge` over a printed scale, a red zone from `high` |

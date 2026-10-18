@@ -207,10 +207,14 @@ A meter has no keyboard interaction: it is not focusable and takes no input.
 - **Meaning never rides on colour alone** (WCAG 1.4.1): the value is the number of lit segments or the needle's place
   against a printed scale, and the zone is also the thresholds' positions on that scale; forced colours and more contrast
   draw lit segments as a fill and the needle in the text colour.
-- **Live values:** a meter driven at frame rate changes its `value` property; its accessible value changes with it. A
-  screen reader reading the number every frame is a nuisance, not a failure: set `aria-live` nowhere, and update the DOM
-  value at a low rate for assistive technology where a signal is faster than people can read (design language section 6).
-  The drawn object follows every write.
+- **Live values:** writing `<meter value>` every frame would recapture the layer every frame (every DOM mutation is a capture, even
+  an attribute no paint depends on: measured, 60 writes, 60 captures), and a screen reader reading the number every frame is a
+  nuisance. A live value (a level at frame rate) goes through `driveStrataMeter(meter, value)` from `@underglass/ui/dom`: where the
+  GPU draws the meter (a bar's segments at every level, a needle at the Instrument level) it writes nothing to the DOM, the value
+  reaching the GPU as emitter strengths and a pose, so 300 frames add 0 captures, 0 uploads and 0 hit-geometry updates; the native
+  `value` (and so `aria-valuetext`) follows at a low rate for assistive technology (`interval`, 1,000 ms by default, 0 only on
+  `releaseStrataMeter`). Where the CSS presents the meter, or draws its needle as captured content (Relief, Objects), the drawing's
+  value is written each time. A write to the native `value` by anyone else ends the drive.
 - **Target size** (2.5.8) does not apply (no input); the box is at least 58 px high.
 
 ## 9. CSS presentation
@@ -247,10 +251,12 @@ Marks sit on whole pixels (CSS `round()`).
   parts; with the value at 0, 25, 50, 75 and 100 the objects draw inside the boxes (0 pixels outside, the light within its
   reach) and native hits on every part pixel find the meter; a value change changes pixels in its box and its reach only;
   the face is lit round a lit bar within the outset and protected text stays within the guard; at the Instrument level the
-  printed scale under the glass is the capture itself (0 mismatched pixels against the layer without the window); 300
-  frames of a sweeping value add no capture, upload or hit-geometry update while the needle moves on its spring; reduced
-  motion puts the needle on its target in the first frame; the accessibility snapshot is the same in DOM and GPU modes. Checked
-  in a headful Canary window as well.
+  printed scale under the glass is the capture itself (the faceplate pixels under it are the DOM's own colour to a level, 0 of
+  1,146 at DPR 1 and 0 of 5,183 at DPR 2 more than a level off, and no pixel of the bars' numerals changes when the bars light); 300
+  frames of a live value add no capture, upload or hit-geometry update while the needle moves on its spring (and the low-rate sync
+  writes about once an interval, each a capture); at Relief and Objects a sweeping value is captured each frame (the needle is
+  captured content) with no hit-geometry update; reduced motion puts the needle on its target in the first frame; the
+  accessibility snapshot is the same in DOM and GPU modes. Checked in a headful Canary window as well.
 - **Bindings and Astro** (`ui-meter-bindings.test.mjs`, `ui-meter-astro.test.mjs`): React, Vue and Astro render the markup
   above exactly (and the Gauge's); a changed value moves the drawing and the native meter; the root ref, `meterRef`,
   `class`, `style` and attributes.
@@ -258,5 +264,9 @@ Marks sit on whole pixels (CSS `round()`).
   the springs and the CSS curves, the tokens, the Relief and Objects entries, and the Instrument parts validated by core's
   `validateInstrumentScene` and contained over the whole travel in every corner of the reference stage at every depth
   (`checkContainment`).
-- **Not yet:** a source prop (live audio through Lite's analyser), a vertical bar, a low-end GPU, and the manual
-  screen-reader script.
+- **A finding for core:** against the layer core draws with no window and no relief (the same capture through the layer pass), the bars'
+  numerals differ at 243 of 2,431 px at DPR 1 and 635 of 9,108 at DPR 2, by at most 22 levels, at glyph edges, and the faceplate by a
+  level: the layer pass does not reproduce the capture bit for bit where the exact twin does, so the comparison that is exact is the
+  glass against the DOM's own colours and against itself with the bars lit, which the suite asserts.
+- **Not yet:** a `source` prop (live audio through Lite's analyser: `driveStrataMeter` takes the value it would give), a vertical
+  bar, a bezel part for the needle meter at the Instrument level, a low-end GPU, and the manual screen-reader script.

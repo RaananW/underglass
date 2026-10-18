@@ -26,6 +26,12 @@
  * `--strata-lit` and the `emitter.*` tokens, read each frame, so a blink or a toggle is a uniform update), the `protected`
  * rects of its text and a `feather`, so core's face pool lights the page around the lens within the contrast guard.
  *
+ * A Meter's or Gauge's segments are the same LED lenses (`gpu/meter-forms.ts`, `gpu/instrument-meter.ts`; design language section 6): one
+ * emitter each, in the colour of its zone, lit from the native meter's value (or the live value `driveStrataMeter` gave it) and its held
+ * peak, so a value change is a uniform update at every level. A needle meter's and a gauge's window and bezel are Relief and Objects
+ * primitives (fitted so their shadows stay in the native meter's box) with the needle as captured content; at the Instrument level the
+ * needle is a part turned by its spring (`spring.meter`, `spring.gauge`), over a glass window that keeps the printed scale exact.
+ *
  * At the Instrument level (`instrument`, between `objects` and `scene` on the ladder, set like the others) a panel with
  * any element at that level takes core's `instrument` material and a version 4 scene (`gpu/instrument.ts`): its knobs
  * become the premium knob's parts, whose pointer turns on a spring as their value changes (uniform updates, no
