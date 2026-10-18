@@ -168,7 +168,7 @@ object is drawn around it.
 | **[Gauge](components/gauge.md)** | `<meter>` (a bounded measurement; indeterminate is not supported) with `aria-valuetext` | A round dial under glass with a needle and a printed scale | Needle | 2 (done) |
 | **RotarySelector** | `<select>`; the native popup stays in the overlay host, as Select does today | A knob with a pointer over a ring of printed positions, one detent per `<option>` | Cap turns to the selected position | 2 |
 | **PushButton** forms | The existing Button and ToggleButton, `<button>` | `momentary`: a machined cap with a lit ring. `latching` (ToggleButton): stays down with an LED on | Travel; ring lights | 2 |
-| **Display** | The existing TextField, `<input>`, as `form="display"`; read-only displays are `<output>` | A glass window in a bezel, backlit, with the text printed under the glass | None; backlight is an emitter | 2 |
+| **[Display](components/display.md)** | The existing TextField, `<input>`, as `form="display"` ([TextField, section 11](components/text-field.md#11-the-display-form)); read-only displays are `<output>` | A glass window in a bezel, backlit, with the text printed under the glass | None; backlight is an emitter | 2 (done) |
 | **Pad** | `<button>`, with `aria-pressed` for latching pads | A square soft cap in a grid, lit from below when active | Travel; emitter | 3 |
 | **JogWheel** | `<input type="range">` with `wrap` (an endless encoder: the value steps, the visual position wraps) | A large flat wheel with a finger dimple | Turns | 3 |
 | **Keypad** | A `<fieldset>` of `<button>`s, Grid pattern for arrow keys | Push buttons in a grid on one plinth | Travel | 3 |
@@ -570,3 +570,8 @@ presentation: CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Inst
 Lamp's LED lens with an emitter each (the Lamp's wiring, so this PR is based on the Lamp's); a needle meter and a gauge are a glass
 window, a needle on `spring.meter` or `spring.gauge` and a hub. `driveStrataMeter` drives a live value as a uniform and a pose with
 no capture. RotarySelector, the PushButton forms and Display follow.
+
+PR 15, wave 2, last part: the Display ([anatomy](components/display.md), [TextField, section 11](components/text-field.md#11-the-display-form))
+at every presentation: the TextField as `form="display"` (a native `<input>` that covers a bezel and a glass window, backlit) and a read-only
+`<output>`. The text stays captured content under the glass (the GPU never draws text); the backlight is an emitter, a few along the window,
+held within the contrast guard over the text; `driveStrataDisplay` bounds a value written at frame rate to one capture an interval.

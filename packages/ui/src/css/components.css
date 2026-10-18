@@ -1631,6 +1631,8 @@
     text-overflow: clip;
   }
   :where(output.ug-display__text) { display: flex; align-items: center; overflow-wrap: anywhere; }
+  :where(.ug-display--input .ug-display__text) { cursor: text; }
+  :where(.ug-display--output .ug-display__text) { cursor: default; }
   :where(.ug-display__text)::placeholder { color: var(--strata-colour-muted); opacity: 1; }
   :where(.ug-display__text:focus-visible) { outline: none; }
   :where(.ug-display__object) { position: absolute; inset: 0; pointer-events: none; }

@@ -149,6 +149,10 @@ the face, and lights:
 | `emitter.strength` | 3,200† | 520† | 0–32,000† | Intensity `I` in the falloff below |
 | `emitter.guardFeather` | 4† | 4† | 0–16† | Width, in px, over which the guard eases off outside a protected rect |
 
+A [Display](components/display.md)'s backlight is a few emitters along its window with its own tokens, `emitter.display.radius` (2.5†, in window heights),
+`emitter.display.height` (0.5†) and `emitter.display.strength` (2,200† for the 36 px reference window, shared between its emitters and scaled with the
+square of its height); the text box is a protected rect, so the light never reaches the text.
+
 A [Meter](components/meter.md)'s lit segment is an LED with its own tokens, `emitter.segment.radius` (3†), `emitter.segment.height`
 (0.8†) and `emitter.segment.strength` (260† for the 10 px lens): a bar throws many small pools, so each reaches less than a lone LED's.
 
@@ -640,7 +644,7 @@ keep their Objects object, drawn as meshes of the same shapes. Lit parts give th
 | Meter `bar` | `window` over the printed scale; `segment`s | Each segment an LED lens whose emitter is lit or dark | — | 16 `segments`† (I0.1). Box 286 × 58 (16 segments × 15 + 2 × `max(10 px, 1.6em)` + 8); segment lens Ø `size.meter` 10, 0.35 of its diameter high; window 2.4 high, a 2.2 px bevel. **The glass covers the scale, not the LEDs:** core's glass parts write no depth, and a window's exact pixels cover them where the capture is opaque. [Anatomy](components/meter.md) |
 | Meter `needle`, Gauge | `bezel` (a Gauge's ring), `window`, `dial` (printed) | `needle` on a `pivot` | Turn through `meter.sweep` (100°) or `gauge.sweep` (240°), with a damped spring (`spring.meter`, `spring.gauge`) | Needle meter box 264 × 152, gauge `size.gauge` (160) + 24 square. Needle 2.2 wide from a 12 px tail, standing 2.4 over the glass; hub Ø 12, 4 high; window 2.4 high, a 2.2 px bevel; a gauge's bezel 3 high, polished. [Meter](components/meter.md), [Gauge](components/gauge.md) |
 | RotarySelector | `collar`; the ring of positions, printed | As Knob | Turn to the selected option, one detent per option | As Knob |
-| Display | `bezel`, `window`; the text, a native `<output>` printed under the window | None | The backlight, an emitter† | Box 236 × 58 on the prototype. Bezel 7 wide, radius 8, 2.4 high, chamfer 2, polished, standing 0.5 px inside the box ([I0.4](instrument-phase0.md#i04-materials-over-the-capture)); window 2.4 high with a 2.6 bevel; finish band 0.3, horizon 0.25; the rest in Phase I4 |
+| Display | `bezel`, `window`; the text, a native `<input>` or `<output>` printed under the window | None | The backlight, emitters along the window† | Box 236 × 56 at medium (the window 214 × 34, the control's height; the prototype's 236 × 58 had a 36 px window). The native element covers the whole box: the bezel stands 4 px in (the room for its shadow), 7 wide, radius 8, 2.4 high, chamfer 2, polished; the window 2.4 high with a 2.6 bevel. The finish band 0.3 and horizon 0.25 only where no text can reach the zone (an input's text can be anywhere in its content box, so never: a window 34 px high has none). The bezel is a solid under the window, whose exact pixels cover it. [Anatomy](components/display.md) |
 | Pad | `plinth` | `cap`: soft (`subsurface`), lit from below | Travel | Phase I5 |
 | JogWheel | `collar` | A large `cap` with a finger dimple | Turn, wrapping | Phase I5 |
 | Keypad | `plinth` | Push-button `cap`s | Travel | Phase I5 |

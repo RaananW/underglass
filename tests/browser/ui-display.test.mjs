@@ -457,13 +457,13 @@ for (const dpr of [1, 2]) for (const level of levels) test(`the displays at ${le
     });
   }
   expect(scene.feather).toBe(4);
-  // The guard: the content box of every input and the text runs of every output are protected, and the bezel round them is not.
+  // The guard: the content box of every native element (an input's or an output's) and the text runs of every output are protected, and the bezel round them is not.
   expect(Array.isArray(scene.protected)).toBe(true);
   const covers = (rect, box) => rect[0] <= box[0] + 0.5 && rect[1] <= box[1] + 0.5 && rect[0] + rect[2] >= box[0] + box[2] - 0.5 && rect[1] + rect[3] >= box[1] + box[3] - 0.5;
   for (const text of scene.texts) expect(scene.protected.some(rect => covers(rect, text)), `a protected rect covers the text at ${text.map(Math.round)}`).toBe(true);
   const frameOf = await textBoxes(page), panelBox = (await inFrame(page, "#display-panel"))[0];
   for (const box of frameOf) expect(scene.protected.some(rect => covers(rect, [box.x - panelBox.x, box.y - panelBox.y, box.width, box.height])), `${box.id}: its text box is protected`).toBe(true);
-  for (const id of inputs) {
+  for (const id of ids) {
     const window = scene.windows.find(entry => entry.id === id), [bx, by, bw, bh] = window.box;
     // Inside the box 6 px in from its edge, on the bezel: no protected rect.
     for (const point of [[bx + 6, by + bh / 2], [bx + bw / 2, by + 6], [bx + bw - 6, by + bh / 2]]) {
@@ -876,5 +876,35 @@ test("a resize, a DPR change and a hidden tab keep GPU on, and the displays stay
   const after = await sceneOf(page);
   expect(after.objects.map(object => object.id).filter(id => id !== "submit")).toEqual(["name", "note", "serial", "rate", "level", "bad", "extra"]);
   expect((await hits(page, "extra", 7)).misses).toEqual([]);
+  await context.close();
+});
+
+for (const dpr of [1, 2]) test(`display text meets 4.5:1 through the glass at the Instrument level (DPR ${dpr}), measured on decoded pixels in every theme`, async ({ browser }) => {
+  test.setTimeout(240000);
+  const context = await browser.newContext({ viewport: { width: 900, height: 800 }, deviceScaleFactor: dpr });
+  const page = await context.newPage();
+  await ready(page, "?level=instrument");
+  const luminance = ([r, g, b]) => { const linear = value => { const x = value / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }; return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b); };
+  const ratio = (a, b) => { const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (high + 0.05) / (low + 0.05); };
+  const results = {};
+  for (const theme of ["light", "dark", "contrast", "contrast-dark"]) {
+    await page.evaluate(value => { document.documentElement.dataset.strataTheme = value; }, theme);
+    await page.waitForTimeout(400);
+    const png = await frame(page, `contrast-dpr${dpr}-${theme}`, { wait: 600 });
+    const boxes = (await textBoxes(page)).filter(box => ["name", "serial", "rate", "level", "bad"].includes(box.id));
+    const worst = [];
+    for (const box of boxes) {
+      const x0 = Math.floor(box.x * dpr), x1 = Math.ceil((box.x + box.width) * dpr), y0 = Math.floor(box.y * dpr), y1 = Math.ceil((box.y + box.height) * dpr);
+      const corner = pixel(png, { x: box.x + 1, y: box.y + 1 }, dpr);
+      // The glyph colour furthest from the window's: the text's own, whatever the theme.
+      let far = corner, distance = 0;
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const at = (y * png.width + x) * 4, value = [png.data[at], png.data[at + 1], png.data[at + 2]], d = Math.abs(luminance(value) - luminance(corner)); if (d > distance) { distance = d; far = value; } }
+      worst.push(ratio(far, corner));
+    }
+    results[theme] = Math.min(...worst);
+    expect(results[theme], `${theme}: the text through the glass`).toBeGreaterThanOrEqual(4.5);
+  }
+  console.log(`instrument DPR ${dpr}: the lowest text contrast through the glass, by theme: ${JSON.stringify(Object.fromEntries(Object.entries(results).map(([theme, value]) => [theme, Math.round(value * 100) / 100])))}`);
+  await healthy(page, "themes", "instrument");
   await context.close();
 });

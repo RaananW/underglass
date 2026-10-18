@@ -197,13 +197,13 @@ const interactive = "input, button, select, textarea, a[href], [tabindex]";
 /** Material roles by face, for elements that name no material (design language section 4). */
 function roleOf(face: SceneFace, element: Element, panel: Element): string {
   if (element === panel || element.matches(".ug-card")) return "panel";
-  // A display's bezel is the polished metal of the knob's; its window is a flat face on the field.
-  if (element.matches(".ug-display__bezel")) return "knob";
-  if (element.matches(".ug-display__window")) return "field";
   // A knob's skirt and cap, and a fader's carriage, are raised faces in the knob's material (a fader's slot is a
   // groove, a rail).
   if (element.matches(".ug-knob__skirt, .ug-knob__cap, .ug-fader__carriage, .ug-lamp__bezel")) return "knob";
   if (face === "raised") return element.matches(".ug-button--accent, .ug-button--primary") ? "buttonPrimary" : "control";
+  // A display's bezel is the polished metal of the knob's; its window is a flat face on the field.
+  if (element.matches(".ug-display__bezel")) return "knob";
+  if (element.matches(".ug-display__window")) return "field";
   return ({ well: "field", groove: "rail", knob: "knob", mark: "indicator", ring: "field", flat: "control" } as Record<string, string>)[face] ?? "control";
 }
 
@@ -320,9 +320,9 @@ function protectedRects(panel: HTMLElement, grow = 2): [number, number, number, 
   for (const field of panel.querySelectorAll("input:not([type='checkbox'], [type='radio'], [type='range'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='file'], [type='hidden'], [type='color'], .ug-display__text), textarea, select")) {
     if (field.checkVisibility({ visibilityProperty: true })) add(field.getBoundingClientRect());
   }
-  // A display's input covers the whole display, bezel included: only its content box (the text's room) is protected, so the bezel and the
-  // padding round the text take the backlight in full and the glass shows there. An output's text runs are protected above.
-  for (const field of panel.querySelectorAll<HTMLElement>("input.ug-display__text")) {
+  // A display's native element covers the whole display, bezel included: only its content box (the text's room, the window's inside) is
+  // protected, an output's as an input's, so the window is one even colour and the bezel and the padding round it take the backlight in full.
+  for (const field of panel.querySelectorAll<HTMLElement>(".ug-display__text")) {
     if (!field.checkVisibility({ visibilityProperty: true })) continue;
     const box = field.getBoundingClientRect(), style = getComputedStyle(field), edge = (name: string) => (Number.parseFloat(style.getPropertyValue(name)) || 0) * scale;
     const left = edge("border-left-width") + edge("padding-left"), right = edge("border-right-width") + edge("padding-right");

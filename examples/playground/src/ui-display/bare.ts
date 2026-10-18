@@ -11,7 +11,7 @@ type Scene = { kind?: string; objects?: { parts: { kind: string }[] }[] };
 const without = <T>(scene: T): T => {
   const instrument = scene as unknown as Scene;
   if (instrument.kind !== "instrument" || !instrument.objects) return scene;
-  return { ...instrument, primitives: [], objects: instrument.objects.map(object => ({ ...object, parts: object.parts.filter(part => part.kind !== "window" && part.kind !== "bezel") })) } as unknown as T;
+  return { ...instrument, primitives: [], objects: instrument.objects.map(object => ({ ...object, parts: object.parts.filter(part => part.kind !== "window" && part.kind !== "bezel") })).filter(object => object.parts.length > 0) } as unknown as T;
 };
 
 export function bareController(controller: CanvasController): StrataGpuController {

@@ -56,8 +56,8 @@ it (a press on the bezel puts the caret where it is nearest, as a press on the w
 - **The backlight's colour** is a role (`backlight`): `glowOn` (amber, the default), `accent`, `success`, `warning`, `danger`
   or `info`, or `off`. The window carries a static tint of its role (10% over `colour.field`, part of the capture, so a toggle
   changes no captured pixel); the glow is the GPU's emitters, and in the CSS presentation a radial gradient and a shadow.
-- **The protected rects** are the content box of an input (its text's room, the window's inside, so the bezel is lit in
-  full) and the text runs of an output. The helper never protects the bezel.
+- **The protected rect** is the content box of the native element, an input's or an output's (the text's room: the window's inside, so
+  the window is one even colour and the bezel is lit in full); an output's text runs are protected too. The helper never protects the bezel.
 - **The finish zone** (a reflection band 0.3 and a dark horizon 0.25, `display.finish`, in the top 31% of the window) is
   turned off wherever text can reach it, as key tops do (design language section 4): an input's text can be anywhere in its
   content box, an output's is its first run, so in a 34 px window it is off. It draws on a taller window whose text sits below it
@@ -244,5 +244,8 @@ in the monospace family (tabular numerals), and, lit, a glow shadow round the be
   stays the native form owner's id.
 - **Unit** (`strata-display.unit.test.mjs`): the forms and roles, the markup model, the emitters, the tokens, the Relief and Objects entries,
   and the Instrument parts validated by core's `validateInstrumentScene` and contained over the whole stage at every depth (`checkContainment`).
+- **A finding for core** (the Meter's, again): against the layer core draws with no window, no bezel and no relief (the same capture through the layer pass),
+  the text boxes differ at 23,832 of 30,726 px at DPR 1 and 93,648 of 120,700 at DPR 2, by at most 10 levels: the layer pass does not reproduce the capture bit
+  for bit where the exact twin does, so the comparison that is exact is the glass against the DOM's own rendering, which the suite asserts.
 - **Not yet:** the `segments` look (a seven-segment or dot-matrix typeface needs a font asset: a follow-up), the manual screen-reader script
   for a live readout (VAL-002) and a real operating-system IME (VAL-001), both in [open issues](../../open-issues.md) until performed, a low-end GPU.
