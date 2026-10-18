@@ -830,7 +830,7 @@ so the canvas becomes `src + (1 − src.a) · out`: 2D.8's composite, with the c
 | 10 | **Options** | `post.taa`, `post.contact` and `post.ssgi`, off by default, with I0.8's settings (TAA factor 0.1 over 8 samples; contact 8 px, 12 steps, multiplied; SSGI 24 px rays, additive, fade 1e5–2e5, since its fade is a camera distance). **Their resolutions are core constants** (contact 1, SSGI 0.5), not scene fields: 2D.1 defines `post` as five booleans, so a resolution field is a change of the format | Resolution fields in `post`: a change of version 4 that the reference validator refuses today |
 | 11 | **The budget rule** | A stage is on by default only if its task p95 at DPR 2 is about 2 ms or less and the look justifies it (I0.8). Measured costs are recorded per stage below; SMAA and bloom stay on, TAA, contact and SSGI stay options | — |
 | 12 | **Compile gating** | Every task of the chain, the map's task, and the mask, glow and caps pipelines are created in the scene before it registers, so registration (`registerScene[WithShadowSupport]`: the frame graph's build and the async shader pipelines) prepares them inside item 1's build, under its gate and its 10 s deadline. Nothing is created after a scene's first frame, so the first frame of a new composition never waits on a chain pipeline | Build the chain lazily on the first frame: its pipelines would compile outside the gate and race a successor's 1.5 s deadline |
-| 13 | **A stage that fails to build** | An optional stage (SMAA, bloom, TAA, contact, SSGI) whose task throws at creation is left out of the chain, reported as `failed` with its error in `state().instrument.post`, and the layer draws the rest. If registration itself fails while optional stages are on, core rebuilds the layer once with the target, mask, caps and composite only (loading the studio again: Lite attaches an environment to one scene, and the failed scene is disposed with it), and reports the stages as `failed` with the registration's error. If the target, mask or composite cannot be built, or the rebuilt minimal chain fails to register too, the layer steps down to Relief with the reason `post`. A failed build is tied to the canvas size: after a resize or a DPR change it is tried again. GPU stays on in every case | Step the layer down whenever any stage fails: a lost SMAA would cost the whole Instrument look |
+| 13 | **A stage that fails to build** | An optional stage (SMAA, bloom, TAA, contact, SSGI) whose task throws at creation is left out of the chain, reported as `failed` with its error in `state().instrument.post`, and the layer draws the rest. If registration itself fails while optional stages are on, core rebuilds the layer once with the target, mask, caps and composite only (loading the studio again: Lite attaches an environment to one scene, and the failed scene is disposed with it), and reports the stages as `failed` with the registration's error. Only a failed registration is rebuilt. The layer steps down to Relief with `post` or `compile`: `post` means exactly: the chain's target, mask or composite could not be built, or the minimal chain (the chain without its optional stages: the rebuild after a failed registration, or the first build when no optional stage is on) failed to register. Any other build error (a mesh, a shader material, the studio) stays `compile`. Either way the reason names the cause (the original error's message). A failed build is tied to the canvas size: after a resize or a DPR change it is tried again. GPU stays on in every case | Step the layer down whenever any stage fails: a lost SMAA would cost the whole Instrument look |
 | 14 | **Timings** | Every task is named `instrument:<layer>:<stage>`; Lite's map task (named `shadow`, timed only on frames that render the map) is the layer's when it precedes the layer's `face` task. `instrumentGpuMs` stays the layer's total; `state().instrument.post` keeps p50 and p95 per stage over the last 256 frames | One sum per layer: the budget rule needs the stages apart |
 | 15 | **Exposure and contrast** | After `loadHdrEnvironment`, core sets exposure 0.8, contrast 1.2 and tone mapping off explicitly (`INSTRUMENT_EXPOSURE`, `INSTRUMENT_CONTRAST`). They are the values Lite's loader sets as a side effect (`loader-hdr/load-hdr.js`, L2) and the values of the Rendering Model's 2D.5 output transform (exposure 0.8, gamma 2.2, contrast 1.2; 61 sampled points asserted at tolerance 16 since the calibration, #148), so the drawn result does not change and no longer depends on load order, and the model needs no new draft revision | Exposure 1 and contrast 1 (what core wrote before the load and the loader overwrote): a 13-level change on polished and chrome parts, and a model change |
 
@@ -957,7 +957,32 @@ behaviour has a test that fails without it:
   not tested (Playwright cannot hide a page reliably headless).
 - **N1 and N2** are limits, recorded below and in SCOPE-009. Decision 9's bias formula now names the full depth span.
 
+**Second review (2026-10-18).** No blocker; three should-fixes and nits, each fixed and, where a test is possible, tested
+against the code without the fix:
+
+- **The release waits for every fence.** It waited for the fences pending when it was scheduled, so a scene that retired
+  while it waited (a layer added and removed again meanwhile) could be disposed after the targets it read. It now waits
+  until no fence is left (`settledAll`, `instrument-post.ts`) and checks again that no layer, build or scene is left. A
+  fence cannot be held from a browser test, so a unit test covers the loop: with fence A pending, fence B added, A settled,
+  a snapshot of the set settles (the old behaviour) while `settledAll` waits for B.
+- **`post` is defined exactly** (decision 13): `post` means exactly: the chain's target, mask or composite could not be built, or the minimal chain (the chain without its optional stages: the rebuild after a failed registration, or the first build when no optional stage is on) failed to register. Any other build error (a mesh, a shader material, the studio) stays `compile`. Either way the reason names the cause (the original error's message). Test: an ordinary error thrown in the minimal rebuild
+  (`?failRegistration=optional&failBuild=minimal`) is `compile` with `the test hook fails the build of the minimal chain` in
+  its reason (with the first review's wrapping restored, it read `post`); a registration failure of the minimal chain is
+  `post`, naming the hook's error.
+- **The in-flight case is deterministic:** core's `beforeBuild` hook holds a build (`?hold=1`) with its gate taken, every
+  instrument material is cancelled while it is held, and the hold is released: the build runs to its end with no layer
+  left, and no target, no failed build, no warning or error remains. With the first review's release logic undone (the
+  release scheduled only when the layer leaves) it leaves the targets allocated. A run at 300 ms after the page starts
+  stays as a second sample.
+- **Nits:** the build hook runs inside the build's promise chain, so a hook that throws ends the build (and its count);
+  the canvas size is read once per frame; the timed checks skip, with the reason recorded, when Lite's task timings are not
+  available; the assertion that the faded face shows through says to delete it when true group opacity lands.
+
 **Limits added by the review:**
+
+- **A build that never settles** (a GPU hang inside its registration) keeps the shared targets allocated, since its scene
+  may hold their handles, until device loss or `destroyGPU` disposes the controller. This is by design: the build's own
+  10 s deadline steps its layer down, but the promise it is waiting on may never settle.
 
 - **The map's texel grows with the stage** (Lite fits the map to the casters' box) while the bias stays 1.95 px: at
   3,840 × 2,160 CSS px a texel is about 1.1 px, and below about 38° of light elevation a stage that large may show acne on

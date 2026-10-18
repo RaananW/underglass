@@ -603,7 +603,7 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
   `p50Ms`, `p95Ms`, `samples`, `total`); and the shared targets (`format`, `width`, `height`; a target no layer uses may
   report its last size). `state().instrument.resources.mapTextures` counts shadow map textures released with their scenes
   (`destroyed`) and any that could not be (`missing`, warned once). A stage that fails to build is
-  left out and reported; a layer whose target, mask or composite cannot be built is drawn at Relief with `post`. `state().materials` lists `{ kind: "instrument", objects, parts, interior, degraded }`.
+  left out and reported; a failed registration is rebuilt once without the optional stages. `post` means exactly: the chain's target, mask or composite could not be built, or the minimal chain (the chain without its optional stages: the rebuild after a failed registration, or the first build when no optional stage is on) failed to register. Any other build error (a mesh, a shader material, the studio) stays `compile`. Either way the reason names the cause (the original error's message). The layer is then drawn at Relief. `state().materials` lists `{ kind: "instrument", objects, parts, interior, degraded }`.
 - **Compile sequencing.** A successor composition that starts while a mesh build compiles starts its 1.5 s deadline when
   the build is done or after 3 s, whichever comes first; a build that takes over 10 s steps its layer down.
 - **Never DOM for an instrument reason.** Containment, budgets, build failures and slow builds (10 s) step objects
