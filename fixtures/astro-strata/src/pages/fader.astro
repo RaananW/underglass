@@ -1,0 +1,25 @@
+---
+/**
+ * Strata Astro Fader check page (`/fader/`): `[data-contract="fader.md"]` renders the anatomy page's markup example with
+ * `@underglass/ui/astro`, and `main` holds live faders `tests/browser/ui-fader-astro.test.mjs` drives with real input.
+ * Server-rendered HTML; the only script is the components' own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { Fader } from "@underglass/ui/astro";
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro Fader check</title>
+</head>
+<body>
+  <div data-contract="fader.md" hidden><Fader label="Level" id="level" name="level" min={-60} max={6} value={0} unit=" dB" marks={[6, 0, -20, -40, -60]} /></div>
+  <main>
+    <form class="ug-panel" data-strata-face="raised" aria-label="Faders" id="faders" style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px">
+      <Fader label="Volume" id="volume" name="volume" min={0} max={100} value={40} unit="%" class="extra" style="margin-right: 4px" data-testid="volume" />
+      <Fader label="Pan" id="pan" name="pan" orientation="horizontal" min={-50} max={50} value={10} resetValue={0} marks={[{ value: -50, label: "L" }, { value: 0, label: "C" }, { value: 50, label: "R" }]} />
+    </form>
+  </main>
+</body>
+</html>

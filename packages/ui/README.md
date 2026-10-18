@@ -632,3 +632,22 @@ pointer is captured content. At the Instrument level (`level: "instrument"`) the
 material: the knob is a skirt, a brushed cap, a polished chamfer and an engraved pointer that turns on a spring, and
 buttons become keys with captured caps.
 [Anatomy](../../docs/ui-library/components/knob.md).
+
+## Fader
+
+A number picked by sliding, as on a mixing desk: a native `<input type="range">`, vertical by default
+(`writing-mode: vertical-lr`, `aria-orientation="vertical"`) or `orientation="horizontal"`, over a slot in the
+faceplate with a printed scale beside it. The transparent native thumb is the drawn carriage, so dragging the carriage,
+clicking the track or the scale, and the keys are the browser's own; the carriage following the value, a tap snapping to
+a printed mark, the wheel and a double-click reset come from `attachStrataFaders` in `@underglass/ui/dom`, which
+`attachStrata` and the components attach. `detents` makes it stepped; `unit` or `format` gives `aria-valuetext`;
+`size` (or `travel`) sets the travel.
+
+```tsx
+<Fader label="Level" min={-60} max={6} value={level} onValueChange={setLevel} unit=" dB" marks={[6, 0, -20, -40, -60]} />
+```
+
+Vue uses `v-model`; Astro takes `value` and `unit`. The ref is the `.ug-fader` root (`inputRef`, or Vue's exposed
+`input`, is the input). On the GPU the slot is a groove and the carriage a raised face at Relief and a slab at Objects.
+Its Instrument parts (a chamfered brushed carriage with a grip, sliding on `spring.fader`) are defined in
+`gpu/instrument-fader.ts` for the helper's `instrument` level. [Anatomy](../../docs/ui-library/components/fader.md).

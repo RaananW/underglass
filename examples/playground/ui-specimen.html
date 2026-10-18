@@ -234,6 +234,39 @@
         </div>
       </section>
 
+      <section class="ug-panel" data-strata-face="raised" aria-labelledby="fader-title">
+        <h3 id="fader-title">Fader</h3>
+        <div class="row" style="align-items: flex-start">
+          <div class="ug-fader" style="--strata-fader-value: 0.7273;">
+            <div class="ug-fader__track">
+              <span class="ug-fader__scale" aria-hidden="true"><span class="ug-fader__mark" data-strata-value="6" style="--strata-fader-at: 1;">6</span><span class="ug-fader__mark" data-strata-value="0" style="--strata-fader-at: 0.9091;">0</span><span class="ug-fader__mark" data-strata-value="-20" style="--strata-fader-at: 0.6061;">−20</span><span class="ug-fader__mark" data-strata-value="-40" style="--strata-fader-at: 0.303;">−40</span><span class="ug-fader__mark" data-strata-value="-60" style="--strata-fader-at: 0;">−60</span></span>
+              <span class="ug-fader__slot" data-strata-face="groove" aria-hidden="true"></span>
+              <span class="ug-fader__carriage" data-strata-face="raised" aria-hidden="true"><span class="ug-fader__grip"></span></span>
+              <input class="ug-fader__input" type="range" id="spec-level" min="-60" max="6" step="1" value="-12" aria-orientation="vertical" data-strata-default="-12" data-strata-unit=" dB" aria-valuetext="−12 dB">
+            </div>
+            <label class="ug-fader__label" for="spec-level">Level</label>
+          </div>
+          <div class="ug-fader ug-fader--detented" style="--strata-fader-value: 0.75;">
+            <div class="ug-fader__track">
+              <span class="ug-fader__scale" aria-hidden="true"><span class="ug-fader__mark" data-strata-value="0" style="--strata-fader-at: 0;">0</span><span class="ug-fader__mark" data-strata-value="2.5" style="--strata-fader-at: 0.25;">2.5</span><span class="ug-fader__mark" data-strata-value="5" style="--strata-fader-at: 0.5;">5</span><span class="ug-fader__mark" data-strata-value="7.5" style="--strata-fader-at: 0.75;">7.5</span><span class="ug-fader__mark" data-strata-value="10" style="--strata-fader-at: 1;">10</span></span>
+              <span class="ug-fader__slot" data-strata-face="groove" aria-hidden="true"></span>
+              <span class="ug-fader__carriage" data-strata-face="raised" aria-hidden="true"><span class="ug-fader__grip"></span></span>
+              <input class="ug-fader__input" type="range" id="spec-send" min="0" max="10" step="2.5" value="7.5" aria-orientation="vertical" data-strata-preview="focus" data-strata-default="7.5">
+            </div>
+            <label class="ug-fader__label" for="spec-send">Send, focus</label>
+          </div>
+          <div class="ug-fader ug-fader--horizontal" style="--strata-fader-value: 0.3;">
+            <div class="ug-fader__track">
+              <span class="ug-fader__scale" aria-hidden="true"><span class="ug-fader__mark" data-strata-value="-50" style="--strata-fader-at: 0;">L</span><span class="ug-fader__mark" data-strata-value="0" style="--strata-fader-at: 0.5;">C</span><span class="ug-fader__mark" data-strata-value="50" style="--strata-fader-at: 1;">R</span></span>
+              <span class="ug-fader__slot" data-strata-face="groove" aria-hidden="true"></span>
+              <span class="ug-fader__carriage" data-strata-face="raised" aria-hidden="true"><span class="ug-fader__grip"></span></span>
+              <input class="ug-fader__input" type="range" id="spec-pan" min="-50" max="50" step="1" value="-20" data-strata-preview="hover" data-strata-default="-20">
+            </div>
+            <label class="ug-fader__label" for="spec-pan">Pan, hover</label>
+          </div>
+        </div>
+      </section>
+
       <section class="ug-panel" data-strata-face="raised" aria-labelledby="select-title">
         <h3 id="select-title">Select, Slider</h3>
         <div class="stack">

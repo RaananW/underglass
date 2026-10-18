@@ -1,0 +1,62 @@
+---
+/**
+ * Fader (anatomy page `fader.md`): a native `<input type="range">` over a slot in the faceplate, its thumb the drawn
+ * carriage, with a printed scale beside the slot and its legend printed under it, rendered on the server. Drag, track
+ * clicks and keys work with no script; the carriage following the value, a tap snapping to a printed mark, the wheel
+ * and the double-click reset come from `attachStrata`, which it loads. `class`, `style` and other attributes reach the
+ * `.ug-fader` root. `unit` keeps `aria-valuetext` in step in the browser; a `format` function would only apply on the
+ * server, so Astro takes `unit` alone.
+ */
+import Behaviour from "./Behaviour.astro";
+import { nextId } from "./field.ts";
+import { faderModel, type FaderMark, type FaderOrientation } from "../shared/fader.ts";
+import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+
+interface Props {
+  /** The legend printed under the track; it names the input. */
+  label: string;
+  /** The value; `min` by default. */
+  value?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  /** Makes the fader stepped: this many positions. */
+  detents?: number;
+  /** `vertical` (the default) or `horizontal`. */
+  orientation?: FaderOrientation;
+  /** The carriage centre's travel in CSS px; the size's `size.fader` by default. */
+  travel?: number;
+  /** The printed scale: a count of evenly spaced marks, or the marks' values (with labels). */
+  marks?: number | readonly (number | FaderMark)[];
+  /** A unit for `aria-valuetext`, appended as written (" dB", "%"). */
+  unit?: string;
+  /** The value a double-click returns to; `value` by default. */
+  resetValue?: number;
+  /** The input's id; generated when absent. */
+  id?: string;
+  name?: string;
+  form?: string;
+  disabled?: boolean;
+  size?: StrataSize;
+  material?: string;
+  level?: StrataLevel;
+  class?: string;
+  style?: string;
+  [attribute: string]: unknown;
+}
+
+const { label, min = 0, max = 100, value = min, step, detents, orientation, travel, marks, unit, resetValue, id, name, form, disabled, size, material, level, class: className, style, ...rest } = Astro.props;
+const model = faderModel({ value, min, max, step, detents, travel, orientation, marks, unit });
+const inputId = id ?? nextId("fader");
+---
+<div class={classes("ug-fader", !model.vertical && "ug-fader--horizontal", model.detented && "ug-fader--detented", className)} {...strataAttributes({ size, material, level })} style={style ? `${model.style} ${style}` : model.style} {...rest}>
+  <div class="ug-fader__track">
+    <span class="ug-fader__scale" aria-hidden="true">{model.marks.map(mark => <span class="ug-fader__mark" data-strata-value={String(mark.value)} style={mark.style}>{mark.text}</span>)}</span>
+    <span class="ug-fader__slot" data-strata-face="groove" aria-hidden="true"></span>
+    <span class="ug-fader__carriage" data-strata-face="raised" aria-hidden="true"><span class="ug-fader__grip"></span></span>
+    <input class="ug-fader__input" type="range" id={inputId} name={name} form={form} min={model.min} max={model.max} step={model.step} value={String(value)}
+      aria-orientation={model.vertical ? "vertical" : undefined} data-strata-default={String(resetValue ?? value)} data-strata-unit={unit} aria-valuetext={model.valueText} disabled={disabled} />
+  </div>
+  <label class="ug-fader__label" for={inputId}>{label}</label>
+</div>
+<Behaviour />
