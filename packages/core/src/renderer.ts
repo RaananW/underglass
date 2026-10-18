@@ -256,7 +256,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   // Emitters (`emitters.ts`, `docs/ui-library/instrument-phase2.md` item 2): what each lit layer draws this frame, the
   // diagnostics of the last frame, why the face pools are off (the draw order was refused), their task timings.
   const lightFrame = new Map<string, FrameLight>();
-  const lightStates = new Map<string, { guard: Guard; feather: number; pass: "drawn" | "idle" | "off"; beneath: number; block?: Float32Array;
+  const lightStates = new Map<string, { guard: Guard; feather: number; pass: "drawn" | "idle" | "off"; beneath: { beneath: number; merged: boolean; overflow: boolean }; block?: Float32Array;
     gpu: { samples: number[]; last: number | null; total: number } }>();
   let lightOrder: string | undefined;
   let lightTiming = { enabled: false, frameIndex: 0, status: "disabled" };
@@ -475,7 +475,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       const draw: Bounds = { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1 };
       const previous = lightStates.get(layer.id);
       lightFrame.set(layer.id, { scene, draw, matrix, opacity: layer.opacity(), frame, emitters: scene.emitters !== undefined,
-        selection: selectEmitters(scene.emitters, draw), block: previous?.block ?? new Float32Array(EMITTER_BLOCK_VEC4S * 4), beneath: 0 });
+        selection: selectEmitters(scene.emitters, draw), block: previous?.block ?? new Float32Array(EMITTER_BLOCK_VEC4S * 4), beneath: { beneath: 0, merged: false, overflow: false } });
     }
     // Layers that no longer light anything leave the diagnostics.
     for (const id of [...lightStates.keys()]) if (!lightFrame.has(id)) lightStates.delete(id);
@@ -530,8 +530,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
             if (slab.x0 < slab.x1 && slab.y0 < slab.y1) beneath.push(slab);
           }
         }
-        light.beneath = beneath.length;
-        packEmitters(light.block, 0, light.selection, guard, { rects: beneath, overflow: false }, draw, layer.extent, feather, light.scene.interior.max);
+        light.beneath = packEmitters(light.block, 0, light.selection, guard, { rects: beneath, overflow: false }, draw, layer.extent, feather, light.scene.interior.max);
       }
       const corners = (rect: Bounds) => [[rect.x0, rect.y0], [rect.x1, rect.y0], [rect.x0, rect.y1], [rect.x1, rect.y1]]
         .map(([x, y]) => { const p = light.matrix.transformPoint({ x: x!, y: y! }); return { x: p.x / p.w, y: p.y / p.w }; });
@@ -541,10 +540,11 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   }
   /** Writes a lit layer's emitter block into its relief binding (`relief`) and its face pool's uniforms. */
   function writeLight(layer: Layer, pass: Pass, light: FrameLight, relief: Float32Array | undefined) {
-    const guard = light.guard!, feather = light.scene.feather ?? DEFAULT_FEATHER;
+    // The guard is packed by `packLights`; a frame that failed before it (admission's own write) computes it here.
+    const guard = light.guard ?? layerGuard(faceOf(layer.id, light.scene), light.scene.protected), feather = light.scene.feather ?? DEFAULT_FEATHER;
     if (relief && light.emitters) relief.set(light.block, RELIEF_EMITTER_BASE * 4);
     const drawn = !!pass.light?.registered && light.selection.drawn.length > 0 && light.opacity > 0;
-    const state = lightStates.get(layer.id) ?? { guard, feather, pass: "off" as const, gpu: { samples: [], last: null, total: 0 }, beneath: 0 };
+    const state = lightStates.get(layer.id) ?? { guard, feather, pass: "off" as const, gpu: { samples: [], last: null, total: 0 }, beneath: { beneath: 0, merged: false, overflow: false } };
     Object.assign(state, { guard, feather, beneath: light.beneath, block: light.block, pass: lightOrder || !pass.light?.registered ? "off" : drawn ? "drawn" : "idle" });
     lightStates.set(layer.id, state);
     if (!pass.light?.registered) return;
@@ -605,7 +605,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       layers: [...lightFrame].map(([id, light]) => {
         const state = lightStates.get(id);
         return { id, emitters: light.selection.total, lit: light.selection.lit, outOfReach: light.selection.outOfReach, drawn: light.selection.drawn.map(entry => entry.index),
-          dropped: light.selection.dropped.map(entry => ({ ...entry })), pass: state?.pass ?? "off", feather: state?.feather ?? DEFAULT_FEATHER, beneath: state?.beneath ?? 0,
+          dropped: light.selection.dropped.map(entry => ({ ...entry })), pass: state?.pass ?? "off", feather: state?.feather ?? DEFAULT_FEATHER, beneath: state ? { rects: state.beneath.beneath, merged: state.beneath.merged, overflow: state.beneath.overflow } : null,
           guard: state ? { rects: state.guard.rects.length, extent: state.guard.extent, overflow: state.guard.overflow,
             caps: state.guard.rects.map(entry => ({ rect: [entry.rect.x0, entry.rect.y0, entry.rect.x1 - entry.rect.x0, entry.rect.y1 - entry.rect.y0], light: entry.light, shadow: entry.shadow })),
             cells: state.guard.cells?.map(cell => ({ ...cell })) ?? null } : null,
@@ -713,7 +713,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   // What a layer with emitters lights in one frame.
   // `block` is its emitter block, packed once per frame (`packLights`) and copied into the relief binding and the face pool.
   type FrameLight = { scene: (ReliefScene | InstrumentScene) & SceneLight; draw: Bounds; selection: LayerEmitters; matrix: DOMMatrix; opacity: number;
-    frame: { width: number; height: number; dpr: number }; emitters: boolean; guard?: Guard; block: Float32Array; beneath: number };
+    frame: { width: number; height: number; dpr: number }; emitters: boolean; guard?: Guard; block: Float32Array; beneath: { beneath: number; merged: boolean; overflow: boolean } };
   // `passes` align with `layers`; `owned` also keeps passes of removed layers alive until the composition retires.
   // A complete set of layers, passes and textures presented together. At most one is `active` (drawn now) and one
   // `pending` (prepared, waiting for fresh pixels); superseded ones sit in `retiring` until a queue fence.
