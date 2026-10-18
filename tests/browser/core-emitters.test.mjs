@@ -170,19 +170,79 @@ for (const dpr of [1, 2]) for (const level of levels) test(`emitters at ${level}
       await call("setLamps", { "c-lamp": true });
       const on = await shot(page, `${directory}/contrast-${theme}-dpr${dpr}.png`);
       report.contrast[theme] = {};
-      for (const id of ["c-lamp-label", "c-lamp-caption"]) {
-        const rect = await call("textBox", id);
-        const entry = { off: contrast(off, rect, dpr, theme === "dark"), on: contrast(on, rect, dpr, theme === "dark"), plain: contrast(plain, rect, dpr, theme === "dark"),
+      const cBox = (await call("panels")).c;
+      for (const id of ["c-lamp-label", "c-lamp-caption", "b-edge"]) {
+        // B's edge note is partly under C: only its part left of C (in C's outset glow) is B's to guard.
+        const full = await call("textBox", id), rect = id === "b-edge" ? { ...full, width: Math.min(full.width, cBox.x - 1 - full.x) } : full;
+        const entry = { rect, off: contrast(off, rect, dpr, theme === "dark"), on: contrast(on, rect, dpr, theme === "dark"), plain: contrast(plain, rect, dpr, theme === "dark"),
           change: excess(plain, on, rect, dpr), lampChange: excess(off, on, rect, dpr) };
         report.contrast[theme][id] = entry;
         expect(entry.off.ratio, `${theme} ${id}: contrast with the lamp off`).toBeGreaterThanOrEqual(4.5);
         expect(entry.on.ratio, `${theme} ${id}: contrast with the lamp on`).toBeGreaterThanOrEqual(4.5);
-        expect(entry.change.levels, `${theme} ${id}: the whole change inside the protected rect stays within interior.max (levels past 1 ± m): ${JSON.stringify(entry.change)}`).toBeLessThanOrEqual(1.5);
+        expect(entry.change.levels, `${theme} ${id}: the whole change inside the protected rect stays within interior.max (levels past 1 ± m): ${JSON.stringify(entry.change)}`).toBeLessThanOrEqual(1);
+        // Two quantized frames (lamp off and on), each rounded once: up to a level past 1 ± m from rounding alone.
+        expect(entry.lampChange.levels, `${theme} ${id}: the lamp's change alone stays within interior.max: ${JSON.stringify(entry.lampChange)}`).toBeLessThanOrEqual(1.5);
       }
+      expect(report.contrast[theme]["b-edge"].rect.width, "B's edge note shows left of C").toBeGreaterThan(20);
       await call("allOff");
     }
     await call("setTheme", "light");
     await stillGpu(call, "after the contrast checks");
+    report.beneath = (await call("emitters")).layers.map(layer => [layer.id, layer.beneath]);
+
+    // A successor composition (C grows by 2 px): C's old pass and its face pool are disposed after the queue fence while the
+    // engine lives (the pool's task targets the swapchain, which must survive the task), and the new pass brings its own.
+    const poolsBefore = (await call("state")).resources.lightPasses, disposedBefore = (await call("state")).metrics.lightPassesDisposed;
+    await call("setLamps", { "c-lamp": true });
+    await call("resize", "c", 2);
+    await page.waitForFunction(count => window.emittersCore.api.state().resources.lightPasses === count && window.emittersCore.api.state().resources.pendingCleanups === 0, poolsBefore, { timeout: 15000 });
+    for (let index = 0; index < 3; index++) await page.evaluate(() => new Promise(requestAnimationFrame));
+    report.successor = { poolsBefore, poolsAfter: (await call("state")).resources.lightPasses, disposed: (await call("state")).metrics.lightPassesDisposed - disposedBefore, pass: (await call("emitters")).layers.find(layer => layer.id === "c").pass };
+    expect(report.successor.poolsAfter, "the retired pool was disposed, none leaked").toBe(poolsBefore);
+    expect(report.successor.disposed, "C's old pool was disposed while the engine lives").toBeGreaterThanOrEqual(1);
+    expect(report.successor.pass, "the new pass draws C's light").toBe("drawn");
+    await stillGpu(call, "after a pool was disposed with the engine alive");
+    await call("resize", "c", -2);
+    await call("allOff");
+    expect(report.beneath.find(([id]) => id === "c")[1], "C knows the lower layers' text under its outset").toBeGreaterThan(0);
+
+    // Other ways to protect text: the whole box ("extent"), more than 64 rects (the whole box too), and overlapping rects.
+    // The guard still holds, the pool still lights the face, and at Instrument the key light's part shadows stay.
+    await call("allOff");
+    const knobBox = (await call("controls")).find(control => control.id === "a-knob"), aBox = (await call("panels")).a;
+    // The deepest point of the knob's shadow (down and right of it, away from the light) against the clear face lower down.
+    const knobCentre = { x: knobBox.x + knobBox.width / 2, y: knobBox.y + knobBox.height / 2 }, shadowRef = { x: knobCentre.x + 30, y: aBox.y + aBox.height - 30 };
+    const shadowPoints = Array.from({ length: 12 }, (_, step) => ({ x: knobCentre.x + (knobBox.width / 2 + 1 + step) * 0.7071, y: knobCentre.y + (knobBox.height / 2 + 1 + step) * 0.7071 }));
+    const depth = png => { const a = pixel(png, shadowRef, dpr); return Math.max(...shadowPoints.map(point => { const b = pixel(png, point, dpr); return (a[0] + a[1] + a[2] - b[0] - b[1] - b[2]) / 3; })); };
+    report.protection = { runs: { shadowDepth: depth(await shot(page)) } };
+    for (const mode of ["extent", "overflow", "overlap"]) {
+      for (const id of ["a", "b", "c"]) await call("setProtection", id, mode);
+      await call("allOff");
+      const off = await shot(page);
+      await call("setLamps", { "c-lamp": true, "c-corner": true });
+      const on = await shot(page, `${directory}/protect-${mode}-${level}-dpr${dpr}.png`);
+      await call("setPlain", true);
+      const plain = await shot(page);
+      await call("setPlain", false);
+      const guard = (await call("emitters")).layers.find(layer => layer.id === "c").guard;
+      const label = await call("textBox", "c-lamp-label"), caption = await call("textBox", "c-lamp-caption");
+      const lamp = (await call("lamps")).find(entry => entry.id === "c-corner");
+      // The face above the corner lamp, clear of text and controls.
+      const facePoint = { x: lamp.centre.x, y: lamp.centre.y - 40 };
+      report.protection[mode] = { shadowDepth: depth(off), extent: guard.extent, overflow: guard.overflow, rects: guard.rects,
+        cells: guard.cells ? { light: Math.min(...guard.cells.map(cell => cell.light)), shadow: Math.min(...guard.cells.map(cell => cell.shadow)) } : null,
+        label: excess(plain, on, label, dpr), caption: excess(plain, on, caption, dpr), face: gain(off, on, facePoint, dpr) };
+      const entry = report.protection[mode];
+      expect(entry.label.levels, `${mode}: the label's change stays within interior.max`).toBeLessThanOrEqual(1);
+      expect(entry.caption.levels, `${mode}: the caption's change stays within interior.max`).toBeLessThanOrEqual(1);
+      expect(entry.face, `${mode}: the pool still lights the face (${JSON.stringify(entry)})`).toBeGreaterThan(1);
+      if (level === "instrument") expect(entry.shadowDepth, `${mode}: the knob's shadow on the face stays (${JSON.stringify(report.protection)})`).toBeGreaterThan(1.5);
+      if (mode !== "overlap") expect(entry.extent, `${mode} protects the whole box`).toBe(true);
+    }
+    for (const id of ["a", "b", "c"]) await call("setProtection", id, "runs");
+    await call("allOff");
+    if (level === "instrument") expect(report.protection.runs.shadowDepth, "the knob's shadow with text runs").toBeGreaterThan(1.5);
+    await stillGpu(call, "after the protection modes");
 
     // Native hits on every visible control, lamps off and on, with no hit-geometry update.
     const controls = (await call("controls")).filter(control => !control.covered);
@@ -265,12 +325,17 @@ for (const dpr of [1, 2]) for (const level of levels) test(`emitters at ${level}
     report.pointerRun.once = { outset: gain(unlitShot, litShot, outsetPoint, dpr), mirror: gain(unlitShot, litShot, mirror, dpr), beneath: await call("hits", [outsetPoint, mirror]) };
     expect(report.pointerRun.once.beneath).toEqual(["b", "b"]);
     expect(report.pointerRun.once.mirror, "the pointer light reaches the mirror point").toBeGreaterThan(1);
-    expect(Math.abs(report.pointerRun.once.outset - report.pointerRun.once.mirror), `the pointer light is applied once: ${JSON.stringify(report.pointerRun.once)}`).toBeLessThanOrEqual(1.5);
+    expect(Math.abs(report.pointerRun.once.outset - report.pointerRun.once.mirror), `the pointer light is applied once: ${JSON.stringify(report.pointerRun.once)}`).toBeLessThanOrEqual(1);
     expect(report.pointerRun.captures, "the pointer light needs no capture").toBe(0);
     expect(report.pointerRun.uploads, "the pointer light needs no upload").toBe(0);
     expect(report.pointerRun.geometryUpdates, "the pointer light leaves hit geometry alone").toBe(0);
     expect(report.pointerRun.stats.updates, "the light is written every frame the pointer moves").toBeGreaterThan(250);
-    expect(report.pointerRun.gpuFrames).toBeGreaterThan(250);
+    expect(report.pointerRun.gpuFrames, "core draws every frame the light moves").toBeGreaterThanOrEqual(295);
+    // A writer that asks for its next frame before writing (the usual idiom): core still draws every frame.
+    report.writer = await call("writerRun", 300);
+    expect(report.writer.writes).toBe(300);
+    expect(report.writer.gpuFrames, `a light written every frame is drawn every frame: ${JSON.stringify(report.writer)}`).toBeGreaterThanOrEqual(299);
+    expect(report.writer.captures).toBe(0);
     await call("setPointer", { enabled: false });
     await stillGpu(call, "after the pointer run");
 

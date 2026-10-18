@@ -86,13 +86,13 @@ const reliefMaterials = {
 const inset = (rect: [number, number, number, number], by: number): [number, number, number, number] => [rect[0] + by, rect[1] + by, rect[2] - 2 * by, rect[3] - 2 * by];
 
 /** The stage: a relief layer with no primitives (its own capture, the page), lit by the pointer light and the outsets. */
-export function stageScene(stage: HTMLElement, theme: Theme, light: { emitters: SceneEmitter[]; protected: [number, number, number, number][]; feather: number }): ReliefScene {
+export function stageScene(stage: HTMLElement, theme: Theme, light: { emitters: SceneEmitter[]; protected: [number, number, number, number][] | "extent"; feather: number }): ReliefScene {
   return { ...common(stage, theme, 0), outset: undefined, materials: { face: { base: { roughness: 1 } } }, primitives: [], ...light };
 }
 
 /** A panel's scene at `level`, with `light` (its emitters, protected rects and feather). */
 export function panelScene(layer: HTMLElement, level: Level, theme: Theme, stage: { width: number; height: number; x: number; y: number },
-  light: { emitters: SceneEmitter[]; protected: [number, number, number, number][]; feather: number }): ReliefScene | InstrumentScene {
+  light: { emitters: SceneEmitter[]; protected: [number, number, number, number][] | "extent"; feather: number }): ReliefScene | InstrumentScene {
   const box = (selector: string) => rectOf(layer.querySelector(selector)!, layer);
   const all = (selector: string) => [...layer.querySelectorAll<HTMLElement>(selector)];
   const face = { face: "raised" as const, rect: [0, 0, layer.offsetWidth, layer.offsetHeight] as [number, number, number, number], radius: 14, height: 8, material: "face" };
@@ -153,7 +153,7 @@ function materials(theme: Theme): Record<string, InstrumentRecipe> {
   };
 }
 function instrumentScene(layer: HTMLElement, theme: Theme, stage: { width: number; height: number; x: number; y: number },
-  light: { emitters: SceneEmitter[]; protected: [number, number, number, number][]; feather: number }, face: InstrumentScene["primitives"][number]): InstrumentScene {
+  light: { emitters: SceneEmitter[]; protected: [number, number, number, number][] | "extent"; feather: number }, face: InstrumentScene["primitives"][number]): InstrumentScene {
   const profiles: Record<string, InstrumentProfile> = {};
   const profile = (name: string, shape: InstrumentProfile) => { const key = `${name}:${JSON.stringify(shape)}`; profiles[key] ??= shape; return key; };
   const objects: InstrumentObject[] = [];

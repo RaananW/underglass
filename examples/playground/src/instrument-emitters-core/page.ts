@@ -62,6 +62,8 @@ function fillPanel(panel: HTMLElement, name: string, lampLabel: string, keyLabel
       element("input", { type: "checkbox", role: "switch", id: `${id}-corner`, class: "ec-lamp", "data-emitter": "lamp", "aria-labelledby": `${id}-corner-label` }));
     panel.append(wrapper);
   }
+  // B's edge note sits where C's outset glow falls on B (placed by `layout`): C adds no light to it, B's guard holds it.
+  if (id === "b") panel.append(Object.assign(element("span", { id: "b-edge", class: "ec-caption" }, "Edge note"), { style: "position: absolute; white-space: nowrap" }));
 }
 /** The page's own controls on the stage: the level, the theme, the pointer light, the guard feather and the density case. */
 function fillStage() {
@@ -92,6 +94,8 @@ function layout() {
   place(panels[0]!, 0.06, 0.2, 0.34, 0.52);
   place(panels[1]!, 0.34, 0.08, 0.32, 0.54);
   place(panels[2]!, 0.6, 0.14, 0.33, 0.58);
+  const b = panels[1]!, c = panels[2]!, edge = document.getElementById("b-edge");
+  if (edge) Object.assign(edge.style, { left: `${c.offsetLeft - b.offsetLeft - 64}px`, top: `${c.offsetTop - b.offsetTop + 85}px` });
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -114,7 +118,16 @@ function emittersOf(layer: HTMLElement): SceneEmitter[] {
     radius: t.radius, reach: "layer", face: pointer.face }];
 }
 /** The light fields of a layer: its emitters, its text runs and the feather (10 px while the pointer light is on). */
-const lightOf = (layer: HTMLElement) => ({ emitters: emittersOf(layer), protected: textRects(layer), feather: pointer.enabled ? Math.max(feather, tokens.pointer.feather) : feather });
+/** How a layer protects its text: its text runs, its whole box, more than 64 rects (so its whole box), or each run twice, overlapping. */
+const protection = new Map<string, "runs" | "extent" | "overflow" | "overlap">();
+function protectedOf(layer: HTMLElement) {
+  const runs = textRects(layer), mode = protection.get(layer.id) ?? "runs";
+  if (mode === "extent") return "extent" as const;
+  if (mode === "overflow") return [...runs, ...Array.from({ length: 65 }, (_, index) => [index * 3, 2, 2, 2] as [number, number, number, number])];
+  if (mode === "overlap") return runs.flatMap(([x, y, w, h]) => [[x, y, w, h], [x + 3, y + 2, w, h]] as [number, number, number, number][]);
+  return runs;
+}
+const lightOf = (layer: HTMLElement) => ({ emitters: emittersOf(layer), protected: protectedOf(layer), feather: pointer.enabled ? Math.max(feather, tokens.pointer.feather) : feather });
 const sceneOf = (layer: HTMLElement) => (layer === stage ? stageScene(stage, theme, lightOf(stage)) : panelScene(layer, level, theme, stageBox(), lightOf(layer)));
 const kindOf = (layer: HTMLElement) => (layer === stage || level === "relief" ? "relief" : level === "objects" ? "objects" : "instrument");
 /** Hands a layer's scene to core: `setMaterial` once, then `update` (structure, layout, states). */
@@ -157,12 +170,9 @@ for (const panel of panels) {
 window.addEventListener("pointermove", event => { pointer.client = { x: event.clientX, y: event.clientY }; pointer.inside = true; pointer.moved = true; }, { passive: true });
 document.documentElement.addEventListener("pointerleave", () => { pointer.inside = false; });
 let previousTick = 0, previousUpdate = 0;
-// The tick asks for its next frame after it writes: core's draw request then comes first in the next frame, so every frame
-// draws the light written in the frame before (a tick that asked first would see core draw only every other frame).
+// The usual idiom: the tick asks for its next frame first, then writes (core keeps its own draw after the writer).
 function tick(now: number) {
-  try { step(now); } finally { requestAnimationFrame(tick); }
-}
-function step(now: number) {
+  requestAnimationFrame(tick);
   const dt = previousTick ? now - previousTick : 1000 / 60;
   previousTick = now;
   if (!pointer.enabled || plain) return;
@@ -289,6 +299,33 @@ const api = {
   setTheme,
   /** Every material cancelled (core's plain pass, the capture as it is), or set again. */
   async setPlain(on: boolean) { plain = on; refreshAll(); await settle(); },
+  /** Panel `id` grows by `by` px: a new capture size, so core builds a successor composition and retires the old passes. */
+  async resize(id: string, by: number) { const panel = layers().find(layer => layer.id === id)!; panel.style.width = `${panel.offsetWidth + by}px`; refresh(panel); await settle(); },
+  async setProtection(id: string, mode: "runs" | "extent" | "overflow" | "overlap") { protection.set(id, mode); refresh(layers().find(layer => layer.id === id)!); await settle(); return state().emitters.layers.find(layer => layer.id === id); },
+  /**
+   * A writer in the usual idiom: each animation frame it first asks for its next frame, then moves a light on B with
+   * `setEmitters`; returns the writes and the GPU frames core drew meanwhile.
+   */
+  async writerRun(frames: number) {
+    const b = panels[1]!, before = counts();
+    let writes = 0;
+    await new Promise<void>(resolve => {
+      const loop = () => {
+        if (writes >= frames) { resolve(); return; }
+        requestAnimationFrame(loop);
+        const own = ownEmitters(b);
+        handles.get("b")?.setEmitters([...own, { position: [40 + (writes % 200) * 2, 120, 20], colour: [1, 0.9, 0.8], strength: 3200, radius: 168 }]);
+        writes++;
+      };
+      requestAnimationFrame(loop);
+    });
+    await nextFrame();
+    await nextFrame();
+    const after = counts();
+    refresh(b);
+    await settle();
+    return { writes, gpuFrames: after.gpuFrames - before.gpuFrames, captures: after.captures - before.captures };
+  },
   hits: (points: { x: number; y: number }[]) => points.map(point => { const hit = document.elementFromPoint(point.x, point.y); return hit?.closest<HTMLElement>("input, button, select, [data-emitter]")?.id ?? hit?.closest("section")?.id ?? hit?.id ?? ""; }),
   /** Frames with `count` emitters on layer `id` (the cost case), for `frames` frames; GPU times from core's diagnostics. */
   async cost(id: string, count: number, frames = 120) {
@@ -322,6 +359,6 @@ const api = {
   browser: () => navigator.userAgent,
 };
 type EmittersCoreApi = typeof api;
-declare global { interface Window { emittersCore: { ready: Promise<EmittersCoreApi> } } }
-window.emittersCore = { ready: Promise.resolve(api) };
+declare global { interface Window { emittersCore: { ready: Promise<EmittersCoreApi>; api: EmittersCoreApi } } }
+window.emittersCore = { ready: Promise.resolve(api), api };
 describe();
