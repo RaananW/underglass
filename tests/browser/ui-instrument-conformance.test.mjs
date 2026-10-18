@@ -9,8 +9,8 @@
  *   2D.10) at the device pixel floor(at · dpr);
  * - `unchanged`: identical pixels in every listed variant; `presence`: the share of part pixels a feature changes;
  * - `ratio`: mapped shadow against the map off; `relief`: the objects are stepped down and reported.
- * A check that needs a part of 2D that core does not draw yet (emitters, the guard's face factor, the shadow map, the
- * post chain and glass: core work items 2 to 4, `docs/ui-library/instrument-phase2.md`) is run and recorded as
+ * A check that needs a part of 2D that core does not draw yet (the shadow map and the post chain, and glass: core work
+ * items 3 and 4, `docs/ui-library/instrument-phase2.md`) is run and recorded as
  * `pending` with the item it waits for, and is not asserted. Every other check is. The pass rate per check kind, the
  * worst deviations and every sample go to the `ui-instrument-conformance` evidence directory.
  */
@@ -47,14 +47,12 @@ function boxDistance(x, y, [left, top, width, height], radius = 0) {
 const boundsOf = object => object.bounds ?? { rect: object.rect, radius: 0 };
 
 /**
- * The core work item a check waits for, or undefined when core draws everything it needs: emitters and the guard's
- * face factor (item 2), the shadow map and the post chain (item 3), glass and the page (item 4).
+ * The core work item a check waits for, or undefined when core draws everything it needs: the shadow map and the post
+ * chain (item 3), glass and the page (item 4). Emitters and the guard's face factor (item 2) are drawn.
  */
 function pending(entry, check, sample) {
   const scene = variantOf(entry, check.variant);
-  const lit = (scene.emitters ?? []).some(emitter => emitter.strength > 0) || (entry.scene.emitters ?? []).some(emitter => emitter.strength > 0);
   if (check.kind === "presence") {
-    if (/emitter/.test(check.feature)) return "emitter light on parts (core item 2)";
     if (/shadow map/.test(check.feature)) return "the shadow map (core item 3)";
     if (/dispersion|lens|window/.test(check.feature)) return "glass (core item 4)";
     return undefined;
@@ -64,9 +62,7 @@ function pending(entry, check, sample) {
   if (check.kind === "sampled") {
     const object = scene.objects.find(item => item.id === sample.object), part = object.parts[sample.part];
     if (part.glass) return "glass (core item 4)";
-    if (lit) return "emitter light on parts (core item 2)";
   }
-  if ((check.kind === "exact" || check.kind === "relief") && sample?.source !== "cap" && lit) return "emitters on the face (core item 2)";
   return undefined;
 }
 
@@ -166,6 +162,9 @@ for (const dpr of [1, 2]) {
           const on = await variant(), off = await variant(check.variant), empty = await render("base:empty", { ...entry.scene, objects: [] });
           const object = entry.scene.objects.find(item => item.id === check.object), bounds = boundsOf(object);
           let parts = 0, changed = 0, outside = 0;
+          // An emitter lights the face as well as the parts (2D.4), so turning it off changes the face outside the object's
+          // bounds by design: for emitter light, the share on the parts is asserted and the face is recorded.
+          const light = /emitter/.test(check.feature);
           for (let py = 0; py < Math.ceil(extent.height * dpr); py++) for (let px = 0; px < Math.ceil(extent.width * dpr); px++) {
             const x = (px + 0.5) / dpr, y = (py + 0.5) / dpr, a = on.at(px, py), b = off.at(px, py);
             if (boxDistance(x, y, bounds.rect, bounds.radius) > 0) { if (entry.scene.objects.every(item => boxDistance(x, y, boundsOf(item).rect, boundsOf(item).radius) > 0) && deviation(a, b) > 0) outside++; continue; }
@@ -174,7 +173,7 @@ for (const dpr of [1, 2]) {
             if (deviation(a, b) >= check.levels) changed++;
           }
           const share = parts ? changed / parts : 0;
-          record(entry, check, { feature: check.feature, parts, share: Math.round(share * 1000) / 1000, required: check.share, outside, pass: share >= check.share && outside === 0, ...(reason ? { pending: reason } : {}) });
+          record(entry, check, { feature: check.feature, parts, share: Math.round(share * 1000) / 1000, required: check.share, outside, pass: share >= check.share && (outside === 0 || light), ...(reason ? { pending: reason } : {}) });
         }
         if (check.kind === "ratio") {
           const reason = pending(entry, check), on = await variant(), off = await variant(check.variant);
