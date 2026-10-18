@@ -696,7 +696,12 @@ M = T(at) · T(slide.x, slide.y, travel) · T(pivot) · R(axis, tilt) · R(z, tu
 with no scale and no shear. `t` is in 0–1, so a pose never passes a stop.
 
 **Custom parts** are first fitted onto the built-in part's anchors by one uniform scale and a rigid placement
-(`fitCustomPart`); everything else in this part then applies to the fitted triangles.
+(`fitCustomPart`); everything else in this part then applies to the fitted triangles. Core's version of the fit is a uniform
+`scale` and an `offset` on a glTF reference (a vertex `(x, y, z)` of the file becomes `(x, z, y) · scale + offset`); anchors
+are the helper's. **What the model fixes for a custom part is presence and containment only:** a part whose triangles are
+not there (still loading, failed) is not drawn and not checked, and one that is there is checked on its own vertices
+over the whole travel (2D.9) exactly as a built-in part is. Its triangles are wound against its normals (above), it is shaded by
+its material (2D.5) and casts as any part does (2D.7); no sampled colour of it is specified.
 
 ### 2D.3 Camera and projection
 
@@ -1061,7 +1066,8 @@ the oracle: written to be read next to this document, not to be fast. Its commen
 
 `validateScene` stays at versions 1 to 3: core accepts version 4 only as Instrument scenes, so a version 4 Relief or
 Objects scene (emitters and protected rects at those levels) is not validated yet. `fitCustomPart` and `mesh` profiles
-wait for core's custom parts.
+are not in the reference implementation: core accepts and draws them (custom parts, work item 5), and the reference
+refuses them.
 
 **Where the standard and the reference implementation disagree:** the standard is authoritative. Fix the
 implementation, regenerate the suite, and record the change in the [change log](#change-log).
@@ -1262,6 +1268,17 @@ version 4 is geometric and sampled (2D):
     overrides them); Lite's prefiltered mips are turned against mip 0. Either fix changes these expectations, in a new
     version of the draft.
 
+- 2026-10-18: version 4, custom parts (core work item 5; [design note](instrument-phase2.md#core-work-item-5-custom-parts)).
+  No expected colour changes. Core now accepts `mesh` profiles and the `custom` kind; the reference implementation still
+  refuses them (its conformance suite has no mesh case).
+  - **The `mesh` profile** is inline (`positions`, `normals` or `"compute"`, `indices`, `uvs`) or a reference
+    (`source`: a glB/glTF by URL or bytes, with `scale`, `offset` and a declared `bounds`), at most 16,384 vertices and
+    32,768 triangles; any kind may use one, `custom` requires one; no `captured`, no `stand`.
+  - **Presence and containment only:** a part whose triangles are not there is not drawn and not checked; one that is there is
+    checked on its own vertices over the whole travel (2D.9). Nothing else is specified for it.
+  - **`fitCustomPart` and `anchors` are not core's:** the fit is a uniform `scale` and an `offset` (a glTF vertex
+    `(x, y, z)` becomes `(x, z, y) · scale + offset`), and the helper may compute them from anchors.
+  - **Winding:** every triangle is wound against its normals; computed normals come from a closed mesh's winding.
 - 2026-10-18: version 4, draft: the reference implementation (`instrument.ts`, section 3), the conformance suite
   (`instrument-4.json`, 13 cases with all seven check kinds at device scales 1 and 2, section 4) and its first run on
   decoded GPU pixels against core's `instrument` material. No expected colour of versions 1 to 3 changes.

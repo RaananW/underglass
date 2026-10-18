@@ -1377,3 +1377,300 @@ without the fix where a test is possible (before / after on the same page, Canar
   withdrawn.
 - **Nits:** a retired scene clears its probe's throttle timer (no stray frame request); the unit test checks both sides of a
   bucket edge of the placement key; resize and DPR changes are documented as going through the throttle (above).
+
+# Core work item 5: custom parts
+
+**Status:** design note for [core work item 5](instrument.md#core-work-additive), written before the code (2026-10-18), then
+implemented in the same PR (results follow it). One concern: **custom parts in core's instrument scene format**,
+validated, contained and budgeted like the parametric ones. Item 4 (the capture probe and glass) merged while this was
+being written, and the work was merged onto it: a custom part may be glass (below). Not in it: the helper-side anchor fitting of the design language (`fitCustomPart`, below), textures, animation, skinning, and the
+Strata components' use of custom parts (the helper only gains the ability to declare one, with one playground example).
+
+**Upstream check (2026-10-18):**
+
+- **WICG HTML-in-Canvas:** `5fb3df86d84de598c7f0fcfc5ee53de1df067e7d` (2026-10-09) is still the latest commit (`gh api`,
+  2026-10-18). Open and recently touched: [#186](https://github.com/WICG/html-in-canvas/issues/186) (2026-10-14) and
+  [#185](https://github.com/WICG/html-in-canvas/issues/185) (2026-10-13). Neither touches this work: custom parts are
+  decoration drawn by the mesh pass and change no capture, hit geometry or admission.
+- **Chromium hotlist 6783002** (including the ElementCanvasTransform issues): not accessible without sign-in; not
+  rechecked.
+- **Browser tested:** Chrome Canary 158.0.8110.0, Windows 11, RTX 3080 (as items 1 to 3). Headful passes are named in the
+  results.
+
+## What the plan fixed and what this note decides
+
+The plan ([decision 6](instrument.md#rendering-decisions), [Core work 5](instrument.md#core-work-additive)) says: a glTF for
+a named part, fitted to documented anchors (base, pivot, cap, pointer, travel axis) and checked against `bounds`; core never
+fetches at render time, the helper loads and hands core mesh data. The design language adds: a custom part carries no
+captured content, counts as one part kind in the budgets and takes its material from its role; a part that fails the
+check is not drawn. Rendering Model 2D.2 lists the `mesh` profile (`positions`, `normals`, `indices`, optional `uvs`) and a
+`custom` kind with `anchors`, and says the triangles are the part.
+
+This item keeps the model's two names (`custom` kind, `mesh` profile) and the rule that the triangles are the part. It
+deviates from the plan in two places, on the brief's instruction, and says so: **core loads** (asynchronously, never in a
+frame: see [Loading](#loading)), and **anchor fitting is not core's**: a custom part is placed in the same part-local px
+as every profile, with a uniform `scale` and an `offset` on a glTF reference as the fit. A helper that wants the anchors
+computes them and passes inline data, or `scale` and `offset` (the helper's `customPart` takes them).
+
+## The format
+
+A profile of `type: "mesh"` in `profiles`, in one of two forms, in part-local px (x right, y down, z up from the face, the
+origin at the centre of the part's base: the axes of every profile):
+
+| Field | Inline | Reference | Meaning |
+| --- | --- | --- | --- |
+| `positions` | required | none | Flat `x, y, z` numbers (an array or a typed array) |
+| `normals` | required, or `"compute"` | none | Flat vectors (normalised on the way in), or `"compute"` to derive smooth normals from the triangles |
+| `indices` | required | none | Triangle list into the vertices |
+| `uvs` | optional | none | Flat `u, v`; omitted: planar from `x` and `y` over the box, so a linear brush runs along `x` |
+| `source` | none | required | `{ url, mesh? }` or `{ data: ArrayBuffer, mesh? }`: a glB or a glTF with embedded buffers; `mesh` names a glTF mesh (or the node that holds it); omitted: the file's only mesh |
+| `scale`, `offset` | none | optional | glTF units to part-local px (default 1) and the placement after the axis change (default `[0, 0, 0]`) |
+| `bounds` | optional | required | `{ low: [x, y, z], high: [x, y, z] }`: the declared box in part-local px |
+| `pivot` | optional | optional | `[x, y, z]`: the default `pose.pivot` of a part of this profile whose pose gives none |
+
+A part uses it with `kind: "custom"` (or, for a part that replaces a named one, that part's kind: any kind may use a mesh
+profile; `custom` requires one) and every property the parametric kinds have: `material` (the scene's recipe, so themes
+and characters apply), `at`, `pose`, `caster`, `emitter`, `finish`, `state`, and `glass` (the glass shader of item 4 draws the mesh: a file's dome as a lens, a file's plate as a
+window, checked by one dome in the browser test). Not accepted: `captured` (a custom part carries no captured content) and `stand`.
+
+**glTF to part-local px.** glTF is right-handed, y up, +z towards the viewer; the part's frame is left-handed with z up. A
+vertex `(gx, gy, gz)` becomes `(gx, gz, gy) · scale + offset`: the model stands on the face with its front towards the
+bottom of the screen. The mesh is taken as its node places it (the node's TRS or matrix and its ancestors'). That change of
+handedness reverses the winding, which the next section normalises.
+
+## Validation
+
+`validateInstrumentScene` is the one place a scene is checked; every refusal names its path and gives the reason
+(`profiles.cap.positions[7] requires a finite number`).
+
+| Rule | Refused with |
+| --- | --- |
+| `positions`: a multiple of 3, 3 to 16,384 vertices, each finite and within ±10,000 | the count, or the index of the first bad value |
+| `indices`: a multiple of 3, at most 32,768 triangles, each an integer below the vertex count, no triangle that repeats a vertex | the index of the first bad value or triangle |
+| `normals`: as many as positions, each finite and not zero; absent without `"compute"` | "missing: give them or set `normals: "compute"`" |
+| `uvs`: as many as vertices, finite | the index |
+| `bounds`: finite, `low ≤ high`; inline vertices must lie inside it (1/1000 of its size + 0.01 px of slack) | the first vertex outside |
+| reference: `url` a string or `data` an `ArrayBuffer`; `bounds` present; `scale` in 1e-6..1e6 | the field |
+| `captured` or `stand` on a mesh part; a `custom` part whose profile is not a mesh | "custom parts carry no captured content" |
+
+**Caps.** 16,384 vertices and 32,768 triangles per profile (a closed mesh has about twice as many triangles as vertices, so
+the two agree), and 64 profiles per scene as for every profile. Per layer, the **drawn triangles of custom parts**
+(instances times triangles) are budgeted at 1,000,000: above it, the objects holding custom parts step down to Relief with
+`budget` from the last object of the scene backwards until the layer fits, which is deterministic and keeps the first
+objects, the ones an application lists first. The 2,048 parts per layer and 6,000 per stage count custom parts like any
+other, and above them the layer steps down as today (the whole layer, `budget`). Every distinct mesh profile with each
+material is one kind (one draw call), counted in the 16 kinds.
+
+**Winding and normals.** A part is shaded with its vertex normals and its winding never decides its light (2D.2, #143).
+Normals that are given are normalised and every triangle is oriented against them, as `profileGeometry` orients the
+parametric builders'. Normals that are computed come from the triangles' winding: a triangle whose `(b − a) × (c − a)`
+points against the outside is front-facing, core's convention; when the mesh is closed (every edge shared by exactly two
+triangles) and its signed volume says it is inside out, every triangle is reversed first, so a closed mesh authored with
+the other winding (a glTF after the handedness change) is lit right whatever its order. An open mesh with computed normals
+keeps its authored winding. UVs pass through.
+
+**Cost of validation.** An update validates its scene (the poses idiom hands core a new scene every frame), so a mesh
+profile is validated once per input: normalised data is cached by the identity of the input arrays, and a profile that is
+passed again with the same arrays costs one comparison. Changing the data means passing new arrays (arrays that are
+mutated in place are not noticed).
+
+## Containment on the real triangles
+
+2D.9 is unchanged and now sees the mesh: `profileGeometry` returns the mesh's normalised triangles, and the travel steps,
+the frontier, the fast bound and the exact projection run on its vertices, not on its declared box. A part that cannot be
+contained makes its object step down to its Relief primitive with the `containment` diagnostic naming the part
+(`custom`), its smallest inset and its overshoot: refused, never clipped. The clip mask stays as item 3 made it (the last
+guard, never the contract). The declared `bounds` are a contract about the file, not the check: a reference whose loaded
+vertices leave its declared box (more than the slack above) fails with `bounds`, which catches an asset swapped for another
+or a wrong `scale` before it is drawn.
+
+The cost is vertices times steps, once per distinct geometry and object shape (the frontier is cached by shape, as for
+parametric parts): the 16,384-vertex cap at 32 steps is about half a million projected vertices. A part with more than 20,000
+vertex-steps keeps, instead of a witness per vertex and step, the least inset per 0.05 px height bucket (the height rounded up in
+magnitude, so a drift is never underestimated), which is the same frontier to within 0.05 px of height; the exact path transforms the
+vertices in place. Measured below.
+
+**Face casters.** Omitted `caster`: the mesh's footprint at its mean height. The footprint is the xy extent of the posed
+mesh's convex hull (computed once per geometry, posed per frame by transforming the hull's points, at the bottom and the top
+of the mesh when it tilts), as a rounded box whose radius follows how round the hull is (a disc gets a full radius, a
+rectangle none). Like the Fader, the height is **capped so that the shadow stays inside the object's `bounds`**: the
+largest height whose shadow (the footprint shifted along the light plus the soft reach `1.5 h + 1`) lies inside the box (each side
+gives `a − c · h ≥ 0`, so it is closed-form, and 0 when even a flat shadow leaves the box); an explicit `caster` is honoured as given. A mesh with no footprint or no height has no caster.
+
+## Loading
+
+Core owns an **asset store** per engine (`instrument-assets.ts`). It fetches or reads a reference, parses it with a small
+glB reader in core (`instrument-gltf.ts`), and hands the triangles to the mesh pass. The store never runs inside a frame: a
+frame only asks it for the state of each reference (`loading`, `ready` or `failed`) and starts a load the first time it
+sees one.
+
+**Lite's loader or our own.** Lite 1.33 exports `loadGltf(engine, url | ArrayBuffer | Blob)` and `getMeshGeometry`. By its
+typings it runs on the shared engine without a scene (the container is only added to a scene by `addToScene`), but it
+uploads every mesh, material and texture of the file to the GPU before core can look at a count, it returns node
+hierarchies whose CPU geometry exists only if the mesh retained it, and it cannot run in the unit tests. Core wants
+positions, normals, indices and UVs of one named mesh, a cap checked before any allocation, errors it can name and a test in
+Node. **Decision: a small reader in core**: glB or glTF with embedded buffers; `FLOAT` positions, normals and UVs
+(`TEXCOORD_0`); `u8`/`u16`/`u32` indices or none; interleaved views; triangle lists (`TRIANGLES`; other modes are
+refused); node transforms; every accessor count is checked against the caps before an array is allocated or a byte is read. Refused with a reason:
+Draco, meshopt, `KHR_mesh_quantization`, sparse accessors, external buffers, skins. Ignored: materials, textures, cameras,
+lights, animations, morph targets (the base shape is used). Lite's loader is the alternative if a later item wants
+materials or textures from the file.
+
+**A frame never waits for a load.** A custom part whose reference is `loading` or `failed` is not drawn and is excluded from
+its object's containment check; every other part of the layer draws as it did. When the load finishes the store asks core
+for a frame, and the next frame replaces the mesh's geometry in place with Lite's `resizeMeshGeometry` (public: the mesh
+object, its material and its shadow-caster entry stay valid), re-checks containment with the real vertices and writes the
+instances, so the part appears in that frame and no scene is rebuilt: **no object steps down to Relief while a part loads**
+(a load that rebuilt the scene would show every object at Relief for a build). The kind and its mesh exist from the first
+build, with a one-triangle placeholder of zero area and no instance written.
+
+**Failure.** A 404 or network error, a body over 8 MiB, a load over 15 s, a file that is not glB/glTF, a missing mesh, a
+cap, a bounds mismatch, an unsupported feature or the asset budget leaves the part out with `failed` and the reason; the
+layer, GPU and the other parts are untouched. A failed entry is kept until no scene references it any more, so a failing URL
+is not refetched every frame and a scene that drops the reference and adds it again retries.
+
+**Cache.** Parsed geometry is cached per engine by `url`, `mesh`, `scale` and `offset` (a buffer by identity), counting
+`positions + normals + uvs + indices` bytes against a budget of **32 MiB**; the least recently used entry that no scene
+references is evicted first, and a load that would pass the budget with every entry referenced fails with `budget`. The
+file's bytes live only while it is parsed (concurrent loads of one URL share one fetch). Disposal: the geometry on the GPU
+belongs to the scene and goes with it, the store goes with the controller (in-flight fetches are aborted) and a rebuilt
+scene takes the CPU geometry from the store without a fetch.
+
+**Diagnostics.** `state().instrument.layers[].customParts` lists each custom part (`object`, `part`, `profile`, `status`,
+`error`, `vertices`, `triangles`); `state().instrument.assets` the store (`entries`, `bytes`, `budgetBytes`, `loads`,
+`hits`, `failures`, `inFlight`).
+
+## Rendering
+
+Nothing new is drawn: a custom kind is a thin-instanced mesh with the scene's PBR recipe in the same `parts` task, so it is
+shadowed by the map, receives the post chain, the clip mask and the opacity group, is lit by clustered emitters and (with
+`emitter`) glows. Posed parts turn and tilt about `pose.pivot` as any part does.
+
+## Decisions (item 5)
+
+| # | Decision | Recommendation | Alternative |
+| --- | --- | --- | --- |
+| 1 | Format | A `mesh` profile (inline or reference) and a `custom` kind, the model's own names; any kind may use a mesh profile; no `captured`, no `stand` | A separate `custom` part field: duplicates profile handling, caches and the kind key |
+| 2 | Placement | Part-local px like every profile; a reference carries `scale` and `offset`; no anchors in core | The design language's anchors in core: a fitting solver for five anchors that the helper knows better |
+| 3 | Declared box | Required on a reference, verified against the loaded vertices; optional inline, verified when given; the containment check uses the vertices | Trust the box: a wrong asset would pass |
+| 4 | Loader | A glB/glTF reader in core: caps before allocation, named errors, Node-testable | Lite's `loadGltf`: GPU upload of everything first, nothing to cap, no unit tests |
+| 5 | Who fetches | Core, in the store, never in a frame (the plan said the helper) | The helper fetches and hands data: every caller repeats caching, budgets and states |
+| 6 | Load lifecycle | `loading`/`ready`/`failed` per part; the part is absent until ready; the mesh is replaced in place | A scene rebuild per load: every object at Relief for a build |
+| 7 | Caps | 16,384 vertices and 32,768 triangles per profile; 1,000,000 custom triangles per layer; the 2,048/6,000 part budgets as they are | No triangle cap: one part could cost a stage |
+| 8 | Budget at the limit | Triangle budget: objects with custom parts step down from the last; part budgets: the whole layer, as item 1 (the brief's "as today" is the layer) | Drop single parts: a control with half its parts |
+| 9 | Cache | Per engine by `url`/`mesh`/`scale`/`offset`, 32 MiB, LRU of the unreferenced, failures kept while referenced | No cache: a refetch per scene rebuild |
+| 10 | Winding | Orient by given normals; compute from winding, reversing a closed mesh that is inside out | Trust the authoring: dark tops (#143) |
+| 11 | Caster | The hull footprint at mean height, height capped to keep the shadow in `bounds`; explicit caster as given | The posed bounding box (item 1's non-lathe rule): coarse for round caps, and uncapped |
+| 12 | Textures, animation, skinning | No: the recipe's material is the look; UVs feed brush and grain | Texture support: Lite's loader and a material path |
+| 13 | Module layout | `instrument-mesh.ts` (validation, normals, hull, no Lite), `instrument-gltf.ts` (the reader), `instrument-assets.ts` (the store); `instrument-pass.ts` calls them | Everything in `instrument.ts` |
+
+## Verification (item 5)
+
+- Unit: `tests/unit/instrument-mesh.unit.test.mjs` (validator, winding, containment on vertices, the caster, the reader and
+  the store's cache and budget with a fake fetch).
+- Browser: `tests/browser/core-custom.test.mjs` on `instrument-custom-core.html`, DPR 1 and 2, headless, and a headful
+  Canary pass. The GLB fixture is generated by `scripts/make-custom-fixture.mjs`.
+- Regression: `core-glass`, `core-instrument`, `core-post`, `core-post-lifecycle`, `core-emitters`, `ui-instrument-conformance`,
+  `ui-gpu`, `ui-knob`, `ui-fader` and `ui-switch-forms`.
+
+## Results (item 5)
+
+Canary 158.0.8110.0, Windows 11, RTX 3080, 1920 × 1080, [`instrument-custom-core.html`](../../examples/playground/instrument-custom-core.html), on
+this branch merged onto `main` with items 1 to 4: one panel of 15 native range inputs, each with a base plate and a part: inline meshes (a bar
+that turns, a disc with its own normals, a bar too long), references to [`parts.glb`](../../examples/playground/public/custom/parts.glb) (133,808 bytes,
+made by [`scripts/make-custom-fixture.mjs`](../../scripts/make-custom-fixture.mjs), five meshes: a fluted cap of 455 vertices and 768 triangles, a lever, a
+block with no normals in the file, a dome of 2,501 vertices and 4,800 triangles, a slab; the cap again at twice the size, the dome as the lens of
+an emitter and as a glass lens) and three files that fail on purpose. Headless at DPR 1 and 2 and headful at DPR 1 and 2 (`--headed`, viewport
+emulated): eight tests per DPR, 16 of 16 in each, and every pixel number below is the same in both.
+
+| Check | DPR 1 | DPR 2 |
+| --- | --- | --- |
+| Part pixels over 9 poses of the travel (t = 0 to 1, a turning bar, lever, cap and disc among them) / outside every control's box | 40,691–41,216 / 0 | 154,249–156,637 / 0 |
+| Every drawn control changes more than 200 px at every pose; a failed part changes | 0 px (3 controls) | 0 px |
+| Native hits on drawn pixels: mismatches | 0 of 4,000 | 0 of 4,000 |
+| Captions and heading (the guard's text), parts and shadows on against plates only: differing px / worst level difference / contrast-ratio shift | 0 of 24,492 / 0 / 0 | 0 of 97,464 / 0 / 0 |
+| Tops lit (mean RGB at the centre of the top): file block with no normals / parametric prism it imitates / inline disc wound the other way with its own normals | (216, 222, 230) / (215, 220, 229) / (218, 223, 231) | the same |
+| Face shadows with the derived caster, capped to the box: px outside the boxes (parts and shadows together) / with an explicit caster | 0 / 4,470 | 0 / 17,856 |
+| Lamp (a file's dome as the lens of an emitter): lenses / lit / bloom / clustered lights lit; 0 px outside | 1 / 1 / on / 1 | the same |
+| Glass dome (the same dome as a glass lens): glass material | `on`; 1,318 px at t = 0.5, 0 outside | `on`; 5,154 px, 0 outside |
+| Load held, then released: frames sampled through the arrival, all `ready`, GPU on; fewest drawn parts in any frame | 54; at least 11 | 54; at least 11 |
+| What the arrival changed: the 8 loaded controls (px) | 847–9,996 (slab: Relief) | 3,490–40,543 |
+| ... the other controls (px / levels, with the shadow map: its fit follows the casters' box) | 70, 51, 49 / up to 7 | 293, 200, 98 / up to 4 |
+| ... the other controls with `?map=off` | 0 px | 0 px |
+| While held, the loading controls against their plates alone | 0 px | 0 px |
+| Failures: 404 / malformed glB / box that does not hold the mesh | `failed`: "the request failed with HTTP 404", "a glB chunk runs past the end of the file", "the mesh leaves its declared bounds: vertex 0 is 54.756 on axis x, outside -18.5..18.5 (it spans -54.756..54.756); check the asset and its scale"; GPU on; no object stepped down | the same |
+| Refused (containment): the 140 px slab in 100 px / the 108 px bar turning in 100 px | `part: custom`, overshoot 30.45 px / 6.29 px; 0 px outside | the same |
+| Caps: 16,900 vertices / 33,000 triangles / a NaN / a repeated vertex / no normals / a box that does not hold it | refused with the path and the reason (the six messages of the test); the scene in effect untouched | the same |
+| Parts budget: 2,048 / 2,049 | 2,041 drawn (the 7 parts of 2 refused objects and 3 failed files are not) / the whole layer `budget` | the same |
+| Custom triangle budget: 16,044 of the scene's own + 204 dense copies (995,244) / 205 copies | no step-down / `dense-204` steps down (`budget`), the others stay | the same |
+| 300 frames of poses (15 controls): captures, uploads, geometry updates | 0, 0, 0 (300 GPU frames) | 0, 0, 0 |
+| Disable, then enable: no instrument state while disabled; the store is new and the file fetched again | the cap is `ready` | the same |
+
+**Cost** (headless; 50 controls with a cap each, 100 parts, 2 kinds, 300 frames of poses; medians of 6 runs; the RTX 3080's
+clocks make GPU figures upper bounds and bimodal):
+
+| | DPR 1 custom (file's cap, 768 triangles) | DPR 1 parametric (lathe, 768 triangles) | DPR 2 custom | DPR 2 parametric |
+| --- | --- | --- | --- | --- |
+| Core frame work p50 / p95 (ms) | 1.70 / 2.50 | 1.80 / 2.50 | 1.70 / 2.40 | 1.70 / 2.50 |
+| Instrument GPU p50 (range over the runs) / p95 (ms, the whole layer) | 1.65 (0.62–3.17) / 3.18 | 3.15 (3.03–3.19) / 3.22 | 3.56 (1.56–3.61) / 3.62 | 1.95 (1.20–3.56) / 3.60 |
+| Frame interval p95 (ms) | 18.3 | 18.3 | 18.3 | 18.3 |
+| `handle.update` per frame p50 (ms) | 0.30 | 0.30 | 0.30 | 0.30 |
+
+A mesh costs what a lathe of the same triangles costs: the frame-work medians agree to 0.1 ms and the GPU columns overlap
+(a run's clocks decide which of ~1.2 and ~3.2 ms it reports). Before this branch was merged onto item 4 the same test gave frame work
+p50 1.0–1.2 ms for both: the page probe's refreshes and the reflections of the merged chain added the rest, to both.
+
+**Loading** (headless; a mesh's own read, and the shared request): parsing the fixture's meshes takes 1.6–3.1 ms for the first cap (cold; 0.3–0.7
+for the same mesh again at another scale), 0.2–0.4 for the lever, 0.1–0.2 for the block, 2.6–3.8 for the dome (4,800 triangles) and 0.3 for
+the slab, about 7 ms in all; the request for the 134 KB file (one fetch shared by the parts that start together, from a local preview server) took
+56–62 ms at DPR 1 and 70–76 ms at DPR 2 (headful 84–94 ms); replacing the eight meshes' geometry in place took 0.7 ms in all (0.9–1.1 headful),
+0.1 ms each. The page is ready (GPU on, all objects drawn, files loading) 1.2 s after it starts.
+Core's own cost for the largest mesh the caps allow (16,384 vertices, 32,258 triangles, a turn of 270°, Node 24, warm): validating
+it 34 ms the first time and 0.15 ms again with the same arrays; its containment frontier about 6–14 ms (it was 215–290 ms before
+the frontier's witnesses were bucketed by height), and its exact path 18 ms per check (32 ms before the vertices were transformed in place).
+
+**Mutation checks** (the tests fail without the code they test): with triangles no longer oriented against their normals the
+inline disc's top is dark (134 against the prism's 213) and the test fails; with the caster's height no longer capped the
+shadow of the tall cap leaves its box (1,416 px outside) and the test fails; the unit tests cover the winding and the cap as well.
+
+**Regression** (merged with item 4, after the last code change but one): `core-glass`, `core-instrument`, `core-post`,
+`core-post-lifecycle`, `core-emitters`, `ui-instrument-conformance`, `ui-gpu`, `ui-knob`, `ui-fader` and `ui-switch-forms`: 126 of 126
+passed (a run before the merge: 112 of 112). `npm run typecheck`, the unit tests (242 passed, 1 skipped), the compiler tests (129) and
+`npm run test:package` pass.
+
+**Lite 1.33 behaviour found or relied on:** [L36 and L37](../upstream/babylon-lite.md) (no CPU-only glTF parse; `resizeMeshGeometry`
+replaces a registered mesh's geometry in place, invalidates the render bundles itself and works with thin instances, culling,
+the PBR material, the shadow casters and the glass kinds' meshes). Nothing else new was needed.
+
+**Review expectations / limits:** headful Canary was checked at DPR 1 and 2 with the viewport emulated; the budgets and costs are
+one fast GPU; the file's request time is a local server's; the reference implementation (`@underglass/ui/tokens`) and its
+conformance suite do not take `mesh` profiles; glass on a custom part was checked with one dome (a lens) only, not a window (a stand is
+refused for a mesh). See [open issues](../open-issues.md) (SCOPE-009).
+
+## Deviations from the draft (item 5)
+
+- **Core loads.** The plan and the design language had the helper load and hand core mesh data; core fetches (outside any frame, never at
+  render time), because every caller would otherwise repeat the cache, the budget and the states.
+- **No anchors.** The design language's five anchors and `fitCustomPart` are not core's: a reference has a uniform `scale` and an `offset`.
+- **The budget at the limit.** The brief expected the layer to drop its lowest-priority parts at the parts budget "as today"; today
+  the whole layer steps down (item 1's note, decision 9), which is kept. The new triangle budget drops objects from the last of the scene.
+- **The built-in stand-in** was first not done (core drew no part while a file loaded) and is now core's `fallback` (see the review fixes below).
+- **`captured` and `stand`** are refused for a mesh part; **any kind** may use a mesh profile.
+
+## Review fixes (item 5)
+
+An independent review found no blocker. Its fixes, each with a unit test (`tests/unit/instrument-custom-fixes.unit.test.mjs`) that fails on the code before it:
+
+- **The reader's caps are real.** A NORMAL or TEXCOORD_0 accessor must name as many elements as POSITION, and every accessor at most 16,384 elements
+  (indices 98,304), *before* an array is allocated for it (a 1e9 count used to allocate gigabytes); `byteOffset`, `byteLength`, `byteStride` and
+  `count` must be non-negative integers.
+- **NaN and overflow.** The declared-box test is written so that NaN fails it; glB positions (after the node's transform, `scale` and `offset`) must be
+  finite and within ±10,000 like inline ones, and a zero or non-finite normal is refused.
+- **Bytes in hand** (`source.data`) are held to the 8 MiB cap like a download.
+- **No per-frame serialization.** `profileGeometry` looks a shape up by its object first (`WeakMap`), so `profileBounds` (per glass instance and per posed part
+  every frame) no longer `JSON.stringify`s it; a test counts the calls across 500 repeats (0 after the first). That is per validated scene object: each new scene (the poses idiom builds one per frame) costs one stringify per distinct profile, not one per call.
+- **Stand-ins** (`fallback`), above: the helper's knob passes the built-in cap, chamfer and pointer, so a 404 shows the standard knob.
+- **Triangles belong to a store.** A profile's loaded triangles carry the store that attached them; another store (a second engine, a controller enabled
+  again) does not draw them and loads for itself, and evicting an entry (or ending a store) takes its triangles off the profiles, so no store draws another's triangles and the bookkeeping stays honest. The 32 MiB budget bounds the store's own parsed cache only: Lite's mesh keeps its own retained CPU copy and its GPU buffers (L37), which it does not count, and detaching does not free those.
+- **Nits.** The triangle budget counts base meshes; the caster cap is 0 within 1 px of the box; `bucketedWitnesses` rounds the height magnitude up on both
+  sides of the face, which is conservative on both (the drift grows with the magnitude), and says so; L37 names what is undocumented.

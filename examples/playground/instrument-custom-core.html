@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Underglass core: custom parts</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body { background: #e3e5e9; color: black; font: 14px system-ui; }
+    [hidden] { display: none !important; }
+    #frame { position: fixed; inset: 0; }
+    #status { position: fixed; right: 8px; bottom: 6px; max-width: 46ch; margin: 0; padding: 4px 8px; border-radius: 6px;
+      background: rgb(255 255 255 / 0.85); font: 11px/1.3 system-ui; white-space: pre-wrap; pointer-events: none; z-index: 1; }
+    .cc-panel { position: absolute; box-sizing: border-box; border-radius: 14px; padding: 12px 16px; margin: 0; background: rgb(223, 225, 229); color: rgb(28, 30, 36); }
+    .cc-panel h2 { margin: 0 0 8px; font-size: 14px; line-height: 18px; font-weight: 600; }
+    .cc-grid { display: grid; justify-content: start; align-content: start; }
+    .cc-cell { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
+    .cc-caption { margin-top: 6px; font-size: 11px; line-height: 14px; white-space: nowrap; }
+    /* Face mode: the range inputs paint nothing themselves (they stay native, focusable and hit-testable) and meshes draw them. */
+    .cc-panel input[type="range"] { appearance: none; margin: 0; padding: 0; background: transparent; outline: none; cursor: pointer; border-radius: 0; }
+    .cc-panel input[type="range"]::-webkit-slider-thumb { appearance: none; width: 1px; height: 1px; background: transparent; }
+  </style>
+</head>
+<body>
+  <div id="frame"></div>
+  <pre id="status" role="status"></pre>
+  <script type="module" src="/src/instrument-custom-core/page.ts"></script>
+</body>
+</html>

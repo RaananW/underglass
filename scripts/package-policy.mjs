@@ -13,7 +13,7 @@ const entries = ["index", "build", "experimental-worker", "worker-thread"].map(n
 // emitting a declaration must be reflected here, or pack validation fails.
 const coreDeclarations = [
   "admission", "affine", "animation", "build", "compiled", "compiler", "composition", "css-animation",
-  "device-lifecycle", "effects", "capture-probe", "emitters", "enrollment", "hosts", "index", "instrument", "instrument-glass", "instrument-pass", "instrument-post", "module", "motion",
+  "device-lifecycle", "effects", "capture-probe", "emitters", "enrollment", "hosts", "index", "instrument", "instrument-assets", "instrument-glass", "instrument-gltf", "instrument-mesh", "instrument-pass", "instrument-post", "module", "motion",
   "mount-boundary", "native", "publication", "relief", "renderer", "ripple", "runtime", "stage", "timeline", "viewport",
   "experimental-worker", "worker-thread", "worker-protocol",
 ];

@@ -325,6 +325,13 @@ objects' bounds and the layer's clip and by the layer's opacity; captured text n
 passes through a stage. A PCF shadow map from the key light shades parts on parts and
 never the face. Glass parts are drawn by a WGSL shader of their own (`instrument-glass.ts`) in that same target: it loads the layer's capture and traces the model's 2D.6, with an exact-only twin of each window in the caps target so that text under glass is never filtered. Metals and coats reflect the layer's page through a cube texture that `capture-probe.ts` fills from the capture on the canvas's configured device and Lite binds as a local environment; it is refreshed on a capture upload or a texture replacement, and on a move of the layer at most once per 100 ms with a trailing refresh (the placement is quantised to a quarter texel), never otherwise, and a probe or glass that cannot be built is left out with a diagnosis, GPU on.
 
+**Custom parts** (`mesh` profiles, [design note](ui-library/instrument-phase2.md#core-work-item-5-custom-parts)) add three
+GPU-free modules: `instrument-mesh.ts` validates a mesh, winds it against its normals and measures its footprint,
+`instrument-gltf.ts` reads one named mesh of a glB/glTF (caps checked before any byte is read), and `instrument-assets.ts`
+is the per-engine store that fetches and caches files outside any frame, under a byte budget. Containment and casters run
+on the mesh's own vertices. A file that arrives replaces its kind's placeholder mesh in place (`resizeMeshGeometry`), so
+no scene is rebuilt and no object steps down for a load.
+
 Version 4 scenes of the `relief`, `objects` and `instrument` kinds may carry
 **emitters** (lamps, LEDs, the pointer light) and protected text rects
 (`emitters.ts`, [design note](ui-library/instrument-phase2.md#core-work-item-2-emitters-and-the-pointer-light)).
