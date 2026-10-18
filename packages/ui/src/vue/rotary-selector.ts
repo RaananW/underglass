@@ -62,7 +62,6 @@ export const RotarySelector = defineComponent({
             ...(props.invalid || control?.["aria-invalid"] ? { "aria-invalid": "true" } : {}),
             ...(control?.["aria-describedby"] ? { "aria-describedby": control["aria-describedby"] } : {}),
             disabled: props.disabled ?? control?.disabled,
-            value: selected,
             onChange: (event: Event) => {
               const next = (event.target as HTMLSelectElement).value;
               if (props.modelValue === undefined) own.value = next;
