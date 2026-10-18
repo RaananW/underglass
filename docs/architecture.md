@@ -316,7 +316,14 @@ documented, guarded reorder of `getRenderingContexts`) and updates inside its ow
 capture and native geometry are unchanged, the layer's face is still its relief pass,
 and an object that cannot be drawn as meshes is drawn there at the Relief level, with
 GPU on. Scene builds are sequenced with successor compositions so neither spends the
-other's compile deadline.
+other's compile deadline. Each instrument scene draws its parts into an offscreen
+target shared by every instrument layer of the engine, runs its post chain there
+(SMAA and an emitter bloom by default; TAA, contact shadows and SSGI as options;
+`instrument-post.ts` holds the chain's settings), draws its captured caps after the
+chain and lays the result over the face in one composite multiplied by a mask of its
+objects' bounds and the layer's clip and by the layer's opacity; captured text never
+passes through a stage. A PCF shadow map from the key light shades parts on parts and
+never the face.
 
 Version 4 scenes of the `relief`, `objects` and `instrument` kinds may carry
 **emitters** (lamps, LEDs, the pointer light) and protected text rects

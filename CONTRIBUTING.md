@@ -221,7 +221,18 @@ npm run test:browser -- performance.test.mjs
 npm run test:browser -- surface.test.mjs --grep 'fence|old-generation'
 # Entire current regression suite:
 npm test
+# The probe and prototype suites (evidence runs, see below), or everything:
+npm run test:browser:probes
+npm run test:browser -- --all
 ```
+
+The probe and prototype suites (`tests/browser/ui-probe-*.test.mjs`, `ui-proto-*.test.mjs`) are the
+evidence behind the UI library's design decisions ([phase0.md](docs/ui-library/phase0.md),
+[instrument-phase0.md](docs/ui-library/instrument-phase0.md)); the core and component suites cover what they
+proved. They cost about 25 of a full run's 55 minutes, so `npm run test:browser` and CI skip them. Run
+`npm run test:browser:probes` when you change a probe page or its harness, or name the file
+(`npm run test:browser -- ui-probe-instrument-post.test.mjs`); `--all` runs the regression suite and the probes
+in one go.
 
 `npm run test:browser` and `npm test` build first. Playwright starts a preview on 5174 and
 development server on 5173, or reuses existing responsive servers. It stops

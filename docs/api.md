@@ -549,7 +549,7 @@ upload/frame timing is synchronous public CPU work, not completion/GPU
 execution. `phase` separates admission work from content work.
 See [measurement definitions and raw evidence](archive/measurements.md).
 With an `instrument` material, `instrumentGpuMs` samples (`layerId`, `phase: "content"`) carry the GPU time of one
-layer's mesh pass in one frame, and with emitters, `emitterGpuMs` samples the GPU time of one layer's face pool pass,
+layer's mesh pass and post chain in one frame, and with emitters, `emitterGpuMs` samples the GPU time of one layer's face pool pass,
 both from Babylon Lite's per-task timings when the device has timestamp queries.
 
 ### The instrument material
@@ -567,14 +567,25 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
 | `profiles` | At most 64 shapes by name: `lathe` (`points: [[r, z, nr, nz], …]`, `segments`), `prism` (`width`, `length`, `radius`, `height`, `taper`, `chamfer`), `extrude` (`outline: [[x, z], …]`, `width`) |
 | `objects` | At most 256 (with `primitives`, 256 in all): `{ id, rect, bounds: { rect, radius }, t (clamped to 0..1), parts, relief }`. A part is `{ kind, profile, at, pose: { from, to }, material, captured, caster, state }`; a pose mixes `travel`, `slide`, `turn` and `tilt` about a fixed `axis` and `pivot`; only parts that travel may be `captured` |
 | `emitters`, `protected`, `feather` | Lights and the guard, as for every level ([emitters](#emitters-and-the-pointer-light)); the parts are lit by Babylon Lite clustered lights |
-| `shadow.map`, `post` | Validated and kept, not drawn yet (core work item 3) |
+| `shadow.map` | The PCF map of parts on parts: `{ size: 2048 | 4096, bias (world px), darkness (0..1) }`, default `{ 4096, 1.95, 0.1 }`, drawn when omitted; `darkness: 1` draws no map |
+| `post` | `{ smaa, bloom, taa, contact, ssgi }`, booleans, default `true`, `true`, `false`, `false`, `false` (the defaults when omitted) |
+| a part's `emitter` | An index into `emitters`: the part is that emitter's lens and feeds the bloom while the emitter gives light |
 
 - **Drawing.** Each instrument layer has a Lite scene on the shared engine, drawn right after the layer's pass:
-  analytic face shadows of the parts, then the parts (thin-instanced per kind, GPU-culled) and the captured caps, with
-  their own depth buffer, the layer's clip and its opacity. `handle.update(scene)` with new `t`, states or layout
+  analytic face shadows of the parts; then the parts (thin-instanced per kind, GPU-culled) into an offscreen target with
+  their own depth, the post stages the scene turns on (TAA, contact shadows, SSGI, SMAA, then the bloom of the lit
+  lenses), and the captured caps after the chain; one composite lays the result over the face, multiplied by a mask of
+  the objects' `bounds` and the layer's clip (so no stage draws outside a control's box) and by the layer's opacity, as
+  one group. Captured text is never filtered. `handle.update(scene)` with new `t`, states or layout
   writes instances in the same frame, with no capture, upload or hit-geometry change; so do more or fewer objects of
-  existing kinds. New profiles, materials, part kinds, a new light or environment rebuild the scene; meanwhile the layer
+  existing kinds. New profiles, materials, part kinds, a new light or environment, new `post` flags or `shadow.map`, or
+  a stage larger than the map's depth window (a half-diagonal past 3,840 px) rebuild the scene; meanwhile the layer
   draws its objects at the Relief level.
+- **The shadow map** is a PCF map from the key light, its depth window centred on the stage, the bias given in world px.
+  Every part casts and receives it except captured caps; the face never receives it. It is rendered again only in a
+  frame whose parts move.
+- **The output transform:** core sets the parts' image processing to exposure 0.8 and contrast 1.2 (tone mapping off)
+  after it loads the studio, the values Babylon Lite's HDR loader sets and the Rendering Model's 2D.5 output transform.
 - **Containment.** Every vertex of every part, over the whole travel, must project at least 0.5 px inside `bounds`, and
   `bounds` must lie inside the layer's box. An object that does not is drawn as its `relief` primitive (default: a raised
   box over its bounds).
@@ -582,15 +593,25 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
   than 16 part kinds per layer is reported; more than 64 steps the layer down. The format accepts up to 8,192 parts.
 - **Diagnostics.** `state().instrument` lists each layer's `status` (`ready`, `pending`, `stepped-down`, `failed`),
   objects, parts, drawn parts, kinds, `steppedDown` entries (`{ object, reason, part?, inset?, overshoot?, detail? }`,
-  reasons `containment`, `budget`, `compile`, `pending`, `transform`, `order-unavailable`), warnings and GPU time
+  reasons `containment`, `budget`, `compile`, `pending`, `transform`, `order-unavailable`, `post`), warnings and GPU time
   (`lastMs`, `p50Ms`, `p95Ms`); the stage's parts; the timing status; and the compile counters (builds, failures,
-  deferred successor deadlines). `state().materials` lists `{ kind: "instrument", objects, parts, interior, degraded }`.
+  deferred successor deadlines). `state().instrument.post` lists per layer each stage's status (`on`, `off`, `idle`
+  for bloom with no lit lens, `failed` with its `error`), the map (`size`, `biasPx`, `bias` in Lite's units, `darkness`,
+  `window`, `casters`, `renders`: the controller's count of frames that flushed a caster, an estimate of Lite's refresh rule,
+  `timedRenders`: the frames Lite's timings saw the map task in, a sample), its lenses and
+  lit lenses, and the GPU time per stage (`face`, `map`, `mask`, `parts`, the stages, `caps`, `composite`: `lastMs`,
+  `p50Ms`, `p95Ms`, `samples`, `total`); and the shared targets (`format`, `width`, `height`; a target no layer uses may
+  report its last size). `state().instrument.resources.mapTextures` counts shadow map textures released with their scenes
+  (`destroyed`) and any that could not be (`missing`, warned once). A stage that fails to build is
+  left out and reported; a failed registration is rebuilt once without the optional stages. `post` means exactly: the chain's target, mask or composite could not be built, or the minimal chain (the chain without its optional stages: the rebuild after a failed registration, or the first build when no optional stage is on) failed to register. Any other build error (a mesh, a shader material, the studio) stays `compile`. Either way the reason names the cause (the original error's message). The layer is then drawn at Relief. `state().materials` lists `{ kind: "instrument", objects, parts, interior, degraded }`.
 - **Compile sequencing.** A successor composition that starts while a mesh build compiles starts its 1.5 s deadline when
   the build is done or after 3 s, whichever comes first; a build that takes over 10 s steps its layer down.
 - **Never DOM for an instrument reason.** Containment, budgets, build failures and slow builds (10 s) step objects
   down to Relief with GPU on. A GPU error (validation scope, device loss) still recovers to ordinary DOM.
 - **Limits:** a layer whose matrix is not a similarity (shear, non-uniform scale, a tilt) draws its objects at Relief;
-  between 0 and 1, layer opacity blends each part over the faded face rather than the layer as one group.
+  between 0 and 1, the meshes blend as one group over the layer's already faded face: under an opaque part the canvas is
+  `α · P + (1 − α) · (α · F + (1 − α) · B)` (`F` the face, `B` what lies beneath the layer), not the layer's true group
+  opacity `α · P + (1 − α) · B`, so face content under a part shows through at `α (1 − α)`.
 
 ### Emitters and the pointer light
 
