@@ -120,6 +120,8 @@ export class CanvasRuntime {
   private drawFrame = 0;
   /** A light was written with `setEmitters` since the last draw (`requestDraw`'s lead frame). */
   private lightWritten = false;
+  /** Someone other than a light asked for a draw since the last one (`requestDraw`). */
+  private drawWanted = false;
   /** The RAF currently awaited by `animate`/`advance`, with the rejecter `cancelMotion` uses to interrupt it. */
   private motionFrame: { id: number; reject(error: Error): void } | undefined;
   /** `animate`/`advance` loops parked until the document becomes visible again. */
@@ -945,14 +947,17 @@ export class CanvasRuntime {
    * after the writer's in each frame, so a light moved every frame is drawn every frame, in the frame it was written.
    */
   private requestDraw(lead = false) {
+    // A request made while the lead frame is pending is folded into it, which then draws.
+    if (!lead) this.drawWanted = true;
     if (this.stopped || this.drawFrame || !this.environment.visible || this.core?.phase() !== "gpu") return;
     this.resources.controllerFrames++;
     this.drawFrame = requestAnimationFrame(() => {
       this.drawFrame = 0;
       this.resources.controllerFrames--;
-      if (lead && !this.lightWritten) return;
+      if (lead && !this.lightWritten && !this.drawWanted) return;
       const written = this.lightWritten;
       this.lightWritten = false;
+      this.drawWanted = false;
       try { this.core?.draw(); } catch (error) { this.recover(`Geometry/draw failure: ${String(error)}`); return; }
       if (written) this.requestDraw(true);
     });
