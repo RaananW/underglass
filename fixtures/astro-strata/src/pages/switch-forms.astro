@@ -1,0 +1,29 @@
+---
+/**
+ * Strata Astro Switch forms check page (`/switch-forms/`): `[data-contract="switch.md#2"]` renders the anatomy page's
+ * Forms markup example with `@underglass/ui/astro`, and `main` holds live form switches
+ * `tests/browser/ui-switch-forms-astro.test.mjs` drives with real input. Server-rendered HTML; the only script is the
+ * components' own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { Switch } from "@underglass/ui/astro";
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro Switch forms check</title>
+</head>
+<body>
+  <div data-contract="switch.md#2" hidden><Switch form="rocker" name="power">Power</Switch></div>
+  <main>
+    <form class="ug-panel" data-strata-face="raised" aria-label="Switches" id="switches" style="display: flex; flex-wrap: wrap; align-items: center; gap: 20px">
+      <Switch form="slide" id="bypass" name="bypass" class="extra" style="margin-right: 4px" data-testid="bypass">Bypass</Switch>
+      <Switch form="bat" id="arm" name="arm" checked>Arm</Switch>
+      <Switch form="wall" id="hall" name="hall" help="Lights the hall." reverse>Hall</Switch>
+      <Switch form="rocker" id="heater" name="heater" disabled>Heater</Switch>
+      <Switch form="switches" id="wifi" name="wifi">Wi-Fi</Switch>
+    </form>
+  </main>
+</body>
+</html>
