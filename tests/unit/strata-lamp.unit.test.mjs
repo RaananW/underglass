@@ -254,7 +254,9 @@ test("at Relief and Objects a lens is a disc or a dome in its own colour, a beze
   const [unlit] = lampFormEntries(lens, context({ lit: 0 }));
   assert.deepEqual([unlit.ring.colour, unlit.material], [lensColours("#ff9228").off, "lens"]);
   const [dome] = lampFormEntries(lens, context({ objects: true, base: 2 }));
-  assert.deepEqual([dome.object, dome.base, dome.colour, dome.bounds, dome.height], ["knob", 2, lensColours("#ff9228").on, [0, 0, 56, 56], 8.4]);
+  // The dome would like to stand 8.4 high (0.3 of its diameter), and stands as high as its shadow (2.8) stays in the box: 5.37 with 14 px to the edge.
+  assert.deepEqual([dome.object, dome.base, dome.colour, dome.bounds, dome.height], ["knob", 2, lensColours("#ff9228").on, [0, 0, 56, 56], 5.37]);
+  assert.ok(lampFormEntries(lens, context({ objects: true, box: [-1000, -1000, 3000, 3000] }))[0].height === 8.4, "with room, 0.3 of its diameter");
   // The bezel: a raised face at Relief and a ring at Objects, each fitted so its shadow stays inside the control's box.
   const bezel = element("lamp__bezel");
   const [face] = lampFormEntries(bezel, context({ rect: rect.bezel }));

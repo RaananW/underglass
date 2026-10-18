@@ -804,7 +804,7 @@
     font-size: var(--strata-control-font);
     cursor: pointer;
   }
-  :where(.ug-lamp:has(> .ug-lamp__input:is(:checked, [aria-pressed="true"]):not(:disabled))) { --strata-lit: 1; }
+  :where(.ug-lamp:has(> .ug-lamp__input:checked:not(:disabled)), .ug-lamp--momentary[aria-pressed="true"]:not(:disabled)) { --strata-lit: 1; }
   /* The native control: a transparent square box over the object, so a press anywhere on it is a press on the control. */
   :where(.ug-lamp__input) {
     flex: none;
@@ -834,6 +834,24 @@
   }
   :where(.ug-lamp--reverse) { flex-direction: row-reverse; justify-content: flex-end; }
   :where(.ug-lamp--reverse > .ug-lamp__object) { left: auto; right: 0; }
+  /* A momentary lamp is the native button itself, with its object and its label inside it: the button's own box is the row, and
+     the object (in the flow, the lens + 28 square) is where it is drawn. */
+  :where(.ug-lamp--momentary) {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    appearance: none;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    line-height: inherit;
+    text-align: start;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :where(.ug-lamp--momentary:focus-visible) { outline: none; }
+  :where(.ug-lamp--momentary > .ug-lamp__object) { position: relative; flex: none; left: auto; right: auto; top: auto; }
   :where(.ug-lamp__object) :where(*) { position: absolute; box-sizing: border-box; pointer-events: none; }
   :where(.ug-lamp__label) { min-width: 0; }
   :where(.ug-lamp__bezel) {
@@ -862,19 +880,19 @@
     height: var(--_lens);
   }
   /* Focus: an accent ring round the bezel (captured content, at every level). Invalid: a danger edge. */
-  :where(.ug-lamp:has(> .ug-lamp__input:is(:focus-visible, [data-strata-preview~="focus"]))) :where(.ug-lamp__bezel) {
+  :where(.ug-lamp:has(> .ug-lamp__input:is(:focus-visible, [data-strata-preview~="focus"])), .ug-lamp--momentary:is(:focus-visible, [data-strata-preview~="focus"])) :where(.ug-lamp__bezel) {
     outline: var(--strata-focus-width) solid var(--strata-colour-accent);
     outline-offset: var(--strata-focus-offset);
   }
   :where(.ug-lamp:has(> .ug-lamp__input[aria-invalid="true"])) :where(.ug-lamp__bezel) { border: 2px solid var(--strata-colour-danger); }
   /* The bezel lifts a little under the pointer, as keys do (section 11). */
-  :where(.ug-lamp:has(> .ug-lamp__input:is(:hover, [data-strata-preview~="hover"]):not(:disabled))) :where(.ug-lamp__bezel) {
+  :where(.ug-lamp:has(> .ug-lamp__input:is(:hover, [data-strata-preview~="hover"]):not(:disabled)), .ug-lamp--momentary:is(:hover, [data-strata-preview~="hover"]):not(:disabled)) :where(.ug-lamp__bezel) {
     --_lift: var(--strata-state-hover-height);
     --_tone: var(--_hover-tone);
   }
-  :where(.ug-lamp:has(> .ug-lamp__input:disabled)) { color: color-mix(in srgb, var(--strata-colour-text) 38%, transparent); cursor: not-allowed; }
-  :where(.ug-lamp:has(> .ug-lamp__input:disabled)) :where(.ug-lamp__object) { opacity: 0.38; }
-  :where(.ug-lamp:has(> .ug-lamp__input:disabled)) :where(.ug-lamp__bezel) { --_h: 0px; --_gain: 0; }
+  :where(.ug-lamp:has(> .ug-lamp__input:disabled), .ug-lamp--momentary:disabled) { color: color-mix(in srgb, var(--strata-colour-text) 38%, transparent); cursor: not-allowed; }
+  :where(.ug-lamp:has(> .ug-lamp__input:disabled), .ug-lamp--momentary:disabled) :where(.ug-lamp__object) { opacity: 0.38; }
+  :where(.ug-lamp:has(> .ug-lamp__input:disabled), .ug-lamp--momentary:disabled) :where(.ug-lamp__bezel) { --_h: 0px; --_gain: 0; }
 
   /* StatusLight (box = lens + 16): the lens alone, lit unless it says otherwise; blinking only while lit. */
   :where(.ug-status-light) {
@@ -2725,10 +2743,12 @@
        fill and by the label; no glow, no blink; GrayText edges when disabled; a Highlight focus ring. */
     :where(.ug-lamp__bezel, .ug-lamp__lens, .ug-status-light__lens) { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; box-shadow: none; filter: none; }
     :where(.ug-lamp__socket) { background: transparent; }
-    :where(.ug-lamp:has(> .ug-lamp__input:is(:checked, [aria-pressed="true"]):not(:disabled))) :where(.ug-lamp__lens), :where(.ug-status-light:not([data-strata-lit="false"])) :where(.ug-status-light__lens) { background: Highlight; }
-    :where(.ug-lamp:has(> .ug-lamp__input:focus-visible)) :where(.ug-lamp__bezel) { outline-color: Highlight; }
-    :where(.ug-lamp:has(> .ug-lamp__input:disabled)) :where(.ug-lamp__object) { opacity: 1; }
-    :where(.ug-lamp:has(> .ug-lamp__input:disabled)) :where(.ug-lamp__bezel, .ug-lamp__lens) { border-color: GrayText; }
+    :where(.ug-lamp:has(> .ug-lamp__input:checked:not(:disabled)), .ug-lamp--momentary[aria-pressed="true"]:not(:disabled)) :where(.ug-lamp__lens), :where(.ug-status-light:not([data-strata-lit="false"])) :where(.ug-status-light__lens) { background: Highlight; }
+    :where(.ug-lamp:has(> .ug-lamp__input:focus-visible), .ug-lamp--momentary:focus-visible) :where(.ug-lamp__bezel) { outline-color: Highlight; }
+    :where(.ug-lamp:has(> .ug-lamp__input:disabled), .ug-lamp--momentary:disabled) :where(.ug-lamp__object) { opacity: 1; }
+    :where(.ug-lamp:has(> .ug-lamp__input:disabled), .ug-lamp--momentary:disabled) :where(.ug-lamp__bezel, .ug-lamp__lens) { border-color: GrayText; }
+    :where(.ug-lamp--momentary) { forced-color-adjust: none; color: ButtonText; }
+    :where(.ug-lamp--momentary:disabled) { color: GrayText; }
     :where(.ug-status-light[data-strata-blink]) { animation: none; }
   }
 }

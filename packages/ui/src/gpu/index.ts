@@ -351,7 +351,8 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     const knob = element.closest(".ug-knob__dial")?.querySelector(".ug-knob__input");
     const fader = element.closest(".ug-fader__track")?.querySelector(".ug-fader__input");
     // A lamp's bezel and lens are its input's object too (hover and disabled; a lamp does not sink when it is pressed).
-    const lamp = element.closest(".ug-lamp")?.querySelector(":scope > .ug-lamp__input");
+    const lampRow = element.closest(".ug-lamp");
+    const lamp = lampRow?.matches(".ug-lamp--momentary") ? lampRow : lampRow?.querySelector(":scope > .ug-lamp__input");
     const owner = knob ?? fader ?? lamp;
     const control = element.matches(interactive) ? element : owner ?? element.closest("label")?.querySelector("input, select, textarea") ?? element;
     const target = control.closest("label") ?? control;
@@ -393,14 +394,15 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     const lampRoot = lens.closest<HTMLElement>(".ug-lamp, .ug-status-light");
     if (!lampRoot || emitters.length >= MAX_EMITTERS || !lens.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
     const kind: LampKind = lampRoot.matches(".ug-lamp") ? "lamp" : "led", rect = rectWithin(lens, panel);
-    const control = kind === "lamp" ? lampRoot.querySelector<HTMLElement>(":scope > .ug-lamp__input") : lampRoot.querySelector<HTMLElement>(".ug-status-light__object");
+    // The control: a toggle lamp's input (its box is the object's), a momentary lamp's button (its box is the whole row, the object drawn in it), a StatusLight's object.
+    const control = kind === "lamp" ? (lampRoot.matches(".ug-lamp--momentary") ? lampRoot : lampRoot.querySelector<HTMLElement>(":scope > .ug-lamp__input")) : lampRoot.querySelector<HTMLElement>(".ug-status-light__object");
     if (!control || rect[2] <= 0 || rect[3] <= 0) continue;
     const style = getComputedStyle(lampRoot), lampTokens = reader(lampRoot);
     const read = Number.parseFloat(style.getPropertyValue("--strata-lit")), lit = Number.isFinite(read) ? Math.min(1, Math.max(0, read)) : 0;
     const role = hex(style.getPropertyValue("--_c").trim() || "#ff9228");
     const given: EmitterTokens = emitterDefaults[kind];
     const own: EmitterTokens = { radius: lampTokens.number(`emitter.${kind}.radius`, given.radius), height: lampTokens.number(`emitter.${kind}.height`, given.height), strength: lampTokens.number(`emitter.${kind}.strength`, given.strength) };
-    lamps.set(lampRoot, { kind, role, lit, lens: rect[2], index: emitters.length, box: rectWithin(control, panel), control, feather: lampTokens.number("emitter.guardFeather", emitterDefaults.guardFeather) });
+    lamps.set(lampRoot, { kind, role, lit, lens: rect[2], index: emitters.length, box: rectWithin(kind === "lamp" ? lampRoot.querySelector<HTMLElement>(".ug-lamp__object") ?? control : control, panel), control, feather: lampTokens.number("emitter.guardFeather", emitterDefaults.guardFeather) });
     // More contrast turns emitters off (design language section 3): the lens is flat colour, and the face has no light.
     emitters.push(lensEmitter(kind, [rect[0] + rect[2] / 2, rect[1] + rect[3] / 2], rect[2], moreContrast ? 0 : lit, role, own));
   }

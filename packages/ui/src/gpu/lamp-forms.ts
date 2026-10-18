@@ -6,7 +6,8 @@
  * - **bezel:** a raised face (Relief) or a ring (Objects, a `bezel` object) round the lens, standing only as high as the
  *   input's box lets its cast shadow (2.8) reach, hovered;
  * - **lens:** a `ring` face as wide as the lens (Relief: its arc is the lens's own colour, unlit, drawn over the socket
- *   printed on the face, so a light turning on or blinking changes no captured pixel) or a dome in that colour (Objects).
+ *   printed on the face, so a light turning on or blinking changes no captured pixel) or a dome in that colour (Objects),
+ *   standing only as high as its box lets its cast shadow reach.
  *   Lit, the material is the `glowOn` role's (emissive); unlit, the `lens` role's (glass).
  * Parts never take focus: the focus ring is the CSS outline round the bezel, captured content. Hits stay on the native
  * control, which no part covers for input (`pointer-events: none`).
@@ -26,7 +27,7 @@ export interface LampFormContext {
   objects: boolean;
   /** The height of the surface the lamp stands on (Objects). */
   base: number;
-  /** The native control's box (the lamp's input, or a StatusLight's object): every part, its shadow included, stays inside it. */
+  /** The object's box (a lamp's input, which it covers, or a StatusLight's object): every part, its shadow included, stays inside it. */
   box: Box;
   /** The lens colour: the role's `#rrggbb`, and how lit it is now (0–1). */
   role: string;
@@ -75,6 +76,7 @@ export function lampFormEntries(element: Element, context: LampFormContext): Sce
   const material = context.material(element, lit ? "glowOn" : "lens", "knob");
   context.domes?.add(element);
   if (!context.objects) return [{ face: "ring", rect: context.rect, height: 0, material, state: { disabled: state.disabled }, ring: { thickness: round(radius), start: 0, sweep: 360, colour } }];
-  // The dome stands on the face inside the bezel's ring, kept inside the control's box.
-  return [{ object: "knob", rect: context.rect, height: Math.max(0.25, round(lampReliefHeights.lens * Math.min(width, height))), base: context.base, material, colour, bounds: box, state }];
+  // The dome stands on the face inside the bezel's ring, as high as its box lets its cast shadow reach (2.8).
+  const rise = round(fittedHeight(lampReliefHeights.lens * Math.min(width, height) * lift, margins, context.light) / lift);
+  return [{ object: "knob", rect: context.rect, height: Math.max(0.25, rise), base: context.base, material, colour, bounds: box, state }];
 }

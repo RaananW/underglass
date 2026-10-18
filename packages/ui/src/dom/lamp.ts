@@ -3,23 +3,22 @@
  * and Vue bindings alike.
  * - **A toggle lamp** (`<input type="checkbox" role="switch">`) needs none: click, Space and its label are native, and
  *   its state is `checked`. Enter does not toggle, as on the Switch.
- * - **A momentary lamp** (`<button aria-pressed>`) lights while it is pressed: `aria-pressed` is `"true"` from the
- *   pointer going down on the lamp (its label included) or Space or Enter going down on the button, to the pointer going
- *   up anywhere, the key going up, the pointer being cancelled or the button losing focus. The click is the native one,
- *   so a form or a listener sees an ordinary button.
+ * - **A momentary lamp** (`<button class="ug-lamp ug-lamp--momentary" aria-pressed>`, with its object and its label
+ *   inside it) lights while it is pressed: `aria-pressed` is `"true"` from the pointer going down on the button or Space or
+ *   Enter going down on it, to the pointer going up anywhere, the key going up, the pointer being cancelled or the
+ *   button losing focus. The click is the native one, so a form or a listener sees an ordinary button.
  * - **Feedback:** a lamp plays `click` where feedback is on (`dom/feedback.ts`, off by default): a toggle on its change,
  *   a momentary lamp as it goes down.
  * Every listener is delegated and passive: nothing on the native event path is blocked or changed.
  */
 import { listenForStrataFeedback, strataFeedback } from "./feedback.ts";
 
-const momentary = ".ug-lamp--momentary";
+const momentary = "button.ug-lamp--momentary";
 const toggles = ".ug-lamp:not(.ug-lamp--momentary) > .ug-lamp__input";
 
 /** The momentary lamp's button around `target`, if it is enabled. */
 function buttonOf(target: EventTarget | null): HTMLButtonElement | undefined {
-  const root = (target as Element | null)?.closest?.(momentary);
-  const button = root?.querySelector(":scope > .ug-lamp__input");
+  const button = (target as Element | null)?.closest?.(momentary);
   return button instanceof HTMLButtonElement && !button.disabled ? button : undefined;
 }
 
@@ -60,7 +59,7 @@ export function attachStrataLamps(doc: Document = document): void {
   doc.addEventListener("pointerup", up, { capture: true, passive: true });
   doc.addEventListener("pointercancel", up, { capture: true, passive: true });
   doc.addEventListener("keydown", event => {
-    const button = event.target instanceof HTMLButtonElement && event.target.matches(`${momentary} > .ug-lamp__input`) && !event.target.disabled ? event.target : undefined;
+    const button = event.target instanceof HTMLButtonElement && event.target.matches(momentary) && !event.target.disabled ? event.target : undefined;
     if (!button || event.repeat || (event.key !== " " && event.key !== "Enter")) return;
     keys.set(button, event.key);
     set(button, true);
@@ -74,7 +73,7 @@ export function attachStrataLamps(doc: Document = document): void {
   // A button that loses focus, or a page that is hidden, lets go.
   doc.addEventListener("focusout", event => {
     const button = event.target instanceof HTMLButtonElement ? event.target : undefined;
-    if (!button?.matches(`${momentary} > .ug-lamp__input`)) return;
+    if (!button?.matches(momentary)) return;
     keys.delete(button);
     if (!held(button)) set(button, false);
   }, { capture: true, passive: true });
