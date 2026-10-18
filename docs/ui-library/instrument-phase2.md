@@ -1003,3 +1003,174 @@ against the code without the fix:
 - **Post resolutions** are core constants, not scene fields.
 - **The map's depth window** is fitted to the stage by a power-of-two bucket (at least 4,096 px half-depth), checked every
   frame, rather than refitted each frame: Lite fixes the window when the generator is created.
+
+# Core work item 4: the capture probe and glass
+
+**Status:** design note for [core work item 4](instrument.md#core-work-additive), written before the code (2026-10-18),
+then implemented in the same PR (results below). One concern: **the capture probe** (the layer's own capture, plus the
+studio, as a reflection source for Lite's PBR parts) and **the glass material** (`glass: "lens" | "window"` parts, which
+items 1 to 3 validated and did not draw). Not in it: custom parts (item 5), the Strata helper's wiring, and true group
+opacity (assessed below, left in SCOPE-009).
+
+**Upstream check (2026-10-18):**
+
+- **WICG HTML-in-Canvas:** `5fb3df86d84de598c7f0fcfc5ee53de1df067e7d` (2026-10-09) is still the latest commit (`gh api
+  repos/WICG/html-in-canvas/commits`, 2026-10-18). Nothing new since item 3: #186 (rotated `canvasClip` hit testing) and
+  #185 are still open, #162 and #155 closed on 2026-10-15 without a commit. None touches this work: glass and the probe
+  read the layer's capture texture that core already uploads with `drawElementImageToTexture`, and change no capture, hit
+  geometry or admission.
+- **Chromium hotlist 6783002** (including the ElementCanvasTransform issues): not accessible without sign-in; not
+  rechecked.
+- **Browser tested:** Chrome Canary 158.0.8110.0, Windows 11, RTX 3080 (as items 1 to 3). The glass and the probe are
+  proved on the installed build by decoded pixels (refraction displaces a known pattern, text under a window is exact,
+  the probe changes a reflection when the capture changes) and native-hit probes, not by property presence.
+
+## What I0.4 and the I1 prototype proved and what core adds
+
+[I0.4](instrument-phase0.md#i04-materials-over-the-capture) filled a cube texture from a layer's capture on the GPU
+(512², 10 blur mips, captured 300 px in front of the face), bound it to the PBR parts with `setPbrLocalEnvironment` and
+refreshed it on capture only (1.07 to 1.72 ms GPU per refresh). The
+[I1 second iteration](instrument-phase0.md#the-glass-construction) drew glass as a `ShaderMaterial` that loads the capture
+per pixel and traces the reflection analytically, because Lite 1.33's transmission fails in a layer scene (L6: 18
+validation warnings, a swapchain clear, a fixed 1024² grab that would blur text) and its shader materials bind 2D
+textures only (L12), so a glass shader cannot sample a cube. The Rendering Model already defines both: 2D.6 gives glass
+exactly (a lens refracts in and out through its flat bottom, a window shifts the capture against a flat pane, both add the
+traced Fresnel reflection), and 2D.5 gives the `page` cube for PBR parts. The reference implementation (`glassSample`,
+`partColour`) and the suite's `glass` case exist and were pending on core. Core now draws both.
+
+## The two constructions, and why the plan's "one cube per layer" splits in two
+
+The plan said glass would sample a local capture cube per layer. Lite 1.33 cannot bind a cube in a custom shader (L12), and
+the model (2D.6, last bullet) says the page cube is not used for glass: the reflected ray is traced to the face, which is
+exact where a prefiltered cube is not. So:
+
+| Surface | Draws with | Sees |
+| --- | --- | --- |
+| Lite PBR parts (metal, lacquer, coats) | Lite's PBR, with the layer's **page cube** through `setPbrLocalEnvironment` | The studio, and the faceplate print and neighbouring controls where a reflected ray meets the face |
+| Glass parts | A **custom WGSL shader** (`ShaderMaterial`) that loads the layer's capture texture per pixel | Refraction of the capture, the traced reflection of the studio (analytic in the shader), the part's `stand` and the face |
+
+Both read the one capture texture of the layer (no new capture, no clone of anything). The probe is the "capture probe" the
+plan names; the glass shader is the "capture-refraction shader".
+
+## API
+
+Nothing new to call. The scene's existing fields now draw:
+
+| Field | Core |
+| --- | --- |
+| `parts[].glass: "lens" \| "window"`, `stand`, `finish` | Drawn by the glass shader (2D.6) |
+| `materials[].glass` (`ior`, `tint`, `absorption`, `reflection`), `materials[].dispersion` | The shader's constants |
+| `environment.page` (`enabled`, `size`, `height`) | The page cube of PBR parts; absent or `enabled: true` builds it (the model's default); `enabled: false` leaves the studio alone |
+| `emitter` on a glass part | The lens glows through its glass while its emitter is lit |
+
+`finish: true` on a window now means the defaults `{ band: 0.3, horizon: 0.25 }` (the reference, which drew nothing for
+`true`, follows; no suite scene uses it). Diagnostics grow by `state().instrument.layers[].probe` and `.glass`, and
+`state().instrument.probes` (below).
+
+**A scene without `environment.page` now builds a probe** (the model's default is on): every Instrument layer reflects its
+page in its metals unless its scene says `page: { enabled: false }`. The cost is below.
+
+## The capture probe
+
+**What it is.** A cube texture per layer (`rgba16float`, `page.size` texels per face, default 512, a full mip chain),
+filled on the GPU from the layer's capture. Lite binds its view directly as the specular environment of the layer's PBR
+materials with box projection (`enablePbrLocalCubemap`, `setPbrLocalEnvironment`), so refreshing its texels updates
+every material with no rebuild. Irradiance, the BRDF table and the sampler are the studio's, so the diffuse term and the
+calibration of 2D.5 do not change.
+
+**Which faces come from what.** All six faces are filled by the same pass. From the capture point (the layer's centre at
+build time, `page.height` px in front of the face plane, default 300), a texel's direction either leaves the projection box
+through its back wall, the face plane, inside the layer's extent, where the cube holds the captured colour (decoded to
+linear, weighted by the capture's alpha), or leaves anywhere else, where it holds the **studio** at that direction (the
+box's other walls are 50,000 px away, so the studio stays at infinity). Looking straight at the face the +z face is mostly
+capture; the side faces hold the capture towards the layer's edges and the studio beyond it. Mips 1 and up are a Gaussian
+blur chain in direction space (5 × 5 taps about one texel wide), so rough materials see a blurred page.
+
+**When it refreshes: never per frame.** The probe is rebuilt only when (a) the layer's capture was uploaded again (the
+renderer's per-layer upload counter changed), (b) the capture texture was replaced (a resize or DPR change), or (c) the
+layer's **placement** changed (its similarity matrix or the stage): Lite fixes the projection box when the scene
+registers, so the cube's content, not the box, follows a layer that moves (a scroll). (c) is not in the plan; without it a
+moved layer would reflect a page it no longer shows. A pose, a pointer light, an emitter write or any number of idle frames
+refresh nothing. At most one refresh per layer per frame.
+
+**Budget and degradation.**
+
+- GPU memory: `size² · 8 B · 6 · 4/3` (16.8 MB at 512²). **At most 4 probes per stage** (`INSTRUMENT_PROBES_PER_STAGE`):
+  the fifth and later layers keep the studio alone, reported with `reason: "budget"`.
+- GPU time per refresh is measured with timestamp queries (below). A refresh is one command buffer of `6 · mips`
+  small passes.
+- If the probe cannot be built (the device refuses the texture, a shader fails, the test hook), the layer builds without it:
+  PBR parts reflect the studio alone, glass is unaffected (it traces the face itself), GPU stays on, and
+  `layers[].probe` reads `{ status: "failed", error }`. A refresh that throws turns the probe off the same way.
+
+## The glass shader
+
+**Placement in the chain.** Glass is drawn in the `parts` task of the layer's scene, into the same offscreen mesh target as
+the PBR parts, so SMAA, bloom and the clipped composite apply and the group opacity rule of item 3 holds. It is a
+`ShaderMaterial` with premultiplied source-over blending, **depth-tested against the opaque parts and not written**
+(back faces culled: a lens and a window are convex, so there is one front face per pixel, and the composite and SMAA see
+a coverage edge). Glass does not cast into the shadow map (it transmits) and is not a map receiver; it casts onto the face
+like any part unless its `caster` is `null` (2D.7: the suite's glass sets `caster: null`; the previous exclusion of glass
+casters is dropped).
+
+**Per pixel** (layer axes: x right, y down, z up; `d` from the camera `C` to the surface point `X`, `n` turned towards the
+viewer): exactly 2D.6. A **lens**: Snell in at the dome, down to its flat bottom at the part's base height, out (total
+internal reflection on the green channel gives the dark rim `(0.015, 0.015, 0.018)`), onto the face, one index per channel
+(`ior − Δ`, `ior`, `ior + Δ`, `Δ = 0.1 · dispersion.strength`: dispersion costs two extra capture reads, nothing else),
+absorbed along the path by `exp(−(1 − tint) · absorption · ℓ)`, then `(1 − Fr) T + Fr · strength · reflection · R` encoded
+with the sRGB curve. A **window**: the capture shifted by the difference between the refracted ray through the real normal
+and through a flat pane, Fresnel beyond the flat pane's, absorption through 12 px · `(1 − n.z)`, the studio/stand/face
+reflection mixed in by that Fresnel, and the finish zone. `R` is traced: the studio is evaluated from its definition
+(2D.5, constants as uniforms), the stand and the face by intersecting the reflected ray. `C`, `X` and `n` are rebuilt in
+layer axes from the interpolated world position and normal and the layer's similarity (a uniform), so a layer scaled,
+rotated or moved draws the same glass.
+
+**Text under a window is exact.** Inside the scene's protected rects grown by 2 px (read from the guard buffer the face
+shadows already use), and wherever a window is flat outside its finish zone, the pixel is the capture texel. SMAA would
+filter that texel against its neighbours (it detects the glyph edges), so those pixels are **also drawn into the caps
+target** by a second, exact-only twin of the window (the same instances, discarding everywhere else), which the composite
+lays over the chain's result like a captured cap. The chain therefore never touches text under glass, and a part in front
+of the window (the caps test their depth against the parts) still hides it.
+
+**Emitters.** A glass part with an `emitter` is a lens like any other: its glow copy feeds bloom while the emitter is lit,
+and the glass adds the glow colour inside itself (the lamp glows through its dome). Clustered lights do not light glass
+(it has no diffuse term); the face pool still lights the face around it.
+
+**Fallback.** If the glass material cannot be built (its shader or storage), the glass kinds are left out and the layer
+draws everything else; the face shows through (a lens disappears, a window is the plain capture, text exact), GPU stays
+on, and `layers[].glass` reads `{ status: "fallback", error }`. A shader that fails at registration is the layer's
+existing `compile` step-down, as any shader.
+
+## Decisions (item 4)
+
+| # | Decision | Recommendation | Alternative |
+| --- | --- | --- | --- |
+| 1 | **Glass construction** | A custom WGSL shader that traces 2D.6, per pixel, with the capture loaded as a texture | Lite's transmission (L6: validation failures, a swapchain clear, a 1024² grab); a cube sampled for the reflection (L12: not bindable) |
+| 2 | **The capture probe's job** | The page cube of PBR parts (metals, coats, lacquer), box-projected, filled from the capture and the studio | One cube for glass and metal alike: glass cannot bind it; the model traces glass reflections exactly |
+| 3 | **Probe refresh** | On capture upload, texture replacement or a placement change; never per frame; one per layer per frame | Every frame (frame work p50 9.0 against 5.3 ms in I0.4); only on capture (a scrolled layer would reflect a stale page) |
+| 4 | **Probe anchor** | The layer's centre at build time; the cube's content follows the layer's current placement | A box rebuilt on every move (`rebuildMaterial` per frame); a canvas-centred anchor (poor resolution for off-centre layers) |
+| 5 | **Probe budget** | 4 per stage at 16.8 MB each at 512²; the rest studio-only with a reported reason | Unbounded (a stage of many layers would hold hundreds of MB) |
+| 6 | **Degradation** | Probe failure: studio-only reflections. Glass failure: glass left out, face shows through. Both reported; GPU on | Step the layer down to Relief (loses every part for a reflection) |
+| 7 | **Glass in the chain** | The mesh target, transparent, depth-tested and not depth-written, premultiplied; the chain applies | Its own target after the chain (no SMAA on its edges); a depth-writing opaque pass (the exact twin would z-fight) |
+| 8 | **Text under windows** | Exact by an exact-only twin drawn into the caps target, so SMAA never reaches it (2D.9 rule 7) | Trust that SMAA leaves flat text alone (it does not: glyph edges are what it detects) |
+| 9 | **Shadow map** | Glass neither casts into nor receives from the map | Glass in the map (the shader material has no depth caster in Lite 1.33; a lens would shade its stand) |
+| 10 | **Glass roughness** | Not drawn. 2D.6 defines clear glass (the recipe's `base.roughness` is ignored for glass) | A blurred refraction (needs a mip chain of the capture, which the layer texture does not have) |
+| 11 | **Group opacity (SCOPE-009)** | Not done; assessment below | Composite the face inside the chain |
+
+## True group opacity: assessed, not done
+
+Item 3's composite is `α · [caps + (1 − caps.a)(parts + halo) M]` over a canvas on which the layer's own pass already drew
+the face at opacity `α`. True group opacity, `α · (P + (1 − P.a) F) + (1 − α) B`, needs the face inside the group: the
+layer's pass would draw into an offscreen target at full opacity and the composite would blend that target, parts and all.
+The capture probe does not help (it concerns reflections, not the face's draw path); glass makes the gap larger, since a
+window replaces the face under it with the capture at `α` while the face beneath it was already faded. The change touches
+`renderer.ts`'s layer pass (a new target per layer, the face pool, the emitter pools, hit-geometry-neutral but every
+relief layer shares the path), not a contained change of this PR. It stays in SCOPE-009, with this note.
+
+## Verification (item 4)
+
+- Unit: `tests/unit/instrument-glass.unit.test.mjs` (pure helpers: kind keys, the glass uniforms, per-instance data, probe
+  settings and refresh key, the studio constants against the reference).
+- Browser: `tests/browser/core-glass.test.mjs` on [`instrument-glass-core.html`](../../examples/playground/instrument-glass-core.html),
+  DPR 1 and 2, headless, and a headful Canary pass; `ui-instrument-conformance` asserts the glass checks.
+- Regression: `core-instrument`, `core-post`, `core-emitters`, `ui-gpu`, `ui-knob`, `ui-switch-forms-instrument`.
