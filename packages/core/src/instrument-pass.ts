@@ -35,13 +35,16 @@ import {
   flushThinInstances, getRenderTaskGpuTimings, isGpuTimingSupported, loadHdrEnvironment, onSceneDispose, registerScene, registerSceneWithShadowSupport, releaseTexture,
   setEffectTexture, setEffectUniforms, setEnvironmentRotation, setPbrAnisotropy, setPbrClearCoat, setPbrEmissive, setPbrIridescence, setPbrLocalEnvironment, setPbrMetallicReflectance, setPbrSheen,
   setMeshVisible, setRenderTaskGpuTimingEnabled, setShaderStorageBuffer, setShaderTexture, setShaderUniform, setShadowTaskCasterMeshes, setThinInstanceCount, setThinInstances,
-  unregisterScene, updateDynamicTexture, updateStorageBuffer, vec3, withSampledDepthTexture,
+  resizeMeshGeometry, unregisterScene, updateDynamicTexture, updateStorageBuffer, vec3, withSampledDepthTexture,
   type ClusteredLightContainer, type DirectionalLight, type DynamicTexture2D, type EngineContext, type EnvironmentTextures, type FreeCamera, type Material, type Mesh, type PbrMaterialProps,
   type RenderingContext, type RenderTargetTextureResult, type RenderTask, type SceneContext, type ShaderMaterial, type ShadowGenerator, type StorageBuffer, type Task,
 } from "@babylonjs/lite";
 import { DEFAULT_FEATHER, EMITTERS_PER_LAYER, GUARD_CELLS, guardCells, layerGuard, PROTECTED_PER_LAYER, shadowScales, type Guard, type LayerEmitters } from "./emitters.js";
+import { createAssetStore } from "./instrument-assets.js";
+import { INSTRUMENT_CUSTOM_TRIANGLES_PER_LAYER, meshGeometry, type MeshProfile } from "./instrument-mesh.js";
 import {
-  boundsInside, checkContainment, containmentFrontier, containmentKey, instrumentFaceScene, instrumentLayout, instrumentPartCount, instrumentStructure, multiply, partCaster, partKindKey, partKinds,
+  boundsInside, checkContainment, containmentFrontier, containmentKey, customParts, instrumentFaceScene, instrumentLayout, instrumentPartCount, instrumentStructure, meshReady, meshReferences,
+  multiply, partCaster, partDrawn, partKindKey, partKinds,
   partMatrix, profileBounds, profileGeometry, sameGeometry, similarity, INSTRUMENT_CASTERS_PER_OBJECT, INSTRUMENT_KINDS_CEILING, INSTRUMENT_KINDS_PER_LAYER, INSTRUMENT_OBJECTS, INSTRUMENT_PARTS_PER_LAYER,
   INSTRUMENT_PARTS_PER_STAGE, STUDIO_DEFAULTS, type Containment, type ContainmentFrontier, type InstrumentCaster, type InstrumentObject,
   type InstrumentProfile, type InstrumentRecipe, type InstrumentScene, type Matrix, type PartKind, type StudioTokens,
@@ -196,6 +199,8 @@ interface LayerState {
   kindMap?: Map<string, PartKind>;
   /** The scene and placement the step-downs were last decided for. */
   checked?: { scene: InstrumentScene; placementKey: string; structure: string };
+  /** The scene as of the last frame, for the custom parts' diagnostics. */
+  scene?: InstrumentScene;
   /** The layer's latest input: its placement anchors the capture probe when a scene is built. */
   input?: InstrumentLayerInput;
   /** Why the layer builds without a page probe after a refresh threw (the scene is rebuilt without it, which frees the cube). */
@@ -247,6 +252,10 @@ const percentile = (values: readonly number[], q: number) => {
 export function createInstrumentController(options: InstrumentControllerOptions) {
   const { engine, queue } = options;
   const layers = new Map<string, LayerState>();
+  // Custom parts' files (core work item 5): loaded outside any frame; a finished load asks for a frame.
+  const assets = createAssetStore({ onChange: () => options.requestDraw() });
+  // Custom parts' geometry replaced in place when a file arrives (`resizeMeshGeometry`), and the time it took.
+  const uploads = { count: 0, lastMs: 0, totalMs: 0 };
   // Every scene the controller has registered and not yet retired: the order guard keeps only these and core's own.
   const scenes = new Set<RenderingContext>();
   const retirements = new Set<Promise<void>>();
@@ -636,7 +645,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         }
       }
       const glassEntry = built ? { data: built.data, buffer: built.buffer, dirty: true, twin, scratch: new Float32Array(GLASS_VEC4S * 4) } : undefined;
-      return { kind, mesh, matrices, capacity, cap, lens, glass: glassEntry, boxes, local, boundMin, boundMax, count: kind.instances.length };
+      return { kind, mesh, matrices, capacity, cap, lens, glass: glassEntry, boxes, local, boundMin, boundMax, count: kind.instances.length, shapeKey: shapeKeyOf(scene.profiles[kind.profile]!) };
     }).filter(<T,>(entry: T | undefined): entry is T => entry !== undefined);
     if (mapState) {
       setShadowTaskCasterMeshes(mapState.generator, casters);
@@ -747,13 +756,8 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     let lastStage = "", lastWorld = "", lastHidden = "";
     let boundTexture: DynamicTexture2D | undefined = options.texture(state.id);
     const lastT = new Float64Array(objectCapacity).fill(Number.NaN);
-    // Profiles are part of the structure, so their bounds hold for the scene's life.
-    const bounds = new Map<string, ReturnType<typeof profileBounds>>();
-    const boundsOf = (name: string, current: InstrumentScene) => {
-      let value = bounds.get(name);
-      if (!value) { value = profileBounds(current.profiles[name]!); bounds.set(name, value); }
-      return value;
-    };
+    // Bounds are cached per geometry (`profileBounds`), so a mesh reference's follow its file when it arrives.
+    const boundsOf = (name: string, current: InstrumentScene) => profileBounds(current.profiles[name]!);
 
     const pass: Pass = {
       scene: sceneContext, camera, structure, registered: false, lights, litLights: 0, prefix: `${label}:`, post, probeStatus: page.status, glass,
@@ -812,16 +816,34 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         for (const entry of meshes) {
           entry.kind = kinds.get(entry.kind.key) ?? { ...entry.kind, instances: [] };
           const count = entry.kind.instances.length;
-          let dirty = all || count !== entry.count;
+          // A custom part's file arrives after the scene was built: its mesh takes the real triangles in place
+          // (`resizeMeshGeometry` keeps the mesh, its material and its place in the shadow map), and its instances are
+          // written from that frame on. Until then (and if it fails) the kind is empty: no instance is written.
+          const shape = current.profiles[entry.kind.profile]!, shapeKey = shapeKeyOf(shape);
+          const rewrite = all || shapeKey !== entry.shapeKey;
+          if (shapeKey !== entry.shapeKey) {
+            const geometry = profileGeometry(shape), started = performance.now();
+            for (const target of [entry.mesh, entry.lens?.mesh, entry.glass?.twin]) {
+              if (!target) continue;
+              resizeMeshGeometry(engine, target, geometry.positions, geometry.normals, geometry.indices, geometry.uvs);
+            }
+            uploads.count++; uploads.lastMs = performance.now() - started; uploads.totalMs += uploads.lastMs;
+            // (Lite recomputes the bounds; the PBR kinds publish their own, for the shadow map's fit.)
+            if (!entry.glass) { entry.mesh.boundMin = entry.boundMin; entry.mesh.boundMax = entry.boundMax; }
+            entry.local = profileBounds(shape);
+            entry.shapeKey = shapeKey;
+          }
+          let dirty = rewrite || count !== entry.count;
           entry.kind.instances.forEach(({ object, part }, index) => {
-            if (!hidden.has(object)) drawn++;
+            const live = partDrawn(current.objects[object]!, part, current.profiles);
+            if (!hidden.has(object) && live) drawn++;
             if (entry.cap) {
               const factor = hidden.has(object) ? 0 : capFactor(current, current.objects[object]!.parts[part]!);
               if (entry.cap.data[index * 4] !== Math.fround(factor)) { entry.cap.data[index * 4] = factor; entry.cap.dirty = true; }
             }
             if (entry.lens) {
               // The glow of a lit lens (decision 8 of item 3): its emitter's state is live (`setEmitters`), so it is read every frame.
-              const glow = hidden.has(object) || input.opacity <= 0 ? undefined : partGlow(current, current.objects[object]!.parts[part]!);
+              const glow = hidden.has(object) || !live || input.opacity <= 0 ? undefined : partGlow(current, current.objects[object]!.parts[part]!);
               const value = glow?.lit ? [glow.colour[0], glow.colour[1], glow.colour[2], 1] : [0, 0, 0, 0];
               if (glow?.lit) lit++;
               for (let channel = 0; channel < 4; channel++) {
@@ -835,10 +857,10 @@ export function createInstrumentController(options: InstrumentControllerOptions)
               const next = hidden.has(object) ? entry.glass.scratch.fill(0) : glassInstance(current, object, part, current.profiles[name]!, boundsOf(name, current), entry.glass.scratch);
               for (let k = 0; k < next.length; k++) if (entry.glass.data[at + k] !== next[k]) { entry.glass.data.set(next, at); entry.glass.dirty = true; break; }
             }
-            if (!all && !moved[object]) return;
+            if (!rewrite && !moved[object]) return;
             dirty = true;
             const target = entry.matrices.subarray(index * 16, index * 16 + 16);
-            if (hidden.has(object)) {
+            if (hidden.has(object) || !live) {
               target.fill(0); entry.boxes.fill(Number.NaN, index * 6, index * 6 + 6);
               return;
             }
@@ -904,10 +926,12 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           quads.fill(0, index * 16, index * 16 + 16);
           reaches.fill(0, index * 4, index * 4 + 4);
           if (hidden.has(index)) return;
-          const casters = object.parts.flatMap(part => {
-            // Glass kinds left out (the fallback) draw nothing, so they cast nothing either.
+          const limit = { box: (object.bounds ?? { rect: object.rect }).rect, light: [L[0] / L[2], L[1] / L[2]] as [number, number] };
+          const casters = object.parts.flatMap((part, partIndex) => {
+            // A custom part that is not there yet draws nothing and casts nothing (its stand-in does); nor do glass kinds left out.
+            if (!partDrawn(object, partIndex, current.profiles)) return [];
             if (part.glass && skipped.has(partKindKey(part))) return [];
-            const caster = partCaster(part, current.profiles[part.profile]!, object.t ?? 0, boundsOf(part.profile, current));
+            const caster = partCaster(part, current.profiles[part.profile]!, object.t ?? 0, boundsOf(part.profile, current), limit);
             return caster && caster.height > 0 ? [caster] : [];
           }).sort((a, b) => b.height - a.height).slice(0, INSTRUMENT_CASTERS_PER_OBJECT);
           if (!casters.length) return;
@@ -1165,7 +1189,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     const [bx, by] = bounds.rect;
     const relative: InstrumentObject = { ...object, rect: [object.rect[0] - bx, object.rect[1] - by, object.rect[2], object.rect[3]],
       bounds: { rect: [0, 0, bounds.rect[2], bounds.rect[3]], radius: bounds.radius ?? 0 },
-      parts: object.parts.map(part => ({ ...part, at: [part.at[0] - bx, part.at[1] - by, part.at[2]] })) };
+      parts: object.parts.filter((_, partIndex) => partDrawn(object, partIndex, scene.profiles)).map(part => ({ ...part, at: [part.at[0] - bx, part.at[1] - by, part.at[2]] })) };
     if (!relative.parts.length) return { contained: true, part: 0, inset: Infinity, overshoot: 0, exact: false } satisfies Containment;
     const key = containmentKey(relative, scene.profiles as Record<string, InstrumentProfile>);
     let frontier = state.frontiers.get(key);
@@ -1194,6 +1218,11 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     const stage = options.stage(), size = sizeKey();
     const present = new Set(inputs.map(input => input.id));
     for (const [id, state] of layers) if (!present.has(id) || !inputs.find(input => input.id === id)?.scene) drop(state);
+    // Custom parts' files: a reference seen for the first time starts loading (outside this frame), a loaded one hands its
+    // profile the triangles, and one no scene references any more is let go.
+    assets.begin();
+    for (const input of inputs) if (input.scene) assets.bind(input.scene);
+    assets.end();
     let stageParts = 0;
     for (const input of inputs) {
       const scene = input.scene;
@@ -1248,7 +1277,8 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       // Containment over the whole travel, at this placement; unchanged geometry at an unchanged placement (poses only)
       // keeps the last verdict.
       const placement = { matrix: matrix!, vanish: [stage.width / 2, stage.height / 2] as [number, number], distance: scene.camera.distance };
-      const placementKey = `${matrix!.a},${matrix!.b},${matrix!.c},${matrix!.d},${matrix!.e},${matrix!.f},${stage.width},${stage.height},${scene.camera.distance},${input.extent.width},${input.extent.height}`;
+      // Which references have their triangles is part of the verdict: a file that arrives is checked in the frame it does.
+      const placementKey = `${matrix!.a},${matrix!.b},${matrix!.c},${matrix!.d},${matrix!.e},${matrix!.f},${stage.width},${stage.height},${scene.camera.distance},${input.extent.width},${input.extent.height},${meshReferences(scene).map(reference => (meshReady(reference.shape) ? 1 : 0)).join("")}`;
       const reuse = state.checked && state.checked.placementKey === placementKey && state.checked.structure === structure && sameGeometry(state.checked.scene, scene);
       if (!reuse) {
         const stepped: number[] = [], steppedDown: SteppedDown[] = [];
@@ -1261,14 +1291,31 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           }
           const result = contain(state!, scene, object, placementKey, placement);
           if (result.contained) return;
+          const drawnParts = object.parts.filter((_, partIndex) => partDrawn(object, partIndex, scene.profiles));
           stepped.push(index);
-          steppedDown.push({ object: object.id, reason: "containment", part: object.parts[result.part]?.kind ?? "", inset: Math.round(result.inset * 100) / 100,
+          steppedDown.push({ object: object.id, reason: "containment", part: drawnParts[result.part]?.kind ?? "", inset: Math.round(result.inset * 100) / 100,
             overshoot: Math.round(result.overshoot * 100) / 100 });
         });
-        state.stepped = stepped;
-        state.steppedDown = steppedDown;
+        // The triangle budget of custom parts: past it the last objects holding any step down, until the layer fits.
+        const done = new Set(stepped);
+        const triangles = scene.objects.map((object, index) => (done.has(index) ? 0 : object.parts.reduce((sum, part, partIndex) => {
+          const shape = scene.profiles[part.profile]!;
+          return sum + (shape.type === "mesh" && partDrawn(object, partIndex, scene.profiles) ? profileGeometry(shape).indices.length / 3 : 0);
+        }, 0)));
+        let total = triangles.reduce((sum, value) => sum + value, 0);
+        for (let index = scene.objects.length - 1; index >= 0 && total > INSTRUMENT_CUSTOM_TRIANGLES_PER_LAYER; index--) {
+          if (!triangles[index]) continue;
+          total -= triangles[index]!;
+          stepped.push(index);
+          steppedDown.push({ object: scene.objects[index]!.id, reason: "budget", detail: `${triangles[index]} custom triangles; the layer's custom parts are limited to ${INSTRUMENT_CUSTOM_TRIANGLES_PER_LAYER}` });
+        }
+        // Back in scene order, as the face lists the objects it draws at Relief.
+        const order = stepped.map((_, at) => at).sort((a, b) => stepped[a]! - stepped[b]!);
+        state.stepped = order.map(at => stepped[at]!);
+        state.steppedDown = order.map(at => steppedDown[at]!);
       }
       state.checked = { scene, placementKey, structure };
+      state.scene = scene;
       const changed = !reuse || state.status !== "ready";
       state.status = "ready";
       // The guard is bounded on the face as drawn: the primitives and the objects at Relief this frame.
@@ -1405,6 +1452,19 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     state: () => ({
       layers: [...layers.values()].map(state => ({ id: state.id, status: state.status, objects: state.objects, parts: state.parts, drawnParts: state.drawnParts,
         kinds: state.kinds, steppedDown: state.steppedDown.map(entry => ({ ...entry })), warnings: [...state.warnings],
+        // Custom parts (core work item 5): each part whose profile is a mesh, and whether its triangles are there.
+        customParts: state.scene ? customParts(state.scene).map(({ object, part, profile }) => {
+          const shape = state.scene!.profiles[profile] as MeshProfile;
+          const info = shape.source ? assets.info(shape) : { status: "ready" as const, vertices: profileGeometry(shape).positions.length / 3, triangles: profileGeometry(shape).indices.length / 3 };
+          // `showing`: what is drawn for the part now: its mesh, its stand-in (`fallback`) while the mesh is not there, or nothing.
+          const showing = meshReady(shape) ? "mesh" : state.scene!.objects[object]!.parts[part]!.fallback ? "fallback" : "none";
+          // `showing` and `shown` report the part's state, not the pixels: an object stepped down to Relief draws none of them.
+          const entry = state.scene!.objects[object]!;
+          let first = part; while (first > 0 && entry.parts[first - 1]!.fallbackFor) first--;
+          let shown = 0;
+          for (let at = first; at <= part; at++) if (partDrawn(entry, at, state.scene!.profiles)) shown++;
+          return { object: state.scene!.objects[object]!.id, part, profile, shown, source: shape.source ? (shape.source.url ?? "buffer") : "inline", showing, ...info };
+        }) : [],
         // The parts' clustered lights: whether the scene has them, and how many the emitters lit this frame.
         lights: { clustered: !!state.pass?.lights, lit: state.pass?.lights && state.status === "ready" ? state.pass.litLights : 0 },
         // The page cube of the PBR parts and the glass (core work item 4).
@@ -1413,7 +1473,9 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         glass: state.pass ? { ...state.pass.glass } : null,
         gpu: { lastMs: state.gpu.last, p50Ms: percentile(state.gpu.samples, 0.5), p95Ms: percentile(state.gpu.samples, 0.95), samples: state.gpu.samples.length, total: state.gpu.total } })),
       stage: { parts: [...layers.values()].reduce((sum, state) => sum + state.drawnParts, 0), budget: INSTRUMENT_PARTS_PER_STAGE },
-      budgets: { partsPerLayer: INSTRUMENT_PARTS_PER_LAYER, partsPerStage: INSTRUMENT_PARTS_PER_STAGE, kindsPerLayer: INSTRUMENT_KINDS_PER_LAYER, kindsCeiling: INSTRUMENT_KINDS_CEILING },
+      budgets: { partsPerLayer: INSTRUMENT_PARTS_PER_LAYER, partsPerStage: INSTRUMENT_PARTS_PER_STAGE, kindsPerLayer: INSTRUMENT_KINDS_PER_LAYER, kindsCeiling: INSTRUMENT_KINDS_CEILING,
+        customTrianglesPerLayer: INSTRUMENT_CUSTOM_TRIANGLES_PER_LAYER },
+      assets: { ...assets.state(), uploads: { ...uploads } },
       timing: { ...timing },
       compile: { ...compile, building: !!gate },
       order: orderUnavailable ?? "core",
@@ -1435,6 +1497,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       }
       layers.clear();
       scenes.clear();
+      assets.dispose();
       if (grain) { releaseTexture(grain); grain = undefined; }
       // The shared targets go after every scene that reads them.
       releaseTargets();
@@ -1443,6 +1506,10 @@ export function createInstrumentController(options: InstrumentControllerOptions)
 }
 export type InstrumentController = ReturnType<typeof createInstrumentController>;
 
+/** What a kind's mesh was built from: a mesh profile's identity and whether it has its triangles yet (custom parts). */
+function shapeKeyOf(shape: InstrumentProfile): string {
+  return shape.type === "mesh" ? `${shape.id}|${meshGeometry(shape) ? 1 : 0}` : "";
+}
 /** A captured cap's interior factor (2B.4 and 2.9): hover lift, press sink, coat and gloss, within `interior.max`. */
 function capFactor(scene: InstrumentScene, part: InstrumentScene["objects"][number]["parts"][number]): number {
   const material = scene.materials[part.material] ?? {}, state = part.state ?? {}, m = scene.interior.max;

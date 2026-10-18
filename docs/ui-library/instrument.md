@@ -164,8 +164,8 @@ object is drawn around it.
 | **Switch forms** | The existing Switch, `<input type="checkbox" role="switch">` | `slide` (default in premium): a flush slide switch. `rocker`: two plates on a pivot. `bat`: a lever that snaps over centre. `wall`: a wall plate with a paddle | Tip, throw, slide | 1 |
 | **[Lamp](components/lamp.md)** | `<input type="checkbox" role="switch">` with the lamp as its label, or a `<button aria-pressed>` when it is a momentary control | A lens on a bezel; off it is a dark glass dome, on it glows and **emits** | None; the emitter turns on | 2 (done) |
 | **[StatusLight](components/status-light.md)** (LED) | `<output>` or a `<span role="img" aria-label>`; an optional `aria-live` region names changes | A small lens; `colour` from a role; `blink` is a tempo token, off under reduced motion | None; emitter | 2 (done) |
-| **Meter** | `<meter>` (implicit role meter); `min`, `max`, `low`, `high`, `optimum` | A bar of LED segments behind a window (`segments`), or a needle meter (`form="needle"`) | Segments light; a needle sweeps with a damped spring | 2 |
-| **Gauge** | `<meter>` or `<progress>` with `aria-valuetext` | A round dial under glass with a needle and a printed scale | Needle | 2 |
+| **[Meter](components/meter.md)** | `<meter>` (implicit role meter); `min`, `max`, `low`, `high`, `optimum` | A bar of LED segments in a window (`segments`; the glass covers the printed scale under them), or a needle meter (`form="needle"`) | Segments light; a needle sweeps with a damped spring | 2 (done) |
+| **[Gauge](components/gauge.md)** | `<meter>` (a bounded measurement; indeterminate is not supported) with `aria-valuetext` | A round dial under glass with a needle and a printed scale | Needle | 2 (done) |
 | **[RotarySelector](components/rotary-selector.md)** | `<select>`; the native popup stays in the overlay host, as Select does today | A knob with a pointer over a ring of printed positions, one detent per `<option>` | Cap turns to the selected position | 2 (done) |
 | **PushButton** forms ([Button](components/button.md#11-push-button-form-momentary), [ToggleButton](components/toggle-button.md#11-push-button-form-latching)) | The existing Button and ToggleButton, `<button>` | `momentary`: a machined cap with a lit ring. `latching` (ToggleButton): stays down with an LED on | Travel; ring lights | 2 (done) |
 | **Display** | The existing TextField, `<input>`, as `form="display"`; read-only displays are `<output>` | A glass window in a bezel, backlit, with the text printed under the glass | None; backlight is an emitter | 2 |
@@ -321,8 +321,12 @@ Each item is its own PR with GPU tests, in order:
    capture as a local environment probe for the PBR parts (a cube per layer, refreshed on capture, texture or
    placement changes), and glass as a custom shader that traces the model's 2D.6 over the capture (Lite's transmission
    and cube sampling in shader materials are unusable, L6 and L12), with text under windows exact.
-5. **Custom parts:** glTF loading for named parts, anchor fitting and the bounds check. Core never fetches at
-   render time; the helper loads and hands core mesh data.
+5. **Done** ([design note](instrument-phase2.md#core-work-item-5-custom-parts)). **Custom parts:** a `mesh` profile (inline
+   triangles or a glB/glTF reference) and a `custom` part kind in the scene format, validated, wound to core's convention,
+   contained on the real vertices and budgeted like the parametric parts. Core loads references outside any frame
+   (a store with a byte budget; a small glB reader; the part appears when its file arrives, with no rebuild). Anchor fitting
+   stayed with the helper (`scale` and `offset` in core), and the plan's "the helper loads and hands core mesh data"
+   became "core loads".
 
 ### Babylon Lite feature map
 
@@ -544,7 +548,7 @@ One concern per PR, each based on `main`:
 3. Design-language sections and version 4 of the Rendering Model (3a); 3b: its reference implementation,
    `instrument-4.json` with its GPU conformance test, and `premium.json` with the character runtime.
 4. Core: `instrument` material and the mesh pass. 5. Core: emitters. 6. Core: object-on-object shadows.
-7. Core: transmission over the capture. 8. Core: custom parts.
+7. Core: transmission over the capture. 8. Core: custom parts (done: item 5 of the core work).
 9. Knob (wave 1: [anatomy](components/knob.md); CSS, Relief, Objects and Instrument done, with the helper's `instrument` level, and its detents' `tick`).
 10. Fader (wave 1: [anatomy](components/fader.md); CSS, Relief, Objects and Instrument done, with the helper's
    `instrument` level, and its detents' `tick`). 11. Switch forms, with sound and haptics as the opt-in option.
@@ -561,7 +565,13 @@ first use of emitters (a version 4 scene with `emitters`, `protected` rects and 
 a blink), the `blink` tempo tokens and the opt-in `click` feedback. Meter, Gauge, RotarySelector, the PushButton forms and
 Display follow.
 
-PR 12, wave 2, third part: the RotarySelector ([anatomy](components/rotary-selector.md)) and the PushButton forms
+PR 13, wave 2, second part: the Meter and the Gauge ([Meter](components/meter.md), [Gauge](components/gauge.md)) at every
+presentation: CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Instrument on the GPU. A bar's segments are the
+Lamp's LED lens with an emitter each (the Lamp's wiring, so this PR is based on the Lamp's); a needle meter and a gauge are a glass
+window, a needle on `spring.meter` or `spring.gauge` and a hub. `driveStrataMeter` drives a live value as a uniform and a pose with
+no capture. Display follows.
+
+PR 14, wave 2, third part: the RotarySelector ([anatomy](components/rotary-selector.md)) and the PushButton forms
 ([`momentary`](components/button.md#11-push-button-form-momentary), [`latching`](components/toggle-button.md#11-push-button-form-latching)),
 at every presentation. The selector is a native `<select>` over the Knob's dial with one detent per option and the labels printed round
 it, the knob's round behaviour and its parts at the Instrument level; the push forms are the Button and ToggleButton as a machined cap on

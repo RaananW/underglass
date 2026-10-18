@@ -149,6 +149,9 @@ the face, and lights:
 | `emitter.strength` | 3,200† | 520† | 0–32,000† | Intensity `I` in the falloff below |
 | `emitter.guardFeather` | 4† | 4† | 0–16† | Width, in px, over which the guard eases off outside a protected rect |
 
+A [Meter](components/meter.md)'s lit segment is an LED with its own tokens, `emitter.segment.radius` (3†), `emitter.segment.height`
+(0.8†) and `emitter.segment.strength` (260† for the 10 px lens): a bar throws many small pools, so each reaches less than a lone LED's.
+
 - **Colour by role:** an emitter takes its lens's role colour: `glowOn` for lamps and lit rings, the StatusLight's
   `colour` role, the `display` role's emissive colour for a backlight. As light, it is that colour's channels in 0–1.
 - **Falloff,** Lite's clustered point-light falloff, so the face pass and the mesh lights agree. At a point with
@@ -581,15 +584,18 @@ edge, `h` its height and `inset` its distance inside the box, less 0.5 px. At 19
 
 ### Custom parts
 
-An application may replace one named part with its own glTF: `parts: { knobCap: url }`. The GPU helper loads it and
-hands core mesh data; core never fetches at render time.
+An application may replace one named part with its own glTF: `parts: { knobCap }` (the GPU helper's option, a glB URL or
+buffer with the box its vertices must lie in). Core loads it ([core work item 5](instrument-phase2.md#core-work-item-5-custom-parts)):
+asynchronously and never inside a frame, into a per-engine cache under a byte budget; until it is ready, and if it fails, the
+part is not drawn and core reports it in `state().instrument`.
 
 - **Anchors.** A custom part declares five anchors in its own units: `base` (the point that stands on the face or on
   the part below), `pivot` (the point it turns or tilts about), `cap` (the height of its top), `pointer` (the direction
-  of value 0 on a turning part) and `travel` (the axis it slides or travels along). The helper fits it by one uniform
-  scale and a rigid placement that bring its anchors onto the built-in part's.
-- **The `bounds` check.** The fitted part is checked as a built-in one is, over the whole travel. A part that fails is
-  not drawn: the built-in part stands in, and a diagnostic names it.
+  of value 0 on a turning part) and `travel` (the axis it slides or travels along). Fitting by anchors is the helper's and
+  is **not implemented yet**: core's custom part takes a uniform `scale` and an `offset` on a glTF reference, in part-local px.
+- **The `bounds` check.** The part is checked as a built-in one is, over the whole travel, on the mesh's own vertices. A part
+  that fails is not drawn and its object is drawn at the Relief level, with a diagnostic naming it. While the file loads and if it fails, the built-in part stands in: the custom part's `fallback` (the built-in parts, which the
+  helper passes) is drawn until the mesh is, and the swap is in the frame the mesh is drawn.
 - **Limits:** a custom part carries no captured content, counts as one part kind in the budgets and takes its material
   from its role, so themes and characters still apply.
 
@@ -631,8 +637,8 @@ keep their Objects object, drawn as meshes of the same shapes. Lit parts give th
 | PushButton `latching` | As momentary, with an LED | `cap` | Travel 4 held, 1.8 latched | As momentary, and the LED a Ø6 glass lens (an 8 px socket) on the bezel's top edge, centred, its own emitter. [Anatomy](components/toggle-button.md#11-push-button-form-latching) |
 | Lamp | `bezel`; `lens`, an emitter | None | The emitter turns on | Lens 28† ([I0.3](instrument-phase0.md#i03-emitters-and-the-pointer-light)); the box is the lens + 28 (56), 10 px each side of the bezel for the bloom halo. Bezel Ø lens + 8, 3 high, polished; the lens a glass plano-convex lens 0.4 of its diameter high over a socket printed on the face. [Anatomy](components/lamp.md) |
 | StatusLight | `lens`, an emitter | None | `blink`, at most 3 flashes a second | Lens 10† (I0.3); the box is the lens + 16 (26); a glass lens 0.35 of its diameter high over a printed socket, no bezel. `blink.slow`, `normal` and `fast` are 1,600, 1,000 and 400 ms a cycle (never under 334 ms). [Anatomy](components/status-light.md) |
-| Meter `bar` | `window`; `segment`s | Segments, shown or collapsed | — | 16 `segments`† (I0.1) |
-| Meter `needle`, Gauge | `bezel`, `window`, `dial` | `needle` on a `pivot` | Turn through the gauge's sweep, with a damped spring | Phase I4 |
+| Meter `bar` | `window` over the printed scale; `segment`s | Each segment an LED lens whose emitter is lit or dark | — | 16 `segments`† (I0.1). Box 286 × 58 (16 segments × 15 + 2 × `max(10 px, 1.6em)` + 8); segment lens Ø `size.meter` 10, 0.35 of its diameter high; window 2.4 high, a 2.2 px bevel. **The glass covers the scale, not the LEDs:** core's glass parts write no depth, and a window's exact pixels cover them where the capture is opaque. [Anatomy](components/meter.md) |
+| Meter `needle`, Gauge | `bezel` (a Gauge's ring), `window`, `dial` (printed) | `needle` on a `pivot` | Turn through `meter.sweep` (100°) or `gauge.sweep` (240°), with a damped spring (`spring.meter`, `spring.gauge`) | Needle meter box 264 × 152, gauge `size.gauge` (160) + 24 square. Needle 2.2 wide from a 12 px tail, standing 2.4 over the glass; hub Ø 12, 4 high; window 2.4 high, a 2.2 px bevel; a gauge's bezel 3 high, polished. [Meter](components/meter.md), [Gauge](components/gauge.md) |
 | RotarySelector | `collar`; the ring of positions, printed | As Knob | Turn to the selected option, one detent per option | As Knob |
 | Display | `bezel`, `window`; the text, a native `<output>` printed under the window | None | The backlight, an emitter† | Box 236 × 58 on the prototype. Bezel 7 wide, radius 8, 2.4 high, chamfer 2, polished, standing 0.5 px inside the box ([I0.4](instrument-phase0.md#i04-materials-over-the-capture)); window 2.4 high with a 2.6 bevel; finish band 0.3, horizon 0.25; the rest in Phase I4 |
 | Pad | `plinth` | `cap`: soft (`subsurface`), lit from below | Travel | Phase I5 |
@@ -843,6 +849,8 @@ into core keyframes: motion never recaptures ([I0.1](instrument-phase0.md#i01-me
 | `spring.bat` | 1,400† | 45† | 0.60 | A bat switch's lever |
 | `spring.wall` | 1,200† | 58† | 0.84 | A wall switch's paddle |
 | `spring.button` | 1,600† | 80† | 1.00 | A push button's cap |
+| `spring.meter` | 360† | 28† | 0.74 | A needle meter's needle |
+| `spring.gauge` | 160† | 20† | 0.79 | A gauge's needle |
 
 Stiffness ranges over 50–4,000† and damping over 5–200†.
 

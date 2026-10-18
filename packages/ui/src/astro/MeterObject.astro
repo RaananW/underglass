@@ -1,0 +1,13 @@
+---
+/**
+ * The drawn object of a Meter or a Gauge (anatomy pages `meter.md`, `gauge.md`): decoration, no pointer, lying over the
+ * native `<meter>`. Internal: `Meter.astro` and `Gauge.astro` render it from `meterModel`.
+ */
+import type { MeterModel } from "../shared/meter.ts";
+
+interface Props { model: MeterModel }
+const { model } = Astro.props;
+---
+{model.form === "bar"
+  ? <span class="ug-meter__object" aria-hidden="true"><span class="ug-meter__window" data-strata-face="well"><span class="ug-meter__segments">{model.segments.map(segment => <span class="ug-meter__segment" data-strata-face="knob" data-strata-zone={segment.zone} style={segment.style}></span>)}</span><span class="ug-meter__scale">{model.marks.map(mark => <span class="ug-meter__mark" data-strata-value={String(mark.value)} style={mark.style}>{mark.text}</span>)}</span></span></span>
+  : <span class="ug-meter__object" aria-hidden="true"><span class="ug-meter__bezel" data-strata-face="raised"><span class="ug-meter__window" data-strata-face="well"><span class="ug-meter__zones"></span><span class="ug-meter__scale">{model.marks.map(mark => <span class="ug-meter__mark" data-strata-value={String(mark.value)} style={mark.style}>{mark.text}</span>)}</span><span class="ug-meter__needle"></span><span class="ug-meter__hub" data-strata-face="knob"></span></span></span></span>}

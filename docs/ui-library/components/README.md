@@ -141,3 +141,5 @@ The [Instrument level](../instrument.md)'s components: hardware objects over nat
 | [RotarySelector](rotary-selector.md) | `<select>` over a printed dial, one detent per `<option>` | A knob that turns to the chosen option, the options' labels printed round it |
 | [Lamp](lamp.md) | `<input type="checkbox" role="switch">` in its label row, or a `<button aria-pressed>` when `momentary` | A lens on a bezel: dark glass off, glowing and emitting on |
 | [StatusLight](status-light.md) | `<span role="img" aria-label>`, a `<span>` with its label, or a live `<output>` | A small lens with an emitter; `colour` a role, `blink` a tempo token |
+| [Meter](meter.md) | `<meter>` (role `meter`) with `min`, `max`, `low`, `high`, `optimum` | A bar of LED segments lit from the value (each an emitter, in its zone's colour), or a needle on a printed arc on `spring.meter`; a held `peak` |
+| [Gauge](gauge.md) | `<meter>` (a bounded measurement; not `<progress>`) | A round dial under glass: a needle on `spring.gauge` over a printed scale, a red zone from `high` |

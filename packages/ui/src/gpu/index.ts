@@ -26,6 +26,12 @@
  * `--strata-lit` and the `emitter.*` tokens, read each frame, so a blink or a toggle is a uniform update), the `protected`
  * rects of its text and a `feather`, so core's face pool lights the page around the lens within the contrast guard.
  *
+ * A Meter's or Gauge's segments are the same LED lenses (`gpu/meter-forms.ts`, `gpu/instrument-meter.ts`; design language section 6): one
+ * emitter each, in the colour of its zone, lit from the native meter's value (or the live value `driveStrataMeter` gave it) and its held
+ * peak, so a value change is a uniform update at every level. A needle meter's and a gauge's window and bezel are Relief and Objects
+ * primitives (fitted so their shadows stay in the native meter's box) with the needle as captured content; at the Instrument level the
+ * needle is a part turned by its spring (`spring.meter`, `spring.gauge`), over a glass window that keeps the printed scale exact.
+ *
  * At the Instrument level (`instrument`, between `objects` and `scene` on the ladder, set like the others) a panel with
  * any element at that level takes core's `instrument` material and a version 4 scene (`gpu/instrument.ts`): its knobs
  * become the premium knob's parts, whose pointer turns on a spring as their value changes (uniform updates, no
@@ -46,6 +52,7 @@
 import { cssVariable, flatten, numeric, strataTokens } from "../tokens/index.ts";
 import { isSceneObject, type SceneEntry, type SceneFace, type SceneMaterial, type ScenePrimitive, type StrataScene } from "../tokens/scene.ts";
 import { panelMotion, type PanelMover } from "../dom/motion.ts";
+import { liveStrataMeter } from "../dom/meter.ts";
 import { switchFormEntries } from "./switch-forms.ts";
 import { pushFormEntries } from "./push-forms.ts";
 import { pushHeight, pushMaterialsOf, pushObject } from "./instrument-push.ts";
@@ -53,18 +60,22 @@ import { followSpring } from "./instrument-rotary.ts";
 import { pushEmitterDefaults, pushPosition, ringEmitter, type PushEmitterTokens } from "../shared/push-button.ts";
 import { rotaryFraction } from "../shared/rotary-selector.ts";
 import { lampFormEntries } from "./lamp-forms.ts";
-import { lampHeight, lampMaterialsOf, lampObject, type LampKind } from "./instrument-lamp.ts";
+import { lampHeight, lampMaterialsOf, lampObject, lensMaterial, type LampKind } from "./instrument-lamp.ts";
 import { emitterDefaults, lensEmitter, type EmitterTokens, type LampEmitter } from "../shared/lamp.ts";
+import { meterFormEntries } from "./meter-forms.ts";
+import { meterBarObject, meterDialObject, meterHeight, meterMaterials } from "./instrument-meter.ts";
+import { advancePeak, meterFraction, meterSprings, meterZoneRoles, peakDefaults, peakIndex, segmentEmitterDefaults, segmentsLit, segmentZones, type PeakState } from "../shared/meter.ts";
 import { strataStage, type StagePresenter } from "../dom/stage.ts";
 import type { EnvironmentMap, StageScene } from "../tokens/stage.ts";
 import { advance, asParticle, decodeHdr, environmentFrom, launch, spring, type BurstOptions, type Confetto } from "./scene.ts";
-import { advanceSpring, depthScale, INSTRUMENT_CAMERA, keyObject, knobObject, knobSprings, premiumMaterials, type InstrumentObject, type InstrumentProfile,
-  type InstrumentRecipe, type KnobSpring } from "./instrument.ts";
+import { advanceSpring, depthScale, INSTRUMENT_CAMERA, keyObject, knobObject, knobSprings, premiumMaterials, profileKey, type CustomPartSource, type InstrumentObject,
+  type InstrumentProfile, type InstrumentRecipe, type KnobSpring } from "./instrument.ts";
 import { faderMaterials, faderObject, faderParts, faderSpring } from "./instrument-fader.ts";
 import { switchHeight, switchMaterials, switchObject } from "./instrument-switch.ts";
 import type { StrataSwitchForm } from "../shared/switch-forms.ts";
 
-export type { InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentRecipe, KnobSpring } from "./instrument.ts";
+export type { CustomPartInput, CustomPartSource, InstrumentMeshProfile, InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentRecipe, KnobSpring } from "./instrument.ts";
+export { customPart } from "./instrument.ts";
 
 export { decodeHdr, environmentFrom, launch, advance, spring } from "./scene.ts";
 export type { BurstOptions, Confetto, HdrImage } from "./scene.ts";
@@ -121,6 +132,8 @@ export interface StrataGpuOptions {
    * step is reported through `onAdjust` and a `strata-adjust` event on the root. GPU stays on.
    */
   adjust?: StrataAdjustPolicy;
+  /** At the Instrument level, glBs for named parts of the built-in components (see `StrataSceneOptions.parts`). */
+  parts?: StrataSceneOptions["parts"];
   /** Called with every step of the adjust policy. */
   onAdjust?(event: StrataAdjustEvent): void;
   /** The Scene level's backdrop: its light pool and vignette (0–1; 0.5 and 0.35 by default) and an optional tint. */
@@ -264,6 +277,13 @@ interface LampInfo {
   feather: number;
 }
 
+/** A visible Meter or Gauge now: its form, its native meter and the meter's box in the panel. */
+interface MeterInfo {
+  form: "bar" | "needle" | "dial";
+  native: HTMLMeterElement;
+  box: [number, number, number, number];
+}
+
 /**
  * The layer's protected rects for the contrast guard (design language section 3, Rendering Model 2D.4): the client rects
  * of every text run in `panel`, and the boxes of its text fields, grown by 2 px (`display.textGrow`). Past 4,096 the whole box is
@@ -324,6 +344,14 @@ export interface StrataSceneOptions {
    */
   springs?: WeakMap<Element, KnobSpring>;
   moving?: Set<Element>;
+  /** A bar meter's held peak, kept between scenes (`ug-meter--peak`); the meters whose peak is still falling are added to `moving`. */
+  peaks?: WeakMap<Element, PeakState>;
+  /**
+   * At the Instrument level, glBs for named parts of the built-in components (`parts: { knobCap }`, the plan's custom slot):
+   * the part is replaced by core's custom part (`docs/ui-library/instrument-phase2.md`, item 5). Absent, every component
+   * looks as it always did. While the file loads (and if it fails or does not fit its box) the part is not drawn.
+   */
+  parts?: { knobCap?: CustomPartSource };
   /** The time the springs advance to (ms, `performance.now()` by default). */
   now?: number;
 }
@@ -397,7 +425,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   // with core's `instrument` material. Its knobs and buttons become parts; everything else stays on the face as Relief.
   const instrumentLayer = [panel, ...panel.querySelectorAll("[data-strata-level]")].some(element => effective(element) === "instrument");
   const objects = (element: Element) => !instrumentLayer && effective(element) !== "relief";
-  const knobs = new Set<HTMLElement>(), faders = new Set<HTMLElement>(), switches = new Set<HTMLElement>(), keys: HTMLElement[] = [];
+  const knobs = new Set<HTMLElement>(), faders = new Set<HTMLElement>(), switches = new Set<HTMLElement>(), instrumentMeters = new Set<HTMLElement>(), keys: HTMLElement[] = [];
   // Objects (design language section 6): the tokens of their proportions, and the height each surface's top stands at.
   const keyHeight = tokens.number("object.keyHeight", 8), keyTravel = tokens.number("object.keyTravel", 6), taper = tokens.number("object.taper", 3);
   const tops = new Map<Element, number>(), floors = new Map<Element, number>();
@@ -456,6 +484,38 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     // More contrast turns emitters off (design language section 3): the lens is flat colour, and the face has no light.
     emitters.push(lensEmitter(kind, [rect[0] + rect[2] / 2, rect[1] + rect[3] / 2], rect[2], moreContrast ? 0 : lit, role, own));
   }
+  // Meters and Gauges (design language section 6): a bar's segments are LEDs, each an emitter in its zone's colour, lit from the
+  // native meter's value (and its held peak) read here, so a live level is a uniform update. The needle and the scale are not lights.
+  const meterInfos = new Map<HTMLElement, MeterInfo>(), segmentInfos = new Map<HTMLElement, LampInfo>(), now = options.now ?? performance.now();
+  for (const root of panel.querySelectorAll<HTMLElement>(".ug-meter")) {
+    const native = root.querySelector<HTMLMeterElement>("meter.ug-meter__native");
+    if (!native || !root.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    const box = rectWithin(native, panel), form = root.matches(".ug-meter--bar") ? "bar" : root.matches(".ug-meter--dial") ? "dial" : "needle";
+    if (box[2] <= 0 || box[3] <= 0) continue;
+    meterInfos.set(root, { form, native, box });
+    if (form !== "bar") continue;
+    const segments = [...root.querySelectorAll<HTMLElement>(".ug-meter__segment")], meterTokens = reader(root);
+    const fraction = meterFraction(liveStrataMeter(native) ?? native.value, native), count = segments.length;
+    // The held peak: the highest segment lit, kept between scenes and let fall on `meter.peakHold` and `meter.peakDecay`.
+    let held = -1;
+    if (root.matches(".ug-meter--peak") && options.peaks) {
+      const hold = milliseconds(meterTokens.raw("meter.peakHold")), next = advancePeak(options.peaks.get(native), fraction, now,
+        { hold: Number.isFinite(hold) ? hold : peakDefaults.hold, decay: meterTokens.number("meter.peakDecay", peakDefaults.decay) });
+      options.peaks.set(native, next.state);
+      if (next.falling) options.moving?.add(native);
+      held = peakIndex(next.value, count);
+    }
+    const lit = segmentsLit(fraction, count), zones = segmentZones(count, native), feather = meterTokens.number("emitter.guardFeather", emitterDefaults.guardFeather);
+    const own: EmitterTokens = { radius: meterTokens.number("emitter.segment.radius", segmentEmitterDefaults.radius), height: meterTokens.number("emitter.segment.height", segmentEmitterDefaults.height),
+      strength: meterTokens.number("emitter.segment.strength", segmentEmitterDefaults.strength) };
+    segments.forEach((segment, index) => {
+      const rect = rectWithin(segment, panel);
+      if (emitters.length >= MAX_EMITTERS || rect[2] <= 0 || rect[3] <= 0 || !segment.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return;
+      const role = meterTokens.colour(meterZoneRoles[zones[index]!]), on = index < lit || index === held ? 1 : 0;
+      segmentInfos.set(segment, { kind: "led", role, lit: on, lens: rect[2], index: emitters.length, box, control: native, feather });
+      emitters.push(lensEmitter("led", [rect[0] + rect[2] / 2, rect[1] + rect[3] / 2], rect[2], moreContrast ? 0 : on, role, own));
+    });
+  }
   if (objects(panel)) {
     entries.push({ object: "slab", rect: [0, 0, width, height], radius: radiusOf(panel, width), height: panelHeight, taper, material: materialFor(panel, "raised") });
     tops.set(panel, panelHeight);
@@ -466,6 +526,12 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     // The slide's flag is invisible (opacity 0) while the switch is off, but the object draws it: hide its CSS paint all the same.
     if (instrumentLayer && element.matches(".ug-switch[data-strata-form] .ug-switch__object .ug-switch__flag") && effective(element) !== "relief") options.domes?.add(element);
     if (!faces.includes(face) || !element.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    // A Meter's or Gauge's segments, hub and a Gauge's bezel are drawn as its Instrument object (its window stays the well of the face).
+    const meterRoot = element.closest<HTMLElement>(".ug-meter"), meter = meterRoot && meterInfos.get(meterRoot);
+    if (meterRoot && meter && instrumentLayer && effective(element) !== "relief") {
+      if (segmentInfos.has(element) || element.matches(".ug-meter__hub") || (element.matches(".ug-meter__bezel") && meter.form === "dial")) { instrumentMeters.add(meterRoot); options.domes?.add(element); options.domes?.add(meterRoot); continue; }
+      if (element.matches(".ug-meter__window")) { instrumentMeters.add(meterRoot); options.domes?.add(meterRoot); }
+    }
     if (instrumentLayer && effective(element) !== "relief") {
       // A knob's skirt and cap, and a fader's carriage, are drawn as its Instrument object (a fader's slot stays a
       // groove on the face); a button as a key with a captured cap.
@@ -515,6 +581,31 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
         },
         light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, hoverHeight: tokens.number("state.hoverHeight", 1.6) });
       if (parts) { entries.push(...parts); continue; }
+    }
+    // A Meter's segment is an LED lens (`lamp-forms.ts`), sunk in its window's well at the Objects level; its window and bezel are
+    // `meter-forms.ts`'s, fitted so their shadows stay in the native meter's box.
+    const segment = segmentInfos.get(element as HTMLElement);
+    if (segment) {
+      // The segments are drawn from the native meter's value at every level, so a live value needs no write to the DOM (`driveStrataMeter`).
+      if (meterRoot) options.domes?.add(meterRoot);
+      const floor = baseOf(element) - (objects(element) ? Math.max(1, level(element.closest(".ug-meter__window") ?? element, "well")) : 0);
+      const parts = lampFormEntries(element, { rect, state, objects: objects(element), base: floor, box: segment.box, role: segment.role, lit: segment.lit, domes: options.domes,
+        material: (part, role, partFace) => {
+          const named = part.closest("[data-strata-material]");
+          if (named && panel.contains(named)) return material(named.getAttribute("data-strata-material")!);
+          return role === "bezel" ? materialFor(part, partFace) : material(tokens.raw(`material.roles.${role}`) || (role === "lens" ? "glass" : "emissive"));
+        },
+        light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, hoverHeight: tokens.number("state.hoverHeight", 1.6) });
+      if (parts) { entries.push(...parts); continue; }
+    }
+    const meterBox = meter?.box;
+    const meterParts = meterBox && meterFormEntries(element, { rect, radius, objects: objects(element), base: baseOf(element), box: meterBox, well: level(element, "well"), raised: level(element, "raised"), taper,
+      material: materialFor, light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) } });
+    if (meterParts) {
+      entries.push(...meterParts);
+      const slab = meterParts[0];
+      if (slab && isSceneObject(slab) && slab.object === "slab") tops.set(element, (slab.base ?? 0) + slab.height);
+      continue;
     }
     if (objects(element) && face !== "ring" && face !== "flat") {
       const base = baseOf(element);
@@ -608,7 +699,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   const tallest = Math.max(...entries.map(entry => top(entry) * (isSceneObject(entry) ? 1.25 : tokens.number("state.hoverHeight", 1.6))));
   const shadowReach = Math.min(128, Math.ceil(tallest / Math.tan(elevation) + 1.5 * tallest + 1));
   // A panel with lights draws at least the emitters' outset (48 px), so a lamp near its edge lights the page past it.
-  const reach = lamps.size ? Math.max(shadowReach, EMITTER_OUTSET) : shadowReach;
+  const reach = emitters.length ? Math.max(shadowReach, EMITTER_OUTSET) : shadowReach;
   const settings = {
     extent: { width, height },
     outset: { top: reach, right: reach, bottom: reach, left: reach },
@@ -623,8 +714,8 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     materials,
   };
   // The lights of the panel's lenses, with the text they must not wash out (the guard, design language section 3).
-  const lights = lamps.size ? { emitters, protected: protectedRects(panel), feather: Math.max(...[...lamps.values()].map(info => info.feather)) } : undefined;
-  if (instrumentLayer) return instrumentScene(panel, options, { settings, entries: entries as ScenePrimitive[], knobs, faders, switches, keys, states, materialFor, tokens, reach, lamps, instrumentLamps, lights });
+  const lights = emitters.length ? { emitters, protected: protectedRects(panel), feather: Math.max(...[...lamps.values(), ...segmentInfos.values()].map(info => info.feather)) } : undefined;
+  if (instrumentLayer) return instrumentScene(panel, options, { settings, entries: entries as ScenePrimitive[], knobs, faders, switches, keys, states, materialFor, tokens, reach, lamps, instrumentLamps, lights, instrumentMeters, meterInfos, segmentInfos });
   if (!entries.some(isSceneObject)) return lights ? { format: "strata-scene", version: 4, ...settings, primitives: entries as ScenePrimitive[], ...lights } : { format: "strata-scene", version: 1, ...settings, primitives: entries };
   // The camera (design language section 2): centred on the stage, at D = max(camera.distance, r · h / taper + h),
   // with r the stage's half-diagonal, so every solid keeps the taper rule wherever its panel sits.
@@ -692,6 +783,8 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
   settings: Omit<StrataScene, "format" | "version" | "primitives">; entries: ScenePrimitive[]; knobs: Set<HTMLElement>; faders: Set<HTMLElement>; switches: Set<HTMLElement>; keys: HTMLElement[];
   /** The lamps and StatusLights at the Instrument level, every visible lens's info, and the panel's lights. */
   instrumentLamps: Set<HTMLElement>; lamps: Map<HTMLElement, LampInfo>; lights?: { emitters: LampEmitter[]; protected: [number, number, number, number][] | "extent"; feather: number };
+  /** The Meters and Gauges at the Instrument level, every visible meter's info and every visible segment's. */
+  instrumentMeters: Set<HTMLElement>; meterInfos: Map<HTMLElement, MeterInfo>; segmentInfos: Map<HTMLElement, LampInfo>;
   states: (element: Element) => { hover: boolean; pressed: boolean; focus: boolean; disabled: boolean };
   materialFor: (element: Element, face: SceneFace) => string; tokens: ReturnType<typeof reader>; reach: number;
 }): StrataInstrumentScene {
@@ -702,11 +795,11 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
   }
   const profiles: Record<string, InstrumentProfile> = {};
   const profile = (name: string, shape: InstrumentProfile) => {
-    const key = `${name}:${JSON.stringify(shape)}`;
+    const key = profileKey(name, shape);
     profiles[key] ??= shape;
     return key;
   };
-  const use = (name: string) => { materials[name] ??= premiumMaterials[name] ?? faderMaterials[name as keyof typeof faderMaterials] ?? switchMaterials[name as keyof typeof switchMaterials]; return name; };
+  const use = (name: string) => { materials[name] ??= premiumMaterials[name] ?? faderMaterials[name as keyof typeof faderMaterials] ?? switchMaterials[name as keyof typeof switchMaterials] ?? meterMaterials[name as keyof typeof meterMaterials]; return name; };
   const scale = depthScale(tokens.number("depth", 0.5)), raised = tokens.number("elevation.raised", 3);
   const outer = panel.getBoundingClientRect(), stageBox = (options.stage ?? panel.parentElement ?? panel).getBoundingClientRect();
   const zoom = outer.width / Math.max(panel.offsetWidth, 1) || 1;
@@ -720,9 +813,9 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
   };
   const now = options.now ?? performance.now(), instant = reducedMotion();
   /** Where a range input's value sits, 0–1, as its spring has it now (section 12): a uniform update, never a capture. */
-  const follow = (input: HTMLInputElement, constants: { stiffness: number; damping: number }) => {
-    const min = Number.parseFloat(input.min) || 0, max = Number.isFinite(Number.parseFloat(input.max)) ? Number.parseFloat(input.max) : 100;
-    const target = max > min ? Math.min(1, Math.max(0, (Number(input.value) - min) / (max - min))) : 0;
+  const follow = (input: HTMLInputElement | HTMLMeterElement, constants: { stiffness: number; damping: number }, live?: number) => {
+    const min = Number.parseFloat(String(input.min)) || 0, max = Number.isFinite(Number.parseFloat(String(input.max))) ? Number.parseFloat(String(input.max)) : 100;
+    const target = max > min ? Math.min(1, Math.max(0, ((live ?? Number(input.value)) - min) / (max - min))) : 0;
     if (!options.springs) return target;
     let spring = options.springs.get(input);
     if (!spring || instant) { spring = { t: target, v: 0, time: now }; options.springs.set(input, spring); }
@@ -743,10 +836,11 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     const state = context.states(skirt);
     const sweep = reader(root).number("knob.sweep", 270);
     objects.push(knobObject({ id: idOf(input, "knob"), box: rectWithin(input, panel), skirt: rectWithin(skirt, panel)[2], cap: rectWithin(cap, panel)[2], t, sweep, scale,
-      state: { hover: state.hover, disabled: state.disabled }, relief: { height: raised, material: use("knobCap") } }, profile));
+      state: { hover: state.hover, disabled: state.disabled }, relief: { height: raised, material: use("knobCap") },
+      ...(options.parts?.knobCap ? { customCap: options.parts.knobCap } : {}) }, profile));
     for (const name of ["knobSkirt", "knobChamfer", "knobInk"]) use(name);
     options.domes?.add(skirt); options.domes?.add(cap);
-    tallest = Math.max(tallest, (2.5 + 16 + 1.2) * scale);
+    tallest = Math.max(tallest, options.parts?.knobCap ? 2.5 * scale + options.parts.knobCap.bounds.high[2] + 1 : (2.5 + 16 + 1.2) * scale);
   }
   const light = { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) };
   for (const root of context.faders) {
@@ -793,6 +887,44 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     objects.push(lampObject(input, profile) as unknown as InstrumentObject);
     Object.assign(materials, lampMaterialsOf(input));
     tallest = Math.max(tallest, lampHeight(info.kind, info.lens, scale));
+  }
+  // Meters and Gauges: a bar is a glass window and an LED lens per segment (lit by its emitter, so the parts never depend on the
+  // value); a needle meter or gauge is a window, a needle turned by its value's place on its spring, and its hub (a gauge: a bezel).
+  for (const root of context.instrumentMeters) {
+    const info = context.meterInfos.get(root), windowElement = root.querySelector<HTMLElement>(".ug-meter__window");
+    if (!info || !windowElement || objects.length + entries.length >= 255) continue;
+    const pane = rectWithin(windowElement, panel), paneRadius = radiusOf(windowElement, pane[2]);
+    if (pane[2] <= 0 || pane[3] <= 0) continue;
+    const id = idOf(info.native.id ? info.native : root, "meter");
+    if (info.form === "bar") {
+      const segments = [...root.querySelectorAll<HTMLElement>(".ug-meter__segment")].flatMap(element => {
+        const segment = context.segmentInfos.get(element), emitter = segment && context.lights?.emitters[segment.index];
+        return segment && emitter ? [{ centre: [emitter.position[0], emitter.position[1]] as [number, number], lens: segment.lens, emitter: segment.index,
+          material: opaque ? lensMaterial({ role: segment.role, opaque }) : "meterGlass", role: segment.role }] : [];
+      });
+      if (!segments.length) continue;
+      // The glass pane covers the printed scale under the LEDs (its text is exact), not the LEDs: core's glass parts do not write depth,
+      // so a pane over an opaque capture would hide the lenses and the light of the lit ones.
+      const scaleElement = root.querySelector<HTMLElement>(".ug-meter__scale"), strip = scaleElement && rectWithin(scaleElement, panel);
+      const glass: [number, number, number, number] = strip ? [pane[0] + 4, strip[1] - 2, pane[2] - 8, pane[1] + pane[3] - 4 - (strip[1] - 2)] : pane;
+      objects.push(meterBarObject({ id, box: info.box, window: glass, windowRadius: strip ? 4 : paneRadius, scale, segments, opaque, relief: { height: raised, material: use("meterGlass") } }, profile) as unknown as InstrumentObject);
+      use("meterGlass");
+      for (const segment of segments) if (opaque) Object.assign(materials, lampMaterialsOf({ kind: "led", role: segment.role, opaque }));
+      tallest = Math.max(tallest, meterHeight("bar", segments[0]!.lens, scale));
+    } else {
+      const needle = root.querySelector<HTMLElement>(".ug-meter__needle"), hub = root.querySelector<HTMLElement>(".ug-meter__hub"), bezel = root.querySelector<HTMLElement>(".ug-meter__bezel");
+      if (!needle || !hub) continue;
+      const pivotBox = rectWithin(hub, panel), dial = info.form === "dial";
+      // The needle's reach from the pivot is the CSS blade less its 12 px tail; it turns on `spring.meter` or `spring.gauge`.
+      const length = Number.parseFloat(getComputedStyle(needle).height) - 12, sweep = reader(root).number(dial ? "gauge.sweep" : "meter.sweep", dial ? 240 : 100);
+      const t = follow(info.native, dial ? meterSprings.gauge : meterSprings.meter, liveStrataMeter(info.native));
+      if (!(length > 4) || pivotBox[2] <= 0) continue;
+      objects.push(meterDialObject({ id, box: info.box, window: pane, windowRadius: paneRadius, ...(dial && bezel ? { bezel: rectWithin(bezel, panel) } : {}), pivot: [pivotBox[0] + pivotBox[2] / 2, pivotBox[1] + pivotBox[3] / 2],
+        length, sweep, t, scale, relief: { height: raised, material: use("knobSkirt") } }, profile) as unknown as InstrumentObject);
+      for (const name of ["knobSkirt", "knobCap", "knobInk", "meterGlass"]) use(name);
+      options.domes?.add(needle);
+      tallest = Math.max(tallest, meterHeight(info.form, 0, scale));
+    }
   }
   for (const element of context.keys) {
     if (objects.length + entries.length >= 255) break;
@@ -909,7 +1041,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   const scrims = new Map<HTMLElement, { id: string; release: () => void; fade?: ReturnType<StrataGpuController["transition"]>; closing?: boolean }>();
   let serial = 0, frame = 0, detached = false;
   // Instrument knobs' springs, kept between scenes; the knobs still moving ask for another frame.
-  const springs = new WeakMap<Element, KnobSpring>(), moving = new Set<Element>();
+  const springs = new WeakMap<Element, KnobSpring>(), moving = new Set<Element>(), peaks = new WeakMap<Element, PeakState>();
   const schedule = () => { if (!frame && !detached) frame = requestAnimationFrame(sync); };
   const resize = new ResizeObserver(schedule);
   // The adjust policy: a cap on levels, moved by frame intervals measured here (no core dependency).
@@ -1164,7 +1296,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     if (element.getAttribute("data-strata-mode") !== "face") element.setAttribute("data-strata-mode", "face");
     const motion = entry.motion;
     const domes = new Set<Element>();
-    const scene = strataScene(element, { level: options.level, cap, stage: stageBox(), domes, environment, springs, moving,
+    const scene = strataScene(element, { level: options.level, cap, stage: stageBox(), domes, environment, springs, moving, peaks, ...(options.parts ? { parts: options.parts } : {}),
       ...(motion ? { height: motion.from + (motion.to - motion.from) * motion.ease(Math.min(1, (performance.now() - motion.start) / motion.duration)) } : {}) });
     markDomes(entry, domes);
     // A panel drawn with the instrument material says so, so the CSS can hold the motion of the parts it draws.
@@ -1227,11 +1359,11 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
       try { await handle.finished; } finally { entry.motion = undefined; schedule(); }
     };
   }
-  const events = ["pointerover", "pointerout", "pointerdown", "pointerup", "focusin", "focusout", "keydown", "keyup", "input", "change", "transitionrun", "transitionend"];
+  const events = ["pointerover", "pointerout", "pointerdown", "pointerup", "focusin", "focusout", "keydown", "keyup", "input", "change", "transitionrun", "transitionend", "strata-meter-live"];
   for (const type of events) root.addEventListener(type, schedule, true);
   const mutation = new MutationObserver(schedule);
   mutation.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "disabled", "checked", "aria-checked",
-    "aria-current", "aria-disabled", "aria-pressed", "data-strata-lit", "data-strata-blink", "data-strata-colour", "aria-selected", "data-strata-closing", "data-strata-face", "data-strata-material", "data-strata-elevation", "data-strata-level", "data-strata-depth", "data-strata-theme", "data-strata-scope", "data-strata-preview", "hidden", "open"] });
+    "aria-current", "aria-disabled", "aria-pressed", "data-strata-lit", "data-strata-blink", "data-strata-colour", "aria-selected", "data-strata-closing", "data-strata-face", "data-strata-material", "data-strata-elevation", "data-strata-level", "data-strata-depth", "data-strata-theme", "data-strata-scope", "data-strata-preview", "hidden", "open", "value", "min", "max", "low", "high", "optimum"] });
   resize.observe(root);
   const poll = setInterval(schedule, options.poll ?? 500);
   forced.addEventListener("change", schedule);

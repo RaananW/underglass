@@ -29,6 +29,8 @@ export { default as Drawer } from "./Drawer.astro";
 export { default as Fader } from "./Fader.astro";
 export { default as Field } from "./Field.astro";
 export { default as Knob } from "./Knob.astro";
+export { default as Meter } from "./Meter.astro";
+export { default as Gauge } from "./Gauge.astro";
 export { default as Lamp } from "./Lamp.astro";
 export { default as StatusLight } from "./StatusLight.astro";
 export { default as IconButton } from "./IconButton.astro";

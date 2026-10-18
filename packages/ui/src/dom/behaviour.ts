@@ -21,6 +21,7 @@
  * - Rotary selectors: `attachStrataRotarySelectors` gives every `.ug-rotary` its detented pointer, wheel and tap behaviour (anatomy page `rotary-selector.md`);
  * - Knobs: `attachStrataKnobs` gives every `.ug-knob` its round pointer, wheel and reset behaviour (anatomy page `knob.md`);
  * - Lamps: `attachStrataLamps` lights a momentary `.ug-lamp` while it is pressed and plays opt-in feedback (anatomy page `lamp.md`);
+ * - Meters and Gauges: `attachStrataMeters` keeps every `.ug-meter`'s drawn value, zones, `aria-valuetext` and held peak in step with its native `<meter>` (anatomy pages `meter.md`, `gauge.md`);
  * - Toolbars: the first time focus enters one, its controls get a roving tabindex (one tab stop), and the arrow keys,
  *   Home and End move between them;
  * - Tabs: a click on a tab selects it, and the arrow keys, Home and End move between tabs and select them (only move,
@@ -41,6 +42,7 @@ import { attachStrataCarousels } from "./carousel.ts";
 import { attachStrataMenus } from "./menu.ts";
 import { attachStrataKnobs } from "./knob.ts";
 import { attachStrataLamps } from "./lamp.ts";
+import { attachStrataMeters } from "./meter.ts";
 
 const attached = new WeakMap<Document | HTMLElement, () => void>();
 
@@ -81,6 +83,7 @@ export function attachStrata(root: Document | HTMLElement = document): () => voi
   attachStrataMenus(root instanceof Document ? root : root.ownerDocument);
   attachStrataKnobs(root instanceof Document ? root : root.ownerDocument);
   attachStrataLamps(root instanceof Document ? root : root.ownerDocument);
+  attachStrataMeters(root instanceof Document ? root : root.ownerDocument);
   const existing = attached.get(root);
   if (existing) return existing;
   const block = (event: Event) => {

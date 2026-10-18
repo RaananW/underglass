@@ -48,6 +48,18 @@ the face around it. Labels are printed on the face, never on the cap (design lan
   and disabled state. If an object could not stay in its box, core draws its Relief primitive (a raised circle the size
   of the skirt) and reports it. No collar, emitters or sound yet.
 
+  **A custom cap** (`attachStrataGpu(controller, { parts: { knobCap } })`, the plan's custom slot; core work item 5): a glB
+  the application names replaces the cap, its chamfer and the pointer. `knobCap` is `{ source: { url, mesh? } | { data, mesh? },
+  bounds: { low, high }, scale?, offset?, pivot? }`, the box in part-local px after `scale` and `offset` (core checks the loaded
+  vertices against it); the model stands on the skirt in the `knobCap` material (so themes and characters apply), turns
+  through the sweep about its own axis (orient its pointer, if it has one, towards the top of the screen at the middle of
+  the sweep: the file's −z), and is contained over the whole travel like any part. Core loads the file outside any frame: until
+  it is ready, and if it fails, the knob shows the built-in cap, chamfer and pointer (the custom part's `fallback`; core swaps them
+  for the mesh in the frame it draws it, and reports the part's `loading`, `ready` or `failed`, the reason and what is `showing` in
+  `state().instrument`); if the mesh arrives but does not fit the dial, the object is drawn at the Relief level with a diagnostic.
+  Without `parts` the knob is the one above. [`ui-knob.html?level=instrument&cap=glb`](../../../examples/playground/ui-knob.html)
+  shows it.
+
 ## 3. Faces and materials
 
 | Face | Colour role | Text role | Material role |

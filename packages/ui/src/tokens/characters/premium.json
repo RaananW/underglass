@@ -13,6 +13,7 @@
           "emitter.lamp.strength",
           "emitter.led.height",
           "emitter.led.strength",
+          "emitter.segment",
           "emitter.guardFeather",
           "colour.glowOn",
           "lamp.lens",
@@ -1453,6 +1454,56 @@
       "damping": {
         "$type": "number",
         "$value": 80,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "meter": {
+      "$description": "A needle meter's needle: quick and a little underdamped (about 3% overshoot), like a moving-coil movement.",
+      "stiffness": {
+        "$type": "number",
+        "$value": 360,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 28,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "gauge": {
+      "$description": "A gauge's needle: heavier and slower than a meter's.",
+      "stiffness": {
+        "$type": "number",
+        "$value": 160,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 20,
         "$description": "Spring damping per unit mass.",
         "$extensions": {
           "dev.underglass.strata": {

@@ -211,8 +211,8 @@ const known = (value: Record<string, unknown>, path: string, allowed: readonly s
 /**
  * Validates a version 4 Instrument scene (2D.1, 2D.2) and returns a deep, normalized copy: defaults filled in, `t`
  * clamped to its stops, every object's Relief primitive resolved. Throws `InstrumentSceneError` on the first problem,
- * naming its path. It accepts exactly the scenes core's `instrument` material accepts; where that differs from the
- * draft of 2D it follows core, as the change log records (`mesh` profiles and `custom` parts wait for custom parts).
+ * naming its path. It accepts the scenes core's `instrument` material accepts, except custom parts: it does not take `mesh` profiles, the
+ * `custom` kind or `fallback` (core does, work item 5; the model's change log records it). Elsewhere, where the draft of 2D differs from core it follows core.
  */
 export function validateInstrumentScene(input: unknown): InstrumentScene {
   const scene = record(input, "");
@@ -318,7 +318,7 @@ export function validateInstrumentScene(input: unknown): InstrumentScene {
 /** One part (2D.2), with its pose's stops checked against each other. */
 function validatePart(part: Record<string, unknown>, at: string, profiles: Record<string, InstrumentProfile>, materials: string[], emitters: number): InstrumentPart {
   known(part, at, ["kind", "profile", "at", "pose", "material", "captured", "glass", "stand", "finish", "caster", "emitter", "state"]);
-  if (part.kind === "custom") fail(`${at}.kind`, "custom parts need core work item 5 (custom parts)");
+  if (part.kind === "custom") fail(`${at}.kind`, "custom parts are not in the reference implementation (core takes them)");
   const kind = choice(part.kind, `${at}.kind`, partKinds);
   if (typeof part.profile !== "string" || !(part.profile in profiles)) fail(`${at}.profile`, "requires one of the scene's profiles");
   if (typeof part.material !== "string" || !materials.includes(part.material)) fail(`${at}.material`, "requires one of the scene's materials");
@@ -370,7 +370,7 @@ function validatePose(pose: Record<string, unknown>, at: string): Required<Instr
     axis: optional(pose.axis, `${at}.axis`, -360, 360, 0), pivot: pose.pivot === undefined ? [0, 0, 0] : tuple(pose.pivot, `${at}.pivot`, 3, -1e4, 1e4) as Vec3 };
 }
 function profile(value: Record<string, unknown>, at: string): InstrumentProfile {
-  if (value.type === "mesh") fail(`${at}.type`, "mesh needs core work item 5 (custom parts)");
+  if (value.type === "mesh") fail(`${at}.type`, "mesh profiles are not in the reference implementation (core takes them)");
   const type = choice(value.type, `${at}.type`, ["lathe", "prism", "extrude"] as const);
   if (type === "lathe") {
     known(value, at, ["type", "points", "segments"]);

@@ -5,6 +5,8 @@
  * `tests/browser/ui-knob.test.mjs`.
  * - `?dom` starts in the CSS presentation; `?level=objects` presents the panel at the Objects level, and
  *   `?level=instrument` at the Instrument level (core's `instrument` material: the knobs and the Reset key as parts).
+ * - `?level=instrument&cap=glb` gives the Instrument knobs a custom cap (the helper's `parts: { knobCap }`, core work item 5): the fluted
+ *   cap of `public/custom/parts.glb` at 1.4 times its size, turning with the value, in place of the premium cap and pointer.
  * - `?plain` puts the panel in the page's flow with no Underglass at all, as a plain HTML page uses it (the mobile and
  *   preference checks).
  * Two knobs, Volume (0–100, step 1, printed 0 to 10, "%") and Gain (−12 to 12 dB in five detents), and a Reset button
@@ -91,7 +93,10 @@ if (params.has("plain")) {
   } });
   attachStrata();
   const level = params.get("level");
-  strata = attachStrataGpu(controller, { level: level === "objects" || level === "instrument" ? level : undefined });
+  // `?cap=glb` (with `?level=instrument`): the helper's custom slot, `parts: { knobCap }`, a fluted cap from `public/custom/parts.glb`
+  // (`scripts/make-custom-fixture.mjs`) in place of the premium cap, turning with the value.
+  const parts = params.get("cap") === "glb" ? { knobCap: { source: { url: "/custom/parts.glb", mesh: "Cap" }, bounds: { low: [-26, -26, 0] as [number, number, number], high: [26, 26, 15] as [number, number, number] }, scale: 1.4 } } : undefined;
+  strata = attachStrataGpu(controller, { level: level === "objects" || level === "instrument" ? level : undefined, ...(parts ? { parts } : {}) });
   host("enable").addEventListener("click", () => void controller!.enable());
   host("disable").addEventListener("click", () => void controller!.disable());
   if (!params.has("dom")) void controller.enable().then(() => strata?.refresh());
