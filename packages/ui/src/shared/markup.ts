@@ -6,7 +6,7 @@
 /** Component size (design language section 13). */
 export type StrataSize = "small" | "medium" | "large";
 /** Presentation level (section 16). */
-export type StrataLevel = "relief" | "objects" | "scene";
+export type StrataLevel = "relief" | "objects" | "instrument" | "scene";
 
 /** Props every Strata component accepts. */
 export interface StrataProps {

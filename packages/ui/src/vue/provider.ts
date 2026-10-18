@@ -43,14 +43,16 @@ export const StrataScope = defineComponent({
     material: { type: String, default: undefined },
     colour: { type: Object as PropType<ScopeOverrides["colour"]>, default: undefined },
     tokens: { type: Object as PropType<ScopeOverrides["tokens"]>, default: undefined },
+    /** Opt-in sound and haptics for the subtree's Instrument controls. */
+    feedback: { type: Object as PropType<ScopeOverrides["feedback"]>, default: undefined },
     /** The theme in effect, for ranges and contrast checks. */
     base: { type: Object as PropType<StrataTheme>, default: undefined },
     report: { type: String as PropType<ReportMode>, default: "error" },
   },
   setup(props, { slots }) {
     return () => {
-      const { depth, theme, density, size, level, material, colour, tokens } = props;
-      const resolved = resolveStrataScope({ depth, theme, density, size, level, material, colour, tokens }, props.base);
+      const { depth, theme, density, size, level, material, colour, tokens, feedback } = props;
+      const resolved = resolveStrataScope({ depth, theme, density, size, level, material, colour, tokens, feedback }, props.base);
       report(resolved.issues, props.report, "scope");
       return h("div", { ...Object.fromEntries(resolved.attributes), style: Object.fromEntries(resolved.properties) }, slots.default?.());
     };

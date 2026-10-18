@@ -312,9 +312,9 @@ Each item is its own PR with GPU tests, in order:
    3 ms GPU p95 on the RTX 3080), counted in part kinds (draw calls), about 16 per layer; a low-end GPU is still to be
    measured. The pass must also apply the layer's clip and opacity, which the probe's meshes ignore, and update
    instances in the same frame as layout.
-2. **Emitters** as clustered lights in the `instrument` material and as the analytic term in the `objects` and
+2. **Done** ([design note](instrument-phase2.md#core-work-item-2-emitters-and-the-pointer-light)). **Emitters** as clustered lights in the `instrument` material and as the analytic term in the `objects` and
    `relief` materials, with protected rects and the outset glow. The pointer light is an emitter whose position
-   the helper rewrites each frame, so this step carries it with no extra core surface.
+   the helper rewrites each frame, through the one call this step adds (`handle.setEmitters`, uniform writes only).
 3. **Shadows and post chain:** contact shadows, the per-layer PCF map from the key light masked to parts, TAA and
    bloom on the mesh pass.
 4. **Reflections and glass over the capture:** the layer's capture as a local environment probe, and transmission
@@ -543,6 +543,9 @@ One concern per PR, each based on `main`:
    `instrument-4.json` with its GPU conformance test, and `premium.json` with the character runtime.
 4. Core: `instrument` material and the mesh pass. 5. Core: emitters. 6. Core: object-on-object shadows.
 7. Core: transmission over the capture. 8. Core: custom parts.
-9. Knob. 10. Fader. 11. Switch forms, with sound and haptics as the opt-in option.
+9. Knob (wave 1: [anatomy](components/knob.md); CSS, Relief, Objects and Instrument done, with the helper's `instrument` level). 10. Fader. 11. Switch forms, with sound and haptics as the opt-in option.
 12. Wave 2 components, one or two per PR. 13. Everyday forms, a few per PR. 14. Instrument gallery and showpiece.
 15. Wave 3 components. 16. Characters: studio, hifi, playful, one per PR.
+
+PR 11, the Switch forms ([anatomy](components/switch.md#11-forms)): `slide`, `rocker`, `bat` and `wall` done in CSS, Relief and
+Objects, with sound and haptics as the opt-in option; their Instrument parts are defined for the helper's `instrument` level.

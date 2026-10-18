@@ -11,24 +11,28 @@
  * - a click on a chip's remove button dispatches a bubbling `strata-remove` event from the chip, and one on a
  *   MessageBar's dismiss button a bubbling `strata-dismiss` event from the bar;
  * - Tooltips: `attachStrataTooltips` shows and hides every `.ug-tooltip` named by a trigger's `aria-describedby`;
+ * - Switch forms: `attachStrataSwitches` throws a `.ug-switch[data-strata-form]` on a drag past centre and plays its feedback (anatomy page `switch.md`);
  * - Popovers: `attachStrataPopovers` places a `.ug-popover` opened from inside an Underglass layer with script;
  * - Trees: `attachStrataTrees` runs every `.ug-tree` from its markup (keys, clicks, `strata-expand` and `strata-select`);
  * - Carousels: `attachStrataCarousels` runs every `.ug-carousel`'s buttons and reports `strata-slide`;
  * - Menus: `attachStrataMenus` runs the Menu Button pattern's keys, and reports `strata-select` from a chosen item;
+ * - Knobs: `attachStrataKnobs` gives every `.ug-knob` its round pointer, wheel and reset behaviour (anatomy page `knob.md`);
  * - Toolbars: the first time focus enters one, its controls get a roving tabindex (one tab stop), and the arrow keys,
  *   Home and End move between them;
  * - Tabs: a click on a tab selects it, and the arrow keys, Home and End move between tabs and select them (only move,
  *   with `data-strata-activation="manual"` on the tablist, until Enter or Space clicks the tab).
- * The React and Vue bindings do the same themselves, so they need none of this.
+ * The React and Vue bindings do the same themselves, so they need none of this (a knob's binding attaches its behaviour).
  */
 import { showStrataDialog, type DialogHandle } from "./dialog.ts";
 import { selectStrataTab, strataTabsActivation, strataTabTarget } from "./tabs.ts";
 import { rovingStrataToolbar, strataToolbarTarget } from "./toolbar.ts";
 import { attachStrataTooltips } from "./tooltip.ts";
+import { attachStrataSwitches } from "./switch.ts";
 import { attachStrataPopovers } from "./popover.ts";
 import { attachStrataTrees } from "./tree.ts";
 import { attachStrataCarousels } from "./carousel.ts";
 import { attachStrataMenus } from "./menu.ts";
+import { attachStrataKnobs } from "./knob.ts";
 
 const attached = new WeakMap<Document | HTMLElement, () => void>();
 
@@ -59,10 +63,12 @@ function applyIndeterminate(root: Document | HTMLElement) {
 export function attachStrata(root: Document | HTMLElement = document): () => void {
   applyIndeterminate(root);
   attachStrataTooltips(root instanceof Document ? root : root.ownerDocument);
+  attachStrataSwitches(root instanceof Document ? root : root.ownerDocument);
   attachStrataPopovers(root instanceof Document ? root : root.ownerDocument);
   attachStrataTrees(root instanceof Document ? root : root.ownerDocument);
   attachStrataCarousels(root instanceof Document ? root : root.ownerDocument);
   attachStrataMenus(root instanceof Document ? root : root.ownerDocument);
+  attachStrataKnobs(root instanceof Document ? root : root.ownerDocument);
   const existing = attached.get(root);
   if (existing) return existing;
   const block = (event: Event) => {

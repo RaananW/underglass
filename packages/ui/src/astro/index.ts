@@ -27,6 +27,7 @@ export { default as Dialog } from "./Dialog.astro";
 export { default as Divider } from "./Divider.astro";
 export { default as Drawer } from "./Drawer.astro";
 export { default as Field } from "./Field.astro";
+export { default as Knob } from "./Knob.astro";
 export { default as IconButton } from "./IconButton.astro";
 export { default as Link } from "./Link.astro";
 export { default as List } from "./List.astro";

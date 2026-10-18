@@ -69,13 +69,15 @@ export interface ScopeOverrides {
   theme?: string;
   density?: "compact" | "comfortable" | "spacious";
   size?: "small" | "medium" | "large";
-  level?: "relief" | "objects" | "scene";
+  level?: "relief" | "objects" | "instrument" | "scene";
   /** Material for the subtree's components, a preset name. */
   material?: string;
   /** Colour roles for the subtree, in `theme`. */
   colour?: Partial<Record<string, string>>;
   /** Any scope-overridable token by its dotted path. */
   tokens?: Record<string, TokenValue>;
+  /** Opt-in feedback for the subtree's Instrument controls (design language section 20): sound and haptics, off by default. */
+  feedback?: { sound?: boolean; haptics?: boolean };
 }
 
 export interface ScopeOptions {
@@ -132,6 +134,9 @@ export function resolveStrataScope(overrides: ScopeOverrides, base?: TokenGroup 
   if (overrides.material !== undefined) {
     if ([...byPath.keys()].some(path => path.startsWith(`material.presets.${overrides.material}.`))) attributes.set("data-strata-material", overrides.material);
     else issues.push({ path: "material", message: `${overrides.material} is not a material preset` });
+  }
+  for (const [name, on] of Object.entries(overrides.feedback ?? {})) {
+    if (on !== undefined && accept(`feedback.${name}`, on ? 1 : 0)) properties.set(cssVariable(`feedback.${name}`), on ? "1" : "0");
   }
   for (const [path, value] of Object.entries(overrides.tokens ?? {})) {
     if (path.startsWith("colour.")) { issues.push({ path, message: "set colours with the colour option and a theme" }); continue; }

@@ -1,0 +1,5 @@
+---
+"@underglass/ui": minor
+---
+
+Add the Switch's hardware forms to the private @underglass/ui package: `form="slide" | "rocker" | "bat" | "wall"` (or `data-strata-form`) draws the same native switch as a slide switch, a rocker, a bat-handle toggle or a wall switch over a transparent box covering its whole throw. A click anywhere, the label and Space throw it natively; `attachStrataSwitches` in `/dom` throws it on a drag past centre and holds a drag short of it. The throw animates on the form's spring (`--strata-switch-t`, a `linear()` easing sampled from the clamped spring). CSS for every form with forced colours, more contrast and reduced motion; Relief and Objects presentation on the GPU with every part and shadow inside the box; the forms' Instrument parts and poses for the helper's `instrument` level. Opt-in feedback: `feedback.sound` and `feedback.haptics` tokens (theme `feedback`, scope `feedback`, or `attachStrataFeedback`), off by default, with a synthesised sound set (click, tick, thunk, snap) and `strataFeedback`. React, Vue and Astro `Switch` take `form`; any other `form` value stays the native form owner.

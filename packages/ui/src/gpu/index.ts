@@ -18,6 +18,16 @@
  * `transition` carries it through depth (scale, tilt and opacity, as the CSS motion does) while its scene height
  * travels from the modal level, so its shadow grows and settles with it.
  *
+ * A Knob's skirt and cap are raised faces (slabs at the Objects level, the cap on the skirt) in the `knob` material,
+ * with its input's hover and disabled state; its turning pointer is captured content on the cap.
+ *
+ * At the Instrument level (`instrument`, between `objects` and `scene` on the ladder, set like the others) a panel with
+ * any element at that level takes core's `instrument` material and a version 4 scene (`gpu/instrument.ts`): its knobs
+ * become the premium knob's parts, whose pointer turns on a spring as their value changes (uniform updates, no
+ * recapture), and its buttons keys with captured caps; every other component stays a Relief primitive on the face.
+ * The Scene level still draws its panels at the Objects level, so the adjust policy steps a Scene page over
+ * `instrument`.
+ *
  * Everything the scene needs comes from the page as the CSS presentation sees it: geometry from layout (followed through
  * CSS transitions frame by frame), states from
  * `:hover`, `:active`, `:focus-visible` and `:disabled`, and token values from each element's resolved `--strata-*`
@@ -25,11 +35,16 @@
  * `@underglass/core`: it takes the controller as a value and speaks the scene format.
  */
 import { cssVariable, flatten, numeric, strataTokens } from "../tokens/index.ts";
-import { isSceneObject, type SceneEntry, type SceneFace, type SceneMaterial, type StrataScene } from "../tokens/scene.ts";
+import { isSceneObject, type SceneEntry, type SceneFace, type SceneMaterial, type ScenePrimitive, type StrataScene } from "../tokens/scene.ts";
 import { panelMotion, type PanelMover } from "../dom/motion.ts";
+import { switchFormEntries } from "./switch-forms.ts";
 import { strataStage, type StagePresenter } from "../dom/stage.ts";
 import type { EnvironmentMap, StageScene } from "../tokens/stage.ts";
 import { advance, asParticle, decodeHdr, environmentFrom, launch, spring, type BurstOptions, type Confetto } from "./scene.ts";
+import { advanceSpring, depthScale, INSTRUMENT_CAMERA, keyObject, knobObject, knobSprings, premiumMaterials, type InstrumentObject, type InstrumentProfile,
+  type InstrumentRecipe, type KnobSpring } from "./instrument.ts";
+
+export type { InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentRecipe, KnobSpring } from "./instrument.ts";
 
 export { decodeHdr, environmentFrom, launch, advance, spring } from "./scene.ts";
 export type { BurstOptions, Confetto, HdrImage } from "./scene.ts";
@@ -38,7 +53,7 @@ export type { BurstOptions, Confetto, HdrImage } from "./scene.ts";
 export interface StrataGpuController {
   readonly container: HTMLElement;
   enroll(element: HTMLElement, options: { id: string; origin?: "center"; decorative?: boolean }): () => void;
-  setMaterial(id: string, descriptor: StrataSceneMaterial | StrataStageMaterial): { update(scene: StrataScene | StageScene): void; cancel(): void };
+  setMaterial(id: string, descriptor: StrataSceneMaterial | StrataStageMaterial): { update(scene: StrataScene | StrataInstrumentScene | StageScene): void; cancel(): void };
   transition(id: string, motion: StrataPanelMotion): { finished: Promise<{ status: string; reason: string }>; cancel(): void };
   state(): { mode: string };
 }
@@ -47,17 +62,20 @@ export interface StrataPanelMotion {
   keyframes: { offset: number; opacity?: number; scaleX?: number; scaleY?: number; tiltX?: number; perspective?: number }[];
   timing: { duration: number; easing: string };
 }
-/** The material descriptor the helper hands to `setMaterial`: `relief` for a version 1 scene, `objects` for version 2. */
-export interface StrataSceneMaterial {
-  kind: "relief" | "objects";
-  scene: StrataScene;
+/**
+ * The material descriptor the helper hands to `setMaterial`: `relief` for a version 1 scene, `objects` for version 2
+ * and 3, `instrument` for version 4.
+ */
+export type StrataSceneMaterial = StrataMaterialBase & ({ kind: "relief" | "objects"; scene: StrataScene } | { kind: "instrument"; scene: StrataInstrumentScene });
+/** What every material descriptor of the helper's has in common. */
+export interface StrataMaterialBase {
   bounds: "layer";
   interaction: "material";
   media: "identity";
   fallback: "static";
 }
 /** The material descriptor of the Scene level's decorative layers: a stage scene (rendering model 2C). */
-export interface StrataStageMaterial extends Omit<StrataSceneMaterial, "kind" | "scene"> {
+export interface StrataStageMaterial extends StrataMaterialBase {
   kind: "stage";
   scene: StageScene;
 }
@@ -112,7 +130,7 @@ export interface StrataGpu {
   /** Rebuilds every panel's scene now (for example from the runtime's `onStatusChange`). */
   refresh(): void;
   /** The scene last given to a panel, for inspection and tests. */
-  scene(panel: HTMLElement): StrataScene | undefined;
+  scene(panel: HTMLElement): StrataScene | StrataInstrumentScene | undefined;
   /** Releases every panel: cancels materials, leaves face mode and releases the enrollments. */
   detach(): void;
   /** The highest level the adjust policy currently allows (`scene` when it allows everything, or when it is off). */
@@ -138,6 +156,8 @@ const interactive = "input, button, select, textarea, a[href], [tabindex]";
 /** Material roles by face, for elements that name no material (design language section 4). */
 function roleOf(face: SceneFace, element: Element, panel: Element): string {
   if (element === panel || element.matches(".ug-card")) return "panel";
+  // A knob's skirt and cap are raised faces in the knob's material.
+  if (element.matches(".ug-knob__skirt, .ug-knob__cap")) return "knob";
   if (face === "raised") return element.matches(".ug-button--accent, .ug-button--primary") ? "buttonPrimary" : "control";
   return ({ well: "field", groove: "rail", knob: "knob", mark: "indicator", ring: "field", flat: "control" } as Record<string, string>)[face] ?? "control";
 }
@@ -195,7 +215,7 @@ function radiusOf(element: Element, width: number) {
 }
 
 /** A presentation level (design language section 16). */
-export type StrataLevel = "relief" | "objects" | "scene";
+export type StrataLevel = "relief" | "objects" | "instrument" | "scene";
 
 /** What a caller may override in a panel's scene. */
 export interface StrataSceneOptions {
@@ -211,16 +231,24 @@ export interface StrataSceneOptions {
   cap?: StrataLevel;
   /** An environment map for the objects to reflect: the scene becomes version 3. */
   environment?: EnvironmentMap;
+  /**
+   * At the Instrument level, each knob's spring (its pointer's position along the travel), kept between scenes; the
+   * knobs whose spring is still moving are added to `moving`, so the caller builds another scene next frame.
+   */
+  springs?: WeakMap<Element, KnobSpring>;
+  moving?: Set<Element>;
+  /** The time the springs advance to (ms, `performance.now()` by default). */
+  now?: number;
 }
 
 /** The levels from lowest to highest. */
-export const strataLevels: readonly StrataLevel[] = ["relief", "objects", "scene"];
+export const strataLevels: readonly StrataLevel[] = ["relief", "objects", "instrument", "scene"];
 const lower = (a: StrataLevel, b: StrataLevel) => (strataLevels.indexOf(a) <= strataLevels.indexOf(b) ? a : b);
 
 /** The level an element is presented at: its own `data-strata-level`, or the nearest scope's, or the default. */
 export function strataLevel(element: Element, fallback: StrataLevel = "relief"): StrataLevel {
   const level = element.closest("[data-strata-level]")?.getAttribute("data-strata-level");
-  return level === "relief" || level === "objects" || level === "scene" ? level : fallback;
+  return level === "relief" || level === "objects" || level === "instrument" || level === "scene" ? level : fallback;
 }
 
 /**
@@ -229,7 +257,7 @@ export function strataLevel(element: Element, fallback: StrataLevel = "relief"):
  * which includes it), it is a version 2 scene: those components become objects (design language section 6), mixed
  * into the same back-to-front list, seen through the stage's camera.
  */
-export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}): StrataScene {
+export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}): StrataScene | StrataInstrumentScene {
   registerTokens();
   const tokens = reader(panel);
   const level = (element: Element, fallback: string) =>
@@ -250,7 +278,10 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     return material(named && panel.contains(named) ? named.getAttribute("data-strata-material")! : tokens.raw(`material.roles.${roleOf(face, element, panel)}`) || "matte");
   };
   const states = (element: Element) => {
-    const control = element.matches(interactive) ? element : element.closest("label")?.querySelector("input, select, textarea") ?? element;
+    // A knob's skirt and cap are its input's object: they take its hover, press and disabled state. Its focus ring is
+    // the CSS outline round the skirt (captured content), so the GPU adds no focus edge of its own.
+    const knob = element.closest(".ug-knob__dial")?.querySelector(".ug-knob__input");
+    const control = element.matches(interactive) ? element : knob ?? element.closest("label")?.querySelector("input, select, textarea") ?? element;
     const target = control.closest("label") ?? control;
     const preview = `${element.getAttribute("data-strata-preview") ?? ""} ${control.getAttribute("data-strata-preview") ?? ""}`.split(/\s+/);
     // Only a control takes hover and press: a card, a plinth or any other surface under the pointer stays where it is.
@@ -260,11 +291,16 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       // A toggle that is on, the current page of a Pagination, or a SegmentedControl's selected key holds its key down (design language section 6: it
       // latches at its travel).
       pressed: (isControl && control.matches(":active, [aria-pressed='true'], [aria-current]:not([aria-current='false']), .ug-segmented__input:checked")) || preview.includes("active"),
-      focus: control.matches(":focus-visible") || preview.includes("focus"),
+      focus: !knob && (control.matches(":focus-visible") || preview.includes("focus")),
       disabled: control.matches(":disabled, [aria-disabled='true']"),
     };
   };
-  const objects = (element: Element) => lower(strataLevel(element, options.level), options.cap ?? "scene") !== "relief";
+  const effective = (element: Element) => lower(strataLevel(element, options.level), options.cap ?? "scene");
+  // The Instrument level, per layer (design language section 16): a panel with any element at `instrument` is drawn
+  // with core's `instrument` material. Its knobs and buttons become parts; everything else stays on the face as Relief.
+  const instrumentLayer = [panel, ...panel.querySelectorAll("[data-strata-level]")].some(element => effective(element) === "instrument");
+  const objects = (element: Element) => !instrumentLayer && effective(element) !== "relief";
+  const knobs = new Set<HTMLElement>(), keys: HTMLElement[] = [];
   // Objects (design language section 6): the tokens of their proportions, and the height each surface's top stands at.
   const keyHeight = tokens.number("object.keyHeight", 8), keyTravel = tokens.number("object.keyTravel", 6), taper = tokens.number("object.taper", 3);
   const tops = new Map<Element, number>(), floors = new Map<Element, number>();
@@ -285,10 +321,21 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     if (entries.length >= 254) break;
     const face = element.getAttribute("data-strata-face") as SceneFace;
     if (!faces.includes(face) || !element.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    if (instrumentLayer && effective(element) !== "relief") {
+      // A knob's skirt and cap are drawn as its Instrument object; a button as a key with a captured cap.
+      const knob = element.matches(".ug-knob__skirt, .ug-knob__cap") ? element.closest<HTMLElement>(".ug-knob") : null;
+      if (knob) { knobs.add(knob); continue; }
+      if (face === "raised" && element.matches("button")) { keys.push(element); continue; }
+    }
     let rect = rectWithin(element, panel);
     if (rect[2] <= 0 || rect[3] <= 0) continue;
     const state = states(element);
     const radius = radiusOf(element, rect[2]);
+    // A Switch's hardware form (`switch-forms.ts`): its parts, inside the input's box, shadows included.
+    const form = switchFormEntries(element, { rect, radius, state, objects: objects(element), base: baseOf(element), rectOf: part => rectWithin(part, panel), material: materialFor, well: level(element, "well"),
+      knob: { material: material(tokens.raw("material.roles.knob") || "satin"), colour: tokens.colour("knob") }, hoverHeight: tokens.number("state.hoverHeight", 1.6),
+      light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, domes: options.domes });
+    if (form) { entries.push(...form); continue; }
     if (objects(element) && face !== "ring" && face !== "flat") {
       const base = baseOf(element);
       if (element.matches("input[type='range']")) {
@@ -393,6 +440,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     focus: { colour: tokens.colour("accent"), width: tokens.number("focus.width", 3), offset: tokens.number("focus.offset", 0.5) },
     materials,
   };
+  if (instrumentLayer) return instrumentScene(panel, options, { settings, entries: entries as ScenePrimitive[], knobs, keys, states, materialFor, tokens, reach });
   if (!entries.some(isSceneObject)) return { format: "strata-scene", version: 1, ...settings, primitives: entries };
   // The camera (design language section 2): centred on the stage, at D = max(camera.distance, r · h / taper + h),
   // with r the stage's half-diagonal, so every solid keeps the taper rule wherever its panel sits.
@@ -405,6 +453,113 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     format: "strata-scene", version: options.environment ? 3 : 2, ...(options.environment ? { environment: options.environment } : {}),
     camera: { distance, vanish: [(stage.left + stage.width / 2 - outer.left) / scale, (stage.top + stage.height / 2 - outer.top) / scale] },
     ...settings, primitives: entries,
+  };
+}
+
+/**
+ * A version 4 scene for core's `instrument` material (Rendering Model part 2D), as the helper writes it: the face's
+ * relief primitives, and the knobs and keys as objects of parts.
+ */
+export interface StrataInstrumentScene extends Omit<StrataScene, "version" | "primitives" | "materials" | "environment" | "light"> {
+  version: 4;
+  kind: "instrument";
+  camera: { distance: number; vanish: [number, number] };
+  environment: { source: "studio"; strength: number };
+  light: { azimuth: number; elevation: number; intensity: number };
+  materials: Record<string, InstrumentRecipe>;
+  primitives: ScenePrimitive[];
+  profiles: Record<string, InstrumentProfile>;
+  objects: InstrumentObject[];
+}
+
+const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * The Instrument scene of a panel (design language section 16, `gpu/instrument.ts`): the face as the Relief level
+ * draws it (its primitives), each knob at the Instrument level as the premium knob, its pointer turned by its spring,
+ * and each button at the Objects level or above as a key with a captured cap. Everything else stays a Relief primitive.
+ */
+function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, context: {
+  settings: Omit<StrataScene, "format" | "version" | "primitives">; entries: ScenePrimitive[]; knobs: Set<HTMLElement>; keys: HTMLElement[];
+  states: (element: Element) => { hover: boolean; pressed: boolean; focus: boolean; disabled: boolean };
+  materialFor: (element: Element, face: SceneFace) => string; tokens: ReturnType<typeof reader>; reach: number;
+}): StrataInstrumentScene {
+  const { settings, entries, tokens } = context;
+  const materials: Record<string, InstrumentRecipe> = {};
+  for (const [name, layers] of Object.entries(settings.materials)) {
+    materials[name] = { base: { roughness: layers.base?.roughness ?? 1, metallic: layers.base?.metallic ?? 0 }, coat: { ...layers.coat }, emissive: { strength: layers.emissive?.strength ?? 0 } };
+  }
+  const profiles: Record<string, InstrumentProfile> = {};
+  const profile = (name: string, shape: InstrumentProfile) => {
+    const key = `${name}:${JSON.stringify(shape)}`;
+    profiles[key] ??= shape;
+    return key;
+  };
+  const use = (name: string) => { materials[name] ??= premiumMaterials[name]!; return name; };
+  const scale = depthScale(tokens.number("depth", 0.5)), raised = tokens.number("elevation.raised", 3);
+  const outer = panel.getBoundingClientRect(), stageBox = (options.stage ?? panel.parentElement ?? panel).getBoundingClientRect();
+  const zoom = outer.width / Math.max(panel.offsetWidth, 1) || 1;
+  const stage = { width: stageBox.width / zoom, height: stageBox.height / zoom };
+  const objects: InstrumentObject[] = [];
+  const ids = new Set<string>(), idOf = (element: Element, prefix: string) => {
+    let id = (element.id || `${prefix}-${objects.length + 1}`).slice(0, 64);
+    while (ids.has(id)) id = `${id.slice(0, 60)}-${ids.size}`;
+    ids.add(id);
+    return id;
+  };
+  const now = options.now ?? performance.now(), instant = reducedMotion();
+  let tallest = 0;
+  for (const root of context.knobs) {
+    const input = root.querySelector<HTMLInputElement>(".ug-knob__input"), skirt = root.querySelector(".ug-knob__skirt"), cap = root.querySelector(".ug-knob__cap");
+    if (!input || !skirt || !cap || objects.length + entries.length >= 255) continue;
+    const min = Number.parseFloat(input.min) || 0, max = Number.isFinite(Number.parseFloat(input.max)) ? Number.parseFloat(input.max) : 100;
+    const target = max > min ? Math.min(1, Math.max(0, (Number(input.value) - min) / (max - min))) : 0;
+    // The pointer follows the value on its spring (section 12): a uniform update per frame, never a capture.
+    let t = target;
+    if (options.springs) {
+      let spring = options.springs.get(input);
+      if (!spring || instant) { spring = { t: target, v: 0, time: now }; options.springs.set(input, spring); }
+      else {
+        // A spring at rest starts one frame back, so the first frame after a change already moves.
+        if (spring.v === 0 && spring.t === target) spring.time = now;
+        else if (spring.v === 0 && now - spring.time > 50) spring.time = now - 16;
+        if (!advanceSpring(spring, target, now, root.matches(".ug-knob--detented") ? knobSprings.detent : knobSprings.knob)) options.moving?.add(input);
+      }
+      t = spring.t;
+    }
+    const state = context.states(skirt);
+    const sweep = reader(root).number("knob.sweep", 270);
+    objects.push(knobObject({ id: idOf(input, "knob"), box: rectWithin(input, panel), skirt: rectWithin(skirt, panel)[2], cap: rectWithin(cap, panel)[2], t, sweep, scale,
+      state: { hover: state.hover, disabled: state.disabled }, relief: { height: raised, material: use("knobCap") } }, profile));
+    for (const name of ["knobSkirt", "knobChamfer", "knobInk"]) use(name);
+    options.domes?.add(skirt); options.domes?.add(cap);
+    tallest = Math.max(tallest, (2.5 + 16 + 1.2) * scale);
+  }
+  for (const element of context.keys) {
+    if (objects.length + entries.length >= 255) break;
+    const colour = hex(getComputedStyle(element).backgroundColor), name = `key ${colour}`;
+    const box = rectWithin(element, panel), state = context.states(element), height = 5 * scale;
+    // A body per colour (the button's own face colour, in its material's roughness), within core's 16 materials.
+    const key = materials[name] || Object.keys(materials).length < 14
+      ? keyObject({ id: idOf(element, "key"), box, radius: radiusOf(element, box[2]), material: name, height, travel: 2.5 * scale, pressed: state.pressed,
+        state: { hover: state.hover, pressed: state.pressed, disabled: state.disabled }, stage, relief: { height: raised, material: use("keyCap") } }, profile)
+      : undefined;
+    if (!key) { entries.push({ face: "raised", rect: box, radius: radiusOf(element, box[2]), height: raised, material: context.materialFor(element, "raised"), state }); continue; }
+    const layers = settings.materials[context.materialFor(element, "raised")];
+    materials[name] ??= { base: { colour, roughness: layers?.base?.roughness ?? 0.45, metallic: layers?.base?.metallic ?? 0 }, coat: { ...layers?.coat } };
+    objects.push(key);
+    tallest = Math.max(tallest, height + 1);
+  }
+  const elevation = (tokens.number("light.elevation", 41) * Math.PI) / 180;
+  const reach = Math.min(128, Math.max(context.reach, Math.ceil(tallest / Math.tan(elevation) + 1.5 * tallest + 1)));
+  return {
+    ...settings, format: "strata-scene", version: 4, kind: "instrument",
+    outset: { top: reach, right: reach, bottom: reach, left: reach },
+    camera: { distance: Math.max(INSTRUMENT_CAMERA, tokens.number("camera.distance", 1600)),
+      vanish: [(stageBox.left + stageBox.width / 2 - outer.left) / zoom, (stageBox.top + stageBox.height / 2 - outer.top) / zoom] },
+    environment: { source: "studio", strength: Math.min(3, Math.max(0, tokens.number("environment.intensity", 1))) },
+    light: { ...settings.light, intensity: 1.6 },
+    materials, primitives: entries, profiles, objects,
   };
 }
 
@@ -454,6 +609,8 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   // Scrims under open dialogs: plain layers (no material) that the GPU fades in and out.
   const scrims = new Map<HTMLElement, { id: string; release: () => void; fade?: ReturnType<StrataGpuController["transition"]>; closing?: boolean }>();
   let serial = 0, frame = 0, detached = false;
+  // Instrument knobs' springs, kept between scenes; the knobs still moving ask for another frame.
+  const springs = new WeakMap<Element, KnobSpring>(), moving = new Set<Element>();
   const schedule = () => { if (!frame && !detached) frame = requestAnimationFrame(sync); };
   const resize = new ResizeObserver(schedule);
   // The adjust policy: a cap on levels, moved by frame intervals measured here (no core dependency).
@@ -491,8 +648,13 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
       const highest = wanted(), current = lower(cap, highest);
       over = p95 > policy.frameBudgetMs ? over + 1 : 0;
       under = p95 <= policy.frameBudgetMs * 0.8 ? under + 1 : 0;
-      if (over >= policy.stepDownAfterFrames && current !== "relief") step(strataLevels[strataLevels.indexOf(current) - 1]!, p95);
-      else if (under >= policy.stepUpAfterFrames && strataLevels.indexOf(cap) < strataLevels.indexOf(highest)) step(strataLevels[strataLevels.indexOf(current) + 1]!, p95);
+      // The Scene level draws its panels at the Objects level, so a page that asks for `scene` steps over `instrument`.
+      const next = (direction: 1 | -1) => {
+        const level = strataLevels[strataLevels.indexOf(current) + direction]!;
+        return level === "instrument" && highest === "scene" ? strataLevels[strataLevels.indexOf(level) + direction]! : level;
+      };
+      if (over >= policy.stepDownAfterFrames && current !== "relief") step(next(-1), p95);
+      else if (under >= policy.stepUpAfterFrames && strataLevels.indexOf(cap) < strataLevels.indexOf(highest)) step(next(1), p95);
     }
     meter = requestAnimationFrame(measure);
   };
@@ -572,6 +734,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   function sync() {
     frame = 0;
     if (detached) return;
+    moving.clear();
     const gpu = presenting();
     for (const element of root.children) {
       if (!shown(element)) continue;
@@ -601,7 +764,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     // A CSS transition (a knob sliding, a face settling) moves geometry with no event per frame: follow it until it
     // ends. Endless CSS animations (the spinner) stay in the captured content and need no new scene.
     if (gpu && (root.getAnimations({ subtree: true }).some(animation => animation instanceof CSSTransition && animation.playState === "running")
-      || [...panels.values()].some(entry => entry.motion))) schedule();
+      || [...panels.values()].some(entry => entry.motion) || moving.size)) schedule();
   }
 
   // ---- The Scene level (Phase 5): decorative layers the helper owns, a backdrop first and particles last. ----
@@ -700,16 +863,19 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     if (element.getAttribute("data-strata-mode") !== "face") element.setAttribute("data-strata-mode", "face");
     const motion = entry.motion;
     const domes = new Set<Element>();
-    const scene = strataScene(element, { level: options.level, cap, stage: stageBox(), domes, environment,
+    const scene = strataScene(element, { level: options.level, cap, stage: stageBox(), domes, environment, springs, moving,
       ...(motion ? { height: motion.from + (motion.to - motion.from) * motion.ease(Math.min(1, (performance.now() - motion.start) / motion.duration)) } : {}) });
     markDomes(entry, domes);
     const key = JSON.stringify(scene);
     if (entry.scene === key) return;
-    const kind = scene.version === 1 ? "relief" : "objects";
+    const kind = scene.version === 1 ? "relief" : scene.version === 4 ? "instrument" : "objects";
     try {
       // A change of level changes the material's kind: the new material replaces the old one in one step.
       if (entry.handle && entry.kind === kind) entry.handle.update(scene);
-      else entry.handle = controller.setMaterial(entry.id, { kind, scene, bounds: "layer", interaction: "material", media: "identity", fallback: "static" });
+      else {
+        const base = { bounds: "layer", interaction: "material", media: "identity", fallback: "static" } as const;
+        entry.handle = controller.setMaterial(entry.id, scene.version === 4 ? { kind: "instrument", scene, ...base } : { kind: kind as "relief" | "objects", scene, ...base });
+      }
       entry.kind = kind;
       entry.scene = key;
     } catch {
@@ -764,7 +930,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   const handle: StrataGpu = {
     burst,
     refresh: () => { if (frame) cancelAnimationFrame(frame); sync(); },
-    scene: panel => { const key = panels.get(panel)?.scene; return key ? JSON.parse(key) as StrataScene : undefined; },
+    scene: panel => { const key = panels.get(panel)?.scene; return key ? JSON.parse(key) as StrataScene | StrataInstrumentScene : undefined; },
     cap: () => cap,
     detach: () => {
       if (detached) return;

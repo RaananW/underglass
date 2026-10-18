@@ -60,10 +60,10 @@ function blended(token: Token): string {
 
 /**
  * The current size's values for each size in the source (`size.<part>.<size>`): `--strata-indicator`,
- * `--strata-switch-width`, `--strata-control-offset` and `--strata-control-font`.
+ * `--strata-switch-width`, `--strata-control-offset`, `--strata-control-font` and `--strata-knob-size`.
  */
 function sizes(tokens: Token[]): [string, string[]][] {
-  const parts: Record<string, string> = { indicator: "indicator", switchWidth: "switch-width", control: "control-offset", font: "control-font" };
+  const parts: Record<string, string> = { indicator: "indicator", switchWidth: "switch-width", control: "control-offset", font: "control-font", knob: "knob-size" };
   const bySize = new Map<string, string[]>();
   for (const token of tokens.filter(token => token.path.startsWith("size."))) {
     const [, part, size] = token.path.split(".") as [string, string, string];

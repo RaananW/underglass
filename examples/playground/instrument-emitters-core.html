@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Underglass core: emitters and the pointer light</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    /* Colour roles from the design language (section 8), light and dark. The light stage is not white, so the light
+       that spills past a panel's edge onto it can be seen. */
+    body { --stage: rgb(222, 225, 230); --panel: rgb(233, 235, 239); --secondary: rgb(247, 248, 250); --text: rgb(28, 30, 36);
+      --muted: rgb(90, 94, 104); --knob: rgb(252, 252, 253); --edge: rgb(118, 124, 136);
+      background: var(--stage); color: var(--text); font: 14px system-ui; }
+    body[data-theme="dark"] { --stage: rgb(24, 26, 31); --panel: rgb(44, 48, 56); --secondary: rgb(62, 67, 78); --text: rgb(232, 234, 240);
+      --muted: rgb(168, 174, 186); --knob: rgb(236, 238, 242); --edge: rgb(132, 139, 154); }
+    [hidden] { display: none !important; }
+    #frame { position: fixed; inset: 0; }
+    #status { position: fixed; right: 8px; bottom: 6px; max-width: 52ch; margin: 0; padding: 4px 8px; border-radius: 6px;
+      background: rgb(255 255 255 / 0.85); color: black; font: 11px/1.3 system-ui; white-space: pre-wrap; pointer-events: none; z-index: 1; }
+    /* The stage is an enrolled layer too: the plain page the lamps and the pointer light fall on, with the controls. */
+    #stage { position: absolute; inset: 0; background: var(--stage); }
+    .ec-toolbar { position: absolute; left: 24px; bottom: 20px; display: flex; align-items: center; gap: 14px; font-size: 13px; color: var(--text); }
+    .ec-toolbar label { display: flex; align-items: center; gap: 6px; }
+    .ec-toolbar select, .ec-toolbar input { font: 13px system-ui; }
+    .ec-panel { position: absolute; box-sizing: border-box; border-radius: 14px; padding: 14px 18px; margin: 0; background: var(--panel); color: var(--text); }
+    .ec-panel h2 { margin: 0 0 12px; font-size: 15px; line-height: 20px; font-weight: 600; }
+    .ec-row { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; min-height: 30px; }
+    .ec-label { font-size: 14px; font-weight: 600; }
+    .ec-caption { font-size: 13px; color: var(--muted); }
+    .ec-note { margin: 0; font-size: 13px; line-height: 18px; color: var(--muted); max-width: 30ch; }
+    /* Native controls: lamps are switches with the lens as their face, LEDs are status images, the lit ring is a push
+       button's ring. */
+    .ec-panel input { appearance: none; margin: 0; padding: 0; border: 0; outline: none; cursor: pointer; background: transparent; }
+    .ec-lamp { width: 28px; height: 28px; border-radius: 50%; flex: none; }
+    .ec-led { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
+    .ec-knob { width: 44px; height: 44px; border-radius: 50%; flex: none; }
+    .ec-knob::-webkit-slider-thumb { appearance: none; width: 1px; height: 1px; background: transparent; }
+    .ec-panel button { margin: 0; padding: 0; border: 0; border-radius: 8px; width: 72px; height: 34px; flex: none;
+      font: 600 13px system-ui; cursor: pointer; outline: none; background: var(--secondary); color: var(--text); }
+    .ec-panel button.ec-ring { width: 44px; height: 44px; border-radius: 50%; font-size: 11px; }
+    .ec-panel :focus-visible { outline: 2px solid rgb(37, 99, 235); outline-offset: 2px; }
+    .ec-corner { position: absolute; display: flex; align-items: center; gap: 8px; }
+    /* Relief and Objects levels: the controls paint their own faces (the lens colour is captured; at Objects a dome
+       draws over it). Instrument level: meshes draw them, so they paint nothing but stay native and hit-testable. */
+    #frame[data-level="relief"] .ec-lamp, #frame[data-level="objects"] .ec-lamp { background: radial-gradient(circle at 40% 35%, rgb(90, 82, 74), rgb(42, 36, 32)); }
+    #frame[data-level="relief"] .ec-lamp:checked, #frame[data-level="objects"] .ec-lamp:checked { background: radial-gradient(circle at 40% 35%, rgb(255, 236, 190), rgb(255, 170, 60)); }
+    #frame[data-level="relief"] .ec-led, #frame[data-level="objects"] .ec-led { background: rgb(70, 220, 110); }
+    #frame[data-level="relief"] .ec-knob, #frame[data-level="objects"] .ec-knob { background: var(--knob); box-shadow: inset 0 0 0 1px var(--edge); }
+    #frame[data-level="relief"] .ec-ring, #frame[data-level="objects"] .ec-ring { box-shadow: inset 0 0 0 4px rgb(80, 150, 255); }
+  </style>
+</head>
+<body data-theme="light">
+  <div id="frame"></div>
+  <pre id="status" role="status"></pre>
+  <script type="module" src="/src/instrument-emitters-core/page.ts"></script>
+</body>
+</html>
