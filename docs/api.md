@@ -616,7 +616,9 @@ them, and a version 4 scene without emitters shades as before.
   protected box (`"extent"`, or more than 64 rects) has its caps per cell of a 16 × 9 grid, so the part shadows and the
   light stay everywhere at most `interior.max` from the face. A layer adds no light to the text of the layers beneath
   its outset (their protected rects, mapped into its space): each layer's text takes light from its own layer only.
-  Part shadows inside protected areas are guarded whether or not the scene has emitters (2D.4's face factor).
+  Part shadows inside protected areas are guarded whether or not the scene has emitters (2D.4's face factor). Not held:
+  text on bare ground (inside no relief entry) takes the relief's cast shadows at full strength, as Relief never guarded
+  it; caps step at the cells' borders; under a protected box the relief highlights are off.
 - **Budget.** A layer draws the 64 emitters that give light and reach furthest into it (scene order on ties); the rest
   are dropped and reported, never a validation error, and GPU stays on.
 - **`handle.setEmitters(emitters)`** replaces a version 4 scene's emitters without validating, repacking or rebuilding
@@ -627,7 +629,8 @@ them, and a version 4 scene without emitters shades as before.
 - **Diagnostics.** `state().emitters` has the budget (64), `order` (`"core"`, or why the face pools are off), the task
   timing status and, per layer with emitters or protected rects: `emitters`, `lit`, `outOfReach`, `drawn` (scene
   indices), `dropped` (`{ index, margin }`, margin in px of reach), `pass` (`drawn`, `idle` or `off`), `feather`,
-  `beneath` (lower layers' text rects under its outset), `guard` (`rects`, `extent`, `overflow`, `caps` with each rect's
+  `beneath` (`{ rects, merged, overflow }`: lower layers' text under its outset, merged into one box when it does not fit,
+  or the whole outset unlit when nothing fits), `guard` (`rects`, `extent`, `overflow`, `caps` with each rect's
   `light` and `shadow` caps, `cells` with each cell's caps for a protected box) and `gpu` (`lastMs`, `p50Ms`, `p95Ms`,
   `samples`, `total`). `state().instrument.layers[].lights` reports whether a scene has its clustered lights and how many
   are lit. `state().resources.lightPasses` counts the face pools alive (they go with their passes after a queue fence or

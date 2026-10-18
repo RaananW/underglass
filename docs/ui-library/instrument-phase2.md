@@ -494,12 +494,18 @@ pool's pixels:
     plus the offsets of the earlier entries it overlaps there)`, and `k_lo` likewise with the negative offsets. Entries
     side by side never add (review fix: the first version summed every overlapping entry, so a rect over two separate
     satin keys bounded `k_hi` at 1.01 instead of 1.005, and ten satin keys under `"extent"` left no light at all);
-  - **shadows where they can fall on a guarded face:** an entry's cast shadow lowers `k_lo` to
-    `1 − min(strength, m)` only where its shadow region meets a point of the area that lies on an *earlier* entry (the
-    shading drops shadows under later covers) and is not a pixel inside the caster (2.8). A face's own drop shadow, which
-    falls outside the face, never counts (review fix: the first version counted any shadow that could reach the area,
-    the panel's own included through its rounded corners, so one raised face under `"extent"` lost every part shadow).
-    The cast height is the entry's in its state (hover raises it, a press lowers it).
+  - **shadows where they can fall on a guarded face:** every caster counts, whether or not its box touches the area (its
+    shadow reaches past it). Its cast shadow lowers `k_lo` to `1 − min(strength, m)` only where its shadow region meets
+    a point of the area that lies on an *earlier* entry (the shading drops shadows under later covers) and is not a
+    pixel inside the caster (2.8). A face's own drop shadow, which falls outside the face, never counts (review fix: the
+    first version counted any shadow that could reach the area, the panel's own included through its rounded corners, so
+    one raised face under `"extent"` lost every part shadow; second review fix: the fix after it tested shadows only
+    for casters whose box touched the area, so a rect 2 px below a key bounded `k` at [1, 1] while the shading darkens it
+    by up to 0.215; it is now [0.96, 1]). The cast height is the one the relief pass packs, through the same function
+    (`castHeight`): hover raises it, a press lowers a face by `pressHeight` and a key or mark by its travel (a pressed key
+    of height 10 and travel 2 casts 8, not 2.5).
+  - **a rect wholly inside a cover** (half a pixel clear of its edge) takes that cover's offset alone: offsets stack only
+    within antialiased edges.
 - **Light:** inside an area, `E` is capped per channel at `(1 + m) / k_hi − 1` (`m` on a plain face).
 - **Part shadows:** inside an area, each object's face shadow is scaled (2.9's `g`, so it keeps its soft profile) so that
   the `n` objects whose shadows reach the area darken it together by at most `1 − (1 − m) / k_lo` (`shadowScales`, a pure
@@ -514,9 +520,16 @@ pool's pixels:
   near the edge still lights the page past it.
 - **Lower layers' text:** a layer adds no light to the text of the layers beneath its outset. Each frame core maps the
   protected areas of every lower layer into the layer's px, keeps their parts that lie in its outset (outside its own
-  box, which covers the rest), and adds them to the block with a light cap of 0, after the layer's own rects; if they do
-  not fit, the outset gets no light at all. Each layer's text therefore takes light only from its own layer, within its
-  own guard (review fix: C's lamp lit B's text in C's outset by +35 levels at 2 px).
+  box, which covers the rest), and adds them to the block with a light cap of 0, after the layer's own rects. If they do
+  not fit, they are merged into their bounding box (no light there, and only there); if the layer's own rects leave no
+  room at all, the outset gets no light. `state().emitters.layers[].beneath` reports `{ rects, merged, overflow }`. Each
+  layer's text therefore takes light only from its own layer, within its own guard (review fix: C's lamp lit B's text in
+  C's outset by +35 levels at 2 px). It assumes the upper layer's box is opaque: lower text inside the upper box (its
+  rounded corners included) where the upper layer is transparent is lit by the upper layer's `reach: "outset"` lamps
+  without a cap.
+- **What the guard does not hold:** text on bare ground (inside no relief entry) takes the relief's cast shadows at full
+  strength, as part 2.9 never guarded it; the caps step at the cells' borders, so a part shadow under a protected box can
+  be cut along a straight line; under a protected box the relief highlights are off across the whole box.
 
 **Deviation from 2D.4:** the model clamps the product `(1 − Sₚ)(1 + E)` to `[(1 − m)/k, (1 + m)/k]`; core bounds each
 side. They are equal when only light or only shadow reaches a protected pixel; with both, core is stricter (light does
@@ -661,13 +674,39 @@ above and measured here (headless DPR 1 and 2, and headful DPR 1, identical pixe
 - **Every written frame drawn.** A writer in the usual idiom (asks for its next frame, then writes): 299 draws for 300
   writes (was 150); the pointer run 297–300 draws for 300 moves.
 - **Tests.** The guard tolerance is 1 level against the plain pass (worst measured 0.44); the lamp's change alone is
-  asserted within 1.5 levels (two separately rounded frames; worst 1.12, Objects light label); a pass retired by a
-  resize disposes its pool while the engine lives (1 disposed, 4 pools before and after, the next frame drawn).
+  asserted within 1.5 levels (worst 1.12, Objects light label: the two frames are each rounded once, which accounts for
+  ≈ 1.02 of it, the rest is the 8-bit blend); a pass retired by a resize disposes its pool while the engine lives (1
+  disposed, 4 pools before and after, the next frame drawn).
 - **Nits.** The block is packed once per layer and frame; a failed pool creation releases its frame-graph context; pools
   are created and their pipelines built with their pass; the timing answer cannot write into a replaced record; layers
   that no longer light anything leave the diagnostics.
 
-**Suites (after the review fixes):** `core-emitters` 6 of 6 headless and 3 of 3 headful (DPR 1); `core-instrument` 5 of 5,
+**Second review fixes (2026-10-18).** A second review found two regressions in the fixes and four smaller gaps; each is fixed
+above and measured here (headless DPR 1 and 2, headful DPR 1, identical numbers):
+
+- **Every caster's shadow counts** (regression). A rect below a key in the unit scene: at y 70 / 71 [0.96, 1.005], at
+  y 72 / 75 [0.96, 1] (was [1, 1]), at y 90 [1, 1] (clear of the shadow); the review's rect [146..160, 96..104] beside a
+  raised key [100, 50, 40, 40]: [0.96, 1] (was [1, 1] with caps 0.04 / 0.04). Ten satin keys under `"extent"`: 91 of 144
+  cells may lie in a key's shadow (shadow cap 0), the smallest light cap stays 0.0348. Cast heights now match the relief
+  pass: a raised face of height 10 casts 10, 16 hovered, 2.5 pressed; a key of height 10 and travel 2 casts 8 pressed
+  (the guard assumed 2.5) and 12.5 hovered. A rect wholly inside a key on a satin plate: [1, 1.005] (was 1.01).
+- **Ordinary draws during a lead frame** (regression). A light written in one frame, then `handle.update` (B's shadow
+  strength 0.24 → 0.6) in the next, while core's lead frame was pending: 1 GPU frame in the two frames after the update,
+  0 paints, the stage below B 73–75 levels darker. With the regression rebuilt into the page the same sequence drew 0
+  frames (three runs), so the test tells them apart.
+- **Lower layers' text that does not fit** is merged into its bounding box before the outset goes dark, reported in
+  `beneath` (`{ rects, merged, overflow }`; C: 1 rect, not merged, no overflow); unit-tested with 63 + 2 and 64 + 2 rects.
+- **`writeLight`** computes the guard when `packLights` did not run (admission's own uniform write).
+- **Tests:** B's note under C's outset: the raw difference lamp off against on is 0 levels on both themes, while a control
+  point in C's glow 9 px below it gains +10.7 (light) and +2.7 (dark); after the pass with its pool was replaced by a
+  resize, C's lamp lights B past C's edge by +21.3; the overlapping rects have exact caps (0.034826 / 0 and
+  0.034826 / 0.04).
+
+**Suites (after the second review's fixes):** `core-emitters` 6 of 6 headless and 3 of 3 headful (DPR 1); `core-instrument`,
+`ui-gpu`, relief, objects, stage, material and the I0.3 probe: 74 of 74; unit 152 (1 skipped), compiler 129, typecheck,
+build and `test:package` pass.
+
+**Suites (after the first review's fixes):** `core-emitters` 6 of 6 headless and 3 of 3 headful (DPR 1); `core-instrument` 5 of 5,
 `ui-gpu`, relief, objects, stage, material and the I0.3 probe: 74 of 74; unit 151 (1 skipped), compiler 129,
 typecheck, build and `test:package` pass. The first version's runs: `core-emitters` 6 / 3, the same suites 69 + 5,
 unit 149.
