@@ -9,6 +9,8 @@
  *   not hold the mesh);
  * - `tall-cap`: the same cap at twice the scale, nearly as wide as its box and 21 px tall, whose face shadow would leave the
  *   box without the cap on a derived caster's height;
+ * - `lamp`: the dome of `dense` as the lens of an emitter (`emitter: 0`): its glow copy takes the file's triangles too, and the
+ *   emitter lights the lens (clustered lights) and blooms inside its box, with no light on the face (`face: 0`);
  * - `prism-ref`: the parametric prism the `block` mesh imitates, for the tops-are-lit comparison.
  * Nothing here is a core API: it is what an application (or the Strata helper) writes.
  */
@@ -17,7 +19,7 @@ import type { InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentRec
 type Vec3 = [number, number, number];
 export const CAMERA_DISTANCE = 2400;
 export const GLB = "/custom/parts.glb";
-export const SPECS = ["bar-inline", "disc-inline", "cap", "lever", "block", "dense", "slab", "long-bar", "missing", "malformed", "wrong-scale", "prism-ref", "tall-cap"] as const;
+export const SPECS = ["bar-inline", "disc-inline", "cap", "lever", "block", "dense", "slab", "long-bar", "missing", "malformed", "wrong-scale", "prism-ref", "tall-cap", "lamp"] as const;
 export type Spec = (typeof SPECS)[number] | "cap-lathe";
 /** The control's box edge, px. */
 export const BOX = 100;
@@ -86,6 +88,7 @@ export function modelOf(spec: Spec): Model {
     case "malformed": return { profile: glb("Cap", [-18.5, -18.5, 0], [18.5, 18.5, 10.6], { url: "/custom/malformed.glb" }), height: 10.6 };
     case "wrong-scale": return { profile: glb("Cap", [-18.5, -18.5, 0], [18.5, 18.5, 10.6], { scale: 3 }), height: 10.6 };
     case "tall-cap": return { profile: glb("Cap", [-37, -37, 0], [37, 37, 21.2], { scale: 2 }), height: 21.2, pose: turn };
+    case "lamp": return { profile: glb("Dense", [-20.5, -20.5, 0], [20.5, 20.5, 8.1]), height: 8.1 };
     case "cap-lathe": return { profile: capLathe, height: 10.5, pose: turn };
     case "prism-ref": return { profile: { type: "prism", width: 24, length: 24, radius: 0, height: 6 }, height: 6, pose: { from: { travel: 0 }, to: { travel: -1.5 } } };
   }
@@ -97,6 +100,7 @@ export const materials: Record<string, InstrumentRecipe> = {
   metal: { base: { colour: "#eceef0", metallic: 1, roughness: 0.3, direct: 0.2 }, brush: { strength: 0.9, direction: "circular" }, grain: { strength: 0.15 } },
   matte: { base: { colour: "#c8ccd4", roughness: 0.55 } },
   pin: { base: { colour: "#101012", roughness: 0.9 } },
+  lamp: { base: { colour: "#ffd9a0", roughness: 0.3 }, emissive: { strength: 1.2, colour: "#ffb347" } },
 };
 
 export interface SceneOptions {
@@ -112,7 +116,7 @@ export interface SceneOptions {
 
 /** One control's object: a base plate and the custom part on it. */
 export function objectOf(id: string, spec: Spec, rect: [number, number, number, number], t: number, stage: { width: number; height: number }, options: SceneOptions,
-  profiles: Record<string, InstrumentProfile>): InstrumentObject {
+  profiles: Record<string, InstrumentProfile>, emitter?: number): InstrumentObject {
   const [x, y, w, h] = rect, cx = x + w / 2, cy = y + h / 2;
   const model = modelOf(spec), plate = margin(2, stage);
   const name = `plate:${w}`;
@@ -120,22 +124,25 @@ export function objectOf(id: string, spec: Spec, rect: [number, number, number, 
   const parts: InstrumentPart[] = [{ kind: "plate", profile: name, at: [cx, cy, 0], material: "base", caster: null }];
   if (options.custom) {
     profiles[spec] = model.profile;
-    parts.push({ kind: model.profile.type === "mesh" ? "custom" : "cap", profile: spec, at: [cx, cy, 2], material: ["block", "prism-ref", "bar-inline", "disc-inline"].includes(spec) ? "matte" : "metal",
+    parts.push({ kind: model.profile.type === "mesh" ? "custom" : "cap", profile: spec, at: [cx, cy, 2], material: spec === "lamp" ? "lamp" : ["block", "prism-ref", "bar-inline", "disc-inline"].includes(spec) ? "matte" : "metal",
+      ...(emitter !== undefined ? { emitter } : {}),
       ...(model.pose ? { pose: model.pose } : {}), ...(options.casters ? (options.caster !== undefined ? { caster: options.caster } : {}) : { caster: null }) });
   }
   return { id, rect, bounds: { rect, radius: 0 }, t, parts, relief: { face: "raised", rect, radius: 4, height: 0, material: "base" } };
 }
 
+/** `?map=off` (a darkness of 1 builds no shadow map): for telling the map's own refit from the parts' own pixels. */
+const mapOff = new URLSearchParams(location.search).get("map") === "off";
 export function sceneOf(panel: { width: number; height: number }, objects: InstrumentObject[], profiles: Record<string, InstrumentProfile>, protectedRects: [number, number, number, number][],
-  stage: { width: number; height: number }): InstrumentScene {
+  stage: { width: number; height: number }, emitters: InstrumentScene["emitters"]): InstrumentScene {
   return {
     format: "strata-scene", version: 4, kind: "instrument",
     camera: { distance: CAMERA_DISTANCE, vanish: [stage.width / 2, stage.height / 2] }, environment: { source: "studio", strength: 1 },
     extent: panel, outset: { top: 16, right: 16, bottom: 16, left: 16 },
     backdrop: "#e3e5e9", light: { azimuth: 323, elevation: 41 },
-    bevel: { width: 3, gain: 1, profile: "quarter-round" }, shadow: { strength: 0.24 }, interior: { max: 0.04 },
+    bevel: { width: 3, gain: 1, profile: "quarter-round" }, shadow: { strength: 0.24, ...(mapOff ? { map: { darkness: 1 } } : {}) }, interior: { max: 0.04 },
     state: { hoverHeight: 1.6, pressHeight: 0.25, hoverLift: 0.02, pressSink: 0.03 }, focus: { colour: "#2563eb", width: 2, offset: 2 },
-    materials, protected: protectedRects,
+    materials, protected: protectedRects, ...(emitters?.length ? { emitters } : {}),
     primitives: [{ face: "raised", rect: [0, 0, panel.width, panel.height], radius: 14, height: 6, material: "face" }],
     profiles, objects,
   };

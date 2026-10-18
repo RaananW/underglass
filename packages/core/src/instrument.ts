@@ -670,6 +670,40 @@ export function posedVertices(part: InstrumentPart, shape: InstrumentProfile, t:
   return out;
 }
 
+/** Vertex-steps above which a part's witnesses are bucketed by height (a dense mesh): below it every one is kept. */
+const BUCKETED_SAMPLES = 20000;
+const HEIGHT_BUCKET = 0.05;
+const HEIGHT_BUCKETS = 4096;
+/**
+ * The witnesses of a dense part without a pair per vertex and step: for each height bucket (0.05 px, the height rounded up
+ * in magnitude, so the drift it implies is never underestimated) the least inset any vertex has at that height over the
+ * whole travel. The frontier of those is the same as the frontier of all of them, to within the 0.05 px of height, and a
+ * 16,384-vertex mesh costs tens of milliseconds, not hundreds. Heights past the buckets are kept as they are.
+ */
+function bucketedWitnesses(part: InstrumentPart, geometry: PartGeometry, steps: number, bounds: { rect: Box; radius?: number }): Witness[] {
+  const above = new Float64Array(HEIGHT_BUCKETS).fill(Infinity), below = new Float64Array(HEIGHT_BUCKETS).fill(Infinity), rest: Witness[] = [];
+  const [left, top, width, height] = bounds.rect, radius = Math.max(0, Math.min(bounds.radius ?? 0, width / 2, height / 2)), cx = left + width / 2, cy = top + height / 2;
+  const hx = width / 2 - radius, hy = height / 2 - radius, positions = geometry.positions;
+  for (let step = 0; step <= steps; step++) {
+    const m = partMatrix(part, steps ? step / steps : 0);
+    for (let index = 0; index < positions.length; index += 3) {
+      const x = positions[index]!, y = positions[index + 1]!, z = positions[index + 2]!;
+      const px = m[0]! * x + m[4]! * y + m[8]! * z + m[12]!, py = m[1]! * x + m[5]! * y + m[9]! * z + m[13]!, pz = m[2]! * x + m[6]! * y + m[10]! * z + m[14]!;
+      const qx = Math.abs(px - cx) - hx, qy = Math.abs(py - cy) - hy;
+      const inset = -(Math.sqrt(Math.max(qx, 0) ** 2 + Math.max(qy, 0) ** 2) + Math.min(Math.max(qx, qy), 0) - radius);
+      const bucket = Math.ceil(Math.abs(pz) / HEIGHT_BUCKET);
+      if (bucket >= HEIGHT_BUCKETS) { rest.push({ inset, height: pz }); continue; }
+      const side = pz >= 0 ? above : below;
+      if (inset < side[bucket]!) side[bucket] = inset;
+    }
+  }
+  const pairs = rest;
+  for (let bucket = 0; bucket < HEIGHT_BUCKETS; bucket++) {
+    if (Number.isFinite(above[bucket]!)) pairs.push({ inset: above[bucket]!, height: bucket * HEIGHT_BUCKET });
+    if (Number.isFinite(below[bucket]!)) pairs.push({ inset: below[bucket]!, height: -bucket * HEIGHT_BUCKET - (bucket === 0 ? 1e-9 : 0) });
+  }
+  return pairs;
+}
 /**
  * The frontier of an object over its whole travel (independent of where the layer stands): for each part, the pairs of
  * orthographic inset (px inside `bounds`, negative outside) and height that are not dominated by a pair with no more
@@ -678,8 +712,11 @@ export function posedVertices(part: InstrumentPart, shape: InstrumentProfile, t:
 export function containmentFrontier(object: InstrumentObject, profiles: Record<string, InstrumentProfile>): ContainmentFrontier {
   const steps = travelSteps(object, profiles), bounds = object.bounds ?? { rect: object.rect, radius: 0 };
   const parts = object.parts.map(part => {
-    const moving = !!part.pose, pairs: Witness[] = [];
-    for (let step = 0; step <= (moving ? steps : 0); step++) {
+    const moving = !!part.pose;
+    let pairs: Witness[] = [];
+    const geometry = profileGeometry(profiles[part.profile]!);
+    if ((geometry.positions.length / 3) * ((moving ? steps : 0) + 1) > BUCKETED_SAMPLES) pairs = bucketedWitnesses(part, geometry, moving ? steps : 0, bounds);
+    else for (let step = 0; step <= (moving ? steps : 0); step++) {
       const vertices = posedVertices(part, profiles[part.profile]!, moving ? step / steps : 0);
       for (let index = 0; index < vertices.length; index += 3) {
         pairs.push({ inset: -roundedBoxDistance(vertices[index]!, vertices[index + 1]!, bounds.rect, bounds.radius ?? 0), height: vertices[index + 2]! });
@@ -746,18 +783,25 @@ export function checkContainment(object: InstrumentObject, profiles: Record<stri
   // The exact projection: every vertex at every step, mapped to the canvas, projected and mapped back.
   const det = m.a * m.d - m.b * m.c;
   let least = Infinity, part = 0;
+  // The posed vertices are transformed in place of `posedVertices` (no array per vertex): a dense mesh near the limit pays this
+  // every frame its layer moves.
+  const [left, top, width, height] = bounds.rect, radius = Math.max(0, Math.min(bounds.radius ?? 0, width / 2, height / 2)), cx = left + width / 2, cy = top + height / 2;
+  const hx = width / 2 - radius, hy = height / 2 - radius;
   object.parts.forEach((entry, index) => {
-    const moving = !!entry.pose;
+    const moving = !!entry.pose, positions = profileGeometry(profiles[entry.profile]!).positions;
     for (let step = 0; step <= (moving ? frontier.steps : 0); step++) {
-      const vertices = posedVertices(entry, profiles[entry.profile]!, moving ? step / frontier.steps : 0);
-      for (let at = 0; at < vertices.length; at += 3) {
-        const x = vertices[at]!, y = vertices[at + 1]!, z = vertices[at + 2]! * m.scale;
+      const pose = partMatrix(entry, moving ? step / frontier.steps : 0);
+      for (let at = 0; at < positions.length; at += 3) {
+        const gx = positions[at]!, gy = positions[at + 1]!, gz = positions[at + 2]!;
+        const x = pose[0]! * gx + pose[4]! * gy + pose[8]! * gz + pose[12]!, y = pose[1]! * gx + pose[5]! * gy + pose[9]! * gz + pose[13]!;
+        const z = (pose[2]! * gx + pose[6]! * gy + pose[10]! * gz + pose[14]!) * m.scale;
         if (z >= distance) { least = -Infinity; part = index; return; }
         const k = distance / (distance - z);
         const sx = vx + (m.a * x + m.c * y + m.e - vx) * k - m.e, sy = vy + (m.b * x + m.d * y + m.f - vy) * k - m.f;
         // Back to layer px through the inverse of the 2 × 2 part.
         const lx = (m.d * sx - m.c * sy) / det, ly = (-m.b * sx + m.a * sy) / det;
-        const inset = -roundedBoxDistance(lx, ly, bounds.rect, bounds.radius ?? 0) * m.scale;
+        const qx = Math.abs(lx - cx) - hx, qy = Math.abs(ly - cy) - hy;
+        const inset = -(Math.sqrt(Math.max(qx, 0) ** 2 + Math.max(qy, 0) ** 2) + Math.min(Math.max(qx, qy), 0) - radius) * m.scale;
         if (inset < least) { least = inset; part = index; }
       }
     }

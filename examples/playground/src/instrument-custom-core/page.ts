@@ -1,12 +1,12 @@
 /**
  * Core's custom parts on plain DOM (no UI framework), for `tests/browser/core-custom.test.mjs` and a headful look
- * (`docs/ui-library/instrument-phase2.md`, core work item 5). One enrolled panel of thirteen native range inputs, each with
+ * (`docs/ui-library/instrument-phase2.md`, core work item 5). One enrolled panel of fourteen native range inputs, each with
  * an Instrument object of a base plate and a custom part (inline meshes and references to `public/custom/parts.glb`,
  * three of them failing on purpose; see `scene.ts`), a heading and a caption under each: the text the contrast guard
  * protects. The panel's material is `{ kind: "instrument", scene }` through the public `setMaterial`; a control's value
  * sets its object's `t` through `handle.update`, so poses never recapture.
  *
- * Query: `?theme` is not offered (one theme); `?material=0` starts with no material.
+ * Query: `?material=0` starts with no material; `?map=off` draws no shadow map (darkness 1).
  *
  * `window.customCore.ready` resolves with the test API (see `api` below).
  */
@@ -92,7 +92,13 @@ function build(): InstrumentScene {
   const size = stage(), profiles: Record<string, InstrumentProfile> = {};
   const objects: InstrumentObject[] = [];
   const inputs = [...panel.querySelectorAll<HTMLInputElement>("input[data-part]")];
-  if (options.objects) for (const input of inputs) objects.push(objectOf(input.id, input.dataset.spec as Spec, boxOf(input), ts.get(input.id) ?? tOf(input), size, options, profiles));
+  // The lamp's lens is the emitter's: one point light above its centre, on the parts only (`face: 0`).
+  const emitters: NonNullable<InstrumentScene["emitters"]> = [];
+  if (options.objects) for (const input of inputs) {
+    const spec = input.dataset.spec as Spec, rect = boxOf(input);
+    if (spec === "lamp") emitters.push({ position: [rect[0] + rect[2] / 2, rect[1] + rect[3] / 2, 14], colour: [1, 0.62, 0.22], strength: 3200, radius: 120, reach: "outset", face: 0 });
+    objects.push(objectOf(input.id, spec, rect, ts.get(input.id) ?? tOf(input), size, options, profiles, spec === "lamp" ? emitters.length - 1 : undefined));
+  }
   // Padding for the budgets: copies of the dense mesh (triangles) and pins (parts), each in an object of its own.
   const dense = inputs.find(input => input.dataset.spec === "dense");
   if (options.objects && dense) for (let index = 0; index < extras.dense; index++) objects.push(objectOf(`dense-${index}`, "dense", boxOf(dense), 0, size, options, profiles));
@@ -112,7 +118,7 @@ function build(): InstrumentScene {
     const box = element.getBoundingClientRect();
     return [Math.floor(box.left - base.left) - 1, Math.floor(box.top - base.top) - 1, Math.ceil(box.width) + 2, Math.ceil(box.height) + 2];
   });
-  return sceneOf({ width: panel.offsetWidth, height: panel.offsetHeight }, objects, profiles, text, size);
+  return sceneOf({ width: panel.offsetWidth, height: panel.offsetHeight }, objects, profiles, text, size, emitters);
 }
 type InstrumentPart = InstrumentObject["parts"][number];
 function refresh() {

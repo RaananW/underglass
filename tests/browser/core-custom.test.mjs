@@ -100,8 +100,8 @@ function mean(png, dpr, point, radius = 3) {
   return [r / n, g / n, b / n];
 }
 const centre = control => ({ x: control.x + control.width / 2, y: control.y + control.height / 2 });
-const GLB_BASED = ["c-cap", "c-lever", "c-block", "c-dense", "c-slab", "c-tall-cap"];
-const DRAWN = ["c-bar-inline", "c-disc-inline", "c-cap", "c-lever", "c-block", "c-dense", "c-prism-ref", "c-tall-cap"];
+const GLB_BASED = ["c-cap", "c-lever", "c-block", "c-dense", "c-slab", "c-tall-cap", "c-lamp"];
+const DRAWN = ["c-bar-inline", "c-disc-inline", "c-cap", "c-lever", "c-block", "c-dense", "c-prism-ref", "c-tall-cap", "c-lamp"];
 const REFUSED = ["c-slab", "c-long-bar"];
 const FAILED = ["c-missing", "c-malformed", "c-wrong-scale"];
 
@@ -116,7 +116,7 @@ for (const dpr of [1, 2]) {
       try {
         const parts = await call("loaded");
         expect(parts.map(part => [part.object, part.status])).toEqual([["c-bar-inline", "ready"], ["c-disc-inline", "ready"], ["c-cap", "ready"], ["c-lever", "ready"], ["c-block", "ready"],
-          ["c-dense", "ready"], ["c-slab", "ready"], ["c-long-bar", "ready"], ["c-missing", "failed"], ["c-malformed", "failed"], ["c-wrong-scale", "failed"], ["c-tall-cap", "ready"]]);
+          ["c-dense", "ready"], ["c-slab", "ready"], ["c-long-bar", "ready"], ["c-missing", "failed"], ["c-malformed", "failed"], ["c-wrong-scale", "failed"], ["c-tall-cap", "ready"], ["c-lamp", "ready"]]);
         await stillGpu(call, "after the loads");
         const controls = await call("controls"), panel = await call("panel");
         // Parts only: no face shadows, so every changed pixel is a part.
@@ -187,6 +187,14 @@ for (const dpr of [1, 2]) {
         // The guard: inside protected text the face's whole change stays within interior.max (0.04 of 255 is 10.2 levels).
         expect(worst, `text pixels changed by up to ${worst} levels`).toBeLessThanOrEqual(11);
         expect(ratioShift, "the captions' contrast ratio shifts by less than 0.05").toBeLessThan(0.05);
+        // The lamp: its lens is a custom part and its emitter's lens, so its glow copy took the file's triangles too: the bloom and the
+        // clustered light are on and nothing of them is outside its box (the diff above covered the whole travel).
+        const post = (await call("instrument")).post.layers[0];
+        report.lamp = { lenses: post.lenses, lit: post.lit, bloom: post.stages.bloom, lights: (await call("instrument")).layers[0].lights };
+        expect(post.lenses, "the lamp's kind is a lens").toBeGreaterThanOrEqual(1);
+        expect(post.lit, "its emitter is lit").toBeGreaterThanOrEqual(1);
+        expect(post.stages.bloom.status).toBe("on");
+        expect(report.lamp.lights.clustered).toBe(true);
         await stillGpu(call, "after the poses");
         await writeFile(`${directory}/drawn-dpr${dpr}.json`, JSON.stringify(report, null, 2));
         expect(errors, "no page or console error").toEqual([]);
@@ -227,7 +235,7 @@ for (const dpr of [1, 2]) {
         // The page is up with the file held: GPU on, the layer ready, the inline parts drawn.
         const early = await call("instrument");
         const states = early.layers[0].customParts.map(part => [part.object, part.status]);
-        expect(states.filter(([id]) => GLB_BASED.concat(["c-wrong-scale"]).includes(id)).map(([, status]) => status), "the held file's parts are loading").toEqual(Array(7).fill("loading"));
+        expect(states.filter(([id]) => GLB_BASED.concat(["c-wrong-scale"]).includes(id)).map(([, status]) => status), "the held file's parts are loading").toEqual(Array(8).fill("loading"));
         expect(states.filter(([id]) => ["c-bar-inline", "c-disc-inline", "c-long-bar", "c-prism-ref"].includes(id)).every(([, status]) => status === "ready")).toBe(true);
         expect(early.layers[0].status, "ready, not pending: no part waits for a build").toBe("ready");
         expect(early.layers[0].steppedDown.map(entry => entry.object), "only the inline bar too long for its box is at Relief").toEqual(["c-long-bar"]);
@@ -269,7 +277,7 @@ for (const dpr of [1, 2]) {
         const report = { dpr };
         const change = diff(loading, after, dpr, controls, panel, { relief: REFUSED });
         expect(change.outside, "nothing changed outside the controls").toBe(0);
-        for (const id of ["c-cap", "c-lever", "c-block", "c-dense", "c-slab", "c-tall-cap"]) expect(change.byControl[id], `${id} appears`).toBeGreaterThan(100);
+        for (const id of ["c-cap", "c-lever", "c-block", "c-dense", "c-slab", "c-tall-cap", "c-lamp"]) expect(change.byControl[id], `${id} appears`).toBeGreaterThan(100);
         // The other controls' parts are not redrawn differently. The key light's shadow map is fitted to its casters' box, which
         // grows with the new parts, so a shadow the map casts on a neighbour's plate may move by a texel: a few levels at most.
         report.arrival = { byControl: change.byControl, maxDelta: change.maxDelta };
@@ -294,6 +302,30 @@ for (const dpr of [1, 2]) {
         const again = (await call("instrument")).layers[0].customParts.map(part => [part.object, part.status]);
         expect(again.find(([id]) => id === "c-cap")).toEqual(["c-cap", "ready"]);
         expect(errors, "no page or console error").toEqual([]);
+      } finally { release?.(); await context.close(); }
+    });
+
+    test(`with no shadow map, a file's arrival changes no other control by a level (DPR ${dpr})`, async ({ browser }) => {
+      test.setTimeout(180000);
+      // The arrival test above allows a few levels on the other controls: the key light's shadow map is fitted to its casters' box, which
+      // grows with the new parts. Without the map (`?map=off`, a darkness of 1) the other controls are bit-identical, which proves it.
+      let release;
+      const gate = new Promise(resolve => { release = resolve; });
+      const { context, call, page } = await open(browser, dpr, { query: "?map=off", routes: page => page.route("**/custom/parts.glb", async route => { await gate; await route.continue(); }) });
+      try {
+        await call("setShadows", false);
+        await call("poseAll", 0.25);
+        const before = await shot(page);
+        release();
+        await call("loaded");
+        await call("poseAll", 0.25);
+        const after = await shot(page);
+        const controls = await call("controls"), panel = await call("panel");
+        const change = diff(before, after, dpr, controls, panel, { relief: REFUSED });
+        for (const id of ["c-bar-inline", "c-disc-inline", "c-prism-ref", "c-missing", "c-malformed", "c-wrong-scale"]) expect(change.byControl[id], `${id} is bit-identical`).toBe(0);
+        for (const id of GLB_BASED) expect(change.byControl[id], `${id} appears`).toBeGreaterThan(100);
+        expect(change.outside).toBe(0);
+        await stillGpu(call, "without a shadow map");
       } finally { release?.(); await context.close(); }
     });
 
