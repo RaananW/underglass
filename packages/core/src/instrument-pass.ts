@@ -1047,6 +1047,17 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       timing.enabled = false; timing.status = "disabled";
       if (!options.keepTiming?.()) void setRenderTaskGpuTimingEnabled(engine, false).catch(() => undefined);
     }
+    // ... and the shared targets are released once every retired scene that read them is gone, unless a layer came back.
+    if (!layers.size && targets.size) {
+      void Promise.all([...retirements]).then(() => { if (!layers.size && !disposed) releaseTargets(); });
+    }
+  }
+  /** Releases the shared targets; a later layer allocates them again. Every scene that read them is gone. */
+  function releaseTargets() {
+    for (const result of targets.values()) {
+      try { disposeRenderTargetTexture(result); } catch (error) { console.error("Underglass instrument target disposal failed", error); }
+    }
+    targets.clear();
   }
 
   /** The contexts to draw right after layer `id`'s pass: its scene, when it is drawn as parts. */
@@ -1171,10 +1182,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       scenes.clear();
       if (grain) { releaseTexture(grain); grain = undefined; }
       // The shared targets go after every scene that reads them.
-      for (const result of targets.values()) {
-        try { disposeRenderTargetTexture(result); } catch (error) { console.error("Underglass instrument target disposal failed", error); }
-      }
-      targets.clear();
+      releaseTargets();
     },
   };
 }

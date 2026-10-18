@@ -219,6 +219,10 @@ for (const dpr of [1, 2]) test(`post chain: text safety, the clip, hits, exact o
     const dark = await shot(page);
     await call("setPlain", true);
     const plain = await shot(page);
+    // No instrument layer left: the shared targets are released (after the retired scenes' fences).
+    for (let tries = 0; tries < 50 && Object.keys((await call("post"))?.targets ?? {}).length; tries++) await page.waitForTimeout(100);
+    report.plainTargets = (await call("post"))?.targets ?? null;
+    expect(Object.keys(report.plainTargets ?? {}), "no instrument layer: the shared targets are released").toEqual([]);
     await call("setPlain", false);
     await call("setLights", true);
     report.text = { offAgainstChain: labelDiff(chain, off, labels, dpr), allAgainstChain: labelDiff(chain, all, labels, dpr), chainAgainstPlain: labelDiff(dark, plain, labels, dpr) };
