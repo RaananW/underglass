@@ -383,27 +383,18 @@
   /* With the GPU drawing the object as parts, its CSS paint is hidden and the cap stays where the layout puts it. */
   :where([data-strata-mode="face"]) .ug-push__bezel[data-strata-dome] { outline-color: transparent; }
   :where([data-strata-mode="face"]) .ug-push[data-strata-dome] .ug-push__cap { translate: none; }
-  /* The same for the rotary selector: at the Instrument level its skirt, cap and pointer are parts, and a turn repaints nothing. */
-  :where([data-strata-mode="face"]) :is(.ug-rotary__skirt, .ug-rotary__cap)[data-strata-dome] { border-color: transparent; }
-  :where([data-strata-mode="face"]) .ug-rotary__cap[data-strata-dome] .ug-rotary__pointer { display: none; }
 
   /* Reduced motion: lights and travel change at once. */
   @media (prefers-reduced-motion: reduce) {
     :where(.ug-push) { transition: none; }
-    :where(.ug-rotary__pointer) { transition: none; }
   }
   /* More contrast: flat colour, no glow, edges in the text colour. */
   @media (prefers-contrast: more) {
-    :where(.ug-rotary) { --_ink: var(--strata-colour-text); }
-    :where(.ug-rotary__text) { color: var(--strata-colour-text); }
-    :where(.ug-rotary__skirt, .ug-rotary__cap) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-edge); }
     :where(.ug-push__socket) { background: var(--_glass); }
     :where(.ug-push__led-socket) { background: var(--_led-glass); }
     :where(.ug-push__ring) { box-shadow: none; }
     :where(.ug-push__bezel, .ug-push__ring, .ug-push__cap, .ug-push__led) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
   }
-  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-rotary) { --_ink: var(--strata-colour-text); }
-  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-rotary__text) { color: var(--strata-colour-text); }
   :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-push__bezel, .ug-push__ring, .ug-push__cap, .ug-push__led) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
   /* Forced colours: system colours; Highlight is a lit ring or LED, GrayText a disabled one. Specific selectors beat the generic buttons' border. */
   @media (forced-colors: active) {
@@ -421,14 +412,6 @@
     .ug-push:is(:disabled, [aria-disabled="true"]) .ug-push__cap { color: GrayText; }
     .ug-push:is(:disabled, [aria-disabled="true"]) .ug-push__object { opacity: 1; }
     .ug-push:focus-visible .ug-push__bezel { outline-color: Highlight; }
-    /* The rotary selector: a Canvas skirt and cap with CanvasText rings, pointer, ticks and print, a Highlight focus ring, GrayText when disabled. */
-    .ug-rotary__skirt, .ug-rotary__cap { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; }
-    .ug-rotary__pointer::after, .ug-rotary__tick { forced-color-adjust: none; background: CanvasText; }
-    .ug-rotary__text, .ug-rotary__legend { forced-color-adjust: none; color: CanvasText; }
-    .ug-rotary__dial:has(> .ug-rotary__select:focus-visible) .ug-rotary__skirt { outline-color: Highlight; }
-    .ug-rotary:has(.ug-rotary__select:disabled) :is(.ug-rotary__skirt, .ug-rotary__cap) { border-color: GrayText; }
-    .ug-rotary:has(.ug-rotary__select:disabled) .ug-rotary__pointer::after, .ug-rotary:has(.ug-rotary__select:disabled) .ug-rotary__tick { background: GrayText; }
-    .ug-rotary:has(.ug-rotary__select:disabled) .ug-rotary__dial { opacity: 1; }
   }
 
   /* ---- Link ---- */
@@ -706,6 +689,31 @@
   :where(.ug-rotary:has(.ug-rotary__select:disabled)) :where(.ug-rotary__dial) { opacity: 0.38; }
   :where(.ug-rotary:has(.ug-rotary__select:disabled)) :where(.ug-rotary__skirt, .ug-rotary__cap) { --_h: 0px; --_gain: 0; }
   :where(.ug-rotary__select:disabled) { cursor: not-allowed; }
+
+  /* With the GPU drawing the selector as parts, its CSS paint is hidden: at the Instrument level the skirt, cap and pointer are the Knob's parts, and a turn repaints nothing. */
+  :where([data-strata-mode="face"]) :is(.ug-rotary__skirt, .ug-rotary__cap)[data-strata-dome] { border-color: transparent; }
+  :where([data-strata-mode="face"]) .ug-rotary__cap[data-strata-dome] .ug-rotary__pointer { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    :where(.ug-rotary__pointer) { transition: none; }
+  }
+  /* More contrast: the pointer and the labels take the text colour, and the skirt and cap an edge. */
+  @media (prefers-contrast: more) {
+    :where(.ug-rotary) { --_ink: var(--strata-colour-text); }
+    :where(.ug-rotary__text) { color: var(--strata-colour-text); }
+    :where(.ug-rotary__skirt, .ug-rotary__cap) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-edge); }
+  }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-rotary) { --_ink: var(--strata-colour-text); }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-rotary__text) { color: var(--strata-colour-text); }
+  /* Forced colours: a Canvas skirt and cap with CanvasText rings, pointer, ticks and print, a Highlight focus ring, GrayText when disabled. */
+  @media (forced-colors: active) {
+    .ug-rotary__skirt, .ug-rotary__cap { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; }
+    .ug-rotary__pointer::after, .ug-rotary__tick { forced-color-adjust: none; background: CanvasText; }
+    .ug-rotary__text, .ug-rotary__legend { forced-color-adjust: none; color: CanvasText; }
+    .ug-rotary__dial:has(> .ug-rotary__select:focus-visible) .ug-rotary__skirt { outline-color: Highlight; }
+    .ug-rotary:has(.ug-rotary__select:disabled) :is(.ug-rotary__skirt, .ug-rotary__cap) { border-color: GrayText; }
+    .ug-rotary:has(.ug-rotary__select:disabled) .ug-rotary__pointer::after, .ug-rotary:has(.ug-rotary__select:disabled) .ug-rotary__tick { background: GrayText; }
+    .ug-rotary:has(.ug-rotary__select:disabled) .ug-rotary__dial { opacity: 1; }
+  }
 
   /* ---- Checkbox and radio ---- */
 

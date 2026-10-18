@@ -468,7 +468,8 @@ for (const dpr of [1, 2]) for (const level of levels) test(`the push buttons at 
   expect(scene.outset.top, "the emitters' outset").toBeGreaterThanOrEqual(48);
   if (level === "instrument") {
     const objectIds = scene.objects.map(object => object.id);
-    expect(objectIds).toEqual([...ids, "plain", "plain-toggle"]);
+    // The plain keys first (the helper builds keys before the push buttons), then the push buttons in document order.
+    expect(objectIds).toEqual(["plain", "plain-toggle", ...ids]);
     let emitter = 0;
     for (const object of scene.objects.filter(object => object.id in pushes)) {
       const [form] = pushes[object.id];

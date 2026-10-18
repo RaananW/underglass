@@ -398,7 +398,7 @@ for (const dpr of [1, 2]) for (const level of ["relief", "objects", "instrument"
     return { version: scene.version, kind: scene.kind, material: probe.controller.state().materials[0]?.kind, skirt: entry("#filter-rotary .ug-rotary__skirt"), cap: entry("#filter-rotary .ug-rotary__cap"),
       select: scene.primitives.some(p => p.face === "groove" || p.object === "rail"),
       objects: scene.objects?.map(object => ({ id: object.id, parts: object.parts.map(part => `${part.kind}:${part.material}`), close: object.bounds.rect.every((value, index) => Math.abs(value - box(object.id)[index]) < 0.01) })),
-      t: scene.objects?.map(object => object.t), pointer: scene.objects?.[0].parts[3].pose };
+      t: scene.objects?.map(object => object.t), pointer: scene.objects?.find(object => object.id === "filter").parts[3].pose };
   });
   if (level === "relief") expect(scene).toMatchObject({ version: 1, material: "relief", skirt: { face: "raised", material: "satin" }, cap: { face: "raised", material: "satin" }, select: false });
   else if (level === "objects") {
@@ -406,14 +406,15 @@ for (const dpr of [1, 2]) for (const level of ["relief", "objects", "instrument"
     expect(scene.cap.base, "the cap stands on the skirt's top").toBe(scene.skirt.base + scene.skirt.height);
   } else {
     expect(scene).toMatchObject({ version: 4, kind: "instrument", material: "instrument" });
+    // The keys first (the helper builds them before the selectors), then the selectors in document order.
     expect(scene.objects).toEqual([
-      { id: "filter", parts: ["skirt:knobSkirt", "cap:knobCap", "chamfer:knobChamfer", "pointer:knobInk"], close: true },
-      { id: "source", parts: ["skirt:knobSkirt", "cap:knobCap", "chamfer:knobChamfer", "pointer:knobInk"], close: true },
       { id: "rotary-reset", parts: [expect.stringMatching(/^plinth:key /), "cap:keyCap"], close: true },
       { id: "rotary-submit", parts: [expect.stringMatching(/^plinth:key /), "cap:keyCap"], close: true },
+      { id: "filter", parts: ["skirt:knobSkirt", "cap:knobCap", "chamfer:knobChamfer", "pointer:knobInk"], close: true },
+      { id: "source", parts: ["skirt:knobSkirt", "cap:knobCap", "chamfer:knobChamfer", "pointer:knobInk"], close: true },
     ]);
     expect(scene.pointer).toEqual({ from: { turn: -225 }, to: { turn: 45 } });
-    expect(scene.t.map(t => Math.round(t * 1e4) / 1e4)).toEqual([0, 0.3333, 0, 0]);
+    expect(scene.t.map(t => Math.round(t * 1e4) / 1e4)).toEqual([0, 0, 0, 0.3333]);
   }
   await healthy("start");
 
@@ -511,12 +512,13 @@ for (const dpr of [1, 2]) test(`at the Instrument level (DPR ${dpr}) 300 frames 
     const probe = window.strataRotaryProbe, select = document.getElementById("filter"), frame = () => new Promise(requestAnimationFrame);
     for (let index = 0; index < 5; index++) await frame();
     const start = probe.counts();
-    let previous = start, extra = 0, moved = 0, changes = 0, t = probe.scene().objects[0].t;
+    const filterT = () => probe.scene().objects.find(object => object.id === "filter").t;
+    let previous = start, extra = 0, moved = 0, changes = 0, t = filterT();
     for (let index = 0; index < 300; index++) {
       // A native change every 15 frames, the spring snapping the pointer to the new detent in between.
       if (index % 15 === 0) { select.selectedIndex = index % 30 === 0 ? 4 : 0; select.dispatchEvent(new Event("input", { bubbles: true })); select.dispatchEvent(new Event("change", { bubbles: true })); changes++; }
       await frame();
-      const now = probe.counts(), next = probe.scene().objects[0].t;
+      const now = probe.counts(), next = filterT();
       if (index % 15 > 1) extra += now.captures - previous.captures;
       if (next !== t) moved++;
       t = next; previous = now;
@@ -561,7 +563,7 @@ test("at the Instrument level under reduced motion the pointer turns at once", a
   await ready(page, "?level=instrument");
   await page.mouse.click(...await label(page, "filter", "Notch"));
   // The first scene after the change already has the option's place: no spring under reduced motion.
-  expect(await page.evaluate(() => { const probe = window.strataRotaryProbe; probe.refresh(); return probe.scene().objects.slice(0, 2).map(object => Math.round(object.t * 1e4) / 1e4); })).toEqual([0.75, 0.3333]);
+  expect(await page.evaluate(() => { const probe = window.strataRotaryProbe; probe.refresh(); return probe.scene().objects.filter(object => object.id === "filter" || object.id === "source").map(object => Math.round(object.t * 1e4) / 1e4); })).toEqual([0.75, 0.3333]);
   expect(await mode(page)).toBe("gpu");
   await context.close();
 });
