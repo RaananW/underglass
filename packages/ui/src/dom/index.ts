@@ -26,7 +26,7 @@ export { attachStrataCarousels, showStrataSlide, strataSlideIndex, strataSlideTa
 export { attachStrataMenus, strataMenuTarget } from "./menu.ts";
 export { attachStrataKnobs, syncStrataKnob } from "./knob.ts";
 export { attachStrataLamps } from "./lamp.ts";
-export { attachStrataMeters, syncStrataMeter } from "./meter.ts";
+export { attachStrataMeters, driveStrataMeter, liveStrataMeter, releaseStrataMeter, syncStrataMeter } from "./meter.ts";
 export { attachStrataGauges, syncStrataGauge } from "./gauge.ts";
 export { setStrataStatusLight } from "./status-light.ts";
 export type { StatusLightUpdate } from "./status-light.ts";

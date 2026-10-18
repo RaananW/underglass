@@ -8,6 +8,8 @@
  * - With `data-strata-unit` on the meter, its `aria-valuetext` follows the value ("−18 dB", with U+2212).
  * - A bar's segments take their zone from `low`, `high` and `optimum` (`data-strata-zone` on each), so a change of those
  *   attributes recolours them.
+ * - A live value (a level at frame rate) is driven with `driveStrataMeter`, which writes nothing to the DOM where the GPU draws the
+ *   meter, so the layer is never recaptured; the native `value` follows at a low rate for assistive technology.
  * - A bar with a peak (`ug-meter--peak`) holds its highest segment lit for `meter.peakHold`, then lets it fall at
  *   `meter.peakDecay` of the range a second (`--strata-meter-peak-index`, the held segment; written only when it changes).
  * Under the GPU the Instrument level reads the native meter itself, frame by frame, and draws the segments and the needle
@@ -18,6 +20,13 @@ import { advancePeak, meterBounds, meterFraction, meterValueText, peakDefaults, 
 
 const roots = ".ug-meter";
 const watched = ["value", "min", "max", "low", "high", "optimum", "data-strata-unit"];
+
+/** A meter driven live: the value the drawing shows, and what the DOM was and has been given since. */
+interface Live { value: number; timer: number; interval: number; base: string | null; written?: string }
+const lives = new WeakMap<HTMLMeterElement, Live>();
+
+/** The value a live-driven meter shows now (`driveStrataMeter`), held to its range, or undefined when the native value is the truth. */
+export const liveStrataMeter = (native: HTMLMeterElement): number | undefined => lives.get(native)?.value;
 
 /** The meter's range as the browser reads it. */
 function rangeOf(native: HTMLMeterElement) {
@@ -50,6 +59,9 @@ function setProperty(root: HTMLElement, name: string, value: string | undefined)
 export function syncStrataMeter(native: HTMLMeterElement): void {
   const root = native.closest<HTMLElement>(roots);
   if (!root) return;
+  // Someone else wrote the native value while a live drive was running: the DOM is the truth again.
+  const live = lives.get(native);
+  if (live && native.getAttribute("value") !== (live.written ?? live.base)) { clearTimeout(live.timer); lives.delete(native); }
   const range = rangeOf(native), bounds = meterBounds(range);
   const value = Math.min(bounds.max, Math.max(bounds.min, Number.parseFloat(native.getAttribute("value") ?? "0") || 0));
   const fraction = Math.round(meterFraction(value, bounds) * 10000) / 10000;
@@ -65,6 +77,45 @@ export function syncStrataMeter(native: HTMLMeterElement): void {
     segments.forEach((segment, index) => { if (segment.getAttribute("data-strata-zone") !== zones[index]) segment.setAttribute("data-strata-zone", zones[index]!); });
   }
   if (root.matches(".ug-meter--peak") && segments.length) holdPeak(root, fraction, segments.length);
+}
+
+/**
+ * Drives a meter with a live value (a level at frame rate, an audio analyser) without touching the DOM: where the GPU draws
+ * the meter (a bar's segments at every level, a needle at the Instrument level) the value is a uniform and a pose, so no
+ * capture, upload or hit-geometry update follows; the native `value` is synced at a low rate for assistive technology
+ * (`interval` ms, 1,000 by default; 0 writes it only on `releaseStrataMeter`), because writing `<meter value>` every frame
+ * would recapture the layer every frame (design language section 6, *Live values are poses*). Where the CSS presents the
+ * meter, or the GPU draws its needle as captured content (Relief, Objects), the drawing's value is written each time, as a
+ * script's own write would be. A write to the native `value` by anyone else ends the drive.
+ */
+export function driveStrataMeter(native: HTMLMeterElement, value: number, { interval = 1000 }: { interval?: number } = {}): void {
+  const root = native.closest<HTMLElement>(roots);
+  if (!root || !Number.isFinite(value)) return;
+  const bounds = meterBounds(rangeOf(native)), held = Math.min(bounds.max, Math.max(bounds.min, value));
+  const live = lives.get(native) ?? { value: held, timer: 0, interval, base: native.getAttribute("value") };
+  lives.set(native, live);
+  live.value = held; live.interval = interval;
+  // The GPU draws it (the helper marks the root): nothing to write. Otherwise the capture is the drawing.
+  if (!root.hasAttribute("data-strata-dome")) setProperty(root, "--strata-meter-value", String(Math.round(meterFraction(held, bounds) * 10000) / 10000));
+  // A bubbling event is no mutation: it wakes the GPU helper without a capture.
+  native.dispatchEvent(new CustomEvent("strata-meter-live", { bubbles: true }));
+  if (interval > 0 && !live.timer) live.timer = window.setTimeout(() => flush(native), interval);
+}
+
+/** Writes a live-driven meter's value to the native element now (the low-rate sync), if it differs. */
+function flush(native: HTMLMeterElement): void {
+  const live = lives.get(native);
+  if (!live) return;
+  clearTimeout(live.timer);
+  live.timer = 0;
+  const text = String(live.value);
+  if (native.getAttribute("value") !== text) { live.written = text; native.setAttribute("value", text); }
+}
+
+/** Ends a live drive: the native `value` is written now, and from here on it is the truth again. */
+export function releaseStrataMeter(native: HTMLMeterElement): void {
+  flush(native);
+  lives.delete(native);
 }
 
 /** Moves a bar's held peak to where `fraction` leaves it now, and keeps frames coming while it falls. */
