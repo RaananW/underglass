@@ -1190,8 +1190,8 @@ version 4 is geometric and sampled (2D):
 - **Underglass's GPU presentation must conform.** Phase 4 step 2 runs this suite against decoded GPU pixels. For
   version 4, `tests/browser/ui-instrument-conformance.test.mjs` runs `instrument-4.json` the same way against core's
   `instrument` material, at DPR 1 and 2. It asserts the checks whose parts core draws today, emitters and the guard
-  included, and records the others (the shadow map and the post chain, and glass: core work items 3 and 4) as
-  pending.
+  included, glass (core work item 4) and the shadow map and the post chain (item 3). Since item 4 no check is pending: a
+  check that needs a part core does not draw would be recorded as pending with the item it waits for.
 - **The CSS presentation is a declared approximation.** It is bound by the P0.6 parity budget, not by this suite. At
   the Instrument level it is bound by the per-component budgets of [I0.6](instrument-phase0.md#i06-css-parity).
 
@@ -1208,7 +1208,9 @@ version 4 is geometric and sampled (2D):
   (`instrument-4.json`), and GPU conformance runs against core's `instrument` material: containment, captured caps,
   unchanged text and the clip, Relief step-downs, the face with emitters, the pointer light and the guard, brush,
   grain and emitter light by presence, and every sampled point (with 2D.5 calibrated to Lite, within 16) pass at DPR 1
-  and 2; the checks that need core work items 3 and 4 are pending.
+  and 2; since core work item 4 so do the glass checks (text under a window and its flat region exactly, the lens's centre
+  and domes and the stand's reflection within 1 level, the finish band, dispersion and the lens's reflection by presence),
+  and no check is pending. The page cube (2D.5 `page`) is not part of the suite: its scenes turn it off.
 - **Reserved:** `light.colour` (one white light, as in version 1), `light.intensity` and `light.ambient` outside
   Instrument scenes, the inner shadow of wells, and particle shadows.
 - **Not in version 4:** shadows cast by emitters; emitter light on captured caps; a specular term for the pointer
@@ -1220,6 +1222,15 @@ version 4 is geometric and sampled (2D):
   renderer states which versions it conforms to.
 
 ## Change log
+
+- 2026-10-18: version 4, draft: **glass drawn by core** (2D.6; core work item 4). Nothing in the model's glass changes: core's
+  shader traces 2D.6 as written, and at DPR 1 and 2 the suite's `glass` case passes (4 exact points at 0, the lens's 4
+  sampled points and the stand at most 1 level from the reference, finish band, dispersion and reflection by presence with
+  shares of 0.55, 0.08 to 0.12 and 0.26), so the sampled tolerance stays 16 and needs no recalibration. One clarification:
+  **`finish: true` on a window is the zone with its defaults** (band 0.3, horizon 0.25); the reference drew nothing for
+  `true` and now follows core. No suite scene uses it, so no expected colour changes. Core places glass in the post
+  chain's target (so SMAA, bloom, the clip and the opacity apply), keeps text under a window exact against SMAA with an
+  exact twin in the captured caps' target, and lets glass cast on the face like any part (2D.7) but not into the shadow map.
 
 - 2026-10-18: version 4, draft: **the reference shading of parts calibrated to Babylon Lite 1.33** (2D.5), from Lite's
   source and core's decoded pixels, and the sampled tolerance measured (2D.10). Every geometric guarantee, the face and

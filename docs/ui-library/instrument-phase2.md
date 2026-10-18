@@ -1007,7 +1007,7 @@ against the code without the fix:
 # Core work item 4: the capture probe and glass
 
 **Status:** design note for [core work item 4](instrument.md#core-work-additive), written before the code (2026-10-18),
-then implemented in the same PR (results below). One concern: **the capture probe** (the layer's own capture, plus the
+then implemented in the same PR ([results](#results-item-4)). One concern: **the capture probe** (the layer's own capture, plus the
 studio, as a reflection source for Lite's PBR parts) and **the glass material** (`glass: "lens" | "window"` parts, which
 items 1 to 3 validated and did not draw). Not in it: custom parts (item 5), the Strata helper's wiring, and true group
 opacity (assessed below, left in SCOPE-009).
@@ -1174,3 +1174,120 @@ relief layer shares the path), not a contained change of this PR. It stays in SC
 - Browser: `tests/browser/core-glass.test.mjs` on [`instrument-glass-core.html`](../../examples/playground/instrument-glass-core.html),
   DPR 1 and 2, headless, and a headful Canary pass; `ui-instrument-conformance` asserts the glass checks.
 - Regression: `core-instrument`, `core-post`, `core-emitters`, `ui-gpu`, `ui-knob`, `ui-switch-forms-instrument`.
+
+## Results (item 4)
+
+Canary 158.0.8110.0, Windows 11, RTX 3080, 1920 × 1080, [`instrument-glass-core.html`](../../examples/playground/instrument-glass-core.html):
+one panel, 7 objects and 12 parts in 10 kinds (a display window over stripes and text, three glass lens knobs over printed
+target rings, a chrome knob, a glass plate over a checkerboard, a lamp with a glass lens), headless at DPR 1 and 2 and
+headful (`--headed`, viewport emulated) at both: every number below passed the same headful. GPU on and nothing stepped down
+throughout.
+
+| Check | DPR 1 | DPR 2 |
+| --- | --- | --- |
+| Printed ring's radius along a diagonal, on the face / through the clear lens (nominal 9.5 px) | 8 / 13 px (×1.63) | 7.5 / 12.5 px (×1.67) |
+| Pixels differing from the same parts as an opaque lacquer: lens knobs / plate / display / lamp | 17.5 to 18.0% / 90.6% / 89.2% / 28.7% | 17.3 to 17.7% / 90.6% / 89.2% / 27.7% |
+| Lens rim (r 17 to 22 px) mean luminance, reflection on / off | 182.7 / 167.5 (+15.2) | 185.6 / 171.0 (+14.6) |
+| Lens centre (r < 6 px), reflection on / off | 103.7 / 91.0 (+12.7) | 116.6 / 104.7 (+11.9) |
+| **Fresnel edge brighter than the centre** (rim minus centre, levels) | 79.0 | 69.0 |
+| Share of the lens changed by the reflection | 96.6% | 96.1% |
+| A window's flat region against the layer without objects: px mismatched | 0 of 5,550 | 0 of 22,800 |
+| A window's bevel (3 to 6 px in): mean luminance change | 29.9 | 25.8 |
+| **Text under the display window against the layer without objects**: px mismatched | **0 of 12,960** | **0 of 51,840** |
+| Display text contrast through the glass | 10.94 : 1 | 12.04 : 1 |
+| Prints beside the glass (9 text boxes), lamp and shadows on: largest change | 0 levels | 0 levels |
+| A lit lamp's glass against unlit (mean luminance of its centre) | 254.1 / 213.7 | 254.4 / 213.7 |
+| Parts on against off: px changed / outside every control's box | 25,000 / 0 | 98,064 / 0 |
+| Native hits on drawn px (sampled): mismatches | 0 of 260 | 0 of 1,013 |
+| Chrome knob, page probe on against studio alone: px differing / the stripes (a face) | 3,821 of 10,000 / 0 | 15,020 of 40,000 / 0 |
+| 300 frames, pointer moving and a knob posed: captures, uploads, geometry updates, probe refreshes | 0, 0, 0, 0 (300 frames drawn) | 0, 0, 0, 0 (300) |
+| Typing into the display: uploads / probe refreshes | 1 / 1 | 1 / 1 |
+| Moving the layer: probe refreshes | 1 | 1 |
+
+The lens knobs differ from the lacquer by about 18% of their box because the lens fills 46 of 100 px; the plate and the
+display differ almost entirely, since the lacquer hides the capture.
+
+**Conformance** (`ui-instrument-conformance`, DPR 1 and 2): every check is asserted and passes, none is pending: contained
+22, sampled 65 (61 + the glass case's 4; median 1, 95th percentile 5, maximum 16, unchanged), presence 9, exact 50,
+unchanged 4, ratio 2, relief 6. The glass case: text under the window, the second text run and the flat region at 0 levels;
+the lens's centre (the hub magnified), its domes on both sides and the polished stand's reflection at 0 or 1 level; the finish
+band changes 0.55 of the window's pixels (0.11 required), dispersion 0.12 at DPR 1 and 0.08 at DPR 2 of the lens (0.04) and
+the lens's reflection 0.26 (0.14). No calibration was needed: core's shader is the reference's computation, and the model's
+sampled tolerance stays 16.
+
+**Costs** (Lite task timings over 300 frames with a lens knob posed every third frame, so the map re-renders; p50 / p95 per
+stage, ms; headless; the RTX 3080's clocks are demand-driven, so these are upper bounds and runs scatter by up to 2×):
+
+| Stage | DPR 1 glass | DPR 1 the same parts as lacquer | DPR 1 no page probe | DPR 2 glass | DPR 2 lacquer | DPR 2 no probe |
+| --- | --- | --- | --- | --- | --- | --- |
+| Parts (glass drawn here) | 2.00 / 2.02 | 2.33 / 2.36 | 1.96 / 2.03 | 0.64 / 1.39 | 0.89 / 1.67 | 0.67 / 1.47 |
+| Caps (the windows' exact twins) | 0.06 / 0.06 | none | 0.06 / 0.06 | 0.05 / 0.05 | none | 0.05 / 0.05 |
+| SMAA | 1.09 / 1.11 | 1.07 / 1.08 | 1.09 / 1.10 | 1.86 / 1.91 | 1.84 / 1.88 | 1.86 / 1.91 |
+| Composite | 0.14 / 0.14 | 0.12 / 0.12 | 0.14 / 0.14 | 0.18 / 0.18 | 0.16 / 0.17 | 0.18 / 0.18 |
+| Layer total | 3.32 / 4.11 | 3.55 / 4.68 | 3.32 / 4.12 | 2.79 / 3.77 | 2.94 / 4.32 | 2.83 / 4.04 |
+
+Glass costs nothing measurable beyond the PBR it replaces (its parts stage is the same or smaller, its twins 0.05 to
+0.06 ms), and a probe adds nothing to a frame that does not refresh it. **The probe's own cost:** its first refresh was 0.50
+ms (cold clocks); over 21 refreshes, 1.97 ms p50 and 3.41 p95 at DPR 1 and 1.04 / 1.12 at DPR 2 (the cube is the same
+size at both); a layer's first build was 221 to 222 ms, and rebuilds took 37 to 40 ms with a probe against 20 to 32 ms
+without (the cube, its 60 passes' bind groups and the error-scope round trip; not broken down). By the budget rule (a
+stage is on by default only at about 2 ms task p95 at DPR 2 or less) the probe fits: it costs a refresh, not a frame, and
+a refresh is one command buffer. A layer that scrolls refreshes every frame it moves: about 1 to 2 ms GPU per frame per
+layer.
+
+**Failures:** with `?failProbe=1` (core's internal test hook) the layer reports `probe: failed` with the hook's reason, holds
+no probe, draws its glass as before (0 pixels of the lens differ from a page-off render) and its chrome knob exactly as a
+page-off render; with `?failGlass=1` it reports `glass: fallback`, the glass parts are left out, the display's text and the
+plate's region equal the layer without objects, and the probe is unaffected. GPU on in both. An invalid probe (a texture the
+device refuses) is caught with validation and out-of-memory error scopes at build; the unit tests cover the settings, the
+budget and the refresh key.
+
+**Regression** (the same code): `core-instrument` 7, `core-emitters` 6, `core-post` 4 and `core-post-lifecycle` 3, `ui-gpu` 53,
+`ui-knob` 13, `ui-switch-forms` 9, `ui-fader` 14, `ui-instrument-conformance` 2 and `core-glass` 4 passed; `npm run test:unit`
+(7 new tests) passed.
+
+**Found while building it** (recorded for the Lite requests, L34 and L35):
+
+- Lite binds a local environment's projection at registration and offers no call to update it, so a layer that moves keeps
+  its box and the cube's content follows the layer instead (decision 3).
+- WebGPU buffer and texture usage flags are different enums with the same names; a `MapWrite | Uniform` buffer failed with a
+  validation error that the probe's error scopes caught and reported as `probe: failed` (the diagnosis path worked the
+  first time it was exercised).
+- A finish, a stand or an emitter changes with the same layout, so the glass's per-instance data is compared every frame and
+  written when it changes; writing it only when an object moved left a changed `finish` stale (found by the suite's
+  `no-band` variant).
+- A range input's `value` repaints, so a test that posed a knob through the DOM recaptured the panel 100 times in 300 frames
+  (and the probe refreshed exactly once per upload); poses go through the scene's `t`, as core's other pages do.
+
+## Review notes and limits (item 4)
+
+- **`core-post`'s page turns the probe off** (`page: { enabled: false }` in `instrument-post-core/scene.ts`): the default now
+  builds a probe, which gave metals reflections of the light face; the test's "the map never changes a face pixel" counts
+  pixels where parts-with-map equal the face-only render, and three part-edge pixels at DPR 2 met the face's colour by
+  chance. The post chain is tested on the studio alone, the probe in `core-glass`.
+- **The page probe's look is not in the model's reference** (2D.5 reflects the page by presence only; the suite's scenes turn it
+  off). Its colour is Lite's and the blur chain's; it is not calibrated.
+- **Glass over a transparent capture** takes the capture's alpha (the premultiplied result with the capture's alpha at the
+  green channel's read): a lens over empty space shows its reflection only. Faceplates are opaque, so this is not measured.
+- **At a fractional opacity** glass takes item 3's group blend; a window then shows the capture at `α` over a face already
+  faded at `α` (SCOPE-009).
+- **Caps behind glass:** captured caps are composited last, so a key behind a window shows over it.
+- **The window's exact twin** discards everywhere the window is not exact, at a cost of the window's pixels in the caps task
+  (0.05 to 0.06 ms for two windows); a window with no protected rects and no flat region has none to draw.
+- **The probe's resolution** is uniform on the face plane only within `page.height` px of its anchor (the +z face); farther
+  or at grazing angles it is coarse (up to about 13 px per texel at 1,000 px) and blurred by the mip chain.
+
+## Deviations from the draft (item 4)
+
+- **The plan's "local capture cube per layer" feeds the PBR parts, not the glass.** Glass traces its reflection (2D.6) and
+  loads the capture directly, because Lite 1.33's shader materials cannot bind a cube (L12) and the model says the page cube is
+  not used for glass; the plan's sentence predates the model's glass.
+- **The probe also refreshes when the layer moves** (the plan said only when the capture refreshes): Lite fixes the box at
+  registration (L34).
+- **Glass casts on the face by default** (2D.7: a part casts unless `caster` is `null`); item 1 had excluded glass because it
+  was not drawn. It does not enter the shadow map (a shader material has no depth caster in Lite 1.33).
+- **`finish: true` on a window** is the zone with its defaults, in core and in the reference.
+- **Glass roughness is not drawn** (the brief asked for it; 2D.6 defines clear glass and a blurred refraction needs a mip
+  chain of the capture, which the layer's texture does not have).
+- **The probe's default is on** for scenes that omit `environment.page`, as 2D.5 says; no existing scene opted in.
+- **`core-post`'s scene turns the probe off** (above).
