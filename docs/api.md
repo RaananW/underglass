@@ -612,20 +612,28 @@ them, and a version 4 scene without emitters shades as before.
   outer half of the outset). The relief shading adds each emitter's highlight on bevels, object sides and domes; at the
   Instrument level the parts are lit by clustered lights with the same values.
 - **The guard.** Inside a protected rect the face's whole change (the relief, the part shadows and the light together)
-  stays within `interior.max`: the light is capped and part shadows are scaled there, easing back over `feather`.
+  stays within `interior.max`: the light is capped and part shadows are scaled there, easing back over `feather`. A
+  protected box (`"extent"`, or more than 64 rects) has its caps per cell of a 16 × 9 grid, so the part shadows and the
+  light stay everywhere at most `interior.max` from the face. A layer adds no light to the text of the layers beneath
+  its outset (their protected rects, mapped into its space): each layer's text takes light from its own layer only.
+  Part shadows inside protected areas are guarded whether or not the scene has emitters (2D.4's face factor).
 - **Budget.** A layer draws the 64 emitters that give light and reach furthest into it (scene order on ties); the rest
   are dropped and reported, never a validation error, and GPU stays on.
 - **`handle.setEmitters(emitters)`** replaces a version 4 scene's emitters without validating, repacking or rebuilding
   anything else: the path for a light that moves every frame. It writes uniforms and clustered light data only: no
-  capture, upload or hit-geometry change. A scene without an `emitters` field gets one through `update` (for an
-  Instrument scene, one rebuild of its mesh scene). Call it once per frame per layer, from the pointer event or from an
-  animation-frame callback that asks for its next frame after writing, so core draws every frame.
+  capture, upload or hit-geometry change. On a version 4 scene that has no `emitters` field yet, `setEmitters` takes the
+  full validation path itself and adds the field (for an Instrument scene, one rebuild of its mesh scene). Core draws
+  every frame in which a light was written, whatever the writer's idiom (after such a draw it asks for a lead frame).
 - **Diagnostics.** `state().emitters` has the budget (64), `order` (`"core"`, or why the face pools are off), the task
   timing status and, per layer with emitters or protected rects: `emitters`, `lit`, `outOfReach`, `drawn` (scene
   indices), `dropped` (`{ index, margin }`, margin in px of reach), `pass` (`drawn`, `idle` or `off`), `feather`,
-  `guard` (`rects`, `extent`, `overflow`, `caps` with each rect's `light` and `shadow` caps) and `gpu` (`lastMs`,
-  `p50Ms`, `p95Ms`, `samples`, `total`). `state().instrument.layers[].lights` reports whether a scene has its clustered
-  lights and how many are lit.
+  `beneath` (lower layers' text rects under its outset), `guard` (`rects`, `extent`, `overflow`, `caps` with each rect's
+  `light` and `shadow` caps, `cells` with each cell's caps for a protected box) and `gpu` (`lastMs`, `p50Ms`, `p95Ms`,
+  `samples`, `total`). `state().instrument.layers[].lights` reports whether a scene has its clustered lights and how many
+  are lit. `state().resources.lightPasses` counts the face pools alive (they go with their passes after a queue fence or
+  with the engine), and `state().metrics.lightPassesDisposed` counts those released.
+- **Instrument scene limits changed:** `emitters` takes up to 1,024 (was 64), `protected` up to 4,096 rects (was 64),
+  and `feather` is 0..16 (was 0..1,000).
 - **Not in core:** tracking the pointer, `pointer: fine`, the fade, `prefers-contrast` and `forced-colors` are the
   application's (the Strata GPU helper's); core draws what the scene says. Emitters cast no shadows and never move the
   key light.

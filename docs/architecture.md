@@ -325,7 +325,8 @@ A lit layer's pass gets a face pool: a Babylon Lite frame-graph context with one
 effect task, placed by the same guarded reorder right after the layer's pass and
 before its mesh scene, that multiplies what is already on the canvas over the
 layer's box and outset (a layer's own blend could only darken what lies beneath
-it). The relief binding carries the same emitter block for the highlights on
+it), adding no light to the text of the layers beneath it, which each layer guards
+within `interior.max` itself. The relief binding carries the same emitter block for the highlights on
 bevels and objects, and instrument scenes light their parts with clustered lights.
 A moving light (`handle.setEmitters`) is uniform data only: no capture, no
 native geometry change, no rebuild.

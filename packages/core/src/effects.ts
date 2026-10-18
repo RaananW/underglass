@@ -257,9 +257,9 @@ export interface MaterialHandle {
    * Replaces the emitters of a version 4 scene (`relief`, `objects` or `instrument`), the cheap path for a light that
    * moves every frame (the pointer light, a lamp turning on): only the list is validated, nothing else of the scene is
    * repacked or rebuilt, and the next frame writes the light's uniforms with no capture, upload or hit-geometry change.
-   * A scene without an `emitters` field gets one through `update` instead (for an Instrument scene, one rebuild of its
-   * mesh scene, for the parts' clustered lights). Throws for other materials, a list that is not valid, or one shorter
-   * than a part's `emitter` index.
+   * On a version 4 scene without an `emitters` field it takes the full validation path itself and adds the field (for an
+   * Instrument scene, one rebuild of its mesh scene, for the parts' clustered lights). Throws for other materials, a list
+   * that is not valid, or one shorter than a part's `emitter` index.
    */
   setEmitters(emitters: readonly SceneEmitter[]): void;
   cancel(): void;

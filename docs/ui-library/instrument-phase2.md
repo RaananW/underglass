@@ -394,10 +394,12 @@ scenes) stays valid; the next frame writes uniforms and clustered lights and not
 `emitters` field gets one through the full `update` path instead (for an Instrument scene that is a structure change,
 below). The pointer light is an emitter like any other, so the helper moves it with `setEmitters` every frame.
 
-**When to call it.** `setEmitters` asks core for a frame; core coalesces requests into one draw per animation frame. A
-helper that writes from its own animation-frame callback must ask for its next frame *after* writing (or write from
-the pointer event): one that asks first runs before core's draw in the next frame, so core draws every other frame
-(measured: 150 draws for 300 writes). The playground page does the former.
+**Every frame a light is written is drawn.** `setEmitters` asks core for a frame, and core coalesces requests into one
+draw per animation frame. The first version drew every other frame for a writer in the usual idiom (an animation-frame
+callback that asks for its next frame before writing runs ahead of core's request in every frame: 150 draws for 300
+writes). After a draw that carried a `setEmitters` write, core now asks for a lead frame at once, which draws only if
+another write arrived by then, so core's callback follows the writer's in each frame (review fix; measured 299 draws
+for 300 writes in that idiom, and 297–300 for 300 real pointer moves).
 
 Diagnostics: `state().emitters` (per layer: emitters in the scene, lit, drawn, dropped with their reach, the guard's
 rects and caps, the feather, the pass status, GPU time) and `emitterGpuMs` measurement samples.
@@ -465,15 +467,19 @@ The pool and the relief shading read the same **emitter block**, packed once per
 | --- | --- |
 | 1 | emitter count, feather, protected rect count, `interior.max` |
 | 1 | the tile grid: origin and cell size over the draw rectangle, layer px |
-| 64 | protected rects |
-| 64 | per rect: the light cap and the shadow cap (the guard, below) |
-| 128 | emitters: `(x, y, z, ±R)` (negative for `reach: "layer"`), `(I · colour, face)` |
+| 1 | the protected box: on or off, the extent, and whether the whole outset is protected (lower layers' text overflowed) |
+| 64 | protected rects: the layer's own, then lower layers' text under its outset |
+| 64 | per rect: the light cap and the shadow cap (the guard, below; 0 for a lower layer's text) |
+| 128 | emitters: `(x, y, z, ±R)` (negative for `reach: "layer"`), `(I · colour, face)`, at full strength |
 | 144 | the 16 × 9 tiles, one vec4 each: four 16-bit masks of the emitters whose reach meets the tile (exact in f32, so no shader reinterprets uniform floats as bits) |
+| 144 | the protected box's 16 × 9 cells over the extent: each cell's light and shadow caps |
 
-The block (402 vec4s) is appended to the relief binding (1,702 → 2,104 vec4s, 33.7 KB of the 64 KB a uniform binding may
-hold), so the layer pass keeps its one binding layout; the stage material uses only the start of the binding and is
-unchanged. The pool's own binding is an 8-vec4 header (frame, draw bounds, inverse matrix rows, draw rectangle, capture
-grid, extent) and the same block.
+The block (547 vec4s) is packed once per layer and frame and appended to the relief binding (1,702 → 2,249 vec4s, 36 KB
+of the 64 KB a uniform binding may hold), so the layer pass keeps its one binding layout; the stage material uses only
+the start of the binding and is unchanged. The pool's own binding is an 8-vec4 header (frame and the layer's opacity,
+draw bounds, inverse matrix rows, draw rectangle, capture grid, extent) and a copy of the same block. Tiles bin each
+emitter by its reach in the face plane; the highlight on an object is evaluated at the object's mid height, a few px
+above it, where the reach is the same to within `z² / R` (under 0.1 px for the tokens).
 
 ## The guard
 
@@ -481,27 +487,42 @@ Inside a protected rect the face's **whole** change stays within `m = interior.m
 (2.9), the part shadows `Sₚ` and the emitter light together (2D.4). Core keeps it without evaluating the relief on the
 pool's pixels:
 
-- **Bounds of `k` per rect,** on the CPU, from the layer's face scene (for an Instrument layer, its primitives and the
-  objects drawn at Relief this frame): `k_hi = 1 + min(m, Σ positive interior offsets of the entries that overlap the
-  rect)` and `k_lo = max(1 − m, (1 − min(m, Σ negative offsets)) · (1 − min(strength, m) if a relief cast shadow can
-  reach the rect))`. Cached per face scene and rect list.
-- **Light:** inside rect `r`, `E` is capped per channel at `(1 + m) / k_hi − 1` (`m` on a plain face).
-- **Part shadows:** inside `r`, each object's face shadow is scaled (2.9's `g`, so it keeps its soft profile) so that the
-  `n` objects whose shadows reach the rect darken it together by at most `1 − (1 − m) / k_lo`.
+- **Bounds of `k` per area,** on the CPU, from the layer's face scene (for an Instrument layer, its primitives and the
+  objects drawn at Relief this frame), cached per face scene and protected list (`interiorBounds`):
+  - **offsets by the largest stack:** in the shading a covering entry replaces the offset beneath it, and offsets add
+    only within an antialiased edge, so `k_hi = 1 + min(m, largest over the entries overlapping the area of its offset
+    plus the offsets of the earlier entries it overlaps there)`, and `k_lo` likewise with the negative offsets. Entries
+    side by side never add (review fix: the first version summed every overlapping entry, so a rect over two separate
+    satin keys bounded `k_hi` at 1.01 instead of 1.005, and ten satin keys under `"extent"` left no light at all);
+  - **shadows where they can fall on a guarded face:** an entry's cast shadow lowers `k_lo` to
+    `1 − min(strength, m)` only where its shadow region meets a point of the area that lies on an *earlier* entry (the
+    shading drops shadows under later covers) and is not a pixel inside the caster (2.8). A face's own drop shadow, which
+    falls outside the face, never counts (review fix: the first version counted any shadow that could reach the area,
+    the panel's own included through its rounded corners, so one raised face under `"extent"` lost every part shadow).
+    The cast height is the entry's in its state (hover raises it, a press lowers it).
+- **Light:** inside an area, `E` is capped per channel at `(1 + m) / k_hi − 1` (`m` on a plain face).
+- **Part shadows:** inside an area, each object's face shadow is scaled (2.9's `g`, so it keeps its soft profile) so that
+  the `n` objects whose shadows reach the area darken it together by at most `1 − (1 − m) / k_lo` (`shadowScales`, a pure
+  function). Part shadows inside protected areas are guarded whether or not the scene has emitters: this is 2D.4's face
+  factor, as the relief's own shadows are on guarded faces (2.9).
 - Emitters only add light and shadows only take it away, so `k · (1 − Sₚ) · (1 + E)` stays in `[1 − m, 1 + m]` inside
-  every protected rect. Outside, both return to full strength over `feather` px (`1 − smoothstep(0, feather, q)`, `q` the
-  distance to the rect).
-- **`"extent"`** protects the layer's box; the outset is outside it, so a lamp near the edge still lights the page past
-  it. **More than 64 rects** protect the extent (the design language's rule), reported in `state().emitters`.
+  every protected area. Outside, both return to full strength over `feather` px (`1 − smoothstep(0, feather, q)`, `q` the
+  distance to the area).
+- **A protected box** (`"extent"`, or more than 64 rects, the design language's rule, reported in `state().emitters`)
+  has its caps per cell of a 16 × 9 grid over the extent, so one stack of controls or one shadow lowers the caps of its
+  own cells only (review fix: the first version gave the whole box one cap). The outset is outside the box, so a lamp
+  near the edge still lights the page past it.
+- **Lower layers' text:** a layer adds no light to the text of the layers beneath its outset. Each frame core maps the
+  protected areas of every lower layer into the layer's px, keeps their parts that lie in its outset (outside its own
+  box, which covers the rest), and adds them to the block with a light cap of 0, after the layer's own rects; if they do
+  not fit, the outset gets no light at all. Each layer's text therefore takes light only from its own layer, within its
+  own guard (review fix: C's lamp lit B's text in C's outset by +35 levels at 2 px).
 
 **Deviation from 2D.4:** the model clamps the product `(1 − Sₚ)(1 + E)` to `[(1 − m)/k, (1 + m)/k]`; core bounds each
 side. They are equal when only light or only shadow reaches a protected pixel; with both, core is stricter (light does
 not lift a shadow inside text). The exact clamp needs `k` and `Sₚ` per pixel in the pool: the relief loop a second time
 on text pixels and the casters of every object, which a refactor of the conformance-tested shader could give later.
 
-**Not guarded by the lamp's layer:** a lower panel's text beneath another panel's outset glow. Its guard is its own
-layer's; the protected rects of other layers are not in this layer's pass. Recorded as a limit; the helper keeps lamps
-whose glow crosses an edge away from text on the panel beneath.
 
 ## The budget
 
@@ -521,11 +542,16 @@ validation error, and GPU stays on. The stage has no emitter budget.
 
 ## Lifecycle
 
-The pool context belongs to its layer's pass (it reads that pass's capture texture): created the first frame the
-layer's scene has an `emitters` field, registered with the passes and ordered after its layer's pass, taken off the
-surface when the composition is unpresented, and disposed with the pass after the composition's queue fence, device
-loss or `destroyGPU`. The clustered container is a resource of its Instrument scene and goes with it. Task timings stay
-on while a pool or an Instrument layer exists.
+The pool context belongs to its layer's pass (it reads that pass's capture texture): created with the pass when the
+layer's scene already has an `emitters` field (its pipeline built then, registered and taken off again as successor
+passes are, so a new composition's first frame compiles nothing), or the first frame the field appears; registered with
+the passes and ordered after its layer's pass, taken off the surface when the composition is unpresented, and disposed
+with the pass after the composition's queue fence, device loss or `destroyGPU` (`resources.lightPasses`,
+`metrics.lightPassesDisposed`). Its task draws into Lite's swapchain target and disposes that target with the task;
+Lite 1.33 leaves it alone only because the swapchain target is eager with no attachment disposer
+(`lib/engine/surface.js`, `lib/engine/render-target.js`), which the browser test exercises by retiring a pass while the
+engine lives. The clustered container is a resource of its Instrument scene and goes with it. Task timings stay on while
+a pool or an Instrument layer exists.
 
 **Draw order.** Pools join item 1's documented reliance (decision 1): core permutes its own contexts in
 `getRenderingContexts` and reads the order back. If Lite refuses it, every pool is taken off the surface (the light is
@@ -539,8 +565,8 @@ off, `state().emitters.order` names the reason), Instrument layers step down as 
 | 2 | The pass object | A standalone frame-graph context with one effect task: synchronous registration, seen by Lite's task timings, execution off on unlit frames | An effect renderer: not timed by Lite; a Lite scene: asynchronous `registerScene` |
 | 3 | How emitters reach the relief shading | An emitter block (64 emitters, 64 rects with caps, 16 × 9 tiles of four 16-bit masks) appended to the relief binding, packed per frame | A separate binding: a second bind-group layout for every relief pass |
 | 4 | Specular at Relief and Objects | The 2.5 lobe per emitter on bevels, sides and domes, coloured, at full strength, zero where 2.9 guards and inside protected rects | No specular (I0.3's face-only light) |
-| 5 | The guard | CPU bounds of `k` per rect; light capped and part shadows scaled so the product stays in `1 ± m`; one feather per layer; `"extent"` protects the box; more than 64 rects protect the extent | The exact clamp of 2D.4, evaluating the relief and every caster per text pixel |
-| 6 | The update path | `handle.setEmitters` swaps the list into the validated scene in place: uniform writes only | `handle.update` every frame: re-validates and repacks the scene, and recomputes the Instrument structure key |
+| 5 | The guard | CPU bounds of `k` per area (offsets by the largest stack, shadows where they fall on a guarded face); light capped and part shadows scaled so the product stays in `1 ± m`; one feather per layer; a protected box (`"extent"`, more than 64 rects) has caps per 16 × 9 cell; lower layers' text under the outset gets no light | The exact clamp of 2D.4, evaluating the relief and every caster per text pixel |
+| 6 | The update path | `handle.setEmitters` swaps the list into the validated scene in place: uniform writes only; core draws every frame a light was written (a lead frame after such a draw) | `handle.update` every frame: re-validates and repacks the scene, and recomputes the Instrument structure key; guidance on the writer's idiom instead of the lead frame |
 | 7 | The budget | 64 per layer kept by reach margin, the rest dropped with a diagnostic; the format takes 1,024 | A validation error at 65 |
 | 8 | Scene versions | Version 4 (`kind: "relief"`) carries `emitters`, `protected` and `feather` for the Relief and Objects materials | Additive fields on versions 1 to 3: changes normative versions |
 | 9 | Instrument parts | One clustered container of 64 lights per scene that has `emitters`, built with the scene, updated in place | A container sized to the emitter count: a rebuild whenever the count changes |
@@ -617,9 +643,34 @@ lights add no measurable time to the parts at 64. With 0 emitters the pool's tas
 **Lifecycle:** after `disable`, `resources.lightPasses` is 0 and the engine is gone; after `enable` the pools come back
 and draw.
 
-**Suites:** `core-emitters` 6 of 6 (headless) and 3 of 3 (headful, DPR 1); `core-instrument` 5 of 5; relief, objects,
-stage, material, `ui-gpu` and the I0.3 probe (`ui-probe-instrument-emitters`) 69 of 69; unit 149 (1 skipped), compiler
-129, typecheck, build and `test:package` pass.
+**Review fixes (2026-10-18).** An independent contract review rated the first version not ready; each finding is fixed
+above and measured here (headless DPR 1 and 2, and headful DPR 1, identical pixel numbers):
+
+- **The guard bound** (blocker). The review's three cases, computed from core's sources: one raised face (radius 14)
+  under `"extent"`: every cell keeps light and shadow caps of 0.04 (was a shadow cap of 0); ten satin keys under
+  `"extent"`: the smallest light cap is 0.0348, one key's (was 0); a rect over two separate satin keys: `k_hi` 1.005 (was
+  1.01). On the page, with every panel protecting `"extent"` or 65 or more rects (12 past 64): the knob's part shadow on
+  the face is 7.3 levels deep at Instrument (49–50 with text runs: inside a protected box part shadows darken by at most
+  `interior.max`, as the relief's own shadows on guarded faces do), the pool still lights the face (+3 to +9 levels
+  beside the corner lamp), and the label and caption stay within 0.44 / 0.40 levels of `1 ± m`; with overlapping rects,
+  +19.3 and the same excesses. The cells' smallest caps: 0.040 / 0.040 at Instrument, 0.030 / 0 at Objects and 0.011 / 0
+  at Relief (cells inside the keys' and knobs' relief shadows).
+- **Lower layers' text.** B's note under C's outset: 0 levels of change against the plain pass with C's lamp on, at every
+  level and DPR (C adds no light there); contrast 5.44 / 5.94 light / dark, unchanged by the lamp. C carries one such
+  rect.
+- **Every written frame drawn.** A writer in the usual idiom (asks for its next frame, then writes): 299 draws for 300
+  writes (was 150); the pointer run 297–300 draws for 300 moves.
+- **Tests.** The guard tolerance is 1 level against the plain pass (worst measured 0.44); the lamp's change alone is
+  asserted within 1.5 levels (two separately rounded frames; worst 1.12, Objects light label); a pass retired by a
+  resize disposes its pool while the engine lives (1 disposed, 4 pools before and after, the next frame drawn).
+- **Nits.** The block is packed once per layer and frame; a failed pool creation releases its frame-graph context; pools
+  are created and their pipelines built with their pass; the timing answer cannot write into a replaced record; layers
+  that no longer light anything leave the diagnostics.
+
+**Suites (after the review fixes):** `core-emitters` 6 of 6 headless and 3 of 3 headful (DPR 1); `core-instrument` 5 of 5,
+`ui-gpu`, relief, objects, stage, material and the I0.3 probe: 74 of 74; unit 151 (1 skipped), compiler 129,
+typecheck, build and `test:package` pass. The first version's runs: `core-emitters` 6 / 3, the same suites 69 + 5,
+unit 149.
 
 **Found while building it** (each handled in core or the page, recorded):
 
@@ -628,11 +679,12 @@ stage, material, `ui-gpu` and the I0.3 probe (`ui-probe-instrument-emitters`) 69
 - A Playwright screenshot asks the browser for a paint with no attribution, which recaptures every layer: the pointer
   run takes its screenshots after the run.
 - Core coalesces draw requests into one per animation frame; a writer that asks for its next frame before writing
-  draws every other frame (150 of 300), hence the guidance above.
+  drew every other frame (150 of 300), hence the lead frame above.
 - The pool reads the captured alpha for `reach: "layer"`; outside the layer's box the clamped read returned the edge
   texel and lit C's outset over B twice (+8 instead of +4): the alpha is 0 outside the box, and the test checks it.
 
-**Limits:** captured caps (key labels at Instrument) are drawn after the pool and not lit, as in I0.3; text on a lower
-panel under another panel's outset glow is guarded by its own layer only; lamps at the Objects level saturate their own
-emissive pucks (the lamp's light falls on its own dome); one fast GPU; `prefers-contrast`, `forced-colors`, `pointer:
-fine` and the fade belong to the helper and are not tested here.
+**Limits:** captured caps (key labels at Instrument) are drawn after the pool and not lit, as in I0.3; a protected box
+lowers part shadows to `interior.max` across the whole face (the guard's rule, not a fault); lamps at the Objects level
+saturate their own emissive pucks (the lamp's light falls on its own dome); one fast GPU; `prefers-contrast`,
+`forced-colors`, `pointer: fine` and the fade belong to the helper and are not tested here. The open limits are in
+[open issues](../open-issues.md) (SCOPE-009).
