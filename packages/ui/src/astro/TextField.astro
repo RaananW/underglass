@@ -1,11 +1,14 @@
 ---
 /**
  * TextField (anatomy page `text-field.md`): a native `<input>` well. With Field props it renders its Field; with an
- * `icon` slot the input sits in a wrapper that carries the well and the focus edge.
+ * `icon` slot the input sits in a wrapper that carries the well and the focus edge. With `form="display"` it is a glass
+ * window in a bezel (section 11): `backlight` names the light behind the glass, `lit={false}` switches it off, and `class`
+ * and `style` go on the display's root; any other `form` string is the native `form` attribute, as before.
  */
 import Field from "./Field.astro";
 import { fieldControl } from "./field.ts";
 import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+import { displayAttributes, displayClasses, displayMarkup, isTextForm, type StrataDisplayBacklight } from "../shared/display.ts";
 
 interface Props {
   id?: string;
@@ -15,21 +18,31 @@ interface Props {
   required?: boolean;
   disabled?: boolean;
   invalid?: boolean;
+  /** `display`: a glass window in a bezel, backlit. Any other string is the native `form` attribute. */
+  form?: string;
+  /** A display's backlight: a colour role (`glowOn` by default) or `off`. */
+  backlight?: StrataDisplayBacklight;
+  /** A display's backlight is lit by default; `false` switches it off. */
+  lit?: boolean;
   requiredLabel?: string;
   errorPrefix?: string;
   size?: StrataSize;
   material?: string;
   level?: StrataLevel;
   class?: string;
+  style?: string;
   [attribute: string]: unknown;
 }
 
-const { id, label, help, error, required, disabled, invalid, requiredLabel, errorPrefix, size, material, level, class: className, ...rest } = Astro.props;
+const { id, label, help, error, required, disabled, invalid, form, backlight, lit, requiredLabel, errorPrefix, size, material, level, class: className, style, ...rest } = Astro.props;
+const display = isTextForm(form);
 const field = fieldControl({ id, label, help, error, required, disabled, invalid });
 const strata = strataAttributes({ size, material, level });
 ---
 <Field wrap={field.wrap} controlId={field.id} label={label} help={help} error={error} required={required} requiredLabel={requiredLabel} errorPrefix={errorPrefix}>
-  {Astro.slots.has("icon")
-    ? <span class="ug-text-field__wrap" data-strata-face="well" {...strata}><span class="ug-text-field__icon" aria-hidden="true"><slot name="icon" /></span><input class={classes("ug-text-field__input", className)} {...field.attrs} {...rest} /></span>
-    : <input class={classes("ug-text-field", className)} data-strata-face="well" {...strata} {...field.attrs} {...rest} />}
+  {display
+    ? <span class={classes(...displayClasses(false), className)} style={style} {...strata} {...displayAttributes({ backlight, lit })}><span class="ug-display__object" aria-hidden="true"><span class={displayMarkup.bezel.className} data-strata-face={displayMarkup.bezel.face}><span class={displayMarkup.window.className} data-strata-face={displayMarkup.window.face}></span></span></span><input class="ug-display__text" {...field.attrs} {...rest} /></span>
+    : Astro.slots.has("icon")
+    ? <span class="ug-text-field__wrap" data-strata-face="well" {...strata}><span class="ug-text-field__icon" aria-hidden="true"><slot name="icon" /></span><input class={classes("ug-text-field__input", className)} {...field.attrs} style={style} form={form} {...rest} /></span>
+    : <input class={classes("ug-text-field", className)} data-strata-face="well" {...strata} {...field.attrs} style={style} form={form} {...rest} />}
 </Field>

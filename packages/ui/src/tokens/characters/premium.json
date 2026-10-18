@@ -18,7 +18,7 @@
           "colour.glowOn",
           "lamp.lens",
           "statusLight.lens",
-          "display.backlight",
+          "emitter.display",
           "material.presets.chrome",
           "instrument.material.chrome"
         ]
@@ -1053,17 +1053,6 @@
       "$type": "dimension",
       "$value": "2px",
       "$description": "Protected rects are the text runs grown by this."
-    },
-    "backlight": {
-      "$type": "number",
-      "$value": 0,
-      "$description": "The backlight emitter's strength (not prototyped).",
-      "$extensions": {
-        "dev.underglass.strata": {
-          "min": 0,
-          "max": 32000
-        }
-      }
     }
   },
   "lamp": {
