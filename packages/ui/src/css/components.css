@@ -756,6 +756,187 @@
   :where(.ug-switch--reverse) { flex-direction: row-reverse; justify-content: flex-end; }
   :where(.ug-switch--reverse .ug-switch__knob) { left: auto; right: calc(var(--strata-switch-width) - var(--strata-indicator) + var(--strata-object-taper)); }
 
+  /* ---- Lamp and StatusLight: a lens on a bezel over a native switch or button, and a small lens (anatomy pages lamp.md, status-light.md) ---- */
+
+  /*
+   * One number lights a lens: `--strata-lit`, 0 unlit and 1 lit, registered so a StatusLight's blink can animate it and
+   * the GPU presentation, which reads it frame by frame, follows the same value as the CSS. A Lamp is lit by its native
+   * state (`checked`, or `aria-pressed` while a momentary lamp is held); a StatusLight is lit unless
+   * `data-strata-lit="false"`. A disabled lamp is unlit. The state is also its label and its switch: light never carries
+   * it alone. The lens glows in CSS (a glow shadow); with the GPU presenting, the lens is drawn as a lens (a dome with an
+   * emitter), the socket under it stays printed on the face, and the CSS paint of the lens is hidden (`data-strata-dome`).
+   */
+  @property --strata-lit { syntax: "<number>"; inherits: true; initial-value: 0; }
+  :where(.ug-lamp, .ug-status-light) {
+    --strata-lit: 0;
+    --_c: var(--strata-colour-glow-on);
+    --_on: color-mix(in srgb, var(--_c), white 18%);
+    --_off: color-mix(in srgb, var(--_c) 16%, #15171b);
+    --_glass: color-mix(in srgb, var(--_on) calc(var(--strata-lit) * 100%), var(--_off));
+    --_metal: var(--strata-colour-knob);
+    --_metal-light: color-mix(in srgb, var(--strata-colour-knob), white 60%);
+    --_metal-shade: color-mix(in srgb, var(--strata-colour-knob), var(--strata-colour-edge) 45%);
+  }
+  :where(.ug-lamp, .ug-status-light)[data-strata-colour="accent"] { --_c: var(--strata-colour-accent); }
+  :where(.ug-lamp, .ug-status-light)[data-strata-colour="success"] { --_c: var(--strata-colour-success); }
+  :where(.ug-lamp, .ug-status-light)[data-strata-colour="warning"] { --_c: var(--strata-colour-warning); }
+  :where(.ug-lamp, .ug-status-light)[data-strata-colour="danger"] { --_c: var(--strata-colour-danger); }
+  :where(.ug-lamp, .ug-status-light)[data-strata-colour="info"] { --_c: var(--strata-colour-info); }
+  :where(.ug-lamp, .ug-status-light)[data-strata-colour="glowOn"] { --_c: var(--strata-colour-glow-on); }
+  :where(.ug-lamp__lens, .ug-status-light__lens) {
+    border-radius: 50%;
+    background: radial-gradient(circle at 36% 30%, color-mix(in srgb, var(--_glass), white 55%) 0, var(--_glass) 45%, color-mix(in srgb, var(--_glass), black 35%) 100%);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35),
+      0 0 calc(var(--strata-lit) * var(--_lens) * 0.7) calc(var(--strata-lit) * var(--_lens) * 0.12) color-mix(in srgb, var(--_on) 55%, transparent);
+  }
+
+  /* Lamp (box = lens + 28): a bezel (lens + 8) round the lens, and the socket (lens + 2) under it; 10 px of room each side for the bloom's halo. */
+  :where(.ug-lamp) {
+    --_lens: var(--strata-lamp-size);
+    --_box: calc(var(--_lens) + 28px);
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--strata-space-3);
+    max-width: 100%;
+    min-height: max(var(--_box), var(--strata-target-min));
+    color: var(--strata-colour-text);
+    font-family: var(--strata-font-family);
+    font-size: var(--strata-control-font);
+    cursor: pointer;
+  }
+  :where(.ug-lamp:has(> .ug-lamp__input:checked:not(:disabled)), .ug-lamp--momentary[aria-pressed="true"]:not(:disabled)) { --strata-lit: 1; }
+  /* The native control: a transparent square box over the object, so a press anywhere on it is a press on the control. */
+  :where(.ug-lamp__input) {
+    flex: none;
+    box-sizing: border-box;
+    width: var(--_box);
+    height: var(--_box);
+    margin: 0;
+    padding: 0;
+    appearance: none;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: inherit;
+    cursor: inherit;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :where(.ug-lamp__input:focus-visible) { outline: none; }
+  :where(.ug-lamp__object) {
+    position: absolute;
+    left: 0;
+    top: calc(50% - var(--_box) / 2);
+    width: var(--_box);
+    height: var(--_box);
+    pointer-events: none;
+  }
+  :where(.ug-lamp--reverse) { flex-direction: row-reverse; justify-content: flex-end; }
+  :where(.ug-lamp--reverse > .ug-lamp__object) { left: auto; right: 0; }
+  /* A momentary lamp is the native button itself, with its object and its label inside it: the button's own box is the row, and
+     the object (in the flow, the lens + 28 square) is where it is drawn. */
+  :where(.ug-lamp--momentary) {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    appearance: none;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    line-height: inherit;
+    text-align: start;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :where(.ug-lamp--momentary:focus-visible) { outline: none; }
+  :where(.ug-lamp--momentary > .ug-lamp__object) { position: relative; flex: none; left: auto; right: auto; top: auto; }
+  :where(.ug-lamp__object) :where(*) { position: absolute; box-sizing: border-box; pointer-events: none; }
+  :where(.ug-lamp__label) { min-width: 0; overflow-wrap: anywhere; }
+  :where(.ug-lamp__bezel) {
+    --_h: 3px;
+    --_bevel: 3px;
+    left: 10px;
+    top: 10px;
+    width: calc(var(--_lens) + 8px);
+    height: calc(var(--_lens) + 8px);
+    border: 1px solid var(--strata-colour-edge);
+    border-radius: 50%;
+    background: linear-gradient(160deg, var(--_metal-light), var(--_metal) 45%, var(--_metal-shade));
+  }
+  :where(.ug-lamp__socket) {
+    left: 13px;
+    top: 13px;
+    width: calc(var(--_lens) + 2px);
+    height: calc(var(--_lens) + 2px);
+    border-radius: 50%;
+    background: var(--_off);
+  }
+  :where(.ug-lamp__lens) {
+    left: 14px;
+    top: 14px;
+    width: var(--_lens);
+    height: var(--_lens);
+  }
+  /* Focus: an accent ring round the bezel (captured content, at every level). Invalid: a danger edge. */
+  :where(.ug-lamp:has(> .ug-lamp__input:is(:focus-visible, [data-strata-preview~="focus"])), .ug-lamp--momentary:is(:focus-visible, [data-strata-preview~="focus"])) :where(.ug-lamp__bezel) {
+    outline: var(--strata-focus-width) solid var(--strata-colour-accent);
+    outline-offset: var(--strata-focus-offset);
+  }
+  :where(.ug-lamp:has(> .ug-lamp__input[aria-invalid="true"])) :where(.ug-lamp__bezel) { border: 2px solid var(--strata-colour-danger); }
+  /* The bezel lifts a little under the pointer, as keys do (section 11). */
+  :where(.ug-lamp:has(> .ug-lamp__input:is(:hover, [data-strata-preview~="hover"]):not(:disabled)), .ug-lamp--momentary:is(:hover, [data-strata-preview~="hover"]):not(:disabled)) :where(.ug-lamp__bezel) {
+    --_lift: var(--strata-state-hover-height);
+    --_tone: var(--_hover-tone);
+  }
+  :where(.ug-lamp:has(> .ug-lamp__input:disabled), .ug-lamp--momentary:disabled) { color: color-mix(in srgb, var(--strata-colour-text) 38%, transparent); cursor: not-allowed; }
+  :where(.ug-lamp:has(> .ug-lamp__input:disabled), .ug-lamp--momentary:disabled) :where(.ug-lamp__object) { opacity: 0.38; }
+  :where(.ug-lamp:has(> .ug-lamp__input:disabled), .ug-lamp--momentary:disabled) :where(.ug-lamp__bezel) { --_h: 0px; --_gain: 0; }
+
+  /* StatusLight (box = lens + 16): the lens alone, lit unless it says otherwise; blinking only while lit. */
+  :where(.ug-status-light) {
+    --_lens: var(--strata-status-light-size);
+    --_box: calc(var(--_lens) + 16px);
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--strata-space-2);
+    max-width: 100%;
+    min-height: var(--_box);
+    vertical-align: middle;
+    color: var(--strata-colour-text);
+    font-family: var(--strata-font-family);
+    font-size: var(--strata-control-font);
+  }
+  :where(.ug-status-light:not([data-strata-lit="false"])) { --strata-lit: 1; }
+  :where(.ug-status-light__object) { position: relative; flex: none; width: var(--_box); height: var(--_box); pointer-events: none; }
+  :where(.ug-status-light__socket, .ug-status-light__lens) { position: absolute; pointer-events: none; }
+  :where(.ug-status-light__socket) {
+    left: 7px;
+    top: 7px;
+    width: calc(var(--_lens) + 2px);
+    height: calc(var(--_lens) + 2px);
+    border-radius: 50%;
+    background: var(--_off);
+  }
+  :where(.ug-status-light__lens) {
+    left: 8px;
+    top: 8px;
+    width: var(--_lens);
+    height: var(--_lens);
+  }
+  :where(.ug-status-light__text) { min-width: 0; overflow-wrap: anywhere; }
+  :where(.ug-status-light--bare .ug-status-light__text) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  :where(.ug-status-light--bare) { gap: 0; }
+  /* The blink tempos (`blink.*`): one full on-off cycle, half lit, in steps. Never over three flashes a second. */
+  :where(.ug-status-light[data-strata-blink="slow"]) { --_period: var(--strata-blink-slow); }
+  :where(.ug-status-light[data-strata-blink="normal"]) { --_period: var(--strata-blink-normal); }
+  :where(.ug-status-light[data-strata-blink="fast"]) { --_period: var(--strata-blink-fast); }
+  :where(.ug-status-light[data-strata-blink]:not([data-strata-lit="false"])) { animation: ug-blink var(--_period) steps(1, end) infinite; }
+  @keyframes ug-blink { 0% { --strata-lit: 1; } 50% { --strata-lit: 0; } 100% { --strata-lit: 1; } }
+
   /* ---- Fader: a native range input over a slot in the faceplate, with a capped carriage and a printed scale (anatomy page fader.md) ---- */
 
   /*
@@ -2421,6 +2602,10 @@
   :where([data-strata-mode="face"]) .ug-switch__object [data-strata-dome] { border-color: transparent; }
   :where([data-strata-mode="face"][data-strata-instrument], [data-strata-mode="face"][data-strata-instrument] *) .ug-switch__object [data-strata-dome] { translate: none; scale: none; opacity: 1; }
   :where([data-strata-mode="face"]) .ug-switch__block[data-strata-dome] .ug-switch__grip { display: none; }
+  /* The GPU draws a lamp's or LED's lens as a lens (a dome with an emitter) at every level, and at the Instrument level its bezel
+     as a part: their CSS paint is hidden, so a light turning on or blinking repaints nothing (the socket printed under the lens
+     and the focus ring stay). */
+  :where([data-strata-mode="face"]) .ug-lamp__bezel[data-strata-dome] { border-color: transparent; }
   /* Under the GPU, an enrolled panel's boundary never carries a CSS transform: the GPU presentation moves it. */
   :where([data-strata-mode="face"]):is(.ug-panel, .ug-card)[data-strata-motion], :where([data-strata-mode="face"]) :is(.ug-panel, .ug-card)[data-strata-motion] { animation: none; }
 
@@ -2429,6 +2614,7 @@
   @media (prefers-reduced-motion: reduce) {
     :where([data-strata-face], .ug-checkbox__mark, .ug-radio__dot, .ug-switch__knob, .ug-switch__input, .ug-accordion__chevron) { transition: none; }
     :where(.ug-knob__pointer) { transition: none; }
+    :where(.ug-status-light[data-strata-blink]) { animation: none; }
     :where(.ug-spinner__arc) { animation: none; }
     :where(.ug-tree__toggle)::before { transition: none; }
     :where(.ug-carousel__slide) { transition: none; }
@@ -2451,6 +2637,14 @@
     :where(.ug-knob__skirt, .ug-knob__cap) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-edge); }
   }
   :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-knob) { --_ink: var(--strata-colour-text); }
+  /* More contrast: a lit lens is flat colour, with no glow, and the socket under it takes that colour too (so the GPU's
+     glass shows it, and its emitters are off); lenses and bezels are edged in the text colour. */
+  @media (prefers-contrast: more) {
+    :where(.ug-lamp__socket, .ug-status-light__socket) { background: var(--_glass); }
+    :where(.ug-lamp__lens, .ug-status-light__lens) { background: var(--_glass); box-shadow: none; }
+    :where(.ug-lamp__bezel, .ug-lamp__lens, .ug-status-light__lens) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
+  }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-lamp__bezel, .ug-lamp__lens, .ug-status-light__lens) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
 
   @media (prefers-reduced-transparency: reduce) {
     :where(.ug-panel[data-strata-material="glass"]) {
@@ -2554,5 +2748,16 @@
     :where(.ug-knob__dial:has(> .ug-knob__input:focus-visible) .ug-knob__skirt) { outline-color: Highlight; }
     :where(.ug-knob:has(.ug-knob__input:disabled)) :where(.ug-knob__skirt, .ug-knob__cap) { border-color: GrayText; }
     :where(.ug-knob:has(.ug-knob__input:disabled)) :where(.ug-knob__pointer)::after { background: GrayText; }
+    /* The lamp and the LED: a Canvas lens with a CanvasText edge on a Canvas bezel, Highlight when lit, so the state shows by
+       fill and by the label; no glow, no blink; GrayText edges when disabled; a Highlight focus ring. */
+    :where(.ug-lamp__bezel, .ug-lamp__lens, .ug-status-light__lens) { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; box-shadow: none; filter: none; }
+    :where(.ug-lamp__socket, .ug-status-light__socket) { background: transparent; }
+    :where(.ug-lamp:has(> .ug-lamp__input:checked:not(:disabled)), .ug-lamp--momentary[aria-pressed="true"]:not(:disabled)) :where(.ug-lamp__lens), :where(.ug-status-light:not([data-strata-lit="false"])) :where(.ug-status-light__lens) { background: Highlight; }
+    :where(.ug-lamp:has(> .ug-lamp__input:focus-visible), .ug-lamp--momentary:focus-visible) :where(.ug-lamp__bezel) { outline-color: Highlight; }
+    :where(.ug-lamp:has(> .ug-lamp__input:disabled), .ug-lamp--momentary:disabled) :where(.ug-lamp__object) { opacity: 1; }
+    :where(.ug-lamp:has(> .ug-lamp__input:disabled), .ug-lamp--momentary:disabled) :where(.ug-lamp__bezel, .ug-lamp__lens) { border-color: GrayText; }
+    :where(.ug-lamp--momentary) { forced-color-adjust: none; color: ButtonText; }
+    :where(.ug-lamp--momentary:disabled) { color: GrayText; }
+    :where(.ug-status-light[data-strata-blink]) { animation: none; }
   }
 }

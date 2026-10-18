@@ -1,0 +1,35 @@
+---
+/**
+ * StatusLight (anatomy page `status-light.md`): a small lens that shows a state, named by its `label`. By default a
+ * `<span role="img" aria-label>`; `showLabel` shows the label as text beside the lens; `live` makes it an `<output>`
+ * (a polite live region, `"assertive"` for an assertive one), so a change of label names the change to a screen reader.
+ * `blink` is a tempo token, off under reduced motion: a light's meaning is its label, never its colour or its blink. It
+ * needs no script.
+ */
+import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+import type { StrataLampColour } from "../shared/lamp.ts";
+import { statusLightMarkup, statusLightModel, type StatusLive, type StrataBlink } from "../shared/status-light.ts";
+
+interface Props {
+  /** What the light says: its accessible name (or, shown or announced, its text). Required. */
+  label: string;
+  /** The lens colour: `glowOn` (amber) by default, or a status role. */
+  colour?: StrataLampColour;
+  /** Lit by default; `false` is an unlit lens. */
+  lit?: boolean;
+  blink?: StrataBlink;
+  showLabel?: boolean;
+  live?: StatusLive;
+  size?: StrataSize;
+  material?: string;
+  level?: StrataLevel;
+  class?: string;
+  style?: string;
+  [attribute: string]: unknown;
+}
+
+const { label, colour, lit, blink, showLabel, live, size, material, level, class: className, style, ...rest } = Astro.props;
+const model = statusLightModel({ label, colour, lit, blink, showLabel, live });
+const Tag = model.tag;
+---
+<Tag class={classes(...model.classes, className)} style={style} {...strataAttributes({ size, material, level })} {...model.attrs} {...rest}><span class="ug-status-light__object" aria-hidden="true">{statusLightMarkup.map(part => <span class={part.className} data-strata-face={part.face}></span>)}</span>{model.text && <span class="ug-status-light__text">{label}</span>}</Tag>

@@ -27,6 +27,9 @@ native attributes (`:hover`, `:active`, `:focus-visible`, `:checked`, `:disabled
 | `data-strata-mode` | The root or a scope | `face`: the GPU paints relief, so CSS paints flat faces (no bevel, shadow or finish) |
 | `data-strata-preview` | A control | `hover`, `active` or `focus`: shows a state statically, for specimens and tests only |
 | `data-strata-form` | A Switch's row | `slide`, `rocker`, `bat` or `wall`: the switch's hardware form ([Switch, Forms](switch.md#11-forms)) |
+| `data-strata-colour` | A Lamp or StatusLight | The lens's colour role: `glowOn` (default), `accent`, `success`, `warning`, `danger` or `info` ([Lamp](lamp.md)) |
+| `data-strata-lit` | A StatusLight | `false`: an unlit light (lit when absent) |
+| `data-strata-blink` | A StatusLight | A tempo token, `slow`, `normal` or `fast`: a lit light blinks, off under reduced motion ([StatusLight](status-light.md)) |
 
 **Relief primitives.** Each is a rounded box (or a circle) taken from the element's border box and its
 `border-radius`. The GPU reads them from the markers, and the CSS presentation styles the same elements.
@@ -134,3 +137,5 @@ The [Instrument level](../instrument.md)'s components: hardware objects over nat
 | --- | --- | --- |
 | [Knob](knob.md) | `<input type="range">` over a printed dial | A skirt and a cap with a turning pointer, a scale printed on the face |
 | [Fader](fader.md) | `<input type="range">`, vertical (`writing-mode: vertical-lr`) or horizontal, its thumb the carriage | A slot in the faceplate with a capped carriage, a scale printed beside it |
+| [Lamp](lamp.md) | `<input type="checkbox" role="switch">` in its label row, or a `<button aria-pressed>` when `momentary` | A lens on a bezel: dark glass off, glowing and emitting on |
+| [StatusLight](status-light.md) | `<span role="img" aria-label>`, a `<span>` with its label, or a live `<output>` | A small lens with an emitter; `colour` a role, `blink` a tempo token |
