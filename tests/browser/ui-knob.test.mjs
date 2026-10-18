@@ -14,6 +14,8 @@
  *   change after each value change and only inside the knob's dial; a grid of native hits over the dial lands on the
  *   input (0 mismatches) at DPR 1 and 2; real clicks, drags, keys and the wheel work; the accessibility snapshot is the
  *   same in DOM and GPU modes.
+ * - Feedback: a detented knob ticks (a haptic pulse) once per change that crosses a detent once feedback is on, a knob
+ *   without detents never, and nothing plays by default.
  * Screenshots go to the `ui-knob` evidence directory.
  */
 import { test, expect } from "../helpers/current-browser.mjs";
@@ -604,6 +606,46 @@ test("at the Instrument level under reduced motion the pointer turns at once, an
   expect(await page.locator("#knob-panel").ariaSnapshot()).toBe(dom);
   // The first scene after the change already has the value's place: no spring under reduced motion.
   expect(await page.evaluate(() => { const probe = window.strataKnobProbe; probe.refresh(); return probe.scene().objects.map(object => object.t); })).toEqual([0.63, 0.25, 0]);
+  expect(await mode(page)).toBe("gpu");
+  await context.close();
+});
+
+test("a detented knob ticks once per change that crosses a detent once feedback is on, and nothing plays by default", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 900, height: 750 } });
+  await context.addInitScript(() => { window.pulses = []; Object.defineProperty(navigator, "vibrate", { configurable: true, value: pattern => { window.pulses.push(pattern); return true; } }); });
+  const page = await context.newPage();
+  await ready(page, "?level=instrument");
+  const pulses = () => page.evaluate(() => window.pulses.splice(0));
+  // Off by default: a real key across a detent pulses nothing.
+  await page.locator("#gain").focus();
+  await page.keyboard.press("ArrowUp");
+  expect(await value(page, "gain")).toBe(6);
+  expect(await pulses()).toEqual([]);
+  // Haptics on for the page: each change that crosses a detent, by the visitor's own input, is one 5 ms tick.
+  await page.evaluate(() => window.strataKnobProbe.feedback({ haptics: true }));
+  await page.keyboard.press("ArrowUp");
+  expect(await value(page, "gain")).toBe(12);
+  expect(await pulses()).toEqual([5]);
+  await page.keyboard.press("ArrowUp");
+  expect(await pulses(), "no change at the stop, no tick").toEqual([]);
+  await page.keyboard.press("Home");
+  expect(await value(page, "gain")).toBe(-12);
+  expect(await pulses(), "a jump across two detents is one change, one tick").toEqual([5]);
+  await page.mouse.click(...await numeral(page, "gain", "0"));
+  expect(await value(page, "gain")).toBe(0);
+  expect(await pulses(), "a click on a numeral is one change, one tick").toEqual([5]);
+  // A drag of 60 px is 30% of the range (dragPx 200), 7.2 of 24: one detent of 6 passed, one change.
+  const d = await dial(page, "gain");
+  await drag(page, [d.cx, d.cy], -60, { steps: 30 });
+  expect(await value(page, "gain")).toBeGreaterThan(0);
+  const dragged = await pulses();
+  expect(dragged.length, "a drag ticks per detent passed, not per frame").toBeLessThanOrEqual(3);
+  expect(dragged.every(pulse => pulse === 5)).toBe(true);
+  // A knob without detents never ticks.
+  await page.locator("#volume").focus();
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("PageUp");
+  expect(await pulses()).toEqual([]);
   expect(await mode(page)).toBe("gpu");
   await context.close();
 });

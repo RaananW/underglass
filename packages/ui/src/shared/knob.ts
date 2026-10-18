@@ -161,3 +161,14 @@ export function knobModel({ value, min = 0, max = 100, step, detents, sweep, mar
     ...(format ? { valueText: format(value) } : unit !== undefined ? { valueText: knobValueText(value, unit) } : {}),
   };
 }
+
+/**
+ * Whether a detented knob's pointer, which last stood at `before` (a fraction of the range, 0-1), passes a detent on the
+ * way to `value`: the detent each sits at (`step` apart, from `min`) differs. The Fader's rule (`dom/fader.ts`).
+ */
+export function knobDetentsCrossed(before: number, value: number, range: KnobRange): boolean {
+  const { min, max, step = 1 } = range;
+  if (!(max > min) || !(step > 0)) return false;
+  const detent = (fraction: number) => Math.round((fraction * (max - min)) / step);
+  return detent(before) !== detent(knobFraction(value, range));
+}

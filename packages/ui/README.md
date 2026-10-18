@@ -191,8 +191,10 @@ in `@underglass/ui/dom`, which `attachStrata` and the components attach). The th
 <Switch form="rocker" checked={power} onChange={event => setPower(event.target.checked)}>Power</Switch>
 ```
 
-On the GPU the parts are Relief primitives or Objects-level slabs and domes, every part and shadow inside the box; the
-Instrument parts (`gpu/instrument-switch.ts`) wait for the helper's `instrument` level.
+On the GPU the parts are Relief primitives or Objects-level slabs and domes, every part and shadow inside the box; at the
+helper's `instrument` level each form is an object of parts (`gpu/instrument-switch.ts`: the block, paddle or lever and
+ball, with the bezel, plate, nut and bushing and the lit flags), posed by the same CSS throw, its shadows kept inside the
+input's box. A detented Knob plays `tick` as its pointer passes a detent when feedback is on (off by default).
 [Anatomy](../../docs/ui-library/components/switch.md#11-forms).
 
 **Feedback** is opt-in and off by default: `createStrataTheme({ feedback: { sound: true, haptics: true } })`, a

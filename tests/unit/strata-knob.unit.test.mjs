@@ -5,7 +5,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { knobAngle, knobDetentStep, knobDrag, knobFraction, knobMarks, knobModel, knobNotch, knobNumber, knobRegion, knobStyle, knobValueAtAngle, knobValueText } from "../../packages/ui/src/shared/knob.ts";
+import { knobAngle, knobDetentsCrossed, knobDetentStep, knobDrag, knobFraction, knobMarks, knobModel, knobNotch, knobNumber, knobRegion, knobStyle, knobValueAtAngle, knobValueText } from "../../packages/ui/src/shared/knob.ts";
 import { registerHooks } from "node:module";
 import { advanceSpring, boxMargin, depthScale, keyObject, knobObject, knobParts, knobSprings, premiumMaterials } from "../../packages/ui/src/gpu/instrument.ts";
 
@@ -190,4 +190,22 @@ test("a knob's spring settles on its value in fixed steps, never past a stop", (
   for (let frame = 0; frame < 60; frame++) { advanceSpring(detent, 0.5, (now += 16), knobSprings.detent); peak = Math.max(peak, detent.t); }
   assert.ok(peak > 0.5 && peak < 1, `peak ${peak}`);
   assert.equal(detent.t, 0.5);
+});
+
+test("a detented knob ticks once per change that crosses a detent, and never within one", () => {
+  const range = { min: 0, max: 10, step: 2.5 };
+  // The pointer's last place (a fraction) against the new value, in detents of 2.5.
+  assert.equal(knobDetentsCrossed(0, 2.5, range), true);
+  assert.equal(knobDetentsCrossed(0.25, 5, range), true);
+  assert.equal(knobDetentsCrossed(0.25, 2.5, range), false);
+  assert.equal(knobDetentsCrossed(0.26, 2.5, range), false, "a pointer still settling on a detent is not a new one");
+  // A jump across several detents is one change, one tick.
+  assert.equal(knobDetentsCrossed(0, 10, range), true);
+  assert.equal(knobDetentsCrossed(1, 10, range), false, "no change at the stop");
+  // A range with no span, or a bad step, never ticks.
+  assert.equal(knobDetentsCrossed(0, 5, { min: 3, max: 3, step: 1 }), false);
+  assert.equal(knobDetentsCrossed(0, 5, { min: 0, max: 10, step: 0 }), false);
+  // A range of 21 detents (−12..12 by 1.2) still counts whole detents from the minimum.
+  assert.equal(knobDetentsCrossed(0.5, 0.6, { min: -12, max: 12, step: 1.2 }), true);
+  assert.equal(knobDetentsCrossed(0.5, -0.1, { min: -12, max: 12, step: 1.2 }), false);
 });
