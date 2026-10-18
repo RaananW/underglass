@@ -1,16 +1,22 @@
 ---
 /**
  * Switch (anatomy page `switch.md`): `<input type="checkbox" role="switch">` in its label row; the slot is the label,
- * which must not contain "on" or "off". `reverse` puts the label first visually and keeps the DOM order.
+ * which must not contain "on" or "off". `reverse` puts the label first visually and keeps the DOM order. `form` draws it
+ * as hardware (`slide`, `rocker`, `bat` or `wall`, *Forms*), with the plain-DOM behaviour that throws it on a drag past
+ * centre; any other `form` string is the native form owner's id, as before.
  */
+import Behaviour from "./Behaviour.astro";
 import Field from "./Field.astro";
 import { fieldControl } from "./field.ts";
 import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+import { isSwitchForm, switchFormMarkup, type StrataSwitchForm } from "../shared/switch-forms.ts";
 
 interface Props {
   id?: string;
   checked?: boolean;
   reverse?: boolean;
+  /** The hardware form; any other string is the native `form` attribute. */
+  form?: StrataSwitchForm | (string & {});
   help?: string;
   error?: string;
   required?: boolean;
@@ -25,9 +31,14 @@ interface Props {
   [attribute: string]: unknown;
 }
 
-const { id, checked, reverse = false, help, error, required, disabled, invalid, errorPrefix, size, material, level, class: className, style, ...rest } = Astro.props;
+const { id, checked, reverse = false, form, help, error, required, disabled, invalid, errorPrefix, size, material, level, class: className, style, ...rest } = Astro.props;
 const field = fieldControl({ id, help, error, required, disabled, invalid }, "switch");
+const hardware = isSwitchForm(form) ? form : undefined;
+const parts = hardware ? switchFormMarkup[hardware] : [];
 ---
 <Field wrap={field.wrap} controlId={field.id} help={help} error={error} errorPrefix={errorPrefix}>
-  <label class={classes("ug-switch", reverse && "ug-switch--reverse", className)} style={style} {...strataAttributes({ size, material, level })}><input class="ug-switch__input" data-strata-face="well" type="checkbox" role="switch" checked={checked} {...field.attrs} {...rest} /><span class="ug-switch__knob" data-strata-face="knob" aria-hidden="true"></span><span class="ug-switch__label"><slot /></span></label>
+  {hardware
+    ? <label class={classes("ug-switch", reverse && "ug-switch--reverse", className)} style={style} {...strataAttributes({ size, material, level })} data-strata-form={hardware}><input class="ug-switch__input" type="checkbox" role="switch" checked={checked} {...field.attrs} {...rest} /><span class="ug-switch__object" aria-hidden="true">{parts.map(part => <span class={part.className} data-strata-face={part.face}>{part.children?.map(child => <span class={child.className} data-strata-face={child.face}></span>)}</span>)}</span><span class="ug-switch__label"><slot /></span></label>
+    : <label class={classes("ug-switch", reverse && "ug-switch--reverse", className)} style={style} {...strataAttributes({ size, material, level })}><input class="ug-switch__input" data-strata-face="well" type="checkbox" role="switch" checked={checked} form={form} {...field.attrs} {...rest} /><span class="ug-switch__knob" data-strata-face="knob" aria-hidden="true"></span><span class="ug-switch__label"><slot /></span></label>}
 </Field>
+{hardware && <Behaviour />}

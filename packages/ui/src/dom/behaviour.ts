@@ -11,6 +11,7 @@
  * - a click on a chip's remove button dispatches a bubbling `strata-remove` event from the chip, and one on a
  *   MessageBar's dismiss button a bubbling `strata-dismiss` event from the bar;
  * - Tooltips: `attachStrataTooltips` shows and hides every `.ug-tooltip` named by a trigger's `aria-describedby`;
+ * - Switch forms: `attachStrataSwitches` throws a `.ug-switch[data-strata-form]` on a drag past centre and plays its feedback (anatomy page `switch.md`);
  * - Popovers: `attachStrataPopovers` places a `.ug-popover` opened from inside an Underglass layer with script;
  * - Trees: `attachStrataTrees` runs every `.ug-tree` from its markup (keys, clicks, `strata-expand` and `strata-select`);
  * - Carousels: `attachStrataCarousels` runs every `.ug-carousel`'s buttons and reports `strata-slide`;
@@ -26,6 +27,7 @@ import { showStrataDialog, type DialogHandle } from "./dialog.ts";
 import { selectStrataTab, strataTabsActivation, strataTabTarget } from "./tabs.ts";
 import { rovingStrataToolbar, strataToolbarTarget } from "./toolbar.ts";
 import { attachStrataTooltips } from "./tooltip.ts";
+import { attachStrataSwitches } from "./switch.ts";
 import { attachStrataPopovers } from "./popover.ts";
 import { attachStrataTrees } from "./tree.ts";
 import { attachStrataCarousels } from "./carousel.ts";
@@ -61,6 +63,7 @@ function applyIndeterminate(root: Document | HTMLElement) {
 export function attachStrata(root: Document | HTMLElement = document): () => void {
   applyIndeterminate(root);
   attachStrataTooltips(root instanceof Document ? root : root.ownerDocument);
+  attachStrataSwitches(root instanceof Document ? root : root.ownerDocument);
   attachStrataPopovers(root instanceof Document ? root : root.ownerDocument);
   attachStrataTrees(root instanceof Document ? root : root.ownerDocument);
   attachStrataCarousels(root instanceof Document ? root : root.ownerDocument);

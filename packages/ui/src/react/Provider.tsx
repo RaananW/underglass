@@ -51,9 +51,9 @@ export interface StrataScopeProps extends ScopeOverrides, Omit<HTMLAttributes<HT
  * application-only and are refused. Renders a `<div>` carrying the scope.
  */
 export const StrataScope = forwardRef<HTMLDivElement, StrataScopeProps>(function StrataScope(
-  { depth, theme, density, size, level, material, colour, tokens, base, report: mode = "error", style, children, ...rest }, ref,
+  { depth, theme, density, size, level, material, colour, tokens, feedback, base, report: mode = "error", style, children, ...rest }, ref,
 ) {
-  const resolved = resolveStrataScope({ depth, theme, density, size, level, material, colour, tokens }, base);
+  const resolved = resolveStrataScope({ depth, theme, density, size, level, material, colour, tokens, feedback }, base);
   report(resolved.issues, mode, "scope");
   const properties = Object.fromEntries(resolved.properties) as CSSProperties;
   return <div ref={ref} {...Object.fromEntries(resolved.attributes)} {...rest} style={{ ...properties, ...style }}>{children}</div>;

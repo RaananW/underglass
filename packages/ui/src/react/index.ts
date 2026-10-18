@@ -20,6 +20,7 @@ export type { DatePickerProps } from "./DatePicker.tsx";
 export type { StrataLevel, StrataProps, StrataSize } from "./shared.ts";
 export { Checkbox, Switch } from "./Choice.tsx";
 export type { CheckboxProps, SwitchProps } from "./Choice.tsx";
+export type { StrataSwitchForm } from "../shared/switch-forms.ts";
 export { Radio, RadioGroup } from "./Radio.tsx";
 export type { RadioGroupProps, RadioProps } from "./Radio.tsx";
 export { Select, Slider } from "./Select.tsx";

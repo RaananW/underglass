@@ -31,6 +31,8 @@ export interface StrataThemeInput {
   tokens?: Record<string, TokenValue>;
   /** New depth anchors (values at depth 0, 0.5 and 1) for depth-blended tokens. */
   anchors?: Record<string, [number, number, number]>;
+  /** Opt-in feedback on Instrument controls (design language section 20): synthesised sound and haptics, both off by default. */
+  feedback?: { sound?: boolean; haptics?: boolean };
 }
 
 export interface StrataTheme {
@@ -125,6 +127,7 @@ export function createStrataTheme(input: StrataThemeInput = {}, options: CreateT
   for (const [name, value] of Object.entries(input.light ?? {})) if (value !== undefined) set(`light.${name}`, value);
   for (const [role, colour] of Object.entries(input.colour ?? {})) if (colour !== undefined) setColour(role, colour);
   for (const [role, preset] of Object.entries(input.roles ?? {})) if (preset !== undefined) set(`material.roles.${role}`, preset);
+  for (const [name, on] of Object.entries(input.feedback ?? {})) if (on !== undefined) set(`feedback.${name}`, on ? 1 : 0);
   for (const [path, anchors] of Object.entries(input.anchors ?? {})) {
     const token = tokenAt(source, path);
     if (!token || !metaOf(token).anchors) { issues.push({ path, message: "is not a depth-blended token" }); continue; }

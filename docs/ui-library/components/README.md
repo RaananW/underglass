@@ -26,6 +26,7 @@ native attributes (`:hover`, `:active`, `:focus-visible`, `:checked`, `:disabled
 | `data-strata-size` | A component or a scope | `small`, `medium` (default) or `large`: indicator, switch and control sizes |
 | `data-strata-mode` | The root or a scope | `face`: the GPU paints relief, so CSS paints flat faces (no bevel, shadow or finish) |
 | `data-strata-preview` | A control | `hover`, `active` or `focus`: shows a state statically, for specimens and tests only |
+| `data-strata-form` | A Switch's row | `slide`, `rocker`, `bat` or `wall`: the switch's hardware form ([Switch, Forms](switch.md#11-forms)) |
 
 **Relief primitives.** Each is a rounded box (or a circle) taken from the element's border box and its
 `border-radius`. The GPU reads them from the markers, and the CSS presentation styles the same elements.
@@ -79,7 +80,7 @@ light and depth, reduced motion, keyboard input and reflow.
 | [TextArea](text-area.md) | `<textarea>` | Well with a bezel |
 | [Checkbox](checkbox.md) | `<input type="checkbox">` | Small well with a raised mark |
 | [Radio and RadioGroup](radio.md) | `<input type="radio">` in `<fieldset>` | Round well with a knob |
-| [Switch](switch.md) | `<input type="checkbox" role="switch">` | Track well with a knob |
+| [Switch](switch.md) | `<input type="checkbox" role="switch">` | Track well with a knob; hardware [forms](switch.md#11-forms): slide, rocker, bat and wall |
 | [Select](select.md) | `<select>` | Key with a chevron |
 | [Slider](slider.md) | `<input type="range">` | Rail groove with a puck |
 | [Card](card.md) | `<article>` or `<section>` | Raised slab |

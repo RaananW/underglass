@@ -14,6 +14,9 @@ export type { DialogCloseReason, DialogHandle, DialogOptions } from "./dialog.ts
 export { attachStrata } from "./behaviour.ts";
 export { selectStrataTab, strataTabsActivation, strataTabTarget } from "./tabs.ts";
 export { rovingStrataToolbar, strataToolbarTarget } from "./toolbar.ts";
+export { attachStrataSwitches, pastCentre, switchTapSlop } from "./switch.ts";
+export { attachStrataFeedback, listenForStrataFeedback, strataFeedback, strataPulses, strataSoundLength, strataSoundSet, synthesiseStrataSound } from "./feedback.ts";
+export type { StrataFeedbackHandle, StrataFeedbackOptions, StrataSound, StrataSoundKind } from "./feedback.ts";
 export { attachStrataTooltips, hideStrataTooltip, showStrataTooltip } from "./tooltip.ts";
 export { attachStrataPopovers, placeStrataPopover } from "./popover.ts";
 export { attachStrataTrees, rovingStrataTree, strataTreeAction, strataTreeTabStop, visibleStrataTreeItems } from "./tree.ts";
