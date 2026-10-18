@@ -111,7 +111,7 @@ export function resolveStrataScope(overrides: ScopeOverrides, base?: TokenGroup 
     if (!token) { issues.push({ path, message: "is not a Strata token" }); return undefined; }
     if (token.meta.scope === false) { issues.push({ path, message: "is application-only and cannot be overridden in a scope" }); return undefined; }
     if (token.meta.options && !token.meta.options.includes(String(value))) { issues.push({ path, message: `${String(value)} is not one of ${token.meta.options.join(", ")}` }); return undefined; }
-    if (typeof value === "number" || token.$type === "dimension") {
+    if (typeof value === "number" || token.$type === "dimension" || token.$type === "duration") {
       const number = numeric(value);
       if (token.meta.min !== undefined && number < token.meta.min) { issues.push({ path, message: `${number} is below the minimum ${token.meta.min}` }); return undefined; }
       if (token.meta.max !== undefined && number > token.meta.max) { issues.push({ path, message: `${number} is above the maximum ${token.meta.max}` }); return undefined; }

@@ -30,7 +30,7 @@ export function validateTokens(source: TokenGroup): Issue[] {
       if (meta.min !== undefined && value < meta.min) report(path, `${what} ${value} is below the minimum ${meta.min}`);
       if (meta.max !== undefined && value > meta.max) report(path, `${what} ${value} is above the maximum ${meta.max}`);
     };
-    if (typeof token.$value === "number" || token.$type === "dimension") inRange(numeric(token.$value), "default");
+    if (typeof token.$value === "number" || token.$type === "dimension" || token.$type === "duration") inRange(numeric(token.$value), "default");
     if (meta.anchors) {
       if (meta.anchors.length !== 3) report(path, "needs three depth anchors");
       else if (meta.anchors[1] !== numeric(token.$value)) report(path, `the 50% anchor ${meta.anchors[1]} differs from the default`);
