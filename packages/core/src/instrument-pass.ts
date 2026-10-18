@@ -30,7 +30,7 @@ import {
   type ClusteredLightContainer, type DynamicTexture2D, type EngineContext, type FreeCamera, type Material, type Mesh, type PbrMaterialProps, type RenderingContext,
   type SceneContext, type ShaderMaterial, type StorageBuffer,
 } from "@babylonjs/lite";
-import { DEFAULT_FEATHER, EMITTERS_PER_LAYER, layerGuard, PROTECTED_PER_LAYER, type Guard, type LayerEmitters } from "./emitters.js";
+import { DEFAULT_FEATHER, EMITTERS_PER_LAYER, GUARD_CELLS, guardCells, layerGuard, PROTECTED_PER_LAYER, shadowScales, type Guard, type LayerEmitters } from "./emitters.js";
 import {
   boundsInside, checkContainment, containmentFrontier, containmentKey, instrumentFaceScene, instrumentLayout, instrumentPartCount, instrumentStructure, multiply, partCaster, partKinds,
   partMatrix, profileBounds, profileGeometry, sameGeometry, similarity, INSTRUMENT_CASTERS_PER_OBJECT, INSTRUMENT_KINDS_CEILING, INSTRUMENT_KINDS_PER_LAYER, INSTRUMENT_OBJECTS, INSTRUMENT_PARTS_PER_LAYER,
@@ -336,7 +336,8 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     storage.push(casterBuffer);
     // The guard (item 2): the protected rects and, per rect, the scale that keeps the face shadows inside it within
     // the rect's shadow cap together.
-    const guardData = new Float32Array((1 + 2 * PROTECTED_PER_LAYER) * 4);
+    // Layout: (rects, feather, protected box, 0), (extent), then per rect (rect, (scale, ·)), then a scale per extent cell.
+    const guardData = new Float32Array((2 + 2 * PROTECTED_PER_LAYER + GUARD_CELLS.x * GUARD_CELLS.y) * 4);
     const guardBuffer = createStorageBuffer(engine, guardData, `${label}:guard`);
     storage.push(guardBuffer);
     const shade = createShaderMaterial({ name: `${label}:shadows`, vertexSource: shadowVertex, fragmentSource: shadowFragment, attributes: ["position"],
@@ -502,21 +503,20 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         if (all) { casterData.fill(0, current.objects.length * INSTRUMENT_CASTERS_PER_OBJECT * 8); quads.fill(0, current.objects.length * 16); }
         if (castersDirty || all) { flushThinInstances(quad); updateStorageBuffer(engine, casterBuffer, casterData); }
         if (all) reaches.fill(0, current.objects.length * 4);
-        // The guard: inside each protected rect, the `n` objects whose shadows reach it may darken it together by at most
-        // its shadow cap, so each object's shadow is scaled to `1 − (1 − cap)^(1 / n)` (2.9's g: the profile stays soft).
+        // The guard: inside each protected rect (or each cell of a protected box), the objects whose shadows reach it
+        // share its shadow cap (`shadowScales`, `emitters.ts`).
         const feather = current.feather ?? DEFAULT_FEATHER, strength = current.shadow.strength;
         if (guard !== guardFor || castersDirty || all || feather !== guardFeather || strength !== guardStrength) {
           guardData.fill(0);
-          guardData.set([guard.rects.length, feather, 0, 0], 0);
-          guard.rects.forEach(({ rect, shadow }, at) => {
-            let count = 0;
-            for (let index = 0; index < current.objects.length; index++) {
-              const [l, t, r, b] = [reaches[index * 4]!, reaches[index * 4 + 1]!, reaches[index * 4 + 2]!, reaches[index * 4 + 3]!];
-              if (r > l && l <= rect.x1 + feather && r >= rect.x0 - feather && t <= rect.y1 + feather && b >= rect.y0 - feather) count++;
-            }
-            const each = count > 1 ? 1 - (1 - shadow) ** (1 / count) : shadow;
-            guardData.set([rect.x0, rect.y0, rect.x1, rect.y1, strength > each ? each / strength : 1, count, 0, 0], (1 + 2 * at) * 4);
+          guardData.set([guard.rects.length, feather, guard.extent ? 1 : 0, 0, current.extent.width, current.extent.height, 0, 0], 0);
+          shadowScales(guard.rects, reaches, current.objects.length, feather, strength).forEach((scale, at) => {
+            const { rect } = guard.rects[at]!;
+            guardData.set([rect.x0, rect.y0, rect.x1, rect.y1, scale, 0, 0, 0], (2 + 2 * at) * 4);
           });
+          if (guard.cells) {
+            const cells = guardCells(current.extent).map((rect, at) => ({ rect, ...guard.cells![at]! }));
+            shadowScales(cells, reaches, current.objects.length, feather, strength).forEach((scale, at) => guardData.set([scale], (2 + 2 * PROTECTED_PER_LAYER + at) * 4));
+          }
           updateStorageBuffer(engine, guardBuffer, guardData);
           guardFor = guard; guardFeather = feather; guardStrength = strength;
         }
@@ -948,6 +948,13 @@ fn roundedBox(q: vec2<f32>, half: vec2<f32>, r: f32) -> f32 {
   let a = abs(q) - half + vec2<f32>(radius);
   return length(max(a, vec2<f32>(0.0))) + min(max(a.x, a.y), 0.0) - radius;
 }
+// The guard's weight of a box given by its corners: 1 inside, easing to 0 over the feather outside it.
+fn guardWeight(p: vec2<f32>, rect: vec4<f32>, feather: f32) -> f32 {
+  let half = (rect.zw - rect.xy) * 0.5;
+  let d = abs(p - (rect.xy + half)) - half;
+  let t = clamp((length(max(d, vec2<f32>(0.0))) + min(max(d.x, d.y), 0.0)) / max(feather, 1e-6), 0.0, 1.0);
+  return 1.0 - t * t * (3.0 - 2.0 * t);
+}
 @fragment fn mainFragment(input: VertexOutput) -> @location(0) vec4<f32> {
   let p = layerLocal(input.position.xy);
   if (!insideClip(p)) { discard; }
@@ -965,11 +972,15 @@ fn roundedBox(q: vec2<f32>, half: vec2<f32>, r: f32) -> f32 {
   // to full strength over the feather outside it.
   let header = guard[0];
   for (var k = 0u; k < u32(header.x); k++) {
-    let rect = guard[1u + 2u * k];
-    let half = (rect.zw - rect.xy) * 0.5;
-    let d = abs(p - (rect.xy + half)) - half;
-    let t = clamp((length(max(d, vec2<f32>(0.0))) + min(max(d.x, d.y), 0.0)) / max(header.y, 1e-6), 0.0, 1.0);
-    s *= mix(1.0, guard[2u + 2u * k].x, 1.0 - t * t * (3.0 - 2.0 * t));
+    let rect = guard[2u + 2u * k];
+    s *= mix(1.0, guard[3u + 2u * k].x, guardWeight(p, rect, header.y));
+  }
+  // A protected box: the scale of p's cell, easing off over the feather outside the box.
+  if (header.z > 0.5) {
+    let extent = guard[1].xy;
+    let size = max(extent / vec2<f32>(${GUARD_CELLS.x}.0, ${GUARD_CELLS.y}.0), vec2<f32>(1e-6));
+    let cell = clamp(vec2<i32>(floor(p / size)), vec2<i32>(0), vec2<i32>(${GUARD_CELLS.x - 1}, ${GUARD_CELLS.y - 1}));
+    s *= mix(1.0, guard[${2 + 2 * PROTECTED_PER_LAYER}u + u32(cell.y) * ${GUARD_CELLS.x}u + u32(cell.x)].x, guardWeight(p, vec4<f32>(0.0, 0.0, extent), header.y));
   }
   return vec4<f32>(0.0, 0.0, 0.0, s * shaderUniforms.frame.y);
 }`;

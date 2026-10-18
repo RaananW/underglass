@@ -44,15 +44,23 @@ export const MAX_FEATHER = 16;
 /** The tile grid over a layer's draw rectangle. */
 export const EMITTER_TILES = { x: 16, y: 9 } as const;
 
-// The emitter block, in vec4s: a header, the tile grid, the protected rects and their caps, two vec4s per emitter, then
-// one vec4 per tile holding four 16-bit masks of the drawn emitters (exact in f32, so no bit casts of uniform floats).
+/** The guard's cell grid over a layer's extent, used when the whole box is protected (`"extent"`, or more than 64 rects). */
+export const GUARD_CELLS = { x: 16, y: 9 } as const;
+/** Rects the emitter block holds: the layer's own protected rects, then lower layers' text under its outset. */
+export const BLOCK_RECTS = PROTECTED_PER_LAYER;
+
+// The emitter block, in vec4s: a header, the tile grid, the extent guard, the protected rects and their caps, two vec4s
+// per emitter, one vec4 per tile holding four 16-bit masks of the drawn emitters (exact in f32, so no bit casts of uniform
+// floats), and one vec4 of caps per guard cell.
 export const EMITTER_GRID = 1;
-export const EMITTER_RECTS = 2;
-export const EMITTER_CAPS = EMITTER_RECTS + PROTECTED_PER_LAYER;
-export const EMITTER_LIGHTS = EMITTER_CAPS + PROTECTED_PER_LAYER;
+export const EMITTER_EXTENT = 2;
+export const EMITTER_RECTS = 3;
+export const EMITTER_CAPS = EMITTER_RECTS + BLOCK_RECTS;
+export const EMITTER_LIGHTS = EMITTER_CAPS + BLOCK_RECTS;
 export const EMITTER_TILE_BASE = EMITTER_LIGHTS + 2 * EMITTERS_PER_LAYER;
+export const EMITTER_CELLS = EMITTER_TILE_BASE + EMITTER_TILES.x * EMITTER_TILES.y;
 /** vec4s in the emitter block. */
-export const EMITTER_BLOCK_VEC4S = EMITTER_TILE_BASE + EMITTER_TILES.x * EMITTER_TILES.y;
+export const EMITTER_BLOCK_VEC4S = EMITTER_CELLS + GUARD_CELLS.x * GUARD_CELLS.y;
 
 type Box = [number, number, number, number];
 /** A rectangle by its corners, layer px. */
@@ -175,24 +183,43 @@ export function tileMasks(drawn: readonly { emitter: SceneEmitter }[], rect: Bou
   return masks;
 }
 
-/** A layer's guard: its protected rects (corners, layer px), each with its light and shadow caps. */
+/** Caps of one guarded area: the most emitter light may add there, and the most part shadows may take away together. */
+export interface GuardCaps { light: number; shadow: number }
+/**
+ * A layer's guard: its protected rects (corners, layer px), each with its caps; or, when the whole box is protected
+ * (`"extent"`, or more than 64 rects), `cells`: the caps of each cell of a 16 × 9 grid over the extent, so one stack of
+ * controls or one shadow lowers the caps of its own cells only.
+ */
 export interface Guard {
-  rects: { rect: Bounds; light: number; shadow: number }[];
-  /** Whether the guard protects the layer's whole box (`"extent"`, or more than 64 rects). */
+  rects: ({ rect: Bounds } & GuardCaps)[];
+  /** Whether the guard protects the layer's whole box. */
   extent: boolean;
   /** Rects the scene gave beyond the 64 the guard holds (then it protects the extent). */
   overflow: number;
+  /** The extent's cells (row-major, `GUARD_CELLS`), when `extent`. */
+  cells: GuardCaps[] | null;
 }
 const guards = new WeakMap<ReliefScene, WeakMap<object, Guard>>();
 const extentKey = {};
-const unguarded: Guard = Object.freeze({ rects: [], extent: false, overflow: 0 });
+const unguarded: Guard = Object.freeze({ rects: [], extent: false, overflow: 0, cells: null });
+/** The caps that keep `k · (1 − Sₚ) · (1 + E)` within `1 ± m` where `k` lies in `[low, high]`. */
+const capsOf = ([low, high]: [number, number], m: number): GuardCaps => ({ light: Math.max(0, (1 + m) / high - 1), shadow: Math.max(0, 1 - (1 - m) / low) });
+/** The extent's guard cells as rects, row-major. */
+export function guardCells(extent: { width: number; height: number }): Bounds[] {
+  const width = extent.width / GUARD_CELLS.x, height = extent.height / GUARD_CELLS.y, cells: Bounds[] = [];
+  for (let row = 0; row < GUARD_CELLS.y; row++) for (let column = 0; column < GUARD_CELLS.x; column++) {
+    cells.push({ x0: column * width, y0: row * height, x1: (column + 1) * width, y1: (row + 1) * height });
+  }
+  return cells;
+}
 /**
- * The guard of a layer (2D.4, `docs/ui-library/instrument-phase2.md`): for each protected rect, bounds of the relief's
- * interior factor `k` over it from `face` (the layer's relief scene as drawn: an Instrument layer's primitives and the
- * objects drawn at Relief), and from them the caps that keep the face's whole change inside the rect within `m`:
+ * The guard of a layer (2D.4, `docs/ui-library/instrument-phase2.md`): for each protected rect (or each cell of the
+ * extent), bounds of the relief's guarded factor `k` over it from `face` (the layer's relief scene as drawn: an Instrument
+ * layer's primitives and the objects drawn at Relief), and from them the caps that keep the face's whole change there
+ * within `m`:
  * - `light`: emitter light is capped at `(1 + m) / k_hi − 1` per channel;
  * - `shadow`: part shadows on the face may darken it by at most `1 − (1 − m) / k_lo` together.
- * `"extent"`, or more than 64 rects, protects the face's extent. Cached per face scene and protected list.
+ * Cached per face scene and protected list.
  */
 export function layerGuard(face: ReliefScene, protect: ProtectedRects | undefined): Guard {
   if (protect === undefined) return unguarded;
@@ -201,75 +228,142 @@ export function layerGuard(face: ReliefScene, protect: ProtectedRects | undefine
   if (!byFace) { byFace = new WeakMap(); guards.set(face, byFace); }
   const cached = byFace.get(key);
   if (cached) return cached;
-  const whole = protect === "extent" || protect.length > PROTECTED_PER_LAYER;
-  const rects: Bounds[] = whole ? [{ x0: 0, y0: 0, x1: face.extent.width, y1: face.extent.height }]
-    : (protect as Box[]).map(([x, y, width, height]) => ({ x0: x, y0: y, x1: x + width, y1: y + height }));
   const m = face.interior.max;
-  const result: Guard = { extent: whole, overflow: protect === "extent" ? 0 : Math.max(0, protect.length - PROTECTED_PER_LAYER), rects: rects.map(rect => {
-    const [low, high] = interiorBounds(face, rect);
-    return { rect, light: Math.max(0, (1 + m) / high - 1), shadow: Math.max(0, 1 - (1 - m) / low) };
-  }) };
+  const whole = protect === "extent" || protect.length > PROTECTED_PER_LAYER;
+  const result: Guard = whole
+    ? { extent: true, overflow: protect === "extent" ? 0 : protect.length - PROTECTED_PER_LAYER, rects: [], cells: guardCells(face.extent).map(cell => capsOf(interiorBounds(face, cell), m)) }
+    : { extent: false, overflow: 0, cells: null, rects: (protect as Box[]).map(([x, y, width, height]) => {
+      const rect = { x0: x, y0: y, x1: x + width, y1: y + height };
+      return { rect, ...capsOf(interiorBounds(face, rect), m) };
+    }) };
   byFace.set(key, result);
   return result;
 }
 
-/**
- * Bounds `[k_lo, k_hi]` of the relief's guarded factor `k` (2.9) over `rect`: the interior offsets of every entry that
- * overlaps it, summed by sign (an occluding entry adds its offset over what is beneath it), within `m`, and the largest
- * cast shadow a guarded face can show (`min(strength, m)`, 2.9's `g`) when any lifted entry's shadow can reach the rect.
- */
-export function interiorBounds(face: ReliefScene, rect: Bounds): [number, number] {
-  const m = face.interior.max, { hoverLift, pressSink, hoverHeight } = face.state;
-  const a = (face.light.azimuth * Math.PI) / 180, e = (face.light.elevation * Math.PI) / 180;
-  const light = [Math.sin(a) * Math.cos(e), -Math.cos(a) * Math.cos(e), Math.sin(e)] as const;
-  let up = 0, down = 0, shadowed = false;
-  const overlaps = (x0: number, y0: number, x1: number, y1: number) => x0 <= rect.x1 && x1 >= rect.x0 && y0 <= rect.y1 && y1 >= rect.y0;
-  for (const entry of face.primitives) {
+/** A relief entry as the guard sees it: its box, corner radius, interior offset, and its cast shadow when lifted. */
+interface GuardShape { box: Bounds; radius: number; offset: number; cast: number }
+const shapeCache = new WeakMap<ReliefScene, GuardShape[]>();
+function guardShapes(face: ReliefScene): GuardShape[] {
+  let shapes = shapeCache.get(face);
+  if (shapes) return shapes;
+  const { hoverLift, pressSink, hoverHeight, pressHeight } = face.state;
+  shapes = face.primitives.map(entry => {
     const [x, y, width, height] = entry.rect, state = entry.state ?? {};
     const material = face.materials[entry.material] ?? {};
-    const lit = !state.disabled && (material.emissive?.strength ?? 0) <= 0 && ("object" in entry || entry.face !== "flat");
-    if (lit && overlaps(x, y, x + width, y + height)) {
-      const offset = hoverLift * (state.hover ? 1 : 0) - pressSink * (state.pressed ? 1 : 0) + (material.coat?.strength ?? 0) * 0.02 + (1 - (material.base?.roughness ?? 1)) * 0.01;
-      if (offset > 0) up += offset; else down -= offset;
+    const object = "object" in entry, dome = object && (entry.object === "knob" || entry.object === "puck");
+    // 2.6 and 2B.4: the interior offset of a lit face or a solid's cap (a dome has none; the guard never holds on it).
+    const lit = !state.disabled && (material.emissive?.strength ?? 0) <= 0 && !dome && (object || entry.face !== "flat");
+    const offset = lit ? hoverLift * (state.hover ? 1 : 0) - pressSink * (state.pressed ? 1 : 0) + (material.coat?.strength ?? 0) * 0.02 + (1 - (material.base?.roughness ?? 1)) * 0.01 : 0;
+    const lifted = object ? entry.object !== "well" : entry.face === "raised" || entry.face === "knob" || entry.face === "mark";
+    // Its cast height in its state (2.3 and 2B.2: hover raises it, a press lowers it), with a dome's base.
+    const raised = state.hover ? (object ? 1.25 : hoverHeight) : 1, sunk = state.pressed ? pressHeight : 1;
+    const cast = lifted && !state.disabled ? (entry.height * raised * sunk + Math.abs(object ? entry.base ?? 0 : 0)) : 0;
+    const round = !object && entry.face === "knob" || dome;
+    return { box: { x0: x, y0: y, x1: x + width, y1: y + height }, radius: round ? Math.min(width, height) / 2 : Math.min(entry.radius ?? 0, width / 2, height / 2), offset, cast };
+  });
+  shapeCache.set(face, shapes);
+  return shapes;
+}
+const overlap = (a: Bounds, b: Bounds, grow = 0) => a.x0 - grow <= b.x1 && a.x1 + grow >= b.x0 && a.y0 - grow <= b.y1 && a.y1 + grow >= b.y0;
+const intersect = (a: Bounds, b: Bounds): Bounds | undefined => {
+  const box = { x0: Math.max(a.x0, b.x0), y0: Math.max(a.y0, b.y0), x1: Math.min(a.x1, b.x1), y1: Math.min(a.y1, b.y1) };
+  return box.x0 < box.x1 && box.y0 < box.y1 ? box : undefined;
+};
+/** Whether `area` lies at least `by` px inside a shape's rounded box (the box is convex, so its corners decide). */
+function within(shape: GuardShape, area: Bounds, by: number) {
+  const { box, radius } = shape, cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2, hx = (box.x1 - box.x0) / 2, hy = (box.y1 - box.y0) / 2;
+  const distance = (px: number, py: number) => {
+    const qx = Math.abs(px - cx) - hx + radius, qy = Math.abs(py - cy) - hy + radius;
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius;
+  };
+  return [distance(area.x0, area.y0), distance(area.x1, area.y0), distance(area.x0, area.y1), distance(area.x1, area.y1)].every(value => value <= -by);
+}
+
+/**
+ * Bounds `[k_lo, k_hi]` of the relief's guarded factor `k` (2.9) over `rect`:
+ * - **Offsets by the largest stack.** In the shading a covering entry replaces the offset beneath it; only within its
+ *   antialiased edge do offsets add up. So the bound is, over the entries that overlap the rect, the largest of an
+ *   entry's offset plus the offsets of the earlier entries it overlaps there, by sign, within `m`. Entries side by side
+ *   never add.
+ * - **Shadows where they can fall on a guarded face.** An entry's cast shadow counts only where it can reach a point of
+ *   the rect that lies on an earlier entry (a guarded face beneath it; the shading drops shadows under later covers) and
+ *   not a pixel inside the caster itself (2.8). A face's own drop shadow, outside the face, never counts. Where one
+ *   counts, `k` may be as low as `1 − min(strength, m)` (2.9's `g`).
+ */
+export function interiorBounds(face: ReliefScene, rect: Bounds): [number, number] {
+  const m = face.interior.max, shapes = guardShapes(face);
+  const a = (face.light.azimuth * Math.PI) / 180, e = (face.light.elevation * Math.PI) / 180;
+  const lx = Math.sin(a) * Math.cos(e), ly = -Math.cos(a) * Math.cos(e), lz = Math.sin(e);
+  let up = 0, down = 0, shadowed = false;
+  shapes.forEach((shape, index) => {
+    if (!overlap(shape.box, rect, 1)) return;
+    let stackUp = Math.max(0, shape.offset), stackDown = Math.max(0, -shape.offset);
+    for (let below = 0; below < index; below++) {
+      const other = shapes[below]!;
+      if (!overlap(other.box, shape.box, 1) || !overlap(other.box, rect, 1)) continue;
+      stackUp += Math.max(0, other.offset); stackDown += Math.max(0, -other.offset);
     }
-    // A lifted entry's shadow: its shape moved against the light by up to its cast height, grown by its softness.
-    const lifted = "object" in entry ? entry.object !== "well" : entry.face === "raised" || entry.face === "knob" || entry.face === "mark";
-    if (!lifted || state.disabled) continue;
-    const cast = (entry.height + Math.abs("object" in entry ? entry.base ?? 0 : 0)) * Math.max(1, hoverHeight) * 1.25;
-    if (cast <= 0) continue;
-    // A cast shadow falls outside its caster only (2.8): a rect more than a pixel inside the caster's shape gets none.
-    const radius = Math.min(entry.radius ?? 0, width / 2, height / 2);
-    const corner = (px: number, py: number) => {
-      const qx = Math.abs(px - x - width / 2) - width / 2 + radius, qy = Math.abs(py - y - height / 2) - height / 2 + radius;
-      return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - radius;
-    };
-    if ([corner(rect.x0, rect.y0), corner(rect.x1, rect.y0), corner(rect.x0, rect.y1), corner(rect.x1, rect.y1)].every(value => value <= -1)) continue;
-    const ox = -(light[0] / light[2]) * cast, oy = -(light[1] / light[2]) * cast, grow = 1.5 * cast + 1;
-    if (overlaps(x + Math.min(0, ox) - grow, y + Math.min(0, oy) - grow, x + width + Math.max(0, ox) + grow, y + height + Math.max(0, oy) + grow)) shadowed = true;
-  }
+    up = Math.max(up, stackUp); down = Math.max(down, stackDown);
+    if (shadowed || shape.cast <= 0) return;
+    // The shadow's region: the caster moved against the light by up to its cast height, grown by its softness.
+    const ox = -(lx / lz) * shape.cast, oy = -(ly / lz) * shape.cast, grow = 1.5 * shape.cast + 1;
+    const region = { x0: shape.box.x0 + Math.min(0, ox) - grow, y0: shape.box.y0 + Math.min(0, oy) - grow, x1: shape.box.x1 + Math.max(0, ox) + grow, y1: shape.box.y1 + Math.max(0, oy) + grow };
+    for (let below = 0; below < index && !shadowed; below++) {
+      const ground = intersect(intersect(rect, region) ?? { x0: 0, y0: 0, x1: 0, y1: 0 }, shapes[below]!.box);
+      if (ground && !within(shape, ground, 1)) shadowed = true;
+    }
+  });
   const high = 1 + Math.min(m, up);
   const low = Math.max(1 - m, (1 - Math.min(m, down)) * (1 - (shadowed ? Math.min(face.shadow.strength, m) : 0)));
   return [low, high];
 }
 
 /**
- * Packs the emitter block at `offset` (in floats) of `out`: the drawn emitters, their tiles over `rect`, the guard and
- * the feather, with `m` the scene's `interior.max`. `opacity` scales the light (a fading layer's lamps fade with it).
+ * The scale of each object's face shadow inside each guarded area (a protected rect or an extent cell): the `n` objects
+ * whose shadows reach the area (its box grown by the feather) may darken it together by at most its shadow cap, so each
+ * one's shadow is scaled to `1 − (1 − cap)^(1 / n)` of the shadow strength (2.9's `g`: the profile stays soft). `reaches`
+ * holds each object's shadow reach as left, top, right, bottom (layer px; right ≤ left when it casts nothing).
  */
-export function packEmitters(out: Float32Array, offset: number, light: LayerEmitters, guard: Guard, rect: Bounds, feather: number, m: number, opacity = 1) {
+export function shadowScales(areas: readonly ({ rect: Bounds } & GuardCaps)[], reaches: ArrayLike<number>, objects: number, feather: number, strength: number): number[] {
+  return areas.map(({ rect, shadow }) => {
+    let count = 0;
+    for (let index = 0; index < objects; index++) {
+      const l = reaches[index * 4]!, t = reaches[index * 4 + 1]!, r = reaches[index * 4 + 2]!, b = reaches[index * 4 + 3]!;
+      if (r > l && l <= rect.x1 + feather && r >= rect.x0 - feather && t <= rect.y1 + feather && b >= rect.y0 - feather) count++;
+    }
+    const each = count > 1 ? 1 - (1 - shadow) ** (1 / count) : shadow;
+    return strength > each ? each / strength : 1;
+  });
+}
+
+/** Rects of lower layers' text under a layer's outset (layer px), where the layer adds no light: their own layer guards them. */
+export interface BeneathRects { rects: Bounds[]; overflow: boolean }
+/**
+ * Packs the emitter block at `offset` (in floats) of `out`: the drawn emitters (at full strength: the face pool scales by
+ * the layer's opacity itself), their tiles over `rect` (the draw rectangle), the guard, `beneath` (lower layers' text
+ * under the outset, cap 0, or the whole outset when they overflow the block) and the feather, with `m` the scene's
+ * `interior.max` and `extent` the layer's box.
+ */
+export function packEmitters(out: Float32Array, offset: number, light: LayerEmitters, guard: Guard, beneath: BeneathRects, rect: Bounds, extent: { width: number; height: number }, feather: number, m: number) {
   out.fill(0, offset, offset + EMITTER_BLOCK_VEC4S * 4);
-  const drawn = opacity > 0 ? light.drawn : [];
-  out.set([drawn.length, feather, guard.rects.length, m], offset);
+  const drawn = light.drawn;
+  const own = guard.rects.slice(0, BLOCK_RECTS), lower = beneath.rects.slice(0, BLOCK_RECTS - own.length);
+  const overflow = beneath.overflow || beneath.rects.length > lower.length;
+  out.set([drawn.length, feather, own.length + lower.length, m], offset);
   out.set([rect.x0, rect.y0, Math.max(1e-6, rect.x1 - rect.x0) / EMITTER_TILES.x, Math.max(1e-6, rect.y1 - rect.y0) / EMITTER_TILES.y], offset + EMITTER_GRID * 4);
-  guard.rects.forEach(({ rect: box, light: cap, shadow }, index) => {
+  // The extent guard: on, the extent, and whether the whole outset is protected (lower layers' text overflowed).
+  out.set([guard.extent ? 1 : 0, extent.width, extent.height, overflow ? 1 : 0], offset + EMITTER_EXTENT * 4);
+  own.forEach(({ rect: box, light: cap, shadow }, index) => {
     out.set([box.x0, box.y0, box.x1, box.y1], offset + (EMITTER_RECTS + index) * 4);
     out.set([cap, shadow, 0, 0], offset + (EMITTER_CAPS + index) * 4);
   });
+  lower.forEach((box, index) => out.set([box.x0, box.y0, box.x1, box.y1], offset + (EMITTER_RECTS + own.length + index) * 4));
   drawn.forEach(({ emitter }, index) => {
-    const [x, y, z] = emitter.position, [r, g, b] = emitter.colour, strength = emitter.strength * opacity;
+    const [x, y, z] = emitter.position, [r, g, b] = emitter.colour, strength = emitter.strength;
     out.set([x, y, z, emitter.reach === "layer" ? -emitter.radius : emitter.radius, r * strength, g * strength, b * strength, emitter.face ?? 1], offset + (EMITTER_LIGHTS + 2 * index) * 4);
   });
   if (drawn.length) out.set(tileMasks(drawn, rect), offset + EMITTER_TILE_BASE * 4);
+  guard.cells?.forEach(({ light: cap, shadow }, index) => out.set([cap, shadow, 0, 0], offset + (EMITTER_CELLS + index) * 4));
 }
 
 /**
@@ -364,12 +458,18 @@ fn poolAlpha(p: vec2f) -> f32 {
   let beyond = max(max(-p, p - extent), vec2f(0.0));
   let room = max(select(-draw.xy, draw.zw - extent, p > extent * 0.5), vec2f(1e-3));
   e *= (1.0 - smoothstep(0.5, 1.0, beyond.x / room.x)) * (1.0 - smoothstep(0.5, 1.0, beyond.y / room.y));
-  // The guard: inside a protected rect the light is capped (its light cap), easing off over the feather.
+  // Lower layers' text overflowed the block: no light past the box at all.
+  if (lampData(${EMITTER_EXTENT}u).w > 0.5 && any(beyond > vec2f(0.0))) { discard; }
+  // The guard, easing off over the feather: a protected box caps the light by the cap of p's cell; a protected rect by
+  // its own cap (0 for a lower layer's text under the outset).
+  let extentWeight = lampExtentWeight(p);
+  if (extentWeight > 0.0) { e = mix(e, min(e, vec3f(lampCell(p).x)), extentWeight); }
   for (var k = 0u; k < u32(header.z); k++) {
     let weight = lampWeight(p, k, header.y);
     if (weight > 0.0) { e = mix(e, min(e, vec3f(lampData(${EMITTER_CAPS}u + k).x)), weight); }
   }
-  return vec4f(e, 1.0);
+  // A fading layer's lamps fade with it.
+  return vec4f(e * pool[0].w, 1.0);
 }`,
 };
 
@@ -391,10 +491,23 @@ fn lampWeight(p: vec2f, k: u32, feather: f32) -> f32 {
   let t = clamp(lampBox(p, lampData(${EMITTER_RECTS}u + k)) / max(feather, 1e-6), 0.0, 1.0);
   return 1.0 - t * t * (3.0 - 2.0 * t);
 }
-// How much any protected rect holds p: 0 clear of them all, 1 inside one.
+// The guard's weight of a protected box (the extent guard): 1 inside the layer's box, easing to 0 over the feather.
+fn lampExtentWeight(p: vec2f) -> f32 {
+  let extent = lampData(${EMITTER_EXTENT}u);
+  if (extent.x < 0.5) { return 0.0; }
+  let t = clamp(lampBox(p, vec4f(0.0, 0.0, extent.yz)) / max(lampData(0u).y, 1e-6), 0.0, 1.0);
+  return 1.0 - t * t * (3.0 - 2.0 * t);
+}
+// The caps of the extent guard's cell at p (light, shadow).
+fn lampCell(p: vec2f) -> vec4f {
+  let size = max(lampData(${EMITTER_EXTENT}u).yz / vec2f(${GUARD_CELLS.x}.0, ${GUARD_CELLS.y}.0), vec2f(1e-6));
+  let cell = clamp(vec2i(floor(p / size)), vec2i(0), vec2i(${GUARD_CELLS.x - 1}, ${GUARD_CELLS.y - 1}));
+  return lampData(${EMITTER_CELLS}u + u32(cell.y) * ${GUARD_CELLS.x}u + u32(cell.x));
+}
+// How much any protected rect or a protected box holds p: 0 clear of them all, 1 inside one.
 fn lampProtect(p: vec2f) -> f32 {
   let header = lampData(0u);
-  var protect = 0.0;
+  var protect = lampExtentWeight(p);
   for (var k = 0u; k < u32(header.z); k++) { protect = max(protect, lampWeight(p, k, header.y)); }
   return protect;
 }

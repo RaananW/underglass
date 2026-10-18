@@ -29,7 +29,7 @@ import { createMountBoundary, type MountBoundaryOptions } from "./mount-boundary
 import { configuredDevice, observeConfiguredDevice, waitForTeardown, type IdleOutcome } from "./device-lifecycle.js";
 import { drawRectangle, layerBlend, layerShader, layerUniforms, passShaders, type PassShaders } from "./composition.js";
 import { RELIEF_EMITTER_BASE, RELIEF_VEC4S, reliefUniforms, type ReliefScene } from "./relief.js";
-import { DEFAULT_FEATHER, EMITTERS_PER_LAYER, layerGuard, packEmitters, packPoolHeader, poolBlend, poolWGSL, POOL_HEADER_VEC4S, POOL_VEC4S, selectEmitters,
+import { DEFAULT_FEATHER, EMITTER_BLOCK_VEC4S, EMITTERS_PER_LAYER, layerGuard, packEmitters, packPoolHeader, poolBlend, poolWGSL, POOL_HEADER_VEC4S, POOL_VEC4S, selectEmitters,
   type Bounds, type Guard, type LayerEmitters, type SceneLight } from "./emitters.js";
 import { createAdmissionProbe, verifyFrameBounds, verifyProbeGeometry, verifyProbePixels, verifyProjectiveHits, type FrameBounds } from "./admission.js";
 import type { Ripple } from "./ripple.js";
@@ -220,7 +220,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     admission: { attempts: 0, passes: 0, captures: 0, pixelCopies: 0, pixelReadbacks: 0, uploads: 0, gpuFrames: 0, gpuReadbacks: 0, geometryChecks: 0,
       last: undefined as { nativePixels: number[][]; gpuPixels: number[][]; geometry: ReturnType<typeof verifyProbeGeometry>; frameBounds: ReturnType<typeof verifyFrameBounds>; projective?: ReturnType<typeof verifyProjectiveHits> } | undefined },
     timings: { captureMs: timing(), uploadMs: timing(), frameWorkMs: timing(), frameIntervalsMs: timing() },
-    paintElements: [] as string[][], perLayer: layerMetrics, uploadBytes: 0, gpuFrames: 0, geometryUpdates: 0, moves: 0, deviceLosses: [] as { reason: GPUDeviceLostReason; message: string; duringMotion: boolean; duringAdmission: boolean }[], fenceOutcomes: [] as IdleOutcome[], captureMs: [] as number[], uploadMs: [] as number[], frameWorkMs: [] as number[], frameIntervalsMs: [] as number[] };
+    paintElements: [] as string[][], perLayer: layerMetrics, lightPassesDisposed: 0, uploadBytes: 0, gpuFrames: 0, geometryUpdates: 0, moves: 0, deviceLosses: [] as { reason: GPUDeviceLostReason; message: string; duringMotion: boolean; duringAdmission: boolean }[], fenceOutcomes: [] as IdleOutcome[], captureMs: [] as number[], uploadMs: [] as number[], frameWorkMs: [] as number[], frameIntervalsMs: [] as number[] };
   /** Appends `value` to a history that keeps only the latest 256 entries. */
   function sample<T>(values: T[], value: T) {
     if (values.length === 256) values.shift();
@@ -256,7 +256,8 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   // Emitters (`emitters.ts`, `docs/ui-library/instrument-phase2.md` item 2): what each lit layer draws this frame, the
   // diagnostics of the last frame, why the face pools are off (the draw order was refused), their task timings.
   const lightFrame = new Map<string, FrameLight>();
-  const lightStates = new Map<string, { guard: Guard; feather: number; pass: "drawn" | "idle" | "off"; gpu: { samples: number[]; last: number | null; total: number } }>();
+  const lightStates = new Map<string, { guard: Guard; feather: number; pass: "drawn" | "idle" | "off"; beneath: number; block?: Float32Array;
+    gpu: { samples: number[]; last: number | null; total: number } }>();
   let lightOrder: string | undefined;
   let lightTiming = { enabled: false, frameIndex: 0, status: "disabled" };
   let lightSerial = 0;
@@ -313,7 +314,21 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       setEffectTexture(effect, "layer0", layer.texture);
       const renderer = createEffectRenderer(engine!.surfaces[0], effect, { name, clear: false });
       resources.renderers++;
-      return { effect, renderer, texture: layer.texture, custom };
+      const pass: Pass = { effect, renderer, texture: layer.texture, custom };
+      // A layer whose scene already has emitters gets its face pool with the pass, its pipeline built now (registered and
+      // taken off again, as the successor's passes are), so the first frame of a new composition does not compile it.
+      const material = layer.material?.();
+      if (custom?.relief && isSceneMaterial(material) && material.scene.format === "strata-scene" && material.scene.emitters !== undefined) {
+        try {
+          pass.light = createLight(pass, layer.id);
+          registerFrameGraphContext(pass.light.context);
+          unregisterFrameGraphContext(pass.light.context);
+        } catch (error) {
+          console.error("Underglass face pool preparation failed; it is created on first use", error);
+          if (pass.light) { disposeFrameGraphContext(pass.light.context); disposeEffectWrapper(pass.light.effect); resources.lightPasses--; pass.light = undefined; }
+        }
+      }
+      return pass;
     } catch (error) {
       disposeEffectWrapper(effect); resources.effects--;
       throw error;
@@ -328,6 +343,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       disposeEffectWrapper(pass.light.effect);
       pass.light = undefined;
       resources.lightPasses--;
+      metrics.lightPassesDisposed++;
     }
   }
   /**
@@ -339,14 +355,20 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     const name = `underglass-emitters:${layerId}:${++lightSerial}`;
     const effect = createEffectWrapper(engine!, { name, vertexWGSL: poolWGSL.vertex, fragmentWGSL: poolWGSL.fragment, blend: poolBlend,
       bindings: [{ binding: 0, kind: "uniform", uniformByteLength: POOL_VEC4S * 16, visibility: 3 }, { binding: 1, kind: "texture", name: "capture" }] });
+    let context: FrameGraphContext | undefined;
     try {
       setEffectTexture(effect, "capture", pass.texture);
-      const context = createFrameGraphContext(engine!, { name });
+      context = createFrameGraphContext(engine!, { name });
+      // The task draws into the swapchain target and disposes it with the task (`disposeFrameGraphContext`). Lite 1.33
+      // leaves that target alone because the swapchain target is eager with no attachment disposer
+      // (`lib/engine/surface.js`, `scRT._eager = true`; `lib/engine/render-target.js`, `disposeRenderTarget`); the browser
+      // test disposes pools while the engine lives and checks the frame after it.
       const task = createEffectRenderTask({ name, effect, target: engine!.scRT, clear: false }, engine!);
       addTask(context.frameGraph, task);
       resources.lightPasses++;
       return { context, task, effect, name, data: new Float32Array(POOL_VEC4S * 4), registered: false };
     } catch (error) {
+      if (context) disposeFrameGraphContext(context);
       disposeEffectWrapper(effect);
       throw error;
     }
@@ -451,9 +473,12 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       const clip = layer.clip?.(matrix) ?? { x: 0, y: 0, width: layer.extent.width, height: layer.extent.height };
       const rect = drawRectangle(clip, layer.extent, scene.outset);
       const draw: Bounds = { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1 };
+      const previous = lightStates.get(layer.id);
       lightFrame.set(layer.id, { scene, draw, matrix, opacity: layer.opacity(), frame, emitters: scene.emitters !== undefined,
-        selection: selectEmitters(scene.emitters, draw) });
+        selection: selectEmitters(scene.emitters, draw), block: previous?.block ?? new Float32Array(EMITTER_BLOCK_VEC4S * 4), beneath: 0 });
     }
+    // Layers that no longer light anything leave the diagnostics.
+    for (const id of [...lightStates.keys()]) if (!lightFrame.has(id)) lightStates.delete(id);
   }
   /**
    * Puts each lit layer's face pool on the surface (created on first use) and turns its task on for frames with light;
@@ -477,16 +502,50 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       ? instrumentFaceScene(scene as InstrumentScene, instrument?.stepped(id) ?? (scene as InstrumentScene).objects.map((_, index) => index))
       : scene as ReliefScene;
   }
+  /**
+   * Packs every lit layer's emitter block once for this frame: its own guard, and the text of the layers beneath it that
+   * its outset covers (`beneath`, cap 0: each layer's text takes light from its own layer only, within its own guard).
+   * Runs after the instrument frame (step-downs) and before the uniforms.
+   */
+  function packLights() {
+    // Each guarded layer's protected areas in canvas space, by paint order.
+    const below: { box: { x: number; y: number }[] }[] = [];
+    for (const layer of layers) {
+      const light = lightFrame.get(layer.id);
+      if (!light) continue;
+      const guard = layerGuard(faceOf(layer.id, light.scene), light.scene.protected);
+      light.guard = guard;
+      const feather = light.scene.feather ?? DEFAULT_FEATHER;
+      if (light.emitters) {
+        const inverse = light.matrix.inverse(), beneath: Bounds[] = [];
+        const { width, height } = layer.extent, draw = light.draw;
+        for (const area of below) {
+          // The area in this layer's px, inside its draw rectangle and outside its box (its own content covers the rest).
+          const local = area.box.map(point => { const p = inverse.transformPoint(point); return { x: p.x / p.w, y: p.y / p.w }; });
+          const box = { x0: Math.max(draw.x0, Math.min(...local.map(p => p.x))), y0: Math.max(draw.y0, Math.min(...local.map(p => p.y))),
+            x1: Math.min(draw.x1, Math.max(...local.map(p => p.x))), y1: Math.min(draw.y1, Math.max(...local.map(p => p.y))) };
+          if (box.x0 >= box.x1 || box.y0 >= box.y1) continue;
+          for (const slab of [{ ...box, x1: Math.min(box.x1, 0) }, { ...box, x0: Math.max(box.x0, width) },
+            { x0: Math.max(box.x0, 0), x1: Math.min(box.x1, width), y0: box.y0, y1: Math.min(box.y1, 0) }, { x0: Math.max(box.x0, 0), x1: Math.min(box.x1, width), y0: Math.max(box.y0, height), y1: box.y1 }]) {
+            if (slab.x0 < slab.x1 && slab.y0 < slab.y1) beneath.push(slab);
+          }
+        }
+        light.beneath = beneath.length;
+        packEmitters(light.block, 0, light.selection, guard, { rects: beneath, overflow: false }, draw, layer.extent, feather, light.scene.interior.max);
+      }
+      const corners = (rect: Bounds) => [[rect.x0, rect.y0], [rect.x1, rect.y0], [rect.x0, rect.y1], [rect.x1, rect.y1]]
+        .map(([x, y]) => { const p = light.matrix.transformPoint({ x: x!, y: y! }); return { x: p.x / p.w, y: p.y / p.w }; });
+      if (guard.extent) below.push({ box: corners({ x0: 0, y0: 0, x1: layer.extent.width, y1: layer.extent.height }) });
+      else for (const { rect } of guard.rects) below.push({ box: corners(rect) });
+    }
+  }
   /** Writes a lit layer's emitter block into its relief binding (`relief`) and its face pool's uniforms. */
   function writeLight(layer: Layer, pass: Pass, light: FrameLight, relief: Float32Array | undefined) {
-    const face = faceOf(layer.id, light.scene);
-    const guard = layerGuard(face, light.scene.protected);
-    const feather = light.scene.feather ?? DEFAULT_FEATHER, m = light.scene.interior.max;
-    // The relief pass applies the layer's opacity itself (its alpha), so its highlights take the light at full strength.
-    if (relief) packEmitters(relief, RELIEF_EMITTER_BASE * 4, light.selection, guard, light.draw, feather, m);
+    const guard = light.guard!, feather = light.scene.feather ?? DEFAULT_FEATHER;
+    if (relief && light.emitters) relief.set(light.block, RELIEF_EMITTER_BASE * 4);
     const drawn = !!pass.light?.registered && light.selection.drawn.length > 0 && light.opacity > 0;
-    const state = lightStates.get(layer.id) ?? { guard, feather, pass: "off" as const, gpu: { samples: [], last: null, total: 0 } };
-    Object.assign(state, { guard, feather, pass: lightOrder || !pass.light?.registered ? "off" : drawn ? "drawn" : "idle" });
+    const state = lightStates.get(layer.id) ?? { guard, feather, pass: "off" as const, gpu: { samples: [], last: null, total: 0 }, beneath: 0 };
+    Object.assign(state, { guard, feather, beneath: light.beneath, block: light.block, pass: lightOrder || !pass.light?.registered ? "off" : drawn ? "drawn" : "idle" });
     lightStates.set(layer.id, state);
     if (!pass.light?.registered) return;
     const data = pass.light.data;
@@ -502,7 +561,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     const content = layer.contentExtent;
     packPoolHeader(data, { dpr: frame.dpr, frame, opacity: light.opacity, bounds, rows, draw: light.draw,
       grid: [content.pixelWidth / Math.max(1, content.width), content.pixelHeight / Math.max(1, content.height), content.pixelWidth, content.pixelHeight], extent: layer.extent });
-    packEmitters(data, POOL_HEADER_VEC4S * 4, light.selection, guard, light.draw, feather, m, light.opacity);
+    data.set(light.block, POOL_HEADER_VEC4S * 4);
     setEffectUniforms(pass.light.effect, data);
   }
   /** After a frame: the face pools' GPU times from Lite's task timings (on while a pool or an instrument layer exists). */
@@ -516,7 +575,10 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     }
     if (!lightTiming.enabled && isGpuTimingSupported(engine)) {
       lightTiming.enabled = true;
-      void setRenderTaskGpuTimingEnabled(engine, true).then(result => { lightTiming.status = result.status; }, error => { lightTiming.status = `error: ${String(error)}`; });
+      // The answer may arrive after the engine is gone and a new timing record replaced this one: it then writes nothing.
+      const record = lightTiming;
+      void setRenderTaskGpuTimingEnabled(engine, true).then(result => { if (lightTiming === record) record.status = result.status; },
+        error => { if (lightTiming === record) record.status = `error: ${String(error)}`; });
     }
     if (!lightTiming.enabled) return;
     const snapshot = getRenderTaskGpuTimings(engine);
@@ -543,9 +605,10 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       layers: [...lightFrame].map(([id, light]) => {
         const state = lightStates.get(id);
         return { id, emitters: light.selection.total, lit: light.selection.lit, outOfReach: light.selection.outOfReach, drawn: light.selection.drawn.map(entry => entry.index),
-          dropped: light.selection.dropped.map(entry => ({ ...entry })), pass: state?.pass ?? "off", feather: state?.feather ?? DEFAULT_FEATHER,
+          dropped: light.selection.dropped.map(entry => ({ ...entry })), pass: state?.pass ?? "off", feather: state?.feather ?? DEFAULT_FEATHER, beneath: state?.beneath ?? 0,
           guard: state ? { rects: state.guard.rects.length, extent: state.guard.extent, overflow: state.guard.overflow,
-            caps: state.guard.rects.map(entry => ({ rect: [entry.rect.x0, entry.rect.y0, entry.rect.x1 - entry.rect.x0, entry.rect.y1 - entry.rect.y0], light: entry.light, shadow: entry.shadow })) } : null,
+            caps: state.guard.rects.map(entry => ({ rect: [entry.rect.x0, entry.rect.y0, entry.rect.x1 - entry.rect.x0, entry.rect.y1 - entry.rect.y0], light: entry.light, shadow: entry.shadow })),
+            cells: state.guard.cells?.map(cell => ({ ...cell })) ?? null } : null,
           gpu: { lastMs: state?.gpu.last ?? null, p50Ms: percentile(state?.gpu.samples ?? [], 0.5), p95Ms: percentile(state?.gpu.samples ?? [], 0.95), samples: state?.gpu.samples.length ?? 0, total: state?.gpu.total ?? 0 } };
       }),
     };
@@ -648,8 +711,9 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   // A face pool: its frame-graph context and effect task, the uniform data, and whether it is on the surface.
   type LightPass = { context: FrameGraphContext; task: Task; effect: EffectWrapper; name: string; data: Float32Array; registered: boolean };
   // What a layer with emitters lights in one frame.
+  // `block` is its emitter block, packed once per frame (`packLights`) and copied into the relief binding and the face pool.
   type FrameLight = { scene: (ReliefScene | InstrumentScene) & SceneLight; draw: Bounds; selection: LayerEmitters; matrix: DOMMatrix; opacity: number;
-    frame: { width: number; height: number; dpr: number }; emitters: boolean };
+    frame: { width: number; height: number; dpr: number }; emitters: boolean; guard?: Guard; block: Float32Array; beneath: number };
   // `passes` align with `layers`; `owned` also keeps passes of removed layers alive until the composition retires.
   // A complete set of layers, passes and textures presented together. At most one is `active` (drawn now) and one
   // `pending` (prepared, waiting for fresh pixels); superseded ones sit in `retiring` until a queue fence.
@@ -988,6 +1052,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       // Ordering first: if Lite refuses the order, the face's uniforms below already carry every object at Relief and the
       // face pools are off.
       orderContexts();
+      packLights();
       writeUniforms(dx, tint);
       renderFrame(engine, 16.67);
       submittedGeneration = publicationGeneration;

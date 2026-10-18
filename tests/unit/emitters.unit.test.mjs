@@ -23,8 +23,8 @@ const { validateReliefScene, reliefUniforms, RELIEF_VEC4S, RELIEF_EMITTER_BASE, 
 const { validateInstrumentScene, instrumentStructure } = await import("../../packages/core/src/instrument.ts");
 const { validateMaterial, withEmitters } = await import("../../packages/core/src/effects.ts");
 sourceImports.deregister();
-const { selectEmitters, tileMasks, layerGuard, interiorBounds, packEmitters, reachMargin, validateLight, EMITTERS_PER_LAYER, EMITTER_BLOCK_VEC4S, EMITTER_TILES,
-  EMITTER_LIGHTS, EMITTER_TILE_BASE, EMITTER_RECTS, EMITTER_CAPS, POOL_VEC4S, poolWGSL } = emitters;
+const { selectEmitters, tileMasks, layerGuard, interiorBounds, packEmitters, reachMargin, validateLight, shadowScales, EMITTERS_PER_LAYER, EMITTER_BLOCK_VEC4S, EMITTER_TILES,
+  EMITTER_LIGHTS, EMITTER_TILE_BASE, EMITTER_RECTS, EMITTER_CAPS, EMITTER_EXTENT, EMITTER_CELLS, POOL_VEC4S, poolWGSL } = emitters;
 
 const lamp = (x, y, overrides = {}) => ({ position: [x, y, 20], colour: [1, 0.72, 0.38], strength: 3200, radius: 168, ...overrides });
 /** A version 4 relief scene: a raised face, a key on it, and the light fields. */
@@ -157,12 +157,51 @@ test("the guard bounds the relief factor per protected rect and caps light and s
     assert.ok(high * (1 + light) <= 1 + m + 1e-12 && low * (1 - shadow) >= 1 - m - 1e-12, "k · (1 ± cap) within 1 ± m");
   }
   assert.equal(layerGuard(scene, scene.protected), guard, "cached per face scene and list");
-  // More than 64 rects, or "extent": the whole box.
+  // Text inside the key: the key's own shadow does not fall on it, and the face's drop shadow never falls inside the face.
+  assert.equal(key[0], 1);
+  // More than 64 rects, or "extent": the whole box, as 16 × 9 cells with caps of their own.
   const many = layerGuard(scene, Array.from({ length: 70 }, () => [0, 0, 4, 4]));
-  assert.deepEqual([many.extent, many.overflow, many.rects.length], [true, 6, 1]);
-  assert.deepEqual(many.rects[0].rect, { x0: 0, y0: 0, x1: 400, y1: 200 });
+  assert.deepEqual([many.extent, many.overflow, many.rects.length, many.cells.length], [true, 6, 0, 144]);
   assert.equal(layerGuard(scene, "extent").extent, true);
   assert.equal(layerGuard(scene, undefined).rects.length, 0);
+});
+
+test("the guard bounds offsets by the largest stack, shadows by where they fall, and a protected box per cell", () => {
+  const key = (x, y, extra = {}) => ({ face: "raised", rect: [x, y, 60, 30], radius: 6, height: 4, material: "satin", ...extra });
+  const face = { face: "raised", rect: [0, 0, 400, 200], radius: 14, height: 6, material: "face" };
+  // Two keys side by side: a rect over both is bounded by one key's offset, not their sum (the review's case: 1.01).
+  const two = validateReliefScene(relief({ primitives: [face, key(40, 40), key(120, 40)], protected: [[50, 45, 120, 20]] }));
+  assert.ok(Math.abs(interiorBounds(two, { x0: 50, y0: 45, x1: 170, y1: 65 })[1] - 1.005) < 1e-12, "two separate keys: k_hi 1.005");
+  // A key on a satin plate: there the offsets may stack (the plate's beneath the key's edge).
+  const stacked = validateReliefScene(relief({ primitives: [face, key(30, 30, { rect: [30, 30, 200, 100], radius: 10 }), key(60, 60)], protected: [[70, 65, 30, 10]] }));
+  assert.ok(Math.abs(interiorBounds(stacked, { x0: 70, y0: 65, x1: 100, y1: 75 })[1] - 1.01) < 1e-12, "a key on a plate: k_hi 1.01");
+  // "extent" on one rounded raised face (the review's case: shadow cap 0): every cell keeps the full caps.
+  const lone = validateReliefScene(relief({ primitives: [face], protected: "extent" }));
+  const loneGuard = layerGuard(lone, "extent");
+  assert.ok(loneGuard.cells.every(cell => Math.abs(cell.light - 0.04) < 1e-12 && Math.abs(cell.shadow - 0.04) < 1e-12), "a lone face: every cell keeps light and shadow caps of m");
+  // Ten satin keys with "extent" (the review's case: light cap 0): no cell loses more than one key's offset.
+  const ten = validateReliefScene(relief({ primitives: [face, ...Array.from({ length: 10 }, (_, index) => key(10 + (index % 5) * 76, 20 + Math.floor(index / 5) * 80))], protected: "extent" }));
+  const tenGuard = layerGuard(ten, "extent");
+  const lightest = Math.min(...tenGuard.cells.map(cell => cell.light)), darkest = Math.min(...tenGuard.cells.map(cell => cell.shadow));
+  assert.ok(Math.abs(lightest - ((1.04 / 1.005) - 1)) < 1e-12, `ten keys: the smallest light cap is one key's (${lightest})`);
+  assert.ok(darkest === 0, "cells inside a key's shadow on the face lose the shadow cap");
+  assert.ok(tenGuard.cells.slice(6 * 16).every(cell => cell.shadow > 0 && Math.abs(cell.light - 0.04) < 1e-12), "cells clear of every key and its shadow keep both caps");
+  // Overlapping protected rects keep their own caps; the shader applies the lower of the two where they overlap.
+  const overlapping = layerGuard(validateReliefScene(relief({ primitives: [face, key(300, 40)], protected: [[290, 30, 40, 20], [310, 45, 40, 20]] })), [[290, 30, 40, 20], [310, 45, 40, 20]]);
+  assert.equal(overlapping.rects.length, 2);
+  assert.ok(overlapping.rects[1].light < overlapping.rects[0].light + 1e-12);
+});
+
+test("each object's face shadow takes its share of a guarded area's shadow cap", () => {
+  const areas = [{ rect: { x0: 0, y0: 0, x1: 100, y1: 20 }, light: 0.04, shadow: 0.04 }, { rect: { x0: 300, y0: 0, x1: 400, y1: 20 }, light: 0.04, shadow: 0 }];
+  // Two objects reach the first area, none the second; one casts nothing.
+  const reaches = new Float64Array([10, 10, 40, 40, 60, 5, 90, 30, 200, 200, 200, 200]);
+  const [first, second] = shadowScales(areas, reaches, 3, 4, 0.24);
+  const each = 1 - (1 - 0.04) ** (1 / 2);
+  assert.ok(Math.abs(first - each / 0.24) < 1e-12);
+  assert.ok((1 - first * 0.24) ** 2 >= 1 - 0.04 - 1e-12, "together within the cap");
+  assert.equal(second, 0, "a cap of 0 takes every shadow there");
+  assert.deepEqual(shadowScales([{ rect: areas[0].rect, light: 0.04, shadow: 0.5 }], reaches, 3, 4, 0.24), [1], "a cap above the strength leaves shadows whole");
 });
 
 test("the emitter block packs the drawn emitters, the guard and the tiles where the shaders read them", () => {
@@ -170,21 +209,27 @@ test("the emitter block packs the drawn emitters, the guard and the tiles where 
   const rect = { x0: -48, y0: -48, x1: 448, y1: 248 };
   const light = selectEmitters(scene.emitters, rect), guard = layerGuard(scene, scene.protected);
   const out = new Float32Array(RELIEF_VEC4S * 4).fill(7);
-  packEmitters(out, RELIEF_EMITTER_BASE * 4, light, guard, rect, scene.feather, scene.interior.max, 0.5);
+  const beneath = { rects: [{ x0: -40, y0: 10, x1: -2, y1: 24 }], overflow: false };
+  packEmitters(out, RELIEF_EMITTER_BASE * 4, light, guard, beneath, rect, scene.extent, scene.feather, scene.interior.max);
   const at = (vec4) => [...out.subarray((RELIEF_EMITTER_BASE + vec4) * 4, (RELIEF_EMITTER_BASE + vec4) * 4 + 4)];
-  assert.deepEqual(at(0), [2, 4, 1, Math.fround(0.04)]);
+  assert.deepEqual(at(0), [2, 4, 2, Math.fround(0.04)], "two rects: the layer's own and the text beneath its outset");
   assert.deepEqual(at(1), [-48, -48, 31, Math.fround(296 / 9)]);
+  assert.deepEqual(at(EMITTER_EXTENT), [0, 400, 200, 0]);
   assert.deepEqual(at(EMITTER_RECTS), [70, 30, 150, 46]);
   assert.deepEqual(at(EMITTER_CAPS).map(value => Math.round(value * 1e6) / 1e6), [0.04, 0.04, 0, 0]);
+  assert.deepEqual(at(EMITTER_RECTS + 1), [-40, 10, -2, 24]);
+  assert.deepEqual(at(EMITTER_CAPS + 1), [0, 0, 0, 0], "no light on a lower layer's text");
   assert.deepEqual(at(EMITTER_LIGHTS), [40, 40, 20, 168]);
-  assert.deepEqual(at(EMITTER_LIGHTS + 1), [1600, Math.fround(1152), Math.fround(608), 1], "colour × strength × opacity, face share");
+  assert.deepEqual(at(EMITTER_LIGHTS + 1), [3200, Math.fround(2304), Math.fround(1216), 1], "colour × strength (the pool scales by opacity), face share");
   assert.deepEqual(at(EMITTER_LIGHTS + 2), [200, 100, 20, -168], "a layer-reach emitter has a negative radius");
   assert.equal(at(EMITTER_LIGHTS + 3)[3], Math.fround(0.3));
   assert.ok(at(EMITTER_TILE_BASE).some(value => value > 0));
   assert.equal(out[(RELIEF_EMITTER_BASE - 1) * 4 + 3], 7, "nothing before the block is touched");
-  // At opacity 0 nothing is drawn.
-  packEmitters(out, RELIEF_EMITTER_BASE * 4, light, guard, rect, scene.feather, scene.interior.max, 0);
-  assert.equal(at(0)[0], 0);
+  // A protected box: the cells' caps; text beneath that overflows protects the whole outset.
+  const boxed = layerGuard(scene, "extent");
+  packEmitters(out, RELIEF_EMITTER_BASE * 4, light, boxed, { rects: [], overflow: true }, rect, scene.extent, scene.feather, scene.interior.max);
+  assert.deepEqual(at(EMITTER_EXTENT), [1, 400, 200, 1]);
+  assert.equal(Math.round(at(EMITTER_CELLS)[0] * 1e6) / 1e6, 0.04);
   // The shaders read the same block.
   assert.match(reliefWGSL, /fn reliefLamp/);
   assert.match(poolWGSL.fragment, /fn lampTile/);
