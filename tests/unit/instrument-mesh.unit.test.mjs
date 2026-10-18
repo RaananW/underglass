@@ -387,7 +387,13 @@ test("the asset store loads once, caches by identity, reports states and retries
   // The same reference in another scene (another validated profile object): served from the cache, no second request.
   const second = referenceScene("/a.glb");
   store.begin(); store.bind(second); store.end();
+  assert.equal(second.profiles.piece, shape, "the same reference is one profile, so what the store attached stays attached");
   assert.equal(meshReady(second.profiles.piece), true);
+  // The same file and mesh with another declared box is another profile on the same entry: a cache hit, no request.
+  const wider = referenceScene("/a.glb", "Cap", { low: [-20, -20, 0], high: [20, 20, 12] });
+  store.begin(); store.bind(first); store.bind(wider); store.end();
+  assert.notEqual(wider.profiles.piece, shape);
+  assert.equal(meshReady(wider.profiles.piece), true);
   assert.equal(net.log.length, 1);
   assert.equal(store.state().hits, 1);
   // A different mesh of the same file is a different entry (and a fetch: files are not kept).

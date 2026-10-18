@@ -36,6 +36,9 @@ interface Entry {
   bytes: number;
   referenced: boolean;
   used: number;
+  /** Timings of the load, ms: the request (or 0 for bytes in hand) and the glTF read. */
+  fetchMs?: number;
+  parseMs?: number;
 }
 
 /** A reference's state for diagnostics: what it is, whether it has its triangles, and why not. */
@@ -85,6 +88,8 @@ export function createAssetStore(options: AssetStoreOptions) {
       try { response = await (options.fetch ?? fetch)(url, { signal: controller.signal }); }
       catch (error) { throw controller.signal.reason instanceof GltfError ? controller.signal.reason : new GltfError(`the request failed: ${String(error)}`); }
       if (!response.ok) throw new GltfError(`the request failed with HTTP ${response.status}`);
+      // A server that answers an unknown path with its page (a single-page app's fallback) is not serving a model.
+      if (/^text\/html\b/i.test(response.headers.get("content-type") ?? "")) throw new GltfError("the server answered with an HTML page, not a model (check the URL)");
       const length = Number(response.headers.get("content-length"));
       if (Number.isFinite(length) && length > fileBytes) throw new GltfError(`the file is ${length} bytes, above the ${fileBytes} a custom part's file may have`);
       if (!response.body) {
@@ -113,12 +118,15 @@ export function createAssetStore(options: AssetStoreOptions) {
   async function load(entry: Entry, shape: MeshProfile) {
     inFlight++;
     try {
+      const started = performance.now();
       const bytes = await bytesOf(shape);
       if (disposed) return;
+      const fetched = performance.now();
       const geometry = readGltf(bytes, { ...(shape.source!.mesh !== undefined ? { mesh: shape.source!.mesh } : {}), scale: shape.scale ?? 1, offset: shape.offset ?? [0, 0, 0] });
       const size = geometryBytes(geometry);
       if (!room(size)) throw new GltfError(`the asset budget is spent: ${size} more bytes would pass ${budget} (every cached mesh is in use)`);
       entry.geometry = geometry; entry.bytes = size; entry.status = "ready"; stats.loads++;
+      entry.fetchMs = fetched - started; entry.parseMs = performance.now() - fetched;
     } catch (error) {
       entry.status = "failed";
       entry.error = error instanceof GltfError ? error.message : `unexpected: ${String(error)}`;
@@ -169,7 +177,8 @@ export function createAssetStore(options: AssetStoreOptions) {
       return { status: "loading", vertices: 0, triangles: 0 };
     },
     state: () => ({
-      entries: [...entries.values()].map(entry => ({ id: entry.id, status: entry.status, bytes: entry.bytes, referenced: entry.referenced, ...(entry.error ? { error: entry.error } : {}) })),
+      entries: [...entries.values()].map(entry => ({ id: entry.id, status: entry.status, bytes: entry.bytes, referenced: entry.referenced,
+        ...(entry.fetchMs !== undefined ? { fetchMs: entry.fetchMs, parseMs: entry.parseMs } : {}), ...(entry.error ? { error: entry.error } : {}) })),
       bytes: total(), budgetBytes: budget, fileBytes, ...stats, inFlight,
     }),
     /** Aborts what is in flight and forgets everything. */

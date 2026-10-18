@@ -226,6 +226,8 @@ export function createInstrumentController(options: InstrumentControllerOptions)
   const layers = new Map<string, LayerState>();
   // Custom parts' files (core work item 5): loaded outside any frame; a finished load asks for a frame.
   const assets = createAssetStore({ onChange: () => options.requestDraw() });
+  // Custom parts' geometry replaced in place when a file arrives (`resizeMeshGeometry`), and the time it took.
+  const uploads = { count: 0, lastMs: 0, totalMs: 0 };
   // Every scene the controller has registered and not yet retired: the order guard keeps only these and core's own.
   const scenes = new Set<RenderingContext>();
   const retirements = new Set<Promise<void>>();
@@ -669,11 +671,12 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           const rewrite = all || shapeKey !== entry.shapeKey;
           const live = meshReady(shape);
           if (shapeKey !== entry.shapeKey) {
-            const geometry = profileGeometry(shape);
+            const geometry = profileGeometry(shape), started = performance.now();
             for (const target of [entry.mesh, entry.lens?.mesh]) {
               if (!target) continue;
               resizeMeshGeometry(engine, target, geometry.positions, geometry.normals, geometry.indices, geometry.uvs);
             }
+            uploads.count++; uploads.lastMs = performance.now() - started; uploads.totalMs += uploads.lastMs;
             entry.mesh.boundMin = entry.boundMin; entry.mesh.boundMax = entry.boundMax;
             entry.local = profileBounds(shape);
             entry.shapeKey = shapeKey;
@@ -1257,7 +1260,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       stage: { parts: [...layers.values()].reduce((sum, state) => sum + state.drawnParts, 0), budget: INSTRUMENT_PARTS_PER_STAGE },
       budgets: { partsPerLayer: INSTRUMENT_PARTS_PER_LAYER, partsPerStage: INSTRUMENT_PARTS_PER_STAGE, kindsPerLayer: INSTRUMENT_KINDS_PER_LAYER, kindsCeiling: INSTRUMENT_KINDS_CEILING,
         customTrianglesPerLayer: INSTRUMENT_CUSTOM_TRIANGLES_PER_LAYER },
-      assets: assets.state(),
+      assets: { ...assets.state(), uploads: { ...uploads } },
       timing: { ...timing },
       compile: { ...compile, building: !!gate },
       order: orderUnavailable ?? "core",
