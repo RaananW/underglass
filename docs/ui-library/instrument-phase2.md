@@ -521,8 +521,9 @@ pool's pixels:
 - **Lower layers' text:** a layer adds no light to the text of the layers beneath its outset. Each frame core maps the
   protected areas of every lower layer into the layer's px, keeps their parts that lie in its outset (outside its own
   box, which covers the rest), and adds them to the block with a light cap of 0, after the layer's own rects. If they do
-  not fit, they are merged into their bounding box (no light there, and only there); if the layer's own rects leave no
-  room at all, the outset gets no light. `state().emitters.layers[].beneath` reports `{ rects, merged, overflow }`. Each
+  not fit, they are merged per side of the layer's box (left, right, top, bottom: at most four boxes, none reaching into
+  the box, so the layer's own face keeps its light; third review fix: one bounding box over text on two sides covered
+  part of the face); if even those do not fit, the outset gets no light. `state().emitters.layers[].beneath` reports `{ rects, merged, overflow }`. Each
   layer's text therefore takes light only from its own layer, within its own guard (review fix: C's lamp lit B's text in
   C's outset by +35 levels at 2 px). It assumes the upper layer's box is opaque: lower text inside the upper box (its
   rounded corners included) where the upper layer is transparent is lit by the upper layer's `reach: "outset"` lamps
@@ -701,6 +702,13 @@ above and measured here (headless DPR 1 and 2, headful DPR 1, identical numbers)
   point in C's glow 9 px below it gains +10.7 (light) and +2.7 (dark); after the pass with its pool was replaced by a
   resize, C's lamp lights B past C's edge by +21.3; the overlapping rects have exact caps (0.034826 / 0 and
   0.034826 / 0.04).
+
+**Third review fixes (2026-10-18).** The guard's cost: with every caster tested against every earlier entry, a warm
+`layerGuard` under `"extent"` took 31–37 ms (the review) and 36–50 ms (here, Node 24) over 256 entries, and 2.5–3.6 ms over
+41, on the main thread at every scene change. Each shape's shadow region is now computed once with the shape, and a
+caster whose region misses the area skips the scan: 0.9–1.1 ms over 256 entries and 0.3–0.5 ms over 41 (median of 7, warm;
+a unit test fails above 15 ms). Lower layers' text is merged per side (above); the update-after-lead check also asserts
+that no browser paint drew its frames.
 
 **Suites (after the second review's fixes):** `core-emitters` 6 of 6 headless and 3 of 3 headful (DPR 1); `core-instrument`,
 `ui-gpu`, relief, objects, stage, material and the I0.3 probe: 74 of 74; unit 152 (1 skipped), compiler 129, typecheck,
