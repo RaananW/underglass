@@ -1668,9 +1668,9 @@ An independent review found no blocker. Its fixes, each with a unit test (`tests
   finite and within ±10,000 like inline ones, and a zero or non-finite normal is refused.
 - **Bytes in hand** (`source.data`) are held to the 8 MiB cap like a download.
 - **No per-frame serialization.** `profileGeometry` looks a shape up by its object first (`WeakMap`), so `profileBounds` (per glass instance and per posed part
-  every frame) no longer `JSON.stringify`s it; a test counts the calls across 500 repeats (0 after the first).
+  every frame) no longer `JSON.stringify`s it; a test counts the calls across 500 repeats (0 after the first). That is per validated scene object: each new scene (the poses idiom builds one per frame) costs one stringify per distinct profile, not one per call.
 - **Stand-ins** (`fallback`), above: the helper's knob passes the built-in cap, chamfer and pointer, so a 404 shows the standard knob.
 - **Triangles belong to a store.** A profile's loaded triangles carry the store that attached them; another store (a second engine, a controller enabled
-  again) does not draw them and loads for itself, and evicting an entry (or ending a store) takes its triangles off the profiles, so the 32 MiB budget is a real bound.
+  again) does not draw them and loads for itself, and evicting an entry (or ending a store) takes its triangles off the profiles, so no store draws another's triangles and the bookkeeping stays honest. The 32 MiB budget bounds the store's own parsed cache only: Lite's mesh keeps its own retained CPU copy and its GPU buffers (L37), which it does not count, and detaching does not free those.
 - **Nits.** The triangle budget counts base meshes; the caster cap is 0 within 1 px of the box; `bucketedWitnesses` rounds the height magnitude up on both
   sides of the face, which is conservative on both (the drift grows with the magnitude), and says so; L37 names what is undocumented.

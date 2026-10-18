@@ -843,7 +843,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
             }
             if (entry.lens) {
               // The glow of a lit lens (decision 8 of item 3): its emitter's state is live (`setEmitters`), so it is read every frame.
-              const glow = hidden.has(object) || input.opacity <= 0 ? undefined : partGlow(current, current.objects[object]!.parts[part]!);
+              const glow = hidden.has(object) || !live || input.opacity <= 0 ? undefined : partGlow(current, current.objects[object]!.parts[part]!);
               const value = glow?.lit ? [glow.colour[0], glow.colour[1], glow.colour[2], 1] : [0, 0, 0, 0];
               if (glow?.lit) lit++;
               for (let channel = 0; channel < 4; channel++) {
@@ -1458,7 +1458,12 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           const info = shape.source ? assets.info(shape) : { status: "ready" as const, vertices: profileGeometry(shape).positions.length / 3, triangles: profileGeometry(shape).indices.length / 3 };
           // `showing`: what is drawn for the part now: its mesh, its stand-in (`fallback`) while the mesh is not there, or nothing.
           const showing = meshReady(shape) ? "mesh" : state.scene!.objects[object]!.parts[part]!.fallback ? "fallback" : "none";
-          return { object: state.scene!.objects[object]!.id, part, profile, source: shape.source ? (shape.source.url ?? "buffer") : "inline", showing, ...info };
+          // `showing` and `shown` report the part's state, not the pixels: an object stepped down to Relief draws none of them.
+          const entry = state.scene!.objects[object]!;
+          let first = part; while (first > 0 && entry.parts[first - 1]!.fallbackFor) first--;
+          let shown = 0;
+          for (let at = first; at <= part; at++) if (partDrawn(entry, at, state.scene!.profiles)) shown++;
+          return { object: state.scene!.objects[object]!.id, part, profile, shown, source: shape.source ? (shape.source.url ?? "buffer") : "inline", showing, ...info };
         }) : [],
         // The parts' clustered lights: whether the scene has them, and how many the emitters lit this frame.
         lights: { clustered: !!state.pass?.lights, lit: state.pass?.lights && state.status === "ready" ? state.pass.litLights : 0 },

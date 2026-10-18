@@ -93,7 +93,7 @@ export interface InstrumentPart {
   emitter?: number;
   /**
    * A custom part only: parametric parts core draws in its place while its file is `loading` and after it `failed` (the built-in
-   * part standing in), and stops drawing in the frame the mesh is. Validation expands them into `fallbackFor` parts before it.
+   * part standing in), and stops drawing in the frame the mesh is. Validation expands them into `fallbackFor` parts before it. A hand-written part marked `fallbackFor` is dropped and expanded again from its custom part (so a validated scene validates again); with no custom part after it, it is simply gone.
    */
   fallback?: InstrumentPart[];
   /** Set by validation on an expanded stand-in: shown while the next part without this mark (its custom part) has no triangles. */

@@ -364,16 +364,21 @@ for (const dpr of [1, 2]) {
           window.samples = [];
           const tick = async () => {
             const api = await window.customCore.ready, layer = api.instrument().layers[0];
-            window.samples.push({ drawn: layer.drawnParts, fb: layer.customParts.find(part => part.object === "c-fb-cap").showing, status: layer.status });
+            const cap = layer.customParts.find(part => part.object === "c-fb-cap");
+            window.samples.push({ drawn: layer.drawnParts, fb: cap.showing, shown: cap.shown, status: layer.status });
             if (!window.stopSampling) requestAnimationFrame(tick);
           };
           requestAnimationFrame(tick);
         });
+        // Hold the file until the sampler has seen the stand-in, so the load cannot win the first animation frame.
+        await page.waitForFunction(() => window.samples.some(sample => sample.fb === "fallback"));
         release();
         await call("loaded");
         await page.waitForTimeout(300);
         const samples = await page.evaluate(() => { window.stopSampling = true; return window.samples; });
         expect(samples.every(sample => sample.status === "ready")).toBe(true);
+        // Never both, never neither: the stand-in and the mesh drawn for the cap add up to exactly one in every sampled frame.
+        expect(samples.map(sample => sample.shown).filter(shown => shown !== 1), "stand-in + mesh == 1 in every frame").toEqual([]);
         expect(new Set(samples.map(sample => sample.fb)), "the cap shows its stand-in, then its mesh").toEqual(new Set(["fallback", "mesh"]));
         const order = samples.map(sample => sample.fb);
         expect(order.lastIndexOf("fallback"), "once the mesh is shown the stand-in does not come back").toBeLessThan(order.indexOf("mesh"));

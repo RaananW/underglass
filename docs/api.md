@@ -665,7 +665,7 @@ profiles: {
   there is no frame with both and none with neither. Validation expands each into a part marked `fallbackFor` placed before its
   custom part (validated scenes validate again), so they count as parts in the budgets. `customParts[].showing` reports `mesh`,
   `fallback` or `none`. The Strata knob's custom cap uses it with the built-in cap, chamfer and pointer.
-- **Cache.** Parsed triangles are cached per engine by `url`, `mesh`, `scale` and `offset` (a buffer by identity) under 32 MiB;
+- **Cache.** Parsed triangles are cached per engine by `url`, `mesh`, `scale` and `offset` (a buffer by identity) under 32 MiB (the budget bounds this parsed cache; Lite's own retained CPU copy and GPU buffers are not counted);
   the least recently used entry no scene uses is evicted first, and a load that would pass the budget with every entry in use
   fails (`budget`). A failed entry is forgotten once no scene uses it, so a scene that asks again retries. The store goes
   with the controller (in-flight requests are aborted); the geometry on the GPU goes with its scene.

@@ -92,6 +92,18 @@ test("bytes in hand are held to the file cap like a download", async () => {
   store.dispose();
 });
 
+test("fresh profile objects per scene do not grow the entry's bookkeeping, and dead refs are pruned", async () => {
+  const net = network({ "/a.glb": fixtures()["parts.glb"] });
+  const store = createAssetStore({ fetch: net.fetch, onChange() {} });
+  const first = validateInstrumentScene(scene());
+  await frame(store, first); await frame(store, first);
+  const peek = () => store.state().entries[0].shapes;
+  for (let i = 0; i < 1000; i++) { const fresh = validateInstrumentScene(scene({}, { ...reference(), bounds: { low: [-19, -19, 0], high: [19, 19, 11 + i * 0.001] } })); store.begin(); store.bind(fresh); store.end(); }
+  assert.ok(peek() <= 130, `${peek()} refs after 1,000 fresh scenes (bound: 2 x 64 plus one)`);
+  assert.equal(store.state().entries[0].status, "ready");
+  store.dispose();
+});
+
 test("a profile is not serialized per call: bounds and geometry come from the shape object", () => {
   const s = validateInstrumentScene(scene());
   const shape = s.profiles.disc;
@@ -100,6 +112,7 @@ test("a profile is not serialized per call: bounds and geometry come from the sh
   let calls = 0;
   JSON.stringify = (...args) => { calls++; return original(...args); };
   try { for (let i = 0; i < 500; i++) { profileBounds(shape); profileGeometry(shape); } } finally { JSON.stringify = original; }
+  // (per validated scene object: a new scene costs one stringify per distinct profile, not one per call)
   assert.equal(calls, 0, "no stringify across 500 repeated calls for the same shape");
   // and a shape seen for the first time serializes at most once
   const fresh = validateInstrumentScene(scene({ disc: { type: "lathe", segments: 14, points: [[9, 0, 1, 0], [9, 4, 1, 0], [0, 4, 0, 1]] } })).profiles.disc;
@@ -109,7 +122,7 @@ test("a profile is not serialized per call: bounds and geometry come from the sh
 });
 
 test("a fallback expands into stand-ins shown until the mesh is there, and validated scenes validate again", () => {
-  const s = validateInstrumentScene(scene());
+  const s = validateInstrumentScene(scene({}, reference("/unique-fallback.glb")));
   const parts = s.objects[0].parts;
   assert.deepEqual(parts.map(p => [p.kind, p.profile, !!p.fallbackFor]), [["cap", "disc", true], ["pointer", "bar", true], ["cap", "piece", false]]);
   assert.deepEqual([0, 1, 2].map(i => partDrawn(s.objects[0], i, s.profiles)), [true, true, false], "the stand-ins while the mesh is not there");

@@ -16,6 +16,8 @@ import { meshReferences, type InstrumentScene } from "./instrument.js";
 export const INSTRUMENT_ASSET_BYTES = 32 * 1024 * 1024;
 /** The largest file a load accepts. */
 export const INSTRUMENT_ASSET_FILE_BYTES = 8 * 1024 * 1024;
+/** Live-or-dead refs an entry keeps before it prunes the dead ones. */
+const SHAPE_REFS = 64;
 /** A load that has not finished in this long fails. */
 export const INSTRUMENT_ASSET_TIMEOUT_MS = 15000;
 
@@ -38,6 +40,7 @@ interface Entry {
   used: number;
   /** The profiles this entry's triangles were attached to: let go of when it is evicted. */
   shapes: WeakRef<object>[];
+  attached: WeakSet<object>;
   /** Timings of the load, ms: the request (or 0 for bytes in hand) and the glTF read. */
   fetchMs?: number;
   parseMs?: number;
@@ -62,6 +65,7 @@ export function createAssetStore(options: AssetStoreOptions) {
   const token = {};
   /** Takes an entry's triangles off the profiles they were attached to, so evicting it frees them. */
   function release(entry: Entry) {
+    entry.attached = new WeakSet();
     for (const ref of entry.shapes.splice(0)) { const shape = ref.deref(); if (shape && meshOwner(shape) === token) setMeshGeometry(shape, undefined); }
   }
   const total = () => { let sum = 0; for (const entry of entries.values()) sum += entry.bytes; return sum; };
@@ -158,7 +162,7 @@ export function createAssetStore(options: AssetStoreOptions) {
       for (const { shape } of meshReferences(scene)) {
         let entry = entries.get(shape.id);
         if (!entry) {
-          entry = { id: shape.id, status: "loading", bytes: 0, referenced: true, used: ++clock, shapes: [] };
+          entry = { id: shape.id, status: "loading", bytes: 0, referenced: true, used: ++clock, shapes: [], attached: new WeakSet() };
           entries.set(shape.id, entry);
           void load(entry, shape);
         } else if (!seen.has(shape)) stats.hits++;
@@ -175,7 +179,16 @@ export function createAssetStore(options: AssetStoreOptions) {
         const wanted = verdict.error ? undefined : entry.geometry;
         if (meshGeometry(shape) !== wanted || (wanted && meshOwner(shape) !== token)) {
           setMeshGeometry(shape, wanted, token);
-          if (wanted) entry.shapes.push(new WeakRef(shape));
+          if (wanted && !entry.attached.has(shape)) {
+            // Each validated scene has fresh profile objects: remember a shape once, and drop the refs of dead ones past a small bound.
+            entry.attached.add(shape);
+            entry.shapes.push(new WeakRef(shape));
+            if (entry.shapes.length > SHAPE_REFS) {
+              entry.shapes = entry.shapes.filter(ref => ref.deref() !== undefined);
+              // Still over (nothing has been collected yet): forget the oldest. They belong to scenes long gone; the owner check keeps them harmless.
+              if (entry.shapes.length > 2 * SHAPE_REFS) entry.shapes.splice(0, entry.shapes.length - SHAPE_REFS);
+            }
+          }
         }
       }
     },
@@ -193,7 +206,7 @@ export function createAssetStore(options: AssetStoreOptions) {
       return { status: "loading", vertices: 0, triangles: 0 };
     },
     state: () => ({
-      entries: [...entries.values()].map(entry => ({ id: entry.id, status: entry.status, bytes: entry.bytes, referenced: entry.referenced,
+      entries: [...entries.values()].map(entry => ({ id: entry.id, status: entry.status, bytes: entry.bytes, referenced: entry.referenced, shapes: entry.shapes.length,
         ...(entry.fetchMs !== undefined ? { fetchMs: entry.fetchMs, parseMs: entry.parseMs } : {}), ...(entry.error ? { error: entry.error } : {}) })),
       bytes: total(), budgetBytes: budget, fileBytes, ...stats, inFlight,
     }),
