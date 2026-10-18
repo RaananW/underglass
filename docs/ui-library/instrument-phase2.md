@@ -1265,10 +1265,8 @@ budget and the refresh key.
 
 ## Review notes and limits (item 4)
 
-- **`core-post`'s page turns the probe off** (`page: { enabled: false }` in `instrument-post-core/scene.ts`): the default now
-  builds a probe, which gave metals reflections of the light face; the test's "the map never changes a face pixel" counts
-  pixels where parts-with-map equal the face-only render, and three part-edge pixels at DPR 2 met the face's colour by
-  chance. The post chain is tested on the studio alone, the probe in `core-glass`.
+- **`core-post` runs with the default probe** (review fix S2, below): its two assertions that the probe disturbed were wrong
+  measures, not product defects, and were corrected.
 - **The page probe's look is not in the model's reference** (2D.5 reflects the page by presence only; the suite's scenes turn it
   off). Its colour is Lite's and the blur chain's; it is not calibrated.
 - **Glass over a transparent capture** takes the capture's alpha (the premultiplied result with the capture's alpha at the
@@ -1294,7 +1292,6 @@ budget and the refresh key.
 - **Glass roughness is not drawn** (the brief asked for it; 2D.6 defines clear glass and a blurred refraction needs a mip
   chain of the capture, which the layer's texture does not have).
 - **The probe's default is on** for scenes that omit `environment.page`, as 2D.5 says; no existing scene opted in.
-- **`core-post`'s scene turns the probe off** (above).
 
 ## Review fixes (item 4, 2026-10-18)
 
@@ -1313,8 +1310,15 @@ without the fix where a test is possible (before / after on the same page, Canar
   face: a polished part reflecting the light face. Two takes of the parts render differ in 0 pixels (deterministic), and with
   `?fail=probe` (no probe anywhere; a new hook in the page) the map assertion passes (the run failed only on the hook's own
   logged errors). So the map changes no face pixel: the test's proxy (a changed pixel counts as a face pixel when the map-on
-  render equals the face) was wrong for parts whose colour meets the face's. A changed pixel now counts as a face pixel only
-  when the **map-off** render shows the face there.
+  render equals the face) was wrong for parts whose colour meets the face's, and so was the first replacement (map-off equals
+  the face: two pixels met it the other way round). A changed pixel now counts as a face pixel only where the parts' coverage
+  mask shows the face, the mask being the same parts lit by nothing (no key light, no environment: near black, never the
+  face's colour; `setDark` in the page), so the post chain keeps covering PBR parts with the default probe under SMAA, bloom
+  and the clip mask. The same run showed the probe also weakens the map's band on the thin plates' plinths (the page
+  brightens them and the output transform compresses levels near white): the "one connected component" check, which counts
+  pixels the map darkens by at least 6 levels, found 4 components at DPR 2 (159, 15, 4 and 2 pixels) and one with a threshold
+  of 2: the threshold is now 3 (the shadow is intact, only a few levels weaker). The post chain's page: the override
+  `page: { enabled: false }` is reverted.
 - **S3, a resize and a DPR change mid-run.** `core-glass` resizes the viewport (1600 × 900) and changes the emulated DPR and
   back: GPU on, the probe refreshed (a resize or a DPR change changes the key or the texture), text under the window 0 pixels
   mismatched against the layer without objects after each, no page error and no warning but Chromium's powerPreference one.

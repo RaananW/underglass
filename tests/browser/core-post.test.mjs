@@ -30,6 +30,9 @@ const directory = evidenceDirectory("core-post");
 const viewport = { width: 1920, height: 1080 };
 const healthy = /^Current content=drawable owning WebGPU canvas/;
 const OFF = { smaa: false, bloom: false, taa: false, contact: false, ssgi: false };
+// How much darker (levels) the map makes a shadowed part pixel for it to count: the page probe brightens the plinths, and the output
+// transform compresses levels near white, so the map's band is a few levels weaker than on the studio alone (it was 6).
+const DARKER = 3;
 const ALL = { smaa: true, bloom: true, taa: true, contact: true, ssgi: true };
 
 /** Signed distance from a client point to a rounded box, negative inside. */
@@ -333,16 +336,19 @@ for (const dpr of [1, 2]) test(`post chain: text safety, the clip, hits, exact o
     await call("setMap", { darkness: 1 });
     const unmapped = await shot(page, `${directory}/map-off-dpr${dpr}.png`);
     await call("setMap", undefined);
+    // The parts' coverage: the same parts lit by nothing are near black, never the face's colour (the colour of a part pixel can
+    // equal the face's by chance, with the page probe a polished part reflects the light face).
+    await call("setDark", true);
+    const mask = await shot(page);
+    await call("setDark", false);
     {
       const controls = await call("controls");
       let changed = 0, outsideParts = 0, outsideControls = 0;
       for (let offset = 0, index = 0; offset < parts.data.length; offset += 4, index++) {
         if (same(parts, unmapped, offset)) continue;
         changed++;
-        // A changed pixel is a face pixel only if the map-off render shows the face there. Comparing the map-on render with the
-        // face instead miscounts part pixels whose map-on colour equals the face's by chance (a polished part reflecting the light
-        // face with the page probe: 3 interior pixels at DPR 2, whose map-off colour differs from the face by 1 level).
-        if (same(unmapped, face, offset)) outsideParts++;
+        // A changed pixel is a face pixel only where the parts' coverage mask (the parts lit by nothing) shows the face.
+        if (same(mask, face, offset)) outsideParts++;
         const point = { x: (index % parts.width + 0.5) / dpr, y: (Math.floor(index / parts.width) + 0.5) / dpr };
         if (!controls.some(control => rounded(point, control) <= 0)) outsideControls++;
       }
@@ -352,7 +358,7 @@ for (const dpr of [1, 2]) test(`post chain: text safety, the clip, hits, exact o
         for (let y = Math.ceil(box.y * dpr); y < Math.floor((box.y + box.height) * dpr); y++) for (let x = Math.ceil(box.x * dpr); x < Math.floor((box.x + box.width) * dpr); x++) {
           if (exclude && inside({ x: (x + 0.5) / dpr, y: (y + 0.5) / dpr }, exclude)) continue;
           const offset = (y * parts.width + x) * 4;
-          if (luminance(unmapped, offset) - luminance(parts, offset) >= 6) set.add(y * parts.width + x);
+          if (luminance(unmapped, offset) - luminance(parts, offset) >= DARKER) set.add(y * parts.width + x);
         }
         return set;
       };
