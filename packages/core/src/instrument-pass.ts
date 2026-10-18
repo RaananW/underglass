@@ -31,7 +31,7 @@ import {
   createDynamicTexture, createEffectRenderTask, createEffectWrapper, createFreeCamera, createHemisphericLight, createPcfDirectionalShadowGenerator, markClusteredLightContainerDirty,
   createMeshFromData, createPbrMaterial, createRenderTask, createSceneContext, createScreenSpaceContactShadowsPostProcessTask,
   createScreenSpaceGlobalIlluminationPostProcessTask, createShaderMaterial, createSmaaPostProcessTask, createStorageBuffer, createSurfaceRenderTargetTexture, createTaaPostProcessTask,
-  disposeEffectWrapper, disposeRenderTargetTexture, disposeScene, disposeStorageBuffer, enableAsyncShaderPipelineCompilation, enableShaderMaterialInstanceWorld, enableThinInstanceGpuCulling,
+  disposeEffectWrapper, disposeRenderTargetTexture, onRenderTargetTextureResize, disposeScene, disposeStorageBuffer, enableAsyncShaderPipelineCompilation, enableShaderMaterialInstanceWorld, enableThinInstanceGpuCulling,
   flushThinInstances, getRenderTaskGpuTimings, isGpuTimingSupported, loadHdrEnvironment, onSceneDispose, registerScene, registerSceneWithShadowSupport, releaseTexture,
   setEffectTexture, setEffectUniforms, setEnvironmentRotation, setPbrAnisotropy, setPbrClearCoat, setPbrEmissive, setPbrIridescence, setPbrMetallicReflectance, setPbrSheen,
   setMeshVisible, setRenderTaskGpuTimingEnabled, setShaderStorageBuffer, setShaderTexture, setShaderUniform, setShadowTaskCasterMeshes, setThinInstanceCount, setThinInstances,
@@ -231,12 +231,16 @@ export function createInstrumentController(options: InstrumentControllerOptions)
   let asyncPipelines = false;
   // The post chain's targets, shared by every instrument layer (decision 1 of item 3), allocated on first use.
   const targets = new Map<TargetName, RenderTargetTextureResult>();
+  // A resize or a DPR change replaces the targets' textures when the first scene re-records; each composite then binds
+  // the new ones (an effect keeps the views it was given until its textures are set again).
+  const rebinds = new Set<() => void>();
   function target(name: TargetName): RenderTargetTextureResult {
     let result = targets.get(name);
     if (!result) {
       result = createSurfaceRenderTargetTexture(engine, { lbl: `underglass-instrument:${name}`, ...TARGET_FORMATS[name], samples: 1, size: engine },
         name === "mesh" ? withSampledDepthTexture : undefined);
       targets.set(name, result);
+      onRenderTargetTextureResize(result, () => { for (const rebind of rebinds) rebind(); });
     }
     return result;
   }
@@ -543,12 +547,17 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         { binding: 2, kind: "texture", name: "mask" }, { binding: 3, kind: "texture", name: "caps" }, { binding: 4, kind: "texture", name: "glow" },
         { binding: 5, kind: "texture", name: "emitters" }] }));
     onSceneDispose(sceneContext, () => disposeEffectWrapper(composite));
-    mandatory("composite", () => {
+    const bind = () => {
       setEffectTexture(composite, "parts", source.texture);
       setEffectTexture(composite, "mask", maskTarget.texture);
       setEffectTexture(composite, "caps", (capsTarget ?? maskTarget).texture);
       setEffectTexture(composite, "glow", (emitterTask ? target("glow") : maskTarget).texture);
       setEffectTexture(composite, "emitters", (emitterTask ? target("emitters") : maskTarget).texture);
+    };
+    rebinds.add(bind);
+    onSceneDispose(sceneContext, () => { rebinds.delete(bind); });
+    mandatory("composite", () => {
+      bind();
       addTask(sceneContext, createEffectRenderTask({ name: `${label}:composite`, effect: composite, target: engine.scRT, clear: false }, engine, sceneContext));
     });
     const compositeData = new Float32Array(COMPOSITE_VEC4S * 4);
