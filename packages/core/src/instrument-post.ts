@@ -117,6 +117,17 @@ export function placedBox(matrix: ArrayLike<number>, low: readonly number[], hig
   return out;
 }
 /**
+ * Resolves once every promise in `pending` has settled, including those added while it waits (a scene retired while an
+ * earlier fence was pending): the shared targets are released only after every retired scene's fence.
+ */
+export async function settledAll(pending: ReadonlySet<Promise<unknown>>): Promise<void> {
+  for (let seen = new Set<Promise<unknown>>(); [...pending].some(entry => !seen.has(entry));) {
+    const round = [...pending];
+    await Promise.all(round.map(entry => entry.then(() => undefined, () => undefined)));
+    seen = new Set([...seen, ...round]);
+  }
+}
+/**
  * What of the chain is part of a scene's structure (a change rebuilds its Lite scene): the flags, the map and its window
  * on this stage, and which part kinds have lenses.
  */

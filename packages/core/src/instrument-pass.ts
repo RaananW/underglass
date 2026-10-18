@@ -47,7 +47,7 @@ import {
   type InstrumentProfile, type InstrumentRecipe, type InstrumentScene, type Matrix, type PartKind, type StudioTokens,
 } from "./instrument.js";
 import {
-  compositeRect, INSTRUMENT_CONTRAST, INSTRUMENT_EXPOSURE, liteMapBias, mapSettings, mapWindow, partGlow, placedBox, postFlags, postStructure, POST_SETTINGS,
+  compositeRect, settledAll, INSTRUMENT_CONTRAST, INSTRUMENT_EXPOSURE, liteMapBias, mapSettings, mapWindow, partGlow, placedBox, postFlags, postStructure, POST_SETTINGS,
   POST_STAGE_BUDGET_MS, POST_STAGES, type PostStage,
 } from "./instrument-post.js";
 
@@ -68,9 +68,13 @@ export interface InstrumentTestHook {
   failStage?(layerId: string, stage: PostStage | "composite"): boolean;
   /** Makes a scene's registration fail (after its chain is built), with (`minimal`) or without its optional stages. */
   failRegistration?(layerId: string, minimal: boolean): boolean;
+  /** Makes a build fail before registration with an ordinary error (as a mesh or shader would), with or without its optional stages. */
+  failBuild?(layerId: string, minimal: boolean): boolean;
 }
 /** The chain's target, mask or composite could not be built: the layer steps down with `post`. */
 class PostBuildError extends Error {}
+/** A scene's registration failed (its pipelines did not prepare), as opposed to an error while building it. */
+class RegistrationError extends Error {}
 /** The shared targets (decision 1 of item 3): formats per name; `mesh` also has a sampled depth. */
 type TargetName = "mesh" | "ping" | "pong" | "mask" | "caps" | "emitters" | "glow";
 const TARGET_FORMATS: Record<TargetName, { format: GPUTextureFormat; dFormat?: GPUTextureFormat }> = {
@@ -334,9 +338,12 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       setEnvironmentRotation(sceneContext, Math.atan2(towards[0], -towards[2]));
       const pass = createPass(state, sceneContext, camera, scene, structure, key, mapState, minimal);
       if (!asyncPipelines) { enableAsyncShaderPipelineCompilation(engine); asyncPipelines = true; }
-      if (options.testHook?.failRegistration?.(state.id, !!minimal)) throw new Error(`the test hook fails the registration${minimal ? " of the minimal chain" : ""}`);
+      if (options.testHook?.failBuild?.(state.id, !!minimal)) throw new Error(`the test hook fails the build${minimal ? " of the minimal chain" : ""}`);
       // Every task of the chain is in the frame graph now, so registration prepares their pipelines inside this build.
-      await (mapState ? registerSceneWithShadowSupport : registerScene)(sceneContext);
+      try {
+        if (options.testHook?.failRegistration?.(state.id, !!minimal)) throw new Error(`the test hook fails the registration${minimal ? " of the minimal chain" : ""}`);
+        await (mapState ? registerSceneWithShadowSupport : registerScene)(sceneContext);
+      } catch (error) { throw new RegistrationError(String(error)); }
       registered = true;
       scenes.add(sceneContext);
       pass.registered = true;
@@ -867,12 +874,16 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         // (decision 13 of item 3); a failure of those is the `post` step-down.
         const optional = POST_STAGES.some(name => postFlags(scene)[name]);
         inFlight++;
-        const building = Promise.resolve(options.testHook?.beforeBuild?.(state.id)).then(() => build(state, scene, structure).catch(error => {
-          if (error instanceof PostBuildError || !optional || disposed || state.building?.token !== token) throw error;
-          console.error(`Underglass instrument layer ${state.id}: its post chain failed to register; building it without its optional stages: ${String(error)}`);
-          // The mandatory chain is all that is left, so its failure is the `post` step-down.
-          return build(state, scene, structure, `registration failed with the optional stages on: ${String(error)}`).catch(minimal => {
-            throw minimal instanceof PostBuildError ? minimal : new PostBuildError(`Instrument post chain could not be registered without its optional stages: ${String(minimal)}`);
+        // The hook runs inside the chain, so a hook that throws ends this build like any failure (and `inFlight` with it).
+        const building = Promise.resolve().then(() => options.testHook?.beforeBuild?.(state.id)).then(() => build(state, scene, structure).catch(error => {
+          // With no optional stage the chain already is the minimal one: its registration failing is `post` too.
+          if (error instanceof RegistrationError && !optional) throw new PostBuildError(`Instrument post chain could not be registered: ${error.message}`);
+          if (!(error instanceof RegistrationError) || !optional || disposed || state.building?.token !== token) throw error;
+          console.error(`Underglass instrument layer ${state.id}: its post chain failed to register; building it without its optional stages: ${error.message}`);
+          // Only the mandatory chain is left: its registration failing is the `post` step-down; any other error (a mesh,
+          // a shader) stays `compile`. Either way the reason names the cause.
+          return build(state, scene, structure, `registration failed with the optional stages on: ${error.message}`).catch(minimal => {
+            throw minimal instanceof RegistrationError ? new PostBuildError(`Instrument post chain could not be registered without its optional stages: ${minimal.message}`) : minimal;
           });
         }));
         // Once the build has ended (its scene registered and handed over or retired, or failed), a stage with no layer left
@@ -978,7 +989,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
    */
   function frame(inputs: readonly InstrumentLayerInput[]) {
     if (disposed) return;
-    const stage = options.stage();
+    const stage = options.stage(), size = sizeKey();
     const present = new Set(inputs.map(input => input.id));
     for (const [id, state] of layers) if (!present.has(id) || !inputs.find(input => input.id === id)?.scene) drop(state);
     let stageParts = 0;
@@ -1007,7 +1018,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       const structure = `${instrumentStructure(scene)}|${postStructure(scene, stage, lensKinds)}`;
       const matrix = similarity(input.matrix);
       // A failed build is retried once the canvas size changes (a transient failure, a target that could not be sized).
-      if (state.failed && state.failed.size !== sizeKey()) state.failed = undefined;
+      if (state.failed && state.failed.size !== size) state.failed = undefined;
       // Whole-layer step-downs, in the order of the note's ladder.
       let whole: SteppedDown[] | undefined, status: Status = "stepped-down";
       if (orderUnavailable) whole = all(scene, "order-unavailable", orderUnavailable);
@@ -1086,7 +1097,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
   function scheduleRelease() {
     const idle = () => !disposed && !layers.size && !inFlight && !scenes.size;
     if (!idle() || !targets.size) return;
-    void Promise.all([...retirements]).then(() => { if (idle()) releaseTargets(); });
+    void settledAll(retirements).then(() => { if (idle() && targets.size) releaseTargets(); });
   }
   /** Releases the shared targets; a later layer allocates them again. Every scene that read them is gone. */
   function releaseTargets() {
