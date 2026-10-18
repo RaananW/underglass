@@ -61,7 +61,9 @@ export function switchFormEntries(element: Element, context: SwitchFormContext):
   if (!input) return undefined;
   const box = context.rectOf(input), [x, y, width, height] = context.rect;
   if (width <= 0.25 || height <= 0.25) return [];
-  const t = Math.min(1, Math.max(0, Number.parseFloat(getComputedStyle(root).getPropertyValue("--strata-switch-t")) || (input.checked ? 1 : 0)));
+  // The throw's position, as the CSS transition has it this frame (the checked state where the stylesheet is absent).
+  const read = Number.parseFloat(getComputedStyle(root).getPropertyValue("--strata-switch-t"));
+  const t = Math.min(1, Math.max(0, Number.isFinite(read) ? read : input.checked ? 1 : 0));
   const state: SceneState = { hover: !!context.state.hover, pressed: !!context.state.pressed, disabled: !!context.state.disabled };
   const margins = { left: x - box[0], top: y - box[1], right: box[0] + box[2] - x - width, bottom: box[1] + box[3] - y - height };
   // Hover lifts a primitive by `hoverHeight` and an object's cap by a quarter: a hovered part's shadow is fitted at that height.
