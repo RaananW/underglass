@@ -649,5 +649,6 @@ a printed mark, the wheel and a double-click reset come from `attachStrataFaders
 
 Vue uses `v-model`; Astro takes `value` and `unit`. The ref is the `.ug-fader` root (`inputRef`, or Vue's exposed
 `input`, is the input). On the GPU the slot is a groove and the carriage a raised face at Relief and a slab at Objects.
-Its Instrument parts (a chamfered brushed carriage with a grip, sliding on `spring.fader`) are defined in
-`gpu/instrument-fader.ts` for the helper's `instrument` level. [Anatomy](../../docs/ui-library/components/fader.md).
+At the Instrument level (`level: "instrument"`) the carriage is a chamfered brushed carriage with a grip, sliding on
+`spring.fader` (`gpu/instrument-fader.ts`), its shadow kept inside the input's box at every depth. A detented fader
+plays `tick` as it passes a detent when feedback is on (off by default). [Anatomy](../../docs/ui-library/components/fader.md).

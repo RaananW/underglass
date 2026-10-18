@@ -9,8 +9,9 @@
  *   so only the pointer carries the turn. `bounds` is the input's box; the printed scale stays on the face.
  * - **Key** (`keyObject`): a button as a body and a captured cap (its own label, read from the capture), inset by the
  *   box rule's margin, travelling `object.keyTravel / 2.4` (2.5 px at 50% depth) while pressed.
- * - **Springs** (`advanceSpring`): a knob's `t` follows its value on `spring.knob` or `spring.detent` (section 12), in
- *   fixed 4 ms steps, clamped at the stops; reduced motion makes it instant.
+ * - **Fader** (`faderObject` in `gpu/instrument-fader.ts`): the premium fader's carriage sliding the slot.
+ * - **Springs** (`advanceSpring`): a knob's `t` follows its value on `spring.knob` or `spring.detent`, a fader's on
+ *   `spring.fader` (section 12), in fixed 4 ms steps, clamped at the stops; reduced motion makes it instant.
  */
 
 type Vec2 = [number, number];
@@ -24,13 +25,14 @@ export type InstrumentProfile =
   | { type: "prism"; width: number; length: number; radius?: number; height: number; taper?: number; chamfer?: number }
   | { type: "extrude"; outline: Vec2[]; width: number };
 export interface InstrumentPart {
-  kind: "cap" | "skirt" | "chamfer" | "pointer" | "plinth";
+  kind: "cap" | "skirt" | "chamfer" | "pointer" | "plinth" | "carriage" | "grip";
   profile: string;
   at: Vec3;
   pose?: { from: InstrumentPose; to: InstrumentPose };
   material: string;
   captured?: boolean;
-  caster?: null;
+  /** Omitted: core's own, from the posed part; `null`: none; given: this footprint at this mean height (2.8). */
+  caster?: null | { rect: Box; radius: number; height: number };
   state?: { hover?: boolean; pressed?: boolean; focus?: boolean; disabled?: boolean };
 }
 export interface InstrumentObject {

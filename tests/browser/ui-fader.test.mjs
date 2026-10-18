@@ -16,6 +16,12 @@
  *   or a slab; pixels change after each value change and only inside the track; the carriage and its shadow stay
  *   inside the track at both stops and mid-travel; a grid of native hits over the track lands on the input (0
  *   mismatches) at DPR 1 and 2; the accessibility snapshot is the same in DOM and GPU modes.
+ * - GPU at the Instrument level (`?level=instrument`, DPR 1 and 2): the carriages and the Reset key are parts; GPU stays
+ *   on and nothing steps down; at both stops and mid-travel (and at both stops at full depth, the caster capped) no
+ *   part or shadow pixel lies outside an input's box and native hits on part pixels land on the input; real input
+ *   gives fresh pixels only in the track; hover and disabled reach the carriage; 300 frames of sliding capture only on
+ *   native changes; reduced motion moves the carriage at once.
+ * - Feedback: a detented carriage ticks (a haptic pulse) per detent passed once feedback is on, and never by default.
  * Screenshots go to the `ui-fader` evidence directory.
  */
 import { test, expect } from "../helpers/current-browser.mjs";
@@ -346,7 +352,22 @@ async function ready(page, query = "") {
   await page.waitForFunction(() => window.strataFaderProbe && window.strataFaderProbe.controller.state().mode === "gpu", null, { timeout: 30000 });
   await page.waitForFunction(() => window.strataFaderProbe.scene() !== undefined);
   await page.evaluate(() => window.strataFaderProbe.controller.settle());
+  await built(page);
 }
+/** At the Instrument level: every instrument layer built (not pending), so its parts are drawn. */
+const built = page => page.waitForFunction(() => {
+  const instrument = window.strataFaderProbe.instrument();
+  return !instrument || (!instrument.compile.building && instrument.layers.every(layer => layer.status !== "pending"));
+}, null, { timeout: 30000 });
+/** At the Instrument level: every carriage's spring at rest on its value (no objects below it: nothing to wait for). */
+const rest = page => page.waitForFunction(() => {
+  const probe = window.strataFaderProbe;
+  probe.refresh();
+  return (probe.scene()?.objects ?? []).filter(object => object.id !== "fader-reset").every(object => {
+    const input = document.getElementById(object.id);
+    return Math.abs(object.t - (input.value - input.min) / (input.max - input.min)) < 1e-6;
+  });
+});
 const mode = page => page.evaluate(() => window.strataFaderProbe.controller.state().mode);
 /** The `#frame` decoded, after the scene and the GPU have caught up; `at(x, y)` in frame CSS px. */
 async function frame(page, name) {
@@ -354,6 +375,10 @@ async function frame(page, name) {
   await page.evaluate(async () => {
     await new Promise(resolve => setTimeout(resolve, 200));
     window.strataFaderProbe.refresh(); await window.strataFaderProbe.controller.settle();
+  });
+  await rest(page);
+  await built(page);
+  await page.evaluate(async () => {
     for (let index = 0; index < 3; index++) await new Promise(requestAnimationFrame);
     await window.strataFaderProbe.controller.settle();
   });
@@ -506,4 +531,237 @@ test("the accessibility snapshot is the same in DOM and GPU modes, and axe passe
   expect(await mode(page)).toBe("gpu");
   const { violations } = await new AxeBuilder({ page }).include("#fader-panel").withTags(tags).analyze();
   expect(summary(violations), "axe on the GPU page").toEqual([]);
+});
+
+// ---- The Instrument level: core's instrument material, the carriage as parts ----
+
+/** Every pixel that differs between two frames, in frame CSS px (every second device pixel). */
+function changedPoints(a, b) {
+  const ratio = a.width / 640, points = [];
+  for (let y = 0; y < a.height; y += 2) for (let x = 0; x < a.width; x += 2) {
+    const index = (y * a.width + x) * 4;
+    if (Math.abs(a.data[index] - b.data[index]) + Math.abs(a.data[index + 1] - b.data[index + 1]) + Math.abs(a.data[index + 2] - b.data[index + 2]) >= 6) points.push([(x + 0.5) / ratio, (y + 0.5) / ratio]);
+  }
+  return points;
+}
+/** Native hits on frame points: how many land on a fader's input. */
+const hitsOn = (page, points) => page.evaluate(points => {
+  const frame = document.getElementById("frame").getBoundingClientRect();
+  let total = 0, mismatches = 0;
+  for (const [x, y] of points) {
+    const hit = document.elementFromPoint(frame.left + x, frame.top + y);
+    total++;
+    if (!hit?.matches(".ug-fader__input")) mismatches++;
+  }
+  return { total, mismatches };
+}, points);
+/** Sets every fader to its minimum, maximum or middle, through its input. */
+const setAll = (page, stop) => page.evaluate(stop => {
+  for (const input of document.querySelectorAll(".ug-fader__input")) {
+    const min = Number(input.min), max = Number(input.max);
+    input.value = String(stop === "minimum" ? min : stop === "maximum" ? max : (min + max) / 2);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+}, stop);
+const carriages = (page, visibility) => page.evaluate(visibility => { for (const carriage of document.querySelectorAll(".ug-fader__carriage")) carriage.style.visibility = visibility; }, visibility);
+
+for (const dpr of [1, 2]) test(`at the Instrument level (DPR ${dpr}) the carriage is drawn as parts that stay in the input's box, slide with its value without captures, and take native hits`, async ({ browser }) => {
+  test.setTimeout(240000);
+  const context = await browser.newContext({ viewport: { width: 900, height: 750 }, deviceScaleFactor: dpr });
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await ready(page, "?level=instrument");
+  const layer = () => page.evaluate(() => window.strataFaderProbe.instrument().layers[0]);
+  const healthy = async label => {
+    expect(await mode(page), `${label}: GPU stays on`).toBe("gpu");
+    const state = await layer();
+    expect(state.status, `${label}: the layer is drawn as parts`).toBe("ready");
+    expect(state.steppedDown, `${label}: nothing is stepped down to Relief`).toEqual([]);
+  };
+  // The scene: the face (the panel and the three slots as grooves; the scale is captured content), the three carriages
+  // and the Reset key as parts, each bounded by its input's box.
+  const sceneOf = () => page.evaluate(() => {
+    const probe = window.strataFaderProbe, scene = probe.scene(), panel = probe.panel().getBoundingClientRect();
+    const box = id => { const rect = document.getElementById(id).getBoundingClientRect(); return [rect.left - panel.left, rect.top - panel.top, rect.width, rect.height]; };
+    return { version: scene.version, kind: scene.kind, material: probe.controller.state().materials[0]?.kind, primitives: scene.primitives.map(entry => entry.face),
+      objects: scene.objects.map(object => ({ id: object.id, parts: object.parts.map(part => `${part.kind}:${part.material}`), close: object.bounds.rect.every((value, index) => Math.abs(value - box(object.id)[index]) < 0.01) })),
+      poses: scene.objects.slice(0, 3).map(object => object.parts[0].pose), casters: scene.objects.slice(0, 3).map(object => object.parts.map(part => part.caster)),
+      states: scene.objects.slice(0, 3).map(object => object.parts[0].state), t: scene.objects.map(object => Math.round(object.t * 10000) / 10000), camera: scene.camera.distance };
+  });
+  const scene = await sceneOf();
+  expect(scene).toMatchObject({ version: 4, kind: "instrument", material: "instrument", primitives: ["raised", "groove", "groove", "groove"], camera: 2400 });
+  const fader = ["carriage:faderCap", "chamfer:faderChamfer", "cap:faderCap", "grip:faderInk"];
+  expect(scene.objects).toEqual([
+    { id: "level", parts: fader, close: true }, { id: "send", parts: fader, close: true }, { id: "pan", parts: fader, close: true },
+    { id: "fader-reset", parts: [expect.stringMatching(/^plinth:key /), "cap:keyCap"], close: true },
+  ]);
+  // The slide: half the 180 px travel each way, down (or left) to the minimum; at 50% depth the caster is core's own.
+  expect(scene.poses).toEqual([{ from: { slide: [0, 90] }, to: { slide: [0, -90] } }, { from: { slide: [0, 90] }, to: { slide: [0, -90] } }, { from: { slide: [-90, 0] }, to: { slide: [90, 0] } }]);
+  expect(scene.casters).toEqual([[undefined, null, null, null], [undefined, null, null, null], [undefined, null, null, null]]);
+  expect(scene.t).toEqual([0.9091, 0.5, 0.5, 0]);
+  await healthy("start");
+
+  // Containment over the whole travel: at both stops and mid-travel, the carriages' parts and their face shadows change
+  // pixels only inside their inputs' boxes, against the same page with the carriages hidden; native hits on every
+  // changed pixel find a fader's input.
+  const boxes = await Promise.all(ids.map(id => inFrame(page, `#${id}`)));
+  const contained = async (stop, label) => {
+    await setAll(page, stop);
+    const on = await frame(page, `instrument-dpr${dpr}-${label}-on`);
+    await carriages(page, "hidden");
+    const off = await frame(page, `instrument-dpr${dpr}-${label}-off`);
+    await carriages(page, "");
+    // Showing the carriages again changes the layer's structure: it is drawn as parts again once rebuilt.
+    await frame(page, `instrument-dpr${dpr}-${label}-back`);
+    const parts = difference(on, off, boxes);
+    expect(parts.inside, `${label}: the carriages are drawn`).toBeGreaterThan(2500 * dpr * dpr);
+    expect(parts.outside, `${label}: no part pixel outside an input's box (${JSON.stringify(parts.outsideSamples)})`).toBe(0);
+    const hit = await hitsOn(page, changedPoints(on, off));
+    expect(hit.mismatches, `${label}: native hits on part pixels`).toBe(0);
+    console.log(`instrument DPR ${dpr}: ${label}: ${parts.inside} part px inside the inputs, ${parts.outside} outside; ${hit.total} hits on part pixels, ${hit.mismatches} mismatches`);
+    await healthy(label);
+  };
+  for (const stop of ["minimum", "maximum", "middle"]) await contained(stop, stop);
+  for (const id of ids) expect((await hits(page, id, dpr === 2 ? 21 : 11)).misses, `${id}: grid hits`).toEqual([]);
+
+  // Full depth: the carriage stands 19.2 high, and its caster is capped (6.201 for a vertical fader, 6.842 for the
+  // horizontal one) so its shadow stays inside the 16 px margin at each stop.
+  await page.evaluate(() => document.documentElement.style.setProperty("--strata-depth", "1"));
+  await frame(page, `instrument-dpr${dpr}-depth1`);
+  const deep = await sceneOf();
+  expect(deep.casters.map(parts => parts[0]?.height)).toEqual([6.201, 6.201, 6.842]);
+  expect(deep.casters.map(parts => parts[0]?.radius)).toEqual([3, 3, 3]);
+  for (const stop of ["minimum", "maximum"]) await contained(stop, `depth1-${stop}`);
+  await page.evaluate(() => document.documentElement.style.removeProperty("--strata-depth"));
+  await page.evaluate(() => { for (const input of document.querySelectorAll(".ug-fader__input")) { input.value = input.getAttribute("data-strata-default"); input.dispatchEvent(new Event("input", { bubbles: true })); } });
+  await frame(page, `instrument-dpr${dpr}-depth-back`);
+  expect((await sceneOf()).casters.map(parts => parts[0])).toEqual([undefined, undefined, undefined]);
+  await healthy("depth back");
+
+  // Hover and disabled: the carriage takes its input's state (a carriage does not sink while it is dragged).
+  const g = await geometry(page, "level");
+  await page.mouse.move(...g.carriage);
+  await page.evaluate(async () => { window.strataFaderProbe.refresh(); await window.strataFaderProbe.controller.settle(); });
+  expect((await sceneOf()).states[0], "hover").toEqual({ hover: true, disabled: false });
+  await page.mouse.down();
+  await page.evaluate(async () => { window.strataFaderProbe.refresh(); await window.strataFaderProbe.controller.settle(); });
+  expect((await sceneOf()).states[0], "dragging").toEqual({ hover: true, disabled: false });
+  await page.mouse.up();
+  await page.locator("#send").evaluate(input => { input.disabled = true; });
+  await frame(page, `instrument-dpr${dpr}-disabled`);
+  expect((await sceneOf()).states[1], "disabled").toEqual({ hover: false, disabled: true });
+  await healthy("disabled");
+  await page.locator("#send").evaluate(input => { input.disabled = false; });
+  await page.evaluate(() => { for (const input of document.querySelectorAll(".ug-fader__input")) { input.value = input.getAttribute("data-strata-default"); input.dispatchEvent(new Event("input", { bubbles: true })); } });
+
+  // Real input slides the carriage: fresh pixels inside the track (and its focus ring, or the readout), none outside.
+  const tracks = await Promise.all(ids.map(id => inFrame(page, `#${id}-fader .ug-fader__track`)));
+  const ring = await page.evaluate(() => { const style = getComputedStyle(document.documentElement); return Number.parseFloat(style.getPropertyValue("--strata-focus-width")) + Number.parseFloat(style.getPropertyValue("--strata-focus-offset")) + 2; });
+  const allowed = [...tracks.map(box => ({ x: box.x - ring, y: box.y - ring, width: box.width + 2 * ring, height: box.height + 2 * ring })), await inFrame(page, "#fader-read")];
+  let before = await frame(page, `instrument-dpr${dpr}-start`);
+  const steps = [
+    ["drag the carriage 60 px down", "level", async () => { const g = await geometry(page, "level"); await drag(page, g.carriage, [0, 60]); }, -22],
+    ["click on −50", "level", async () => page.mouse.click(...await numeral(page, "level", "−50")), -50],
+    ["End key", "level", async () => { await page.locator("#level").focus(); await page.keyboard.press("End"); }, 6],
+    ["wheel notch", "level", async () => { const g = await geometry(page, "level"); await page.mouse.move(...g.slot); await page.mouse.wheel(0, 100); }, 5],
+    ["double-click reset", "level", async () => { await page.mouse.dblclick(...await numeral(page, "level", "−30")); }, 0],
+    ["click on L", "pan", async () => page.mouse.click(...await numeral(page, "pan", "L")), -50],
+    ["drag the pan carriage 90 px right", "pan", async () => { const g = await geometry(page, "pan"); await drag(page, g.carriage, [90, 0]); }, 0],
+    ["click on 10 (detented)", "send", async () => page.mouse.click(...await numeral(page, "send", "10")), 10],
+  ];
+  for (const [name, id, act, expected] of steps) {
+    await act();
+    expect(await value(page, id), name).toBe(expected);
+    const after = await frame(page, `instrument-dpr${dpr}-${id}-${expected}`);
+    const changed = difference(before, after, allowed);
+    expect(changed.inside, `${name}: the carriage moved`).toBeGreaterThan(200);
+    expect(changed.outside, `${name}: nothing changes outside the track (${JSON.stringify(changed.outsideSamples)})`).toBe(0);
+    console.log(`instrument DPR ${dpr}: ${name} → ${expected}: ${changed.inside} px changed in the tracks, ${changed.outside} outside`);
+    await healthy(name);
+    before = after;
+  }
+  // The Reset key is a key of parts: a real click on it reaches the button and resets the faders.
+  const reset = await page.locator("#fader-reset").boundingBox();
+  expect(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest("button")?.id, centre(reset))).toBe("fader-reset");
+  await page.mouse.click(...centre(reset));
+  expect(await Promise.all(ids.map(id => value(page, id)))).toEqual([0, 5, 0]);
+  await rest(page);
+  await healthy("reset key");
+
+  // 300 frames of sliding: a native change every 15 frames, the spring sliding in between. Core captures each native
+  // change (in its frame or the next); the sliding frames between them add no capture, upload or hit-geometry update.
+  await page.evaluate(() => { document.getElementById("fader-read").style.visibility = "hidden"; });
+  await rest(page);
+  const sliding = await page.evaluate(async () => {
+    const probe = window.strataFaderProbe, input = document.getElementById("level"), frame = () => new Promise(requestAnimationFrame);
+    for (let index = 0; index < 5; index++) await frame();
+    const start = probe.counts();
+    let previous = start, extra = 0, moved = 0, changes = 0, t = probe.scene().objects[0].t;
+    for (let index = 0; index < 300; index++) {
+      if (index % 15 === 0) { input.value = String(index % 30 === 0 ? 1 : -55); input.dispatchEvent(new Event("input", { bubbles: true })); changes++; }
+      await frame();
+      const now = probe.counts(), next = probe.scene().objects[0].t;
+      if (index % 15 > 1) extra += now.captures - previous.captures;
+      if (next !== t) moved++;
+      t = next; previous = now;
+    }
+    const end = probe.counts();
+    return { changes, moved, extra, captures: end.captures - start.captures, uploads: end.uploads - start.uploads, geometryUpdates: end.geometryUpdates - start.geometryUpdates, mode: end.mode };
+  });
+  console.log(`instrument DPR ${dpr}: 300 frames, ${sliding.changes} native changes, ${sliding.moved} frames sliding, ${sliding.captures} captures (${sliding.extra} in sliding frames), ${sliding.uploads} uploads, ${sliding.geometryUpdates} hit-geometry updates`);
+  expect(sliding.mode).toBe("gpu");
+  expect(sliding.moved, "the carriage slides on most frames").toBeGreaterThan(200);
+  expect(sliding.extra, "sliding frames cause no capture").toBe(0);
+  expect(sliding.captures).toBeLessThanOrEqual(sliding.changes);
+  expect(sliding.geometryUpdates).toBe(0);
+  await healthy("sliding");
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+test("at the Instrument level under reduced motion the carriage moves at once, and the accessibility snapshot matches the DOM", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 900, height: 750 }, reducedMotion: "reduce" });
+  const page = await context.newPage();
+  await page.goto("/ui-fader.html?dom");
+  await page.waitForFunction(() => window.strataFaderProbe);
+  const act = async () => { await page.locator("#level").focus(); await page.keyboard.press("ArrowUp"); await page.locator("#pan").focus(); await page.keyboard.press("ArrowLeft"); };
+  await act();
+  const dom = await page.locator("#fader-panel").ariaSnapshot();
+  await ready(page, "?level=instrument");
+  await act();
+  expect(await page.locator("#fader-panel").ariaSnapshot()).toBe(dom);
+  // The first scene after the change already has the value's place: no spring under reduced motion.
+  expect(await page.evaluate(() => { const probe = window.strataFaderProbe; probe.refresh(); return probe.scene().objects.map(object => Math.round(object.t * 10000) / 10000); })).toEqual([0.9242, 0.5, 0.49, 0]);
+  expect(await mode(page)).toBe("gpu");
+  await context.close();
+});
+
+test("a detented carriage ticks as it passes each detent once feedback is on, and nothing plays by default", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 900, height: 750 } });
+  await context.addInitScript(() => { window.pulses = []; Object.defineProperty(navigator, "vibrate", { configurable: true, value: pattern => { window.pulses.push(pattern); return true; } }); });
+  const page = await context.newPage();
+  await ready(page, "?level=instrument");
+  const pulses = () => page.evaluate(() => window.pulses.splice(0));
+  // Off by default: a real key across a detent pulses nothing.
+  await page.locator("#send").focus();
+  await page.keyboard.press("ArrowUp");
+  expect(await value(page, "send")).toBe(7.5);
+  expect(await pulses()).toEqual([]);
+  // Haptics on for the page: each detent passed by the visitor's own input is one 5 ms tick.
+  await page.evaluate(() => window.strataFaderProbe.feedback({ haptics: true }));
+  await page.keyboard.press("ArrowUp");
+  expect(await value(page, "send")).toBe(10);
+  expect(await pulses()).toEqual([5]);
+  await page.keyboard.press("ArrowUp");
+  expect(await pulses(), "no change at the stop, no tick").toEqual([]);
+  await page.mouse.click(...await numeral(page, "send", "2.5"));
+  expect(await value(page, "send")).toBe(2.5);
+  expect((await pulses()).length).toBeGreaterThanOrEqual(1);
+  // A fader without detents never ticks.
+  await page.locator("#level").focus();
+  await page.keyboard.press("ArrowUp");
+  expect(await pulses()).toEqual([]);
+  expect(await mode(page)).toBe("gpu");
+  await context.close();
 });

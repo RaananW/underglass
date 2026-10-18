@@ -38,9 +38,10 @@ face, never on the carriage (design language principle 2).
   reaches 15.5 px down at 50% depth under the default light, and the scale sits on the side the shadow falls, so it
   holds it across (`faderShadowReach` in [`gpu/instrument-fader.ts`](../../../packages/ui/src/gpu/instrument-fader.ts)).
   At Relief and Objects the carriage's shadow reaches 7 px.
-- **At the Instrument level** the fader is the [Instrument object table](../design-language.md#instrument-object-table)'s
-  Fader, defined by `faderObject` in [`gpu/instrument-fader.ts`](../../../packages/ui/src/gpu/instrument-fader.ts)
-  from the laid-out slot, bounded by the input's box:
+- **At the Instrument level** (`level: "instrument"`, core's `instrument` material) the GPU helper draws the carriage
+  as the [Instrument object table](../design-language.md#instrument-object-table)'s Fader, built by `faderObject` in
+  [`gpu/instrument-fader.ts`](../../../packages/ui/src/gpu/instrument-fader.ts) from the laid-out slot, bounded by
+  the input's box (the slot stays a groove on the face, the scale captured content):
 
   | Part | Profile (50% depth; heights × 0.6, 1, 1.6 with depth) | Material (premium) | Pose |
   | --- | --- | --- | --- |
@@ -52,10 +53,13 @@ face, never on the carriage (design language principle 2).
   `t` is the value's place along the range, driven by `spring.fader` (420 / 41, critically damped) in fixed 4 ms steps,
   clamped at the stops, instant under reduced motion; the slot and the scale stay on the face, and only the carriage
   casts. Every vertex stays at least 0.5 px inside the box over the whole travel in every corner of the reference
-  stage at every depth (core's `checkContainment`). **Not wired yet:** the GPU helper's `instrument` level (the Knob's
-  PR, #142) picks this module up; until then a fader at the Instrument level is drawn as at Objects. At full depth the
-  carriage's shadow (24 px down) passes the 16 px margin at the bottom stop: the follow-up caps the caster's height or
-  grows the margin with depth.
+  stage at every depth (core's `checkContainment`). The carriage's caster is core's own (its footprint at its mean
+  height, following the pose) while that shadow stays in the box. Past that (above 50% depth under the default light)
+  `faderCasterHeight` caps it: the helper passes the carriage's footprint where it stands now at the tallest mean
+  height whose shadow stays inside the box from either stop, 6.2 for a vertical fader (16 px down) and 6.84 for a
+  horizontal one (its 16 px right of the maximum), against 9.6 uncapped, whose shadow would reach 24 px down. The
+  carriage takes its input's hover and disabled state; core changes no uncaptured part with them, so it stays at its
+  height on hover, and it does not sink while dragged.
 
 ## 3. Faces and materials
 
@@ -171,6 +175,10 @@ default), `id`, `name`, `form`, `disabled`, and in React `inputRef` (Vue exposes
   delegated listeners per document, among them the blocking document-level wheel listener); `attachStrata` and the
   React, Vue and Astro components attach it. Without script the fader is a native vertical slider whose drag, track
   click and keys work; the carriage stays where it was rendered.
+- **Feedback** ([design language section 20](../design-language.md#20-feedback)): a detented fader's carriage
+  passing a detent plays `tick` through `strataFeedback` (one per change, however many detents it passes). Sound and
+  haptics are both off by default (`feedback.sound`, `feedback.haptics`, or `attachStrataFeedback`), so nothing plays
+  unless the application or a scope turns them on; a fader without detents never ticks.
 - `disabled` uses the native attribute, which removes the fader from the tab order and from pointer input.
 
 ## 9. CSS presentation
@@ -206,10 +214,24 @@ along and 90 across (vertical), far above `target.min` (24); the carriage, the t
   the track; the carriage and its shadow stay inside the track over the whole travel (decoded pixels against the
   carriage hidden, at both stops and mid-travel); native hits on a grid over the track land on the input (0
   mismatches) at DPR 1 and 2; the accessibility snapshot is the same in DOM and GPU modes.
+- **GPU, Instrument level** (`ui-fader.test.mjs`, DPR 1 and 2): the scene is version 4 with the three carriages and the
+  Reset key as parts and the slots as grooves; GPU stays on and nothing is stepped down through every step; at both
+  stops and mid-travel, and at both stops at full depth (the capped caster), the parts and their shadows change 0
+  pixels outside the inputs' boxes against the carriages hidden (8,021–8,443 part pixels inside at DPR 1,
+  31,968–34,008 at DPR 2), and native hits on every part pixel land on a fader's input (0 mismatches); real drags,
+  clicks, keys, the wheel, the reset and the detented fader give fresh pixels in the track and none outside; hover and
+  disabled reach the carriage; 300 frames of sliding with a native change every 15 add a capture only for the native
+  changes (20 captures, 0 in sliding frames, 0 hit-geometry updates); reduced motion moves the carriage at once.
+  Without the cap the bottom stop at full depth puts 561 shadow pixels outside the level fader's box (a control run).
+  Checked in a headful Canary window as well.
+- **Feedback** (`ui-fader.test.mjs`): with feedback off a detent passed by a real key pulses nothing; with haptics on,
+  each change of a detented fader by the visitor's own key or click is one 5 ms pulse, none at a stop, and a fader
+  without detents never pulses.
 - **Bindings** (`ui-fader-bindings.test.mjs`, `ui-fader-astro.test.mjs`): React, Vue and Astro render the markup
   above; controlled and uncontrolled values, `onValueChange` / `v-model`, the root ref, `class` and `style`.
 - **Unit** (`strata-fader.unit.test.mjs`): the value maths, marks and styles; the fader's object validated by core's
   `validateInstrumentScene`, contained over its whole travel in every corner of the reference stage at every depth
-  (core's `checkContainment`), the carriage's face shadow inside its box at 50% depth, and `spring.fader`.
-- **Not yet:** the Instrument level on the GPU (the helper's `instrument` level), a parity budget against I0.6's, a
-  low-end GPU, and the manual screen-reader script.
+  (core's `checkContainment`), the carriage's face shadow inside its box at 50% depth and, capped, at full depth over
+  the whole travel, and `spring.fader`.
+- **Not yet:** a parity budget against I0.6's, a low-end GPU, sound heard on a device, and the manual screen-reader
+  script.
