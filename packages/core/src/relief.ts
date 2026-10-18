@@ -17,7 +17,7 @@
  */
 
 import { STAGE_VEC4S, stageUniforms, stageWGSL, type StageScene } from "./stage.js";
-import { EMITTER_BLOCK_VEC4S, emitterWGSL, EMITTER_LIGHTS, validateLight, type ProtectedRects, type SceneEmitter } from "./emitters.js";
+import { castHeight, EMITTER_BLOCK_VEC4S, emitterWGSL, objectHeights as heights, EMITTER_LIGHTS, validateLight, type ProtectedRects, type SceneEmitter } from "./emitters.js";
 
 /** Relief primitives one layer may carry (P0.3 budget). */
 export const RELIEF_PRIMITIVES = 256;
@@ -262,17 +262,6 @@ function validateObject(value: Record<string, unknown>, at: string, names: strin
   };
 }
 
-/** An object's heights (2B.2): the base, and the cap (a well's floor, a pressed key's sunk cap) or a dome's apex. */
-/** 2B.2: an object's base and cap heights in its state, or at the highest it reaches (hovered, not pressed). */
-function heights(entry: ReliefObject, highest = false): [number, number] {
-  const z0 = entry.base ?? 0;
-  if (entry.object === "well") return [z0, z0 - entry.height];
-  const state = highest ? { hover: true } : entry.state ?? {};
-  const travel = (entry.object === "key" || entry.object === "mark") && state.pressed ? Math.min(entry.travel ?? 0, entry.height) : 0;
-  // Hover raises the cap by a quarter of the object's height.
-  const rise = state.hover && !state.disabled ? entry.height / 4 : 0;
-  return [z0, z0 + entry.height + rise - travel];
-}
 /**
  * Hit safety (2B.6): why an object cannot be drawn as an object, or undefined when it can. A solid's taper must cover
  * the drift at its base corner farthest from the vanishing point; a dome's projected bounding box must stay inside its
@@ -371,8 +360,7 @@ export function reliefUniforms(scene: ReliefScene | StageScene): Float32Array {
     // 2.3: lit unless flat, disabled or emissive; the band; the cast height after the state multipliers.
     const lit = !state.disabled && (material.emissive?.strength ?? 0) <= 0 && primitive.face !== "flat";
     const band = !lit ? 0 : knob ? inradius : Math.min(scene.bevel.width, ring ? (primitive.ring?.thickness ?? 0) / 2 : inradius);
-    const lifted = primitive.face === "raised" || knob || primitive.face === "mark";
-    const cast = lifted && !state.disabled ? primitive.height * (1 + (scene.state.hoverHeight - 1) * (state.hover ? 1 : 0)) * (1 - (1 - scene.state.pressHeight) * (state.pressed ? 1 : 0)) : 0;
+    const cast = castHeight(scene, primitive);
     const sunk = primitive.face === "well" || primitive.face === "groove" || ring;
     // 2.4: a band narrower than the bevel is a shallower bevel; its slope scales by band / bevel.width (packed with the sign).
     const steep = knob || band <= 0 || scene.bevel.width <= 0 ? 1 : Math.min(1, band / scene.bevel.width);
@@ -402,9 +390,8 @@ function packObject(scene: ReliefScene, entry: ReliefObject, names: string[]): n
   const dome = domes.includes(entry.object);
   const lit = !state.disabled && (material.emissive?.strength ?? 0) <= 0;
   const [z0, z1] = heights(entry);
-  const travels = entry.object === "key" || entry.object === "mark";
   // 2B.2: the cast height is the cap's height, which hover already raises and a key's travel already lowers.
-  const cast = z1 > z0 && !state.disabled ? (z1 - z0) * (travels ? 1 : 1 - (1 - scene.state.pressHeight) * (state.pressed ? 1 : 0)) : 0;
+  const cast = castHeight(scene, entry);
   let drift = 0;
   if (dome && scene.camera) {
     const { distance, vanish: [vx, vy] } = scene.camera, scale = distance / (distance - z1);

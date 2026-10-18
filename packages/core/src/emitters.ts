@@ -9,7 +9,7 @@
  *
  * Coordinates are layer-local CSS px, x right, y down, z up from the face.
  */
-import type { ReliefScene } from "./relief.js";
+import type { ReliefObject, ReliefPrimitive, ReliefScene } from "./relief.js";
 
 /** One point light (2D.4), in layer px; `z` is the height above the face. */
 export interface SceneEmitter {
@@ -240,13 +240,41 @@ export function layerGuard(face: ReliefScene, protect: ProtectedRects | undefine
   return result;
 }
 
+/**
+ * An object's heights (2B.2): the base, and the cap (a well's floor, a pressed key's sunk cap) or a dome's apex, in its
+ * state or (`highest`) at the highest it reaches (hovered, not pressed). Shared by the relief packing and the guard.
+ */
+export function objectHeights(entry: ReliefObject, highest = false): [number, number] {
+  const z0 = entry.base ?? 0;
+  if (entry.object === "well") return [z0, z0 - entry.height];
+  const state = highest ? { hover: true } : entry.state ?? {};
+  const travel = (entry.object === "key" || entry.object === "mark") && state.pressed ? Math.min(entry.travel ?? 0, entry.height) : 0;
+  // Hover raises the cap by a quarter of the object's height.
+  const rise = state.hover && !(state as { disabled?: boolean }).disabled ? entry.height / 4 : 0;
+  return [z0, z0 + entry.height + rise - travel];
+}
+/**
+ * The height a relief entry casts its shadow from in its state (2.3 and 2B.2), exactly as the relief pass packs it: a
+ * lifted face's height times the hover and press multipliers; an object's cap above its base (a key's travel already
+ * lowers it; any other object takes the press multiplier). 0 for an entry that casts nothing.
+ */
+export function castHeight(scene: Pick<ReliefScene, "state">, entry: ReliefPrimitive | ReliefObject): number {
+  const state = entry.state ?? {};
+  if ("object" in entry) {
+    const [z0, z1] = objectHeights(entry), travels = entry.object === "key" || entry.object === "mark";
+    return z1 > z0 && !state.disabled ? (z1 - z0) * (travels ? 1 : 1 - (1 - scene.state.pressHeight) * (state.pressed ? 1 : 0)) : 0;
+  }
+  const lifted = entry.face === "raised" || entry.face === "knob" || entry.face === "mark";
+  return lifted && !state.disabled ? entry.height * (1 + (scene.state.hoverHeight - 1) * (state.hover ? 1 : 0)) * (1 - (1 - scene.state.pressHeight) * (state.pressed ? 1 : 0)) : 0;
+}
+
 /** A relief entry as the guard sees it: its box, corner radius, interior offset, and its cast shadow when lifted. */
 interface GuardShape { box: Bounds; radius: number; offset: number; cast: number }
 const shapeCache = new WeakMap<ReliefScene, GuardShape[]>();
 function guardShapes(face: ReliefScene): GuardShape[] {
   let shapes = shapeCache.get(face);
   if (shapes) return shapes;
-  const { hoverLift, pressSink, hoverHeight, pressHeight } = face.state;
+  const { hoverLift, pressSink } = face.state;
   shapes = face.primitives.map(entry => {
     const [x, y, width, height] = entry.rect, state = entry.state ?? {};
     const material = face.materials[entry.material] ?? {};
@@ -254,10 +282,10 @@ function guardShapes(face: ReliefScene): GuardShape[] {
     // 2.6 and 2B.4: the interior offset of a lit face or a solid's cap (a dome has none; the guard never holds on it).
     const lit = !state.disabled && (material.emissive?.strength ?? 0) <= 0 && !dome && (object || entry.face !== "flat");
     const offset = lit ? hoverLift * (state.hover ? 1 : 0) - pressSink * (state.pressed ? 1 : 0) + (material.coat?.strength ?? 0) * 0.02 + (1 - (material.base?.roughness ?? 1)) * 0.01 : 0;
-    const lifted = object ? entry.object !== "well" : entry.face === "raised" || entry.face === "knob" || entry.face === "mark";
-    // Its cast height in its state (2.3 and 2B.2: hover raises it, a press lowers it), with a dome's base.
-    const raised = state.hover ? (object ? 1.25 : hoverHeight) : 1, sunk = state.pressed ? pressHeight : 1;
-    const cast = lifted && !state.disabled ? (entry.height * raised * sunk + Math.abs(object ? entry.base ?? 0 : 0)) : 0;
+    // Its cast height in its state, as the relief pass packs it. An object drawn at the Relief level instead (2B.6) casts
+    // as its Relief equivalent, a face of the same height: the guard takes the larger.
+    const cast = object ? Math.max(castHeight(face, entry), castHeight(face, { face: "raised", rect: entry.rect, height: entry.height, material: entry.material, state }))
+      : castHeight(face, entry);
     const round = !object && entry.face === "knob" || dome;
     return { box: { x0: x, y0: y, x1: x + width, y1: y + height }, radius: round ? Math.min(width, height) / 2 : Math.min(entry.radius ?? 0, width / 2, height / 2), offset, cast };
   });
@@ -296,14 +324,17 @@ export function interiorBounds(face: ReliefScene, rect: Bounds): [number, number
   const lx = Math.sin(a) * Math.cos(e), ly = -Math.cos(a) * Math.cos(e), lz = Math.sin(e);
   let up = 0, down = 0, shadowed = false;
   shapes.forEach((shape, index) => {
-    if (!overlap(shape.box, rect, 1)) return;
-    let stackUp = Math.max(0, shape.offset), stackDown = Math.max(0, -shape.offset);
-    for (let below = 0; below < index; below++) {
-      const other = shapes[below]!;
-      if (!overlap(other.box, shape.box, 1) || !overlap(other.box, rect, 1)) continue;
-      stackUp += Math.max(0, other.offset); stackDown += Math.max(0, -other.offset);
+    if (overlap(shape.box, rect, 1)) {
+      let stackUp = Math.max(0, shape.offset), stackDown = Math.max(0, -shape.offset);
+      // Inside the cover's interior (half a pixel clear of its edge) the entry's offset replaces what is beneath it.
+      if (!within(shape, rect, 0.5)) for (let below = 0; below < index; below++) {
+        const other = shapes[below]!;
+        if (!overlap(other.box, shape.box, 1) || !overlap(other.box, rect, 1)) continue;
+        stackUp += Math.max(0, other.offset); stackDown += Math.max(0, -other.offset);
+      }
+      up = Math.max(up, stackUp); down = Math.max(down, stackDown);
     }
-    up = Math.max(up, stackUp); down = Math.max(down, stackDown);
+    // Every caster, overlapping the rect or not: its shadow reaches past its own box.
     if (shadowed || shape.cast <= 0) return;
     // The shadow's region: the caster moved against the light by up to its cast height, grown by its softness.
     const ox = -(lx / lz) * shape.cast, oy = -(ly / lz) * shape.cast, grow = 1.5 * shape.cast + 1;
@@ -344,11 +375,17 @@ export interface BeneathRects { rects: Bounds[]; overflow: boolean }
  * under the outset, cap 0, or the whole outset when they overflow the block) and the feather, with `m` the scene's
  * `interior.max` and `extent` the layer's box.
  */
-export function packEmitters(out: Float32Array, offset: number, light: LayerEmitters, guard: Guard, beneath: BeneathRects, rect: Bounds, extent: { width: number; height: number }, feather: number, m: number) {
+export function packEmitters(out: Float32Array, offset: number, light: LayerEmitters, guard: Guard, beneath: BeneathRects, rect: Bounds, extent: { width: number; height: number }, feather: number, m: number): { beneath: number; merged: boolean; overflow: boolean } {
   out.fill(0, offset, offset + EMITTER_BLOCK_VEC4S * 4);
   const drawn = light.drawn;
-  const own = guard.rects.slice(0, BLOCK_RECTS), lower = beneath.rects.slice(0, BLOCK_RECTS - own.length);
-  const overflow = beneath.overflow || beneath.rects.length > lower.length;
+  const own = guard.rects.slice(0, BLOCK_RECTS), room = BLOCK_RECTS - own.length;
+  // Lower layers' text that does not fit is merged into its bounding box (no light there, and only there); with no room
+  // at all, the whole outset gets no light. Either is reported (`state().emitters.layers[].beneath`).
+  let lower = beneath.rects;
+  const merged = lower.length > room && room > 0;
+  if (merged) lower = [{ x0: Math.min(...lower.map(box => box.x0)), y0: Math.min(...lower.map(box => box.y0)), x1: Math.max(...lower.map(box => box.x1)), y1: Math.max(...lower.map(box => box.y1)) }];
+  const overflow = beneath.overflow || lower.length > room;
+  if (overflow) lower = [];
   out.set([drawn.length, feather, own.length + lower.length, m], offset);
   out.set([rect.x0, rect.y0, Math.max(1e-6, rect.x1 - rect.x0) / EMITTER_TILES.x, Math.max(1e-6, rect.y1 - rect.y0) / EMITTER_TILES.y], offset + EMITTER_GRID * 4);
   // The extent guard: on, the extent, and whether the whole outset is protected (lower layers' text overflowed).
@@ -364,6 +401,7 @@ export function packEmitters(out: Float32Array, offset: number, light: LayerEmit
   });
   if (drawn.length) out.set(tileMasks(drawn, rect), offset + EMITTER_TILE_BASE * 4);
   guard.cells?.forEach(({ light: cap, shadow }, index) => out.set([cap, shadow, 0, 0], offset + (EMITTER_CELLS + index) * 4));
+  return { beneath: beneath.rects.length, merged, overflow };
 }
 
 /**
