@@ -105,7 +105,7 @@ export const Radio = forwardRef<HTMLInputElement, RadioProps>(function Radio(
     <label className={classes("ug-radio", className)} style={style} {...strataAttributes({ size, material, level })}>
       <span className="ug-push ug-latch ug-latch--bank" {...(group.colour ? { "data-strata-colour": group.colour } : {})}>
         {input}
-        <span className="ug-push__object ug-latch__object" aria-hidden="true">
+        <span className="ug-push__object" aria-hidden="true">
           {bankMarkup.map(part => <span key={part.className} className={part.className} data-strata-face={part.face} />)}
         </span>
         <span className="ug-push__cap" data-strata-face="raised"><span className="ug-radio__label">{children}</span></span>

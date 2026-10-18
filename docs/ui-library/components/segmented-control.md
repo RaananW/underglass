@@ -133,7 +133,7 @@ LEDs' role (`glowOn` by default). As with the Switch's hardware forms, the premi
     <label class="ug-segmented__item">
       <span class="ug-push ug-latch ug-latch--bank">
         <input class="ug-segmented__input" type="radio" name="view" value="day">
-        <span class="ug-push__object ug-latch__object" aria-hidden="true">
+        <span class="ug-push__object" aria-hidden="true">
           <span class="ug-push__led-socket"></span>
           <span class="ug-push__led"></span>
         </span>
@@ -143,7 +143,7 @@ LEDs' role (`glowOn` by default). As with the Switch's hardware forms, the premi
     <label class="ug-segmented__item">
       <span class="ug-push ug-latch ug-latch--bank">
         <input class="ug-segmented__input" type="radio" name="view" value="week">
-        <span class="ug-push__object ug-latch__object" aria-hidden="true">
+        <span class="ug-push__object" aria-hidden="true">
           <span class="ug-push__led-socket"></span>
           <span class="ug-push__led"></span>
         </span>
@@ -153,7 +153,7 @@ LEDs' role (`glowOn` by default). As with the Switch's hardware forms, the premi
     <label class="ug-segmented__item">
       <span class="ug-push ug-latch ug-latch--bank">
         <input class="ug-segmented__input" type="radio" name="view" value="month">
-        <span class="ug-push__object ug-latch__object" aria-hidden="true">
+        <span class="ug-push__object" aria-hidden="true">
           <span class="ug-push__led-socket"></span>
           <span class="ug-push__led"></span>
         </span>

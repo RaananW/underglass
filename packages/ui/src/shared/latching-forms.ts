@@ -31,7 +31,7 @@ export const bankForm = (form: unknown): StrataBankForm | undefined => (form ===
 export const nativeForm = (form: unknown, own: "latching" | "bank"): string | undefined => (typeof form === "string" && form !== FLUSH_FORM && form !== own ? form : undefined);
 
 /**
- * A Checkbox's key object, inside `<span class="ug-push__object ug-latch__object" aria-hidden="true">`, in paint order: the push
+ * A Checkbox's key object, inside `<span class="ug-push__object" aria-hidden="true">`, in paint order: the push
  * button's bezel, socket and lit ring (a square key, so the same shapes with a small corner radius). The cap
  * (`<span class="ug-push__cap" data-strata-face="raised"><span class="ug-checkbox__mark">`) follows the object.
  */

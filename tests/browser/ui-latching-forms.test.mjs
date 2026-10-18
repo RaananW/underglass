@@ -983,3 +983,40 @@ test("with haptics on a real change pulses 8 ms once, a scripted one does not, r
   expect(await log(muted.page), "muted: no sound and no pulse").toMatchObject({ played: 0, pulses: [] });
   await muted.context.close();
 });
+
+// ---- The specimen ----
+
+const channel = c => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+const luminance = (r, g, b) => 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+/** Contrast of rendered text against its face, from decoded pixels: the face is the most common colour, the text the pixel farthest from it in luminance. */
+function textContrast(png) {
+  const counts = new Map();
+  for (let i = 0; i < png.data.length; i += 4) { const key = (png.data[i] << 16) | (png.data[i + 1] << 8) | png.data[i + 2]; counts.set(key, (counts.get(key) ?? 0) + 1); }
+  const face = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const faceL = luminance(face >> 16, (face >> 8) & 255, face & 255);
+  let best = faceL;
+  for (let i = 0; i < png.data.length; i += 4) { const l = luminance(png.data[i], png.data[i + 1], png.data[i + 2]); if (Math.abs(l - faceL) > Math.abs(best - faceL)) best = l; }
+  return (Math.max(best, faceL) + 0.05) / (Math.min(best, faceL) + 0.05);
+}
+
+test("the specimen's latching forms: the labels on the bank's and the segments' caps and beside the keys meet 4.5:1 in decoded pixels in every theme", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 });
+  const page = await context.newPage();
+  await page.goto("/ui-specimen.html");
+  const samples = ["#latching-title ~ .row .ug-radio .ug-push__cap >> nth=0", "#latching-title ~ .row .ug-radio .ug-push__cap >> nth=1", "#latching-title ~ .row .ug-segmented__key >> nth=0", "#latching-title ~ .row .ug-segmented__key >> nth=1",
+    "#latching-title ~ .row .ug-checkbox__label >> nth=0", "#latching-title ~ .row .ug-checkbox__label >> nth=1"];
+  for (const theme of ["light", "dark", "contrast", "contrast-dark"]) {
+    await page.evaluate(value => { document.documentElement.dataset.strataTheme = value; }, theme);
+    for (const selector of samples) {
+      const element = page.locator(selector);
+      await element.scrollIntoViewIfNeeded();
+      const box = await element.boundingBox();
+      const key = await element.evaluate(node => node.dataset.strataFace === "raised");
+      // A cap is measured in its label zone (35% to 65% of the height, inside the bevel).
+      const clip = key ? { x: box.x + 10, y: box.y + box.height * 0.35, width: box.width - 20, height: box.height * 0.3 } : box;
+      const ratio = textContrast(PNG.sync.read(await page.screenshot({ clip })));
+      expect(ratio, `${theme}: ${selector} is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+  await context.close();
+});

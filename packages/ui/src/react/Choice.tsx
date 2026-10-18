@@ -51,7 +51,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
     <label className={classes("ug-checkbox", className)} style={style} {...strataAttributes({ size, material, level })} data-strata-form={latching}>
       <span className="ug-push ug-latch ug-latch--key" {...(colour ? { "data-strata-colour": colour } : {})}>
         {input}
-        <span className="ug-push__object ug-latch__object" aria-hidden="true">
+        <span className="ug-push__object" aria-hidden="true">
           {checkboxMarkup.map(part => <span key={part.className} className={part.className} data-strata-face={part.face} />)}
         </span>
         <span className="ug-push__cap" data-strata-face="raised" aria-hidden="true"><span className="ug-checkbox__mark" /></span>

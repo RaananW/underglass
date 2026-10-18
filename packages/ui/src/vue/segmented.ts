@@ -59,7 +59,7 @@ export const SegmentedControl = defineComponent({
         h("div", { class: classes("ug-segmented__plinth", latching && "ug-bank__plinth"), ...(latching ? { "data-strata-face": "raised" } : {}) }, props.options.map(option => h("label", { key: option.value, class: "ug-segmented__item" }, latching ? [
           h("span", { class: "ug-push ug-latch ug-latch--bank", ...(props.colour ? { "data-strata-colour": props.colour } : {}) }, [
             inputOf(option),
-            h("span", { class: "ug-push__object ug-latch__object", "aria-hidden": "true" }, bankMarkup.map(part => h("span", { class: part.className, "data-strata-face": part.face }))),
+            h("span", { class: "ug-push__object", "aria-hidden": "true" }, bankMarkup.map(part => h("span", { class: part.className, "data-strata-face": part.face }))),
             h("span", { class: "ug-push__cap ug-segmented__key", "data-strata-face": "raised" }, option.label),
           ]),
         ] : [

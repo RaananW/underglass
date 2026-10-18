@@ -172,7 +172,7 @@ built yet: it is a later change, and `form="selector"` is for now the native for
     <label class="ug-radio">
       <span class="ug-push ug-latch ug-latch--bank">
         <input class="ug-radio__input" type="radio" name="preset" value="piano">
-        <span class="ug-push__object ug-latch__object" aria-hidden="true">
+        <span class="ug-push__object" aria-hidden="true">
           <span class="ug-push__led-socket"></span>
           <span class="ug-push__led"></span>
         </span>
@@ -182,7 +182,7 @@ built yet: it is a later change, and `form="selector"` is for now the native for
     <label class="ug-radio">
       <span class="ug-push ug-latch ug-latch--bank">
         <input class="ug-radio__input" type="radio" name="preset" value="organ">
-        <span class="ug-push__object ug-latch__object" aria-hidden="true">
+        <span class="ug-push__object" aria-hidden="true">
           <span class="ug-push__led-socket"></span>
           <span class="ug-push__led"></span>
         </span>
@@ -192,7 +192,7 @@ built yet: it is a later change, and `form="selector"` is for now the native for
     <label class="ug-radio">
       <span class="ug-push ug-latch ug-latch--bank">
         <input class="ug-radio__input" type="radio" name="preset" value="strings">
-        <span class="ug-push__object ug-latch__object" aria-hidden="true">
+        <span class="ug-push__object" aria-hidden="true">
           <span class="ug-push__led-socket"></span>
           <span class="ug-push__led"></span>
         </span>

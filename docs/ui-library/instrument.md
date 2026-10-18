@@ -185,13 +185,13 @@ divider a groove) or stay flat, because they are print on the faceplate.
 | Button | `momentary` push button, machined cap, lit ring on focus | `flush` (a key, as Objects) |
 | ToggleButton | `latching` push button with an LED | `rocker` |
 | Switch | `slide` | `rocker`, `bat`, `wall` |
-| Checkbox | A small latching square button whose cap lights when checked | `flush` |
-| Radio, RadioGroup | A **preset bank**: interlocking latching buttons, one down at a time (where the name comes from) | `selector` (a RotarySelector over the group) |
+| Checkbox | A small latching square button whose cap lights when checked ([`latching`, done](components/checkbox.md#11-latching-form-latching)) | `flush` |
+| Radio, RadioGroup | A **preset bank**: interlocking latching buttons, one down at a time (where the name comes from) ([`bank`, done](components/radio.md#11-latching-form-the-preset-bank-bank)) | `selector` (a RotarySelector over the group; later), `flush` |
 | Select | `selector` (RotarySelector) | `display` (a display with step buttons), `flush` |
 | Slider | `fader` | `knob`, `wheel` |
 | TextField, TextArea | `display` (a glass window in a bezel) | `flush` (a well, as Objects) |
 | Tabs | Latching buttons on a rail; the panel is the faceplate under them | `flush` |
-| SegmentedControl | Interlocking latching buttons on one plinth | `flush` |
+| SegmentedControl | Interlocking latching buttons on one plinth ([`latching`, done](components/segmented-control.md#11-latching-form-latching)) | `flush` |
 | ProgressBar, Spinner | Segment meter, ring of LEDs | `flush` |
 | Badge | An LED pill (a StatusLight with text) | `flush` |
 | Rating | A row of lamps | `flush` |
@@ -199,6 +199,15 @@ divider a groove) or stay flat, because they are print on the faceplate.
 | Dialog | A plate that rises out of the chassis (depth entry), with its controls on it | `flush` |
 | Drawer | A tray that slides out of the chassis edge | `flush` |
 | Tooltip, Menu, Popover, Toast | Unchanged: overlay-host CSS, as today | — |
+
+**Latching forms (the first everyday forms).** The Checkbox, the RadioGroup and the SegmentedControl take their premium forms through
+`form` (`latching`, `bank`, `latching`; `flush` names today's look, and an absent `form` is `flush`, as the Switch's hardware forms are, so a page that
+does not opt in is unchanged; the character's default form is reached by naming it). They are the PushButton's machinery on native inputs: the
+input is an invisible overlay on its key's box inside a push button's host, the lit ring, the LED and the cap's travel are the same three
+numbers, the same spring and the same emitters, and the keys of a bank stand on one polished plinth that is a part of its own. A bank key has no
+bezel and no ring: the plinth is the frame, and the LED above each key shows the one that is down. The `selector` form of the RadioGroup is a later
+change. [Checkbox](components/checkbox.md#11-latching-form-latching), [RadioGroup](components/radio.md#11-latching-form-the-preset-bank-bank),
+[SegmentedControl](components/segmented-control.md#11-latching-form-latching).
 
 ### Interaction, in detail
 

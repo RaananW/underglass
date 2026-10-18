@@ -21,8 +21,8 @@ const params = new URLSearchParams(location.search);
 const host = (id: string) => document.getElementById(id)!;
 const flush = params.has("flush");
 
-const keyObject = '<span class="ug-push__object ug-latch__object" aria-hidden="true"><span class="ug-push__bezel" data-strata-face="raised"></span><span class="ug-push__socket"></span><span class="ug-push__ring"></span></span>';
-const bankObject = '<span class="ug-push__object ug-latch__object" aria-hidden="true"><span class="ug-push__led-socket"></span><span class="ug-push__led"></span></span>';
+const keyObject = '<span class="ug-push__object" aria-hidden="true"><span class="ug-push__bezel" data-strata-face="raised"></span><span class="ug-push__socket"></span><span class="ug-push__ring"></span></span>';
+const bankObject = '<span class="ug-push__object" aria-hidden="true"><span class="ug-push__led-socket"></span><span class="ug-push__led"></span></span>';
 const attrs = (list: Record<string, string | boolean | undefined>) => Object.entries(list).filter(([, value]) => value !== undefined && value !== false).map(([key, value]) => (value === true ? ` ${key}` : ` ${key}="${value}"`)).join("");
 
 /** A Checkbox's contract markup, latching or flush. */

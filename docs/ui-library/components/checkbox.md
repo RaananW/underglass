@@ -156,7 +156,7 @@ input's form owner), as before. `colour` names the ring's role (`glowOn` by defa
 <label class="ug-checkbox" data-strata-form="latching">
   <span class="ug-push ug-latch ug-latch--key" data-strata-colour="info">
     <input class="ug-checkbox__input" type="checkbox">
-    <span class="ug-push__object ug-latch__object" aria-hidden="true">
+    <span class="ug-push__object" aria-hidden="true">
       <span class="ug-push__bezel" data-strata-face="raised"></span>
       <span class="ug-push__socket"></span>
       <span class="ug-push__ring"></span>

@@ -55,7 +55,7 @@ export const Checkbox = defineComponent({
       if (latching) return h("label", { ...row, class: classes("ug-checkbox", row.class as string), ...strataAttributes(props), "data-strata-form": latching }, [
         h("span", { class: "ug-push ug-latch ug-latch--key", ...(props.colour ? { "data-strata-colour": props.colour } : {}) }, [
           native,
-          h("span", { class: "ug-push__object ug-latch__object", "aria-hidden": "true" }, checkboxMarkup.map(part => h("span", { class: part.className, "data-strata-face": part.face }))),
+          h("span", { class: "ug-push__object", "aria-hidden": "true" }, checkboxMarkup.map(part => h("span", { class: part.className, "data-strata-face": part.face }))),
           h("span", { class: "ug-push__cap", "data-strata-face": "raised", "aria-hidden": "true" }, [h("span", { class: "ug-checkbox__mark" })]),
         ]),
         h("span", { class: "ug-checkbox__label" }, slots.default?.()),
@@ -198,7 +198,7 @@ export const Radio = defineComponent({
       if (context?.bank) return h("label", { ...row, class: classes("ug-radio", row.class as string), ...strataAttributes(props) }, [
         h("span", { class: "ug-push ug-latch ug-latch--bank", ...(context.colour ? { "data-strata-colour": context.colour } : {}) }, [
           native,
-          h("span", { class: "ug-push__object ug-latch__object", "aria-hidden": "true" }, bankMarkup.map(part => h("span", { class: part.className, "data-strata-face": part.face }))),
+          h("span", { class: "ug-push__object", "aria-hidden": "true" }, bankMarkup.map(part => h("span", { class: part.className, "data-strata-face": part.face }))),
           h("span", { class: "ug-push__cap", "data-strata-face": "raised" }, [h("span", { class: "ug-radio__label" }, slots.default?.())]),
         ]),
       ]);

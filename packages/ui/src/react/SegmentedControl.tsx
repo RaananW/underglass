@@ -66,7 +66,7 @@ export const SegmentedControl = forwardRef<HTMLFieldSetElement, SegmentedControl
             <label key={option.value} className="ug-segmented__item">
               <span className="ug-push ug-latch ug-latch--bank" {...(colour ? { "data-strata-colour": colour } : {})}>
                 {input}
-                <span className="ug-push__object ug-latch__object" aria-hidden="true">
+                <span className="ug-push__object" aria-hidden="true">
                   {bankMarkup.map(part => <span key={part.className} className={part.className} data-strata-face={part.face} />)}
                 </span>
                 <span className="ug-push__cap ug-segmented__key" data-strata-face="raised">{option.label}</span>
