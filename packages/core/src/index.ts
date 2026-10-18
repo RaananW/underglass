@@ -26,7 +26,7 @@ export type { CompiledAnimation, CompiledProgramSet } from "./compiled.js";
 export type { Ripple } from "./ripple.js";
 export { defineEffect } from "./effects.js";
 export type { ApplicationEffect, ParameterRange, EffectDescriptor, EffectTime, EffectHandle, EffectResult, MaterialDescriptor, MaterialHandle, CustomMaterial, ReliefMaterial, ObjectsMaterial, StageMaterial, InstrumentMaterial } from "./effects.js";
-export type { InstrumentScene, InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentPose, InstrumentRecipe, InstrumentEmitter, InstrumentCaster } from "./instrument.js";
+export type { InstrumentScene, InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentPose, InstrumentRecipe, InstrumentEmitter, InstrumentCaster, InstrumentMeshProfile, InstrumentMeshSource } from "./instrument.js";
 export type { ReliefScene, ReliefPrimitive, ReliefObject, ReliefMaterial as ReliefSceneMaterial } from "./relief.js";
 export type { SceneEmitter, ProtectedRects } from "./emitters.js";
 export type { StageScene, StageParticle } from "./stage.js";
