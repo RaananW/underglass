@@ -377,6 +377,69 @@
       }
     }
   },
+  "knob": {
+    "$description": "Knob interaction (section 14, Instrument controls).",
+    "sweep": {
+      "$type": "number",
+      "$value": 270,
+      "$description": "The cap's turn from minimum to maximum, in degrees.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 90,
+          "max": 330,
+          "scope": true
+        }
+      }
+    },
+    "dragPx": {
+      "$type": "dimension",
+      "$value": "200px",
+      "$description": "Vertical drag for a full sweep.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 50,
+          "max": 1000
+        }
+      }
+    },
+    "fine": {
+      "$type": "number",
+      "$value": 0.1,
+      "$description": "The drag rate while Shift is held.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0.01,
+          "max": 1,
+          "scope": true
+        }
+      }
+    },
+    "tapSlop": {
+      "$type": "dimension",
+      "$value": "4px",
+      "$description": "A press that moves less than this is a tap.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 1,
+          "max": 12
+        }
+      }
+    },
+    "snap": {
+      "$type": "number",
+      "$value": 2,
+      "$description": "A ring click within this many degrees of a printed numeral sets exactly its value.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 5,
+          "scope": true
+        }
+      }
+    }
+  },
   "material": {
     "$description": "Open, layered materials: presets, roles, and any custom materials an application adds (design-language.md section 4).",
     "presets": {
@@ -1528,6 +1591,44 @@
           }
         }
       }
+    },
+    "knob": {
+      "small": {
+        "$type": "dimension",
+        "$value": "48px",
+        "$description": "Knob skirt diameter at small.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 120
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "64px",
+        "$description": "Knob skirt diameter at medium (the premium knob).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 120
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "80px",
+        "$description": "Knob skirt diameter at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 120
+          }
+        }
+      }
     }
   },
   "motion": {
@@ -1661,13 +1762,14 @@
   "level": {
     "$type": "string",
     "$value": "relief",
-    "$description": "Presentation level: relief (default), objects, scene.",
+    "$description": "Presentation level: relief (default), objects, instrument, scene.",
     "$extensions": {
       "dev.underglass.strata": {
         "scope": true,
         "options": [
           "relief",
           "objects",
+          "instrument",
           "scene"
         ]
       }

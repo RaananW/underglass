@@ -1,0 +1,58 @@
+---
+/**
+ * Knob (anatomy page `knob.md`): a native `<input type="range">` over a printed dial, with its legend printed under it,
+ * rendered on the server. Keys work with no script; the round pointer behaviour (drag, ring click-to-set, cap taps, the
+ * wheel and the double-click reset) and the dial following the value come from `attachStrata`, which it loads.
+ * `class`, `style` and other attributes reach the `.ug-knob` root. `unit` keeps `aria-valuetext` in step in the
+ * browser; a `format` function would only apply on the server, so Astro takes `unit` alone.
+ */
+import Behaviour from "./Behaviour.astro";
+import { nextId } from "./field.ts";
+import { knobModel, type KnobMark } from "../shared/knob.ts";
+import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+
+interface Props {
+  /** The legend printed under the dial; it names the input. */
+  label: string;
+  /** The value; `min` by default. */
+  value?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  /** Makes the knob stepped: this many positions. */
+  detents?: number;
+  /** The cap's turn in degrees; the `knob.sweep` token (270) by default. */
+  sweep?: number;
+  /** The printed scale: a count of evenly spaced marks, or the marks' values (with labels). */
+  marks?: number | readonly (number | KnobMark)[];
+  /** A unit for `aria-valuetext`, appended as written (" dB", "%"). */
+  unit?: string;
+  /** The value a double-click returns to; `value` by default. */
+  resetValue?: number;
+  /** The input's id; generated when absent. */
+  id?: string;
+  name?: string;
+  form?: string;
+  disabled?: boolean;
+  size?: StrataSize;
+  material?: string;
+  level?: StrataLevel;
+  class?: string;
+  style?: string;
+  [attribute: string]: unknown;
+}
+
+const { label, min = 0, max = 100, value = min, step, detents, sweep, marks, unit, resetValue, id, name, form, disabled, size, material, level, class: className, style, ...rest } = Astro.props;
+const model = knobModel({ value, min, max, step, detents, sweep, marks, unit });
+const inputId = id ?? nextId("knob");
+---
+<div class={classes("ug-knob", model.detented && "ug-knob--detented", className)} {...strataAttributes({ size, material, level })} style={style ? `${model.style} ${style}` : model.style} {...rest}>
+  <div class="ug-knob__dial">
+    <span class="ug-knob__scale" aria-hidden="true">{model.marks.map(mark => <span class="ug-knob__mark" data-strata-value={String(mark.value)} style={mark.style}>{mark.text}</span>)}</span>
+    <span class="ug-knob__skirt" data-strata-face="raised" aria-hidden="true"><span class="ug-knob__cap" data-strata-face="raised"><span class="ug-knob__pointer"></span></span></span>
+    <input class="ug-knob__input" type="range" id={inputId} name={name} form={form} min={model.min} max={model.max} step={model.step} value={String(value)}
+      data-strata-default={String(resetValue ?? value)} data-strata-unit={unit} aria-valuetext={model.valueText} disabled={disabled} />
+  </div>
+  <label class="ug-knob__label" for={inputId}>{label}</label>
+</div>
+<Behaviour />

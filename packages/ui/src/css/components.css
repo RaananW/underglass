@@ -546,6 +546,155 @@
   }
   :where(.ug-slider:disabled) { opacity: 0.38; cursor: not-allowed; }
 
+  /* ---- Knob: a native range input over a printed dial, with a skirt, a cap and its pointer (anatomy page knob.md) ---- */
+
+  /*
+   * The dial is the skirt plus the printed scale: ticks at r + 5, numerals at r + 5 + 1.25em (r + 20 at the caption
+   * size) and at least 3.5em out, so the numerals move apart as text grows, and 1.5em of room beyond them. Every size
+   * is an even number of px, so the centre is a whole pixel.
+   * The transparent input covers the whole dial and takes every press; the drawn parts take none.
+   */
+  :where(.ug-knob) {
+    --_size: var(--strata-knob-size);
+    --_sweep: calc(var(--strata-knob-sweep) * 1deg);
+    --_ink: color-mix(in srgb, var(--strata-colour-edge), black 55%);
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--strata-space-1);
+    max-width: 100%;
+    color: var(--strata-colour-text);
+    font-family: var(--strata-font-family);
+  }
+  /* A detented knob is 0.8 times the knob's size (design language section 6). */
+  :where(.ug-knob--detented) { --_size: round(nearest, calc(var(--strata-knob-size) * 0.8), 2px); }
+  :where(.ug-knob__dial) {
+    --_r: calc(var(--_size) / 2);
+    --_rn: max(calc(var(--_r) + 5px + 1.25em), 3.5em);
+    position: relative;
+    flex: none;
+    box-sizing: border-box;
+    width: round(nearest, calc(2 * (var(--_rn) + 1.5em)), 2px);
+    height: round(nearest, calc(2 * (var(--_rn) + 1.5em)), 2px);
+    font-size: var(--strata-font-size-caption);
+    line-height: 1;
+  }
+  :where(.ug-knob__scale) { position: absolute; inset: 0; pointer-events: none; }
+  /* A mark is a numeral printed upright at its angle, with its tick drawn by ::before, both on whole pixels. */
+  :where(.ug-knob__mark) {
+    --_a: calc((var(--strata-knob-at, 0) - 0.5) * var(--_sweep));
+    position: absolute;
+    left: round(nearest, calc(50% + sin(var(--_a)) * var(--_rn) - 1em), 1px);
+    top: round(nearest, calc(50% - cos(var(--_a)) * var(--_rn) - 0.5em), 1px);
+    width: 2em;
+    height: 1em;
+    color: var(--strata-colour-muted);
+    font-weight: var(--strata-font-weight-strong);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    white-space: nowrap;
+  }
+  :where(.ug-knob__mark)::before {
+    content: "";
+    position: absolute;
+    left: calc(1em - 0.8px + sin(var(--_a)) * (var(--_r) + 8px - var(--_rn)));
+    top: calc(0.5em - 3px - cos(var(--_a)) * (var(--_r) + 8px - var(--_rn)));
+    width: 1.6px;
+    height: 6px;
+    rotate: var(--_a);
+    background: var(--strata-colour-text);
+  }
+  /* The skirt: a turned flange; its upper half catches the light, its lower half the floor. */
+  :where(.ug-knob__skirt) {
+    --_finish: linear-gradient(180deg, rgb(255 255 255 / calc(0.55 * min(1, var(--_gain)))) 0 44%, rgb(255 255 255 / 0) 50%, rgb(0 0 0 / calc(0.16 * min(1, var(--_gain)))) 100%);
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    width: var(--_size);
+    height: var(--_size);
+    margin: auto;
+    border-radius: 50%;
+    background-color: var(--strata-colour-knob);
+    pointer-events: none;
+  }
+  /* The cap: 0.8 of the skirt, spun metal (circular hairlines and a bow-tie highlight along the light's azimuth). */
+  :where(.ug-knob__cap) {
+    --_finish:
+      repeating-radial-gradient(circle, rgb(255 255 255 / calc(0.06 * min(1, var(--_gain)))) 0 0.6px, rgb(0 0 0 / calc(0.05 * min(1, var(--_gain)))) 0.6px 1.4px),
+      conic-gradient(from calc(var(--strata-light-azimuth) * 1deg), rgb(255 255 255 / calc(0.6 * min(1, var(--_gain)))), rgb(255 255 255 / 0) 45deg, rgb(0 0 0 / calc(0.1 * min(1, var(--_gain)))) 90deg,
+        rgb(255 255 255 / 0) 135deg, rgb(255 255 255 / calc(0.45 * min(1, var(--_gain)))) 180deg, rgb(255 255 255 / 0) 225deg, rgb(0 0 0 / calc(0.1 * min(1, var(--_gain)))) 270deg,
+        rgb(255 255 255 / 0) 315deg, rgb(255 255 255 / calc(0.6 * min(1, var(--_gain)))));
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    width: round(nearest, calc(var(--_size) * 0.8), 2px);
+    height: round(nearest, calc(var(--_size) * 0.8), 2px);
+    margin: auto;
+    border-radius: 50%;
+    background-color: var(--strata-colour-knob);
+  }
+  /* Only the pointer turns: the cap and skirt keep their boxes, so their faces never change size. */
+  :where(.ug-knob__pointer) {
+    position: absolute;
+    inset: 0;
+    rotate: calc((var(--strata-knob-value, 0.5) - 0.5) * var(--_sweep));
+  }
+  :where(.ug-knob__pointer)::after {
+    content: "";
+    position: absolute;
+    left: calc(50% - 1.1px);
+    top: 7%;
+    width: 2.2px;
+    height: 29%;
+    border-radius: 1.1px;
+    background: var(--_ink);
+  }
+  /* A detented knob settles on its detent with a little overshoot; a continuous one follows the pointer at once. */
+  :where(.ug-knob--detented .ug-knob__pointer) { transition: rotate var(--strata-motion-fast) cubic-bezier(0.3, 1.45, 0.55, 1); }
+  :where(.ug-knob__input) {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    appearance: none;
+    background: transparent;
+    outline: none;
+    cursor: ns-resize;
+    touch-action: none;
+  }
+  :where(.ug-knob__input)::-webkit-slider-runnable-track { height: 100%; border: 0; background: transparent; }
+  :where(.ug-knob__input)::-webkit-slider-thumb { width: 1px; height: 1px; appearance: none; border: 0; background: transparent; }
+  :where(.ug-knob__input)::-moz-range-track { height: 100%; border: 0; background: transparent; }
+  :where(.ug-knob__input)::-moz-range-thumb { width: 1px; height: 1px; border: 0; background: transparent; }
+  /* The printed legend, on the faceplate under the dial. */
+  :where(.ug-knob__label) {
+    max-width: 100%;
+    font-size: var(--strata-font-size-small);
+    font-weight: var(--strata-font-weight-strong);
+    letter-spacing: 0.08em;
+    text-align: center;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+  /* Focus: an accent ring around the skirt, in every presentation (it is captured content on the GPU). */
+  :where(.ug-knob__dial:has(> .ug-knob__input:is(:focus-visible, [data-strata-preview~="focus"])) .ug-knob__skirt) {
+    outline: var(--strata-focus-width) solid var(--strata-colour-accent);
+    outline-offset: calc(var(--strata-focus-offset) + 2px);
+  }
+  :where(.ug-knob__dial:has(> .ug-knob__input:is(:hover, [data-strata-preview~="hover"]):not(:disabled)) :is(.ug-knob__skirt, .ug-knob__cap)) {
+    --_lift: var(--strata-state-hover-height);
+    --_tone: var(--_hover-tone);
+  }
+  :where(.ug-knob:has(.ug-knob__input:disabled)) { color: color-mix(in srgb, var(--strata-colour-text) 38%, transparent); }
+  :where(.ug-knob:has(.ug-knob__input:disabled)) :where(.ug-knob__dial) { opacity: 0.38; }
+  :where(.ug-knob:has(.ug-knob__input:disabled)) :where(.ug-knob__skirt, .ug-knob__cap) { --_h: 0px; --_gain: 0; }
+  :where(.ug-knob__input:disabled) { cursor: not-allowed; }
+
   /* ---- Tabs ---- */
 
   /* A row of flat tabs over a rail (a groove); the selected tab's indicator (a mark) stands in the rail under it. */
@@ -1810,6 +1959,10 @@
   :where([data-strata-mode="face"]) [data-strata-dome] { background: transparent; box-shadow: none; }
   :where([data-strata-mode="face"]) .ug-slider[data-strata-dome]::-webkit-slider-thumb { background: transparent; box-shadow: none; }
   :where([data-strata-mode="face"]) .ug-slider[data-strata-dome]::-moz-range-thumb { background: transparent; box-shadow: none; }
+  /* At the Instrument level the GPU draws a knob's skirt, cap and pointer as parts: their CSS paint is hidden, so a
+     value change repaints nothing (the focus ring round the skirt stays). */
+  :where([data-strata-mode="face"]) :is(.ug-knob__skirt, .ug-knob__cap)[data-strata-dome] { border-color: transparent; }
+  :where([data-strata-mode="face"]) .ug-knob__cap[data-strata-dome] .ug-knob__pointer { display: none; }
   /* Under the GPU, an enrolled panel's boundary never carries a CSS transform: the GPU presentation moves it. */
   :where([data-strata-mode="face"]):is(.ug-panel, .ug-card)[data-strata-motion], :where([data-strata-mode="face"]) :is(.ug-panel, .ug-card)[data-strata-motion] { animation: none; }
 
@@ -1817,6 +1970,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     :where([data-strata-face], .ug-checkbox__mark, .ug-radio__dot, .ug-switch__knob, .ug-switch__input, .ug-accordion__chevron) { transition: none; }
+    :where(.ug-knob__pointer) { transition: none; }
     :where(.ug-spinner__arc) { animation: none; }
     :where(.ug-tree__toggle)::before { transition: none; }
     :where(.ug-carousel__slide) { transition: none; }
@@ -1831,6 +1985,14 @@
       background-size: auto;
     }
   }
+
+  /* More contrast: the high-contrast themes apply through the tokens; the knob's pointer and scale take the text colour. */
+  @media (prefers-contrast: more) {
+    :where(.ug-knob) { --_ink: var(--strata-colour-text); }
+    :where(.ug-knob__mark) { color: var(--strata-colour-text); }
+    :where(.ug-knob__skirt, .ug-knob__cap) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-edge); }
+  }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-knob) { --_ink: var(--strata-colour-text); }
 
   @media (prefers-reduced-transparency: reduce) {
     :where(.ug-panel[data-strata-material="glass"]) {
@@ -1911,5 +2073,12 @@
     :where(.ug-divider--vertical) { border-left-color: CanvasText; border-right: 0; }
     :where(.ug-badge) { border-color: CanvasText; }
     :where(.ug-field__error) { color: CanvasText; }
+    /* The knob: system-colour rings for the skirt and cap, a CanvasText pointer and scale, a Highlight focus ring. */
+    :where(.ug-knob__skirt, .ug-knob__cap) { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; }
+    :where(.ug-knob__pointer)::after, :where(.ug-knob__mark)::before { forced-color-adjust: none; background: CanvasText; }
+    :where(.ug-knob__mark) { color: CanvasText; }
+    :where(.ug-knob__dial:has(> .ug-knob__input:focus-visible) .ug-knob__skirt) { outline-color: Highlight; }
+    :where(.ug-knob:has(.ug-knob__input:disabled)) :where(.ug-knob__skirt, .ug-knob__cap) { border-color: GrayText; }
+    :where(.ug-knob:has(.ug-knob__input:disabled)) :where(.ug-knob__pointer)::after { background: GrayText; }
   }
 }

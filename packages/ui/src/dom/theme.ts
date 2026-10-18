@@ -69,7 +69,7 @@ export interface ScopeOverrides {
   theme?: string;
   density?: "compact" | "comfortable" | "spacious";
   size?: "small" | "medium" | "large";
-  level?: "relief" | "objects" | "scene";
+  level?: "relief" | "objects" | "instrument" | "scene";
   /** Material for the subtree's components, a preset name. */
   material?: string;
   /** Colour roles for the subtree, in `theme`. */

@@ -19,7 +19,7 @@ native attributes (`:hover`, `:active`, `:focus-visible`, `:checked`, `:disabled
 | `data-strata-face` | Any element the material pass lights | The relief primitive: `raised`, `well`, `groove`, `knob`, `mark`, `ring` or `flat` (below) |
 | `data-strata-material` | A face, a component or a scope | A material role (`buttonPrimary`) or preset (`lacquer`); overrides the role default |
 | `data-strata-elevation` | A raised face | An elevation token name (`raised`, `floating`); the component's default when absent |
-| `data-strata-level` | A component or a scope | `relief`, `objects` or `scene`, overriding the scope's level |
+| `data-strata-level` | A component or a scope | `relief`, `objects`, `instrument` or `scene`, overriding the scope's level |
 | `data-strata-depth` | A scope | Depth for the subtree, 0–1 |
 | `data-strata-theme` | The root or a scope | `light`, `dark`, `contrast` or `contrast-dark`; the root follows the system without it |
 | `data-strata-density` | The root or a scope | `compact`, `comfortable` or `spacious` |
@@ -124,3 +124,11 @@ light and depth, reduced motion, keyboard input and reflow.
 | [Menu](menu.md) | `<div popover role="menu">` of `menuitem` buttons, opened by a menu button | A floating slab with flat rows |
 | [Combobox](combobox.md) | `<input list>` with a `<datalist>`; the browser's own list | A TextField well with a printed chevron |
 | [DatePicker](date-picker.md) | `<input type="date">`; the browser's own calendar | A TextField well with a printed calendar |
+
+## Instrument
+
+The [Instrument level](../instrument.md)'s components: hardware objects over native controls, at every presentation.
+
+| Component | Native element | Object |
+| --- | --- | --- |
+| [Knob](knob.md) | `<input type="range">` over a printed dial | A skirt and a cap with a turning pointer, a scale printed on the face |

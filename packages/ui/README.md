@@ -590,3 +590,22 @@ forms work natively. The selected key is held down.
 ```
 
 Vue uses `v-model`; Astro takes `value` and `name`. `hideLabel` hides the legend visually. [Anatomy](../../docs/ui-library/components/segmented-control.md).
+
+## Knob
+
+A number picked by turning, as on audio and control hardware: a native `<input type="range">` over a printed dial, the
+first component of the Instrument level. Keys are native; a vertical drag (Shift for fine), a click on the printed
+scale, a tap on the cap's upper or lower half, the wheel and a double-click reset come from `attachStrataKnobs` in
+`@underglass/ui/dom`, which `attachStrata` and the components attach. `detents` makes it stepped; `unit` or `format`
+gives `aria-valuetext`.
+
+```tsx
+<Knob label="Gain" min={-12} max={12} detents={5} value={gain} onValueChange={setGain} unit=" dB" />
+```
+
+Vue uses `v-model`; Astro takes `value` and `unit`. The ref is the `.ug-knob` root (`inputRef`, or Vue's exposed
+`input`, is the input). On the GPU the skirt and the cap are raised faces at Relief and slabs at Objects, and the turning
+pointer is captured content. At the Instrument level (`level: "instrument"`) the panel takes core's `instrument`
+material: the knob is a skirt, a brushed cap, a polished chamfer and an engraved pointer that turns on a spring, and
+buttons become keys with captured caps.
+[Anatomy](../../docs/ui-library/components/knob.md).

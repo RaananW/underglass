@@ -28,7 +28,7 @@
 <main>
   <header>
     <h1>Strata specimen</h1>
-    <p class="lead">Every token, material, elevation and state of the Tier A components, in plain HTML and CSS from
+    <p class="lead">Every token, material, elevation and state of the Tier A components and the Knob, in plain HTML and CSS from
       <code>@underglass/ui/css</code>. States are shown statically with <code>data-strata-preview</code>; the real
       controls respond to the pointer and keyboard too. This page is the visual reference for later tests.</p>
     <form class="controls" id="settings" hidden>
@@ -246,6 +246,28 @@
           <div class="ug-field" style="align-self: stretch">
             <label class="ug-field__label" for="spec-volume">Volume</label>
             <input class="ug-slider" data-strata-face="groove" type="range" id="spec-volume" min="0" max="100" value="40">
+          </div>
+        </div>
+      </section>
+
+      <section class="ug-panel" data-strata-face="raised" aria-labelledby="knob-title">
+        <h3 id="knob-title">Knob</h3>
+        <div class="row" style="align-items: flex-start">
+          <div class="ug-knob" style="--strata-knob-value: 0.62;">
+            <div class="ug-knob__dial">
+              <span class="ug-knob__scale" aria-hidden="true"><span class="ug-knob__mark" data-strata-value="0" style="--strata-knob-at: 0;">0</span><span class="ug-knob__mark" data-strata-value="25" style="--strata-knob-at: 0.25;">25</span><span class="ug-knob__mark" data-strata-value="50" style="--strata-knob-at: 0.5;">50</span><span class="ug-knob__mark" data-strata-value="75" style="--strata-knob-at: 0.75;">75</span><span class="ug-knob__mark" data-strata-value="100" style="--strata-knob-at: 1;">100</span></span>
+              <span class="ug-knob__skirt" data-strata-face="raised" aria-hidden="true"><span class="ug-knob__cap" data-strata-face="raised"><span class="ug-knob__pointer"></span></span></span>
+              <input class="ug-knob__input" type="range" id="spec-knob" min="0" max="100" step="1" value="62" data-strata-default="62" data-strata-unit="%" aria-valuetext="62%">
+            </div>
+            <label class="ug-knob__label" for="spec-knob">Volume</label>
+          </div>
+          <div class="ug-knob ug-knob--detented" style="--strata-knob-value: 0.25;">
+            <div class="ug-knob__dial">
+              <span class="ug-knob__scale" aria-hidden="true"><span class="ug-knob__mark" data-strata-value="-12" style="--strata-knob-at: 0;">−12</span><span class="ug-knob__mark" data-strata-value="-6" style="--strata-knob-at: 0.25;">−6</span><span class="ug-knob__mark" data-strata-value="0" style="--strata-knob-at: 0.5;">0</span><span class="ug-knob__mark" data-strata-value="6" style="--strata-knob-at: 0.75;">6</span><span class="ug-knob__mark" data-strata-value="12" style="--strata-knob-at: 1;">12</span></span>
+              <span class="ug-knob__skirt" data-strata-face="raised" aria-hidden="true"><span class="ug-knob__cap" data-strata-face="raised"><span class="ug-knob__pointer"></span></span></span>
+              <input class="ug-knob__input" type="range" id="spec-gain" min="-12" max="12" step="6" value="-6" data-strata-preview="focus" data-strata-default="0" data-strata-unit=" dB" aria-valuetext="−6 dB">
+            </div>
+            <label class="ug-knob__label" for="spec-gain">Gain, focus</label>
           </div>
         </div>
       </section>
