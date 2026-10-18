@@ -1531,6 +1531,7 @@
     box-sizing: border-box;
     min-width: calc(var(--_cap) + 24px);
     min-height: calc(var(--_cap) + 24px);
+    max-width: 100%;
     padding: 12px;
     border: 0;
     border-radius: calc(var(--_cap) / 2 + 12px);
@@ -1547,7 +1548,7 @@
   :where(.ug-push)[data-strata-colour="glowOn"] { --_c: var(--strata-colour-glow-on); }
   /* Latched: down at 0.45 of the travel with the ring and the LED lit. Held (the pointer or Space or Enter down): down all the way with the ring lit. */
   :where(.ug-push[aria-pressed="true"]:not(:disabled, [aria-disabled="true"])) { --strata-lit: 1; --strata-led: 1; --strata-push-t: 0.45; }
-  :where(.ug-push:is(:active, [data-strata-down="true"], [data-strata-preview~="active"]):not(:disabled, [aria-disabled="true"])) { --strata-lit: 1; --strata-push-t: 1; }
+  :where(.ug-push:is(:active:not([data-strata-down="false"]), [data-strata-down="true"], [data-strata-preview~="active"]):not(:disabled, [aria-disabled="true"])) { --strata-lit: 1; --strata-push-t: 1; }
   :where(.ug-push__object) { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
   :where(.ug-push__object) > :where(*) { position: absolute; box-sizing: border-box; pointer-events: none; }
   /* The bezel (cap + 14 across, 4.4 px of metal), the socket and the ring under the cap (cap + 5.2 across). */
@@ -1587,8 +1588,9 @@
     min-width: var(--_cap);
     min-height: var(--_cap);
     max-width: 100%;
-    padding: 0 12px;
+    padding: 6px 12px;
     border-radius: calc(var(--_cap) / 2);
+    line-height: 1.15;
     background-color: var(--strata-colour-secondary);
     color: var(--_text);
     text-align: center;
@@ -1601,7 +1603,7 @@
     --_lift: var(--strata-state-hover-height);
     --_tone: var(--_hover-tone);
   }
-  :where(.ug-push:is(:active, [data-strata-down="true"], [data-strata-preview~="active"]):not(:disabled, [aria-disabled="true"])) :where(.ug-push__cap) {
+  :where(.ug-push:is(:active:not([data-strata-down="false"]), [data-strata-down="true"], [data-strata-preview~="active"]):not(:disabled, [aria-disabled="true"])) :where(.ug-push__cap) {
     --_lift: var(--strata-state-press-height);
     --_tone: var(--_press-tone);
   }
@@ -1646,7 +1648,7 @@
     .ug-push .ug-push__bezel { border: 1px solid ButtonText; background: Canvas; }
     .ug-push .ug-push__socket { background: transparent; }
     .ug-push .ug-push__ring { border: 1px solid ButtonText; background: Canvas; box-shadow: none; }
-    .ug-push[aria-pressed="true"]:not(:disabled, [aria-disabled="true"]) .ug-push__ring, .ug-push:is(:active, [data-strata-down="true"]):not(:disabled, [aria-disabled="true"]) .ug-push__ring { background: Highlight; }
+    .ug-push[aria-pressed="true"]:not(:disabled, [aria-disabled="true"]) .ug-push__ring, .ug-push:is(:active:not([data-strata-down="false"]), [data-strata-down="true"]):not(:disabled, [aria-disabled="true"]) .ug-push__ring { background: Highlight; }
     .ug-push .ug-push__led-socket { background: transparent; }
     .ug-push .ug-push__led { border: 1px solid ButtonText; background: Canvas; box-shadow: none; }
     .ug-push[aria-pressed="true"]:not(:disabled, [aria-disabled="true"]) .ug-push__led { background: Highlight; }

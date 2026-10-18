@@ -10,7 +10,7 @@
  * native state; the GPU helper reads them frame by frame, as it does a Lamp's.
  */
 import { lensColours, type LampEmitter } from "./lamp.ts";
-import { type SwitchSpring } from "./switch-forms.ts";
+import { fittedHeight, type SwitchSpring } from "./switch-forms.ts";
 
 /** The push-button forms: `momentary` is the Button's, `latching` the ToggleButton's. */
 export const pushForms = ["momentary", "latching"] as const;
@@ -93,4 +93,19 @@ export function ringEmitter(centre: readonly [number, number], cap: number, lit:
     radius: fixed(tokens.radius * cap),
     reach: "outset", face: 1,
   };
+}
+
+/**
+ * The tallest a stadium-shaped part may stand with its cast shadow inside the stadium it is concentric with, `margins` being how far it
+ * lies inside the box on each side (`fittedHeight`'s rule, and one more at the round ends: there the shadow's reach along the
+ * light's direction, `h · |L.xy| / L.z + 1.5 · h + 1`, must stay within the smallest margin, since a box's rounded corner is nearer
+ * than its sides).
+ */
+export function fittedRoundHeight(wanted: number, margins: { left: number; right: number; top: number; bottom: number }, light: { azimuth: number; elevation: number }): number {
+  const side = fittedHeight(wanted, margins, light);
+  const a = (light.azimuth * Math.PI) / 180, e = (light.elevation * Math.PI) / 180;
+  const k = Math.hypot(Math.sin(a) * Math.cos(e), Math.cos(a) * Math.cos(e)) / Math.sin(e);
+  const margin = Math.min(margins.left, margins.right, margins.top, margins.bottom);
+  const round = Math.max(0, (margin - 1) / (k + 1.5));
+  return Math.floor(Math.min(side, round, wanted) * 100) / 100;
 }

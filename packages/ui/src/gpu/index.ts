@@ -58,6 +58,7 @@ import { advanceSpring, depthScale, INSTRUMENT_CAMERA, keyObject, knobObject, kn
 import { faderMaterials, faderObject, faderParts, faderSpring } from "./instrument-fader.ts";
 import { switchHeight, switchMaterials, switchObject } from "./instrument-switch.ts";
 import type { StrataSwitchForm } from "../shared/switch-forms.ts";
+import { pushFormEntries } from "./push-forms.ts";
 import { pushHeight, pushMaterialsOf, pushObject } from "./instrument-push.ts";
 import { pushEmitterDefaults, pushPosition, ringEmitter, type PushEmitterTokens } from "../shared/push-button.ts";
 import { rotaryFraction } from "../shared/rotary-selector.ts";
@@ -384,7 +385,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       hover: (isControl && target.matches(":hover")) || preview.includes("hover"),
       // A toggle that is on, the current page of a Pagination, or a SegmentedControl's selected key holds its key down (design language section 6: it
       // latches at its travel).
-      pressed: !fader && !lamp && (isControl && control.matches(":active, [aria-pressed='true'], [data-strata-down='true'], [aria-current]:not([aria-current='false']), .ug-segmented__input:checked")) || preview.includes("active"),
+      pressed: !fader && !lamp && (isControl && control.matches(":active:not([data-strata-down='false']), [aria-pressed='true'], [data-strata-down='true'], [aria-current]:not([aria-current='false']), .ug-segmented__input:checked")) || preview.includes("active"),
       focus: !owner && (control.matches(":focus-visible") || preview.includes("focus")),
       disabled: control.matches(":disabled, [aria-disabled='true']"),
     };
@@ -491,6 +492,13 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       knob: { material: material(tokens.raw("material.roles.knob") || "satin"), colour: tokens.colour("knob") }, hoverHeight: tokens.number("state.hoverHeight", 1.6),
       light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, domes: options.domes });
     if (form) { entries.push(...form); continue; }
+    // A push button's bezel and cap (`push-forms.ts`): inside the button's box, shadows included.
+    const pushRoot = element.matches(".ug-push__bezel, .ug-push__cap") ? element.closest<HTMLElement>("button.ug-push") : null;
+    if (pushRoot) {
+      const parts = pushFormEntries(element, { rect, state, objects: objects(element), base: baseOf(element), box: rectWithin(pushRoot, panel), bezel: rectWithin(pushRoot.querySelector(".ug-push__bezel") ?? pushRoot, panel),
+        material: materialFor, light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, hoverHeight: tokens.number("state.hoverHeight", 1.6), keyTravel });
+      if (parts) { entries.push(...parts); continue; }
+    }
     // A Lamp's or StatusLight's bezel and lens (`lamp-forms.ts`): inside the control's box, shadows included.
     const lampRoot = element.matches(".ug-lamp__bezel, .ug-lamp__lens, .ug-status-light__lens") ? element.closest<HTMLElement>(".ug-lamp, .ug-status-light") : null;
     const lamp = lampRoot && lamps.get(lampRoot);
@@ -810,7 +818,7 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     const disabled = root.matches(":disabled, [aria-disabled='true']");
     // The throw's position as the CSS transition has it this frame, the same number the Relief and Objects levels follow.
     const read = Number.parseFloat(style.getPropertyValue("--strata-push-t"));
-    const t = Math.min(1, Math.max(0, disabled ? 0 : Number.isFinite(read) ? read : pushPosition({ held: root.matches(":active, [data-strata-down='true']"), latched: root.getAttribute("aria-pressed") === "true", disabled })));
+    const t = Math.min(1, Math.max(0, disabled ? 0 : Number.isFinite(read) ? read : pushPosition({ held: root.matches(":active:not([data-strata-down='false']), [data-strata-down='true']"), latched: root.getAttribute("aria-pressed") === "true", disabled })));
     if (!materials[name] && Object.keys(materials).length >= 12) { entries.push({ face: "raised", rect: box, radius: radiusOf(root, box[2]), height: raised, material: context.materialFor(cap, "raised"), state }); continue; }
     const layers = settings.materials[context.materialFor(cap, "raised")];
     materials[name] ??= { base: { colour, roughness: layers?.base?.roughness ?? 0.45, metallic: layers?.base?.metallic ?? 0 }, coat: { ...layers?.coat } };

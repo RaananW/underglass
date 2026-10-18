@@ -17,8 +17,7 @@
  * is `t`. Heights scale with depth (× 0.6, 1, 1.6 at 0, 50 and 100%); widths and diameters do not. Under
  * `prefers-reduced-transparency` the ring and the LED are opaque lacquer in the role's colour, not glass.
  */
-import { fittedHeight } from "../shared/switch-forms.ts";
-import { pushGeometry, pushTravel, PUSH_LED, type StrataPushForm } from "../shared/push-button.ts";
+import { fittedRoundHeight, pushGeometry, pushTravel, PUSH_LED, type StrataPushForm } from "../shared/push-button.ts";
 import { lensGlass, lensMaterial, lensOpaque, lensProfile, lampMaterials } from "./instrument-lamp.ts";
 import type { InstrumentProfile, InstrumentRecipe } from "./instrument.ts";
 
@@ -102,7 +101,7 @@ export function pushObject(input: PushInput, profile: (name: string, shape: Inst
   const fit = (rect: Box, radius: number, mean: number): PushPart["caster"] | undefined => {
     if (!input.light) return undefined;
     const margins = { left: Math.max(0, rect[0] - bx - 1), right: Math.max(0, bx + bw - rect[0] - rect[2] - 1), top: Math.max(0, rect[1] - by - 1), bottom: Math.max(0, by + bh - rect[1] - rect[3] - 1) };
-    const height = Math.floor(fittedHeight(mean, margins, input.light) * 1000) / 1000;
+    const height = Math.floor(fittedRoundHeight(mean, margins, input.light) * 1000) / 1000;
     return height < mean ? { rect, radius, height } : undefined;
   };
   const parts: PushPart[] = [];

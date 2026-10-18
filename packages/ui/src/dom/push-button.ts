@@ -4,7 +4,7 @@
  * Vue bindings alike.
  * - **Held:** `data-strata-down` is `"true"` from the pointer going down on the button, or Space or Enter going down on it, to
  *   the pointer going up anywhere, the key going up, the pointer being cancelled, the button losing focus or the page being
- *   hidden. A momentary button's ring is lit and its cap down while it is held; a latching button's cap goes all the way down
+ *   hidden, and `"false"` after that (it overrides a `:active` a touch can leave behind; with no script `:active` is the held state). A momentary button's ring is lit and its cap down while it is held; a latching button's cap goes all the way down
  *   while held and rests at 0.45 of the travel while latched (`aria-pressed`, kept by the ToggleButton's own behaviour). The
  *   click is the native one, so a form or a listener sees an ordinary button; Enter and Space both activate it, as on any button.
  * - **Disabled:** a disabled or `aria-disabled` button is never held, never lit and never travels.
@@ -37,7 +37,8 @@ export function attachStrataPushButtons(doc: Document = document): void {
   const held = (button: HTMLButtonElement) => keys.has(button) || [...pointers.values()].includes(button);
   const set = (button: HTMLButtonElement, on: boolean) => {
     if ((button.getAttribute("data-strata-down") === "true") === on) return;
-    if (on) button.setAttribute("data-strata-down", "true"); else button.removeAttribute("data-strata-down");
+    // Released is `"false"`, not absent: a touch can leave Chrome's `:active` on the button after it ends, and `"false"` overrides it.
+    button.setAttribute("data-strata-down", String(on));
     if (on) strataFeedback(button, "click");
   };
   const releaseAll = () => {

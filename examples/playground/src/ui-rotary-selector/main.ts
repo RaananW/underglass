@@ -47,7 +47,7 @@ const markup = `
     <button type="button" class="ug-button" data-strata-face="raised" id="rotary-reset"><span class="ug-button__label">Reset</span></button>
     <button type="submit" class="ug-button" data-strata-face="raised" id="rotary-submit" form="rotary-form"><span class="ug-button__label">Submit</span></button>
   </p>
-  <pre id="rotary-data" aria-label="Form data"></pre>`;
+  <pre id="rotary-data"></pre>`;
 
 const events: { id: string; type: string; value: string }[] = [];
 let panel!: HTMLElement;

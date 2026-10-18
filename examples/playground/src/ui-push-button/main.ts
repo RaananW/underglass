@@ -9,8 +9,8 @@
  * - `?plain` puts the panel in the page's flow with no Underglass at all, as a plain HTML page uses it (the mobile and
  *   preference checks).
  * Momentary buttons Record (danger) and Talk, latching buttons Mute (warning) and 48 V (info, latched), a disabled one of each,
- * a momentary Send that submits a form, and a plain Button and ToggleButton beside them. Every click is recorded;
- * `feedback(options)` sets the page's feedback options (off by default).
+ * a momentary Send that submits a form, and a plain Button and ToggleButton beside them. Every click is recorded; `?sound`,
+ * `?haptics` and `?muted` set the page's feedback options (off by default) and `feedback(options)` changes them.
  */
 import "@underglass/ui/css";
 import { compileStyle, mountApplicationModule, type CanvasController } from "@underglass/core";
@@ -41,13 +41,13 @@ const markup = `
     ${momentary({ id: "locked", label: "Locked", disabled: true })}
     ${latching({ id: "latched-off", label: "Armed", pressed: true, disabled: true })}
   </div>
-  <form id="push-form" style="display:flex;gap:16px;align-items:center;margin:16px 0 0">
+  <form id="push-form" style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin:16px 0 0">
     ${momentary({ id: "send", label: "Send", type: "submit", name: "send", colour: "success" })}
     <button type="button" class="ug-button" data-strata-face="raised" id="plain"><span class="ug-button__label">Plain</span></button>
     <button type="button" class="ug-toggle-button" data-strata-face="raised" id="plain-toggle" aria-pressed="false"><span class="ug-toggle-button__label">Plain toggle</span></button>
   </form>
   <p class="read" id="push-read">No clicks yet</p>
-  <pre id="push-data" aria-label="Form data"></pre>`;
+  <pre id="push-data"></pre>`;
 
 const events: { id: string; type: string }[] = [];
 let panel!: HTMLElement;
@@ -106,11 +106,15 @@ if (params.has("plain")) {
   if (!params.has("dom")) void controller.enable().then(() => strata?.refresh());
 }
 
+// `?sound`, `?haptics` and `?muted` set the page's feedback options; without them each control's `feedback.*` tokens decide (off by default).
+const feedback = attachStrataFeedback({ sound: params.has("sound") ? true : undefined, haptics: params.has("haptics") ? true : undefined, muted: params.has("muted") });
+
 window.strataPushProbe = {
   controller, panel: () => panel, scene: () => strata?.scene(panel), refresh: () => strata?.refresh(),
   events: () => [...events], clearEvents: () => { events.length = 0; },
-  feedback: (options: StrataFeedbackOptions) => { attachStrataFeedback(options); },
+  feedback: (options: StrataFeedbackOptions) => { feedback.update(options); },
   instrument: () => (controller?.state() as unknown as { instrument: unknown } | undefined)?.instrument,
+  state: () => controller?.state(),
   counts: () => { const state = controller?.state() as unknown as { mode: string; metrics: { captures: number; uploads: number; geometryUpdates: number } } | undefined;
     return state ? { mode: state.mode, captures: state.metrics.captures, uploads: state.metrics.uploads, geometryUpdates: state.metrics.geometryUpdates } : undefined; },
 };
@@ -118,6 +122,6 @@ declare global {
   interface Window { strataPushProbe: {
     controller: CanvasController | undefined; panel(): HTMLElement; scene(): ReturnType<StrataGpu["scene"]>; refresh(): void;
     events(): { id: string; type: string }[]; clearEvents(): void;
-    instrument(): unknown; feedback(options: StrataFeedbackOptions): void; counts(): { mode: string; captures: number; uploads: number; geometryUpdates: number } | undefined;
+    instrument(): unknown; state(): ReturnType<CanvasController["state"]> | undefined; feedback(options: StrataFeedbackOptions): void; counts(): { mode: string; captures: number; uploads: number; geometryUpdates: number } | undefined;
   } }
 }
