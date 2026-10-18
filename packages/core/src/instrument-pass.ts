@@ -6,12 +6,20 @@
  * scene that draws after a layer's pass; `afterFrame` reads GPU timings and finishes a build's first frame.
  *
  * Each layer scene has the stage camera (at the canvas centre, `D` away, mapping the face plane one CSS px to one CSS
- * px), the key light, an optional diffuse fill, the studio environment and two render tasks into the layer's pass
- * target (colour loaded, never cleared):
- * - `face`: one quad per object that darkens the face by its parts' analytic shadows (the Relief formula, 2.8);
- * - `parts`: the parts (PBR, thin-instanced per kind, GPU-culled) and the captured caps, with the scene's own depth
- *   buffer cleared every frame, after a clip mask when the layer is clipped.
- * Core work item 3 moves `parts` to an offscreen target with a clipped composite; `face` stays.
+ * px), the key light (with its PCF shadow map, Lite's `shadow` task), an optional diffuse fill, the studio environment
+ * and the post chain (core work item 3, `instrument-post.ts` for its settings), in task order:
+ * - `face`: one quad per object that darkens the face by its parts' analytic shadows (the Relief formula, 2.8), straight
+ *   onto the swapchain;
+ * - `mask`: the clip mask, 1 where a pixel centre lies inside a drawn object's `bounds` and the layer's clip;
+ * - `parts`: the PBR parts (thin-instanced per kind, GPU-culled) into the shared mesh target, cleared transparent, with
+ *   its own depth;
+ * - `taa`, `contact`, `ssgi`, `smaa` (the ones the scene turns on), then `emitters` and `bloom` (flat glow copies of the
+ *   lit lenses, bloomed);
+ * - `caps`: the captured caps into their own target, depth-tested against the parts;
+ * - `composite`: one effect onto the swapchain over the layer's rectangle: `α · [caps + (1 − caps.a) · (parts + halo) · mask]`,
+ *   premultiplied, so the layer's opacity applies to its meshes as a group.
+ * The targets are shared by every instrument layer of the engine: each layer's chain runs to its composite before the
+ * next layer's scene starts.
  *
  * World axes are Lite's (y up, +z away from the viewer, the stage centre at the origin). Instance matrices map
  * part-local px to world: the canvas conversion, times the layer's similarity (with z scaled alike), times the part's
@@ -19,16 +27,17 @@
  * released after a queue fence or device loss, as superseded compositions are.
  */
 import {
-  addClusteredLightContainer, addMeshToTask, addTask, addToScene, createClusteredLightContainer, createClusteredPointLight, createDirectionalLight,
-  createDynamicTexture, createFreeCamera, createHemisphericLight, markClusteredLightContainerDirty,
-  createMeshFromData, createPbrMaterial, createRenderTarget, createRenderTask, createSceneContext, createShaderMaterial, createStorageBuffer,
-  disposeScene, disposeStorageBuffer, enableAsyncShaderPipelineCompilation, enableShaderMaterialInstanceWorld, enableThinInstanceGpuCulling,
-  flushThinInstances, getRenderTaskGpuTimings, markMaterialUboDirty, isGpuTimingSupported, loadHdrEnvironment, onSceneDispose, registerScene, releaseTexture,
-  setEnvironmentRotation, setPbrAnisotropy, setPbrClearCoat, setPbrEmissive, setPbrIridescence, setPbrMetallicReflectance, setPbrSheen,
-  setMeshVisible, setRenderTaskGpuTimingEnabled, setShaderStorageBuffer, setShaderTexture, setShaderUniform, setThinInstanceCount, setThinInstances,
-  unregisterScene, updateDynamicTexture, updateStorageBuffer, vec3,
-  type ClusteredLightContainer, type DynamicTexture2D, type EngineContext, type FreeCamera, type Material, type Mesh, type PbrMaterialProps, type RenderingContext,
-  type SceneContext, type ShaderMaterial, type StorageBuffer,
+  addClusteredLightContainer, addMeshToTask, addTask, addToScene, createBloomPostProcessTask, createClusteredLightContainer, createClusteredPointLight, createDirectionalLight,
+  createDynamicTexture, createEffectRenderTask, createEffectWrapper, createFreeCamera, createHemisphericLight, createPcfDirectionalShadowGenerator, markClusteredLightContainerDirty,
+  createMeshFromData, createPbrMaterial, createRenderTask, createSceneContext, createScreenSpaceContactShadowsPostProcessTask,
+  createScreenSpaceGlobalIlluminationPostProcessTask, createShaderMaterial, createSmaaPostProcessTask, createStorageBuffer, createSurfaceRenderTargetTexture, createTaaPostProcessTask,
+  disposeEffectWrapper, disposeRenderTargetTexture, onRenderTargetTextureResize, disposeScene, disposeStorageBuffer, enableAsyncShaderPipelineCompilation, enableShaderMaterialInstanceWorld, enableThinInstanceGpuCulling,
+  flushThinInstances, getRenderTaskGpuTimings, isGpuTimingSupported, loadHdrEnvironment, onSceneDispose, registerScene, registerSceneWithShadowSupport, releaseTexture,
+  setEffectTexture, setEffectUniforms, setEnvironmentRotation, setPbrAnisotropy, setPbrClearCoat, setPbrEmissive, setPbrIridescence, setPbrMetallicReflectance, setPbrSheen,
+  setMeshVisible, setRenderTaskGpuTimingEnabled, setShaderStorageBuffer, setShaderTexture, setShaderUniform, setShadowTaskCasterMeshes, setThinInstanceCount, setThinInstances,
+  unregisterScene, updateDynamicTexture, updateStorageBuffer, vec3, withSampledDepthTexture,
+  type ClusteredLightContainer, type DirectionalLight, type DynamicTexture2D, type EngineContext, type FreeCamera, type Material, type Mesh, type PbrMaterialProps,
+  type RenderingContext, type RenderTargetTextureResult, type RenderTask, type SceneContext, type ShaderMaterial, type ShadowGenerator, type StorageBuffer, type Task,
 } from "@babylonjs/lite";
 import { DEFAULT_FEATHER, EMITTERS_PER_LAYER, GUARD_CELLS, guardCells, layerGuard, PROTECTED_PER_LAYER, shadowScales, type Guard, type LayerEmitters } from "./emitters.js";
 import {
@@ -37,6 +46,10 @@ import {
   INSTRUMENT_PARTS_PER_STAGE, STUDIO_DEFAULTS, type Containment, type ContainmentFrontier, type InstrumentCaster, type InstrumentObject,
   type InstrumentProfile, type InstrumentRecipe, type InstrumentScene, type Matrix, type PartKind, type StudioTokens,
 } from "./instrument.js";
+import {
+  compositeRect, settledAll, INSTRUMENT_CONTRAST, INSTRUMENT_EXPOSURE, liteMapBias, mapSettings, mapWindow, partGlow, placedBox, postFlags, postStructure, POST_SETTINGS,
+  POST_STAGE_BUDGET_MS, POST_STAGES, type PostStage,
+} from "./instrument-post.js";
 
 /** A build that has not finished in this long steps its layer down (`compile`); GPU stays on. */
 export const INSTRUMENT_BUILD_DEADLINE_MS = 10000;
@@ -48,6 +61,30 @@ export const INSTRUMENT_BUILD_DEADLINE_MS = 10000;
  * that still cannot compile falls back, diagnosed, after 3 s + 1.5 s; the build's own deadline stays 10 s.
  */
 export const INSTRUMENT_SUCCESSOR_DEFERRAL_MS = 3000;
+
+/** @internal Tests only (see `InstrumentControllerOptions.testHook`). */
+export interface InstrumentTestHook {
+  beforeBuild?(layerId: string): Promise<void> | void;
+  failStage?(layerId: string, stage: PostStage | "composite"): boolean;
+  /** Makes a scene's registration fail (after its chain is built), with (`minimal`) or without its optional stages. */
+  failRegistration?(layerId: string, minimal: boolean): boolean;
+  /** Makes a build fail before registration with an ordinary error (as a mesh or shader would), with or without its optional stages. */
+  failBuild?(layerId: string, minimal: boolean): boolean;
+}
+/** The chain's target, mask or composite could not be built: the layer steps down with `post`. */
+class PostBuildError extends Error {}
+/** A scene's registration failed (its pipelines did not prepare), as opposed to an error while building it. */
+class RegistrationError extends Error {}
+/** The shared targets (decision 1 of item 3): formats per name; `mesh` also has a sampled depth. */
+type TargetName = "mesh" | "ping" | "pong" | "mask" | "caps" | "emitters" | "glow";
+const TARGET_FORMATS: Record<TargetName, { format: GPUTextureFormat; dFormat?: GPUTextureFormat }> = {
+  mesh: { format: "rgba16float", dFormat: "depth24plus" }, ping: { format: "rgba16float" }, pong: { format: "rgba16float" }, mask: { format: "r8unorm" },
+  caps: { format: "rgba8unorm" }, emitters: { format: "rgba8unorm" }, glow: { format: "rgba8unorm" },
+};
+const transparent = { r: 0, g: 0, b: 0, a: 0 };
+/** The task suffixes and the stage each one's GPU time counts for (the emitter target's draw counts for bloom). */
+const TASK_STAGES: Record<string, string> = { face: "face", mask: "mask", parts: "parts", taa: "taa", contact: "contact", ssgi: "ssgi", smaa: "smaa",
+  emitters: "bloom", bloom: "bloom", caps: "caps", composite: "composite" };
 
 /** What the renderer hands the controller for one presented layer, every frame. */
 export interface InstrumentLayerInput {
@@ -69,7 +106,7 @@ export interface InstrumentLayerInput {
 /** Why an object is drawn as its Relief primitive. */
 export interface SteppedDown {
   object: string;
-  reason: "containment" | "budget" | "compile" | "pending" | "order-unavailable" | "transform";
+  reason: "containment" | "budget" | "compile" | "pending" | "order-unavailable" | "transform" | "post";
   part?: string;
   /** The smallest projected inset of the binding vertex, canvas px (negative: outside `bounds`). */
   inset?: number;
@@ -93,11 +130,25 @@ interface Pass {
    * layer's protected rects with their shadow caps, which scale the face shadows inside them.
    */
   update(input: InstrumentLayerInput, scene: InstrumentScene, hidden: ReadonlySet<number>, stage: Stage, kinds: ReadonlyMap<string, PartKind>, changed: boolean, guard: Guard): number;
-  taskNames: string[];
+  /** The prefix of every task the scene names (`instrument:<layer>:`); Lite's map task is `shadow`. */
+  prefix: string;
   registered: boolean;
   /** The clustered light container (a scene with `emitters`), and how many of its lights are lit. */
   lights?: ClusteredLightContainer;
   litLights: number;
+  post: PassPost;
+}
+/** A stage's status: `idle` is bloom on a frame with no lit lens (its tasks off). */
+type StageStatus = { status: "on" | "off" | "failed" | "idle"; error?: string };
+/** One layer's post chain: its stages, its map and its GPU time per stage. */
+interface PassPost {
+  stages: Record<PostStage, StageStatus>;
+  map?: { size: number; bias: number; biasPx: number; darkness: number; window: number; casters: number; renders: number; timedRenders: number; generator: ShadowGenerator };
+  gpu: Map<string, Timing>;
+  /** Lit lenses this frame. */
+  lit: number;
+  lenses: number;
+  caps: number;
 }
 interface Stage { width: number; height: number; dpr: number }
 interface LayerState {
@@ -107,7 +158,8 @@ interface LayerState {
   structure?: string;
   /** The build in flight: its structure and a token that tells a superseded build to dispose its scene. */
   building?: { structure: string; token: object };
-  failed?: { structure: string; reason: string };
+  /** A failed build; `post`: the chain's target, mask or composite could not be built (the `post` step-down). */
+  failed?: { structure: string; reason: string; post?: boolean; size: string };
   status: Status;
   stepped: number[];
   steppedDown: SteppedDown[];
@@ -138,8 +190,12 @@ export interface InstrumentControllerOptions {
   requestDraw(): void;
   /** The successor preparation in flight, if any; a build waits for it (the compile policy). */
   preparation(): Promise<void> | undefined;
-  /** @internal Tests only: `beforeBuild` may delay (or never resolve) a layer's build, to prove the build deadline. */
-  testHook?: { beforeBuild?(layerId: string): Promise<void> | void };
+  /**
+   * @internal Tests only: `beforeBuild` may delay (or never resolve) a layer's build, to prove the build deadline;
+   * `failStage` makes a stage's creation throw (a post stage, or `composite` for the chain itself), to prove the `post`
+   * diagnostics.
+   */
+  testHook?: InstrumentTestHook;
   /** Whether Lite's task timings must stay on when the last instrument layer leaves (the renderer's face pools use them). */
   keepTiming?(): boolean;
   onMeasure?(sample: { kind: "instrumentGpuMs"; at: number; durationMs: number; phase: "content"; layerId: string }): void;
@@ -179,6 +235,26 @@ export function createInstrumentController(options: InstrumentControllerOptions)
   let grain: DynamicTexture2D | undefined;
   const studios = new Map<string, Uint8Array>();
   let asyncPipelines = false;
+  // The post chain's targets, shared by every instrument layer (decision 1 of item 3), allocated on first use.
+  const targets = new Map<TargetName, RenderTargetTextureResult>();
+  // A resize or a DPR change replaces the targets' textures when the first scene re-records; each composite then binds
+  // the new ones (an effect keeps the views it was given until its textures are set again).
+  const rebinds = new Set<() => void>();
+  // Shadow map textures released with their scenes, and any that could not be (N3 of the review).
+  const mapTextures = { destroyed: 0, missing: 0 };
+  // Builds running (from the build's start to its end, a retry and a timed-out build included): the shared targets are
+  // never released under one, since its scene may hold their handles or allocate them again.
+  let inFlight = 0;
+  function target(name: TargetName): RenderTargetTextureResult {
+    let result = targets.get(name);
+    if (!result) {
+      result = createSurfaceRenderTargetTexture(engine, { lbl: `underglass-instrument:${name}`, ...TARGET_FORMATS[name], samples: 1, size: engine },
+        name === "mesh" ? withSampledDepthTexture : undefined);
+      targets.set(name, result);
+      onRenderTargetTextureResize(result, () => { for (const rebind of rebinds) rebind(); });
+    }
+    return result;
+  }
 
   /** The hairline `grain` normal map (I0.4): grooves along u, one random depth per row with a slow drift, at strength 0.5. */
   function grainTexture(): DynamicTexture2D {
@@ -208,20 +284,44 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     return image;
   }
 
-  /** Builds a layer's scene; resolves once it is registered (pipelines prepared) or rejects. */
-  async function build(state: LayerState, scene: InstrumentScene, structure: string): Promise<Pass> {
+  /**
+   * Builds a layer's scene; resolves once it is registered (pipelines prepared) or rejects. `minimal` (the reason) builds
+   * the chain without its optional stages, after a registration with them failed (decision 13 of item 3).
+   */
+  async function build(state: LayerState, scene: InstrumentScene, structure: string, minimal?: string): Promise<Pass> {
     const label = `instrument:${state.id}`;
     const sceneContext = createSceneContext(engine, { defaultRenderTask: false });
     let registered = false;
     try {
       sceneContext.name = label;
-      sceneContext.imageProcessing = { ...sceneContext.imageProcessing, exposure: 1, contrast: 1, toneMappingEnabled: false };
       const camera = createFreeCamera(vec3(0, 0, -scene.camera.distance), vec3(0, 0, 0));
       sceneContext.camera = camera;
       // Lite's light direction is the way light travels, in world axes; the scene's light points towards the light.
       const a = (scene.light.azimuth * Math.PI) / 180, e = (scene.light.elevation * Math.PI) / 180;
       const towards: [number, number, number] = [Math.sin(a) * Math.cos(e), Math.cos(a) * Math.cos(e), -Math.sin(e)];
-      addToScene(sceneContext, createDirectionalLight([-towards[0], -towards[1], -towards[2]], scene.light.intensity ?? 1.6));
+      const key = createDirectionalLight([-towards[0], -towards[1], -towards[2]], scene.light.intensity ?? 1.6);
+      // The PCF map (decision 9 of item 3): built with the light, before any part (a receiver built without a generator
+      // keeps that state, I0.5). The light stands on the stage centre's ray towards itself, its depth window centred on
+      // the stage; Lite's bias is a share of the window.
+      const map = mapSettings(scene);
+      let mapState: PassPost["map"];
+      if (map) {
+        const window = mapWindow(options.stage()), distance = window + 1024;
+        key.position.set(towards[0] * distance, towards[1] * distance, towards[2] * distance);
+        const generator = createPcfDirectionalShadowGenerator(engine, key, { mapSize: map.size, bias: liteMapBias(map.bias, window), darkness: map.darkness,
+          orthoMinZ: distance - window, orthoMaxZ: distance + window });
+        key.shadowGenerator = generator;
+        mapState = { ...map, biasPx: map.bias, bias: liteMapBias(map.bias, window), window, casters: 0, renders: 0, timedRenders: 0, generator };
+        // Lite 1.33 has no public disposal for a generator's map: its depth texture (64 MB at 4,096²) is released with the
+        // scene through the internal field. If a Lite version renames it, that is counted and reported once, not leaked silently.
+        onSceneDispose(sceneContext, () => {
+          const texture = (generator as { _depthTexture?: GPUTexture })._depthTexture;
+          if (texture && typeof texture.destroy === "function") { texture.destroy(); mapTextures.destroyed++; return; }
+          mapTextures.missing++;
+          if (mapTextures.missing === 1) console.warn("Underglass instrument: a shadow map's texture could not be released (Babylon Lite's generator has no _depthTexture); it is left to garbage collection");
+        });
+      }
+      addToScene(sceneContext, key);
       // 2D.5: the fill is diffuse only and 0 unless the scene sets it; the studio is the fill.
       if ((scene.light.ambient ?? 0) > 0) {
         const fill = createHemisphericLight([0, 0, -1], scene.light.ambient);
@@ -233,10 +333,17 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       const url = URL.createObjectURL(new Blob([studioImage(towards[1], tokens) as BlobPart], { type: "image/vnd.radiance" }));
       try { await loadHdrEnvironment(sceneContext, url, { faceSize: 256, skipSkybox: true, skipGround: true }); }
       finally { URL.revokeObjectURL(url); }
+      // The output transform, explicitly (decision 15 of item 3): the loader sets exactly these as a side effect (L2).
+      Object.assign(sceneContext.imageProcessing, { exposure: INSTRUMENT_EXPOSURE, contrast: INSTRUMENT_CONTRAST, toneMappingEnabled: false });
       setEnvironmentRotation(sceneContext, Math.atan2(towards[0], -towards[2]));
-      const pass = createPass(state, sceneContext, camera, scene, structure);
+      const pass = createPass(state, sceneContext, camera, scene, structure, key, mapState, minimal);
       if (!asyncPipelines) { enableAsyncShaderPipelineCompilation(engine); asyncPipelines = true; }
-      await registerScene(sceneContext);
+      if (options.testHook?.failBuild?.(state.id, !!minimal)) throw new Error(`the test hook fails the build${minimal ? " of the minimal chain" : ""}`);
+      // Every task of the chain is in the frame graph now, so registration prepares their pipelines inside this build.
+      try {
+        if (options.testHook?.failRegistration?.(state.id, !!minimal)) throw new Error(`the test hook fails the registration${minimal ? " of the minimal chain" : ""}`);
+        await (mapState ? registerSceneWithShadowSupport : registerScene)(sceneContext);
+      } catch (error) { throw new RegistrationError(String(error)); }
       registered = true;
       scenes.add(sceneContext);
       pass.registered = true;
@@ -249,38 +356,72 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     }
   }
 
-  /** Creates the tasks, materials, kinds, casters and caps of one scene; `update` writes them every frame. */
-  function createPass(state: LayerState, sceneContext: SceneContext, camera: FreeCamera, scene: InstrumentScene, structure: string): Pass {
+  /**
+   * Creates the tasks, materials, kinds, casters, caps, lenses and the post chain of one scene, in task order;
+   * `update` writes them every frame. `minimal` leaves the optional stages out (reported failed with that reason).
+   */
+  function createPass(state: LayerState, sceneContext: SceneContext, camera: FreeCamera, scene: InstrumentScene, structure: string, key: DirectionalLight,
+    mapState: PassPost["map"], minimal?: string): Pass {
     const label = `instrument:${state.id}`;
-    const depth = createRenderTarget({ lbl: `${label}:depth`, dFormat: "depth24plus-stencil8", samples: 1, size: engine });
+    const hook = options.testHook?.failStage;
+    const flags = postFlags(scene);
+    const stages = Object.fromEntries(POST_STAGES.map(name => [name, { status: flags[name] ? "on" : "off" }])) as Record<PostStage, StageStatus>;
+    const post: PassPost = { stages, map: mapState, gpu: new Map(), lit: 0, lenses: 0, caps: 0 };
+    // The chain's mandatory pieces (the target, the mask, the composite): without them the parts cannot be drawn safely,
+    // so a failure steps the layer down with `post`.
+    const mandatory = <T>(what: string, make: () => T): T => {
+      try {
+        if (hook?.(state.id, "composite")) throw new Error("the test hook fails the chain");
+        return make();
+      } catch (error) { throw new PostBuildError(`Instrument post chain ${what} could not be built: ${String(error)}`); }
+    };
+    const mesh = mandatory("target", () => target("mesh")), maskTarget = mandatory("mask", () => target("mask"));
     const faceTask = createRenderTask({ name: `${label}:face`, rt: engine.scRT, clr: false, autoMirror: false }, engine, sceneContext);
-    const partsTask = createRenderTask({ name: `${label}:parts`, rt: engine.scRT, depth, clr: false, autoMirror: false }, engine, sceneContext);
+    const maskTask = createRenderTask({ name: `${label}:mask`, rt: maskTarget.rt, sharedRt: true, clr: true, clrColor: transparent, autoMirror: false }, engine, sceneContext);
+    const partsTask = createRenderTask({ name: `${label}:parts`, rt: mesh.rt, sharedRt: true, clr: true, clrColor: transparent, autoMirror: false }, engine, sceneContext);
     addTask(sceneContext, faceTask);
+    addTask(sceneContext, maskTask);
     addTask(sceneContext, partsTask);
-    const add = (task: typeof faceTask, mesh: Mesh) => { addToScene(sceneContext, mesh); addMeshToTask(task, mesh); };
+    const add = (task: RenderTask, mesh: Mesh) => { addToScene(sceneContext, mesh); addMeshToTask(task, mesh); };
     const storage: StorageBuffer[] = [];
     onSceneDispose(sceneContext, () => { for (const buffer of storage.splice(0)) disposeStorageBuffer(buffer); });
     const kinds = partKinds(scene);
     const capacityOf = (count: number) => Math.min(INSTRUMENT_PARTS_PER_LAYER, Math.max(256, 2 ** Math.ceil(Math.log2(Math.max(1, count) * 2))));
     // Uniforms every shader material shares: canvas → layer px (the inverse similarity) and the frame.
-    const shared = (): ShaderMaterial[] => materials;
     const materials: ShaderMaterial[] = [];
 
-    // PBR materials from the recipes (decision 4 of the note), one per material name the kinds use, and a blended twin
-    // for fractional layer opacity (decision 7).
-    const pbr = new Map<string, PbrMaterialProps>(), blended = new Map<string, PbrMaterialProps>();
-    const pbrOf = (name: string, blend = false) => {
-      const cache = blend ? blended : pbr;
-      let material = cache.get(name);
-      if (material) return material;
-      material = recipeMaterial(scene.materials[name]!, scene, blend ? `${name}:blended` : name);
-      if (blend) { material.alphaBlend = true; material.alpha = 1; }
-      cache.set(name, material);
+    // PBR materials from the recipes (decision 4 of the note), one per material name the kinds use.
+    const pbr = new Map<string, PbrMaterialProps>();
+    const pbrOf = (name: string) => {
+      let material = pbr.get(name);
+      if (!material) { material = recipeMaterial(scene.materials[name]!, scene, name); pbr.set(name, material); }
       return material;
     };
 
+    // Lenses (parts flagged `emitter`) are drawn again into the emitter target as flat glow copies, and the captured
+    // caps into the caps target after the chain. Both tasks are created now (their meshes are added with the kinds) and
+    // put in the frame graph in their place below.
+    const lensKinds = kinds.filter(kind => !kind.captured && kind.instances.some(({ object, part }) => scene.objects[object]!.parts[part]!.emitter !== undefined));
+    let emitterTask: RenderTask | undefined, bloomTask: Task | undefined;
+    if (flags.bloom && !lensKinds.length) stages.bloom = { status: "idle" };
+    if (flags.bloom && lensKinds.length) {
+      if (minimal) stages.bloom = { status: "failed", error: minimal };
+      else {
+        try {
+          if (hook?.(state.id, "bloom")) throw new Error("the test hook fails bloom");
+          const emitters = target("emitters"), glow = target("glow");
+          emitterTask = createRenderTask({ name: `${label}:emitters`, rt: emitters.rt, sharedRt: true, clr: true, clrColor: transparent, autoMirror: false }, engine, sceneContext);
+          bloomTask = createBloomPostProcessTask({ name: `${label}:bloom`, sourceTexture: emitters.rt, targetTexture: glow.rt, ...POST_SETTINGS.bloom }, engine, sceneContext);
+        } catch (error) { emitterTask = undefined; stages.bloom = { status: "failed", error: String(error) }; console.error(`Underglass instrument layer ${state.id}: bloom left out: ${String(error)}`); }
+      }
+    }
+    const capsTarget = kinds.some(kind => kind.captured) ? mandatory("caps target", () => target("caps")) : undefined;
+    // The caps test their depth against the parts' (the mesh target's depth, loaded): a part in front of a cap hides it.
+    const capsTask = capsTarget ? createRenderTask({ name: `${label}:caps`, rt: capsTarget.rt, depth: mesh.rt, sharedRt: true, clr: true, clrColor: transparent, autoMirror: false }, engine, sceneContext) : undefined;
+
     // Parts: one thin-instanced mesh per kind. Captured kinds take the cap shader instead of PBR.
     const caps: { material: ShaderMaterial; buffer: StorageBuffer; data: Float32Array; dirty: boolean }[] = [];
+    const casters: Mesh[] = [];
     const meshes = kinds.map((kind, index) => {
       const geometry = profileGeometry(scene.profiles[kind.profile]!);
       const mesh = createMeshFromData(engine, `${label}:kind${index}`, geometry.positions, geometry.normals, geometry.indices, geometry.uvs);
@@ -288,12 +429,16 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       setThinInstances(mesh, matrices, capacity);
       setThinInstanceCount(mesh, kind.instances.length);
       let cap: (typeof caps)[number] | undefined;
-      let twin: Mesh | undefined;
+      let lens: { mesh: Mesh; buffer: StorageBuffer; data: Float32Array; dirty: boolean } | undefined;
+      // The world box of each instance (NaN when hidden): their union is the kind's bounds for the map's fit.
+      const boxes = new Float64Array(capacity * 6).fill(Number.NaN);
+      const local = profileBounds(scene.profiles[kind.profile]!);
+      const boundMin: [number, number, number] = [0, 0, 0], boundMax: [number, number, number] = [0, 0, 0];
       if (kind.captured) {
         const data = new Float32Array(capacity * 4);
         const buffer = createStorageBuffer(engine, data, `${label}:caps${index}`);
         storage.push(buffer);
-        const material = createShaderMaterial({ name: `${label}:caps${index}`, vertexSource: capVertex, fragmentSource: capFragment, attributes: ["position"],
+        const material = createShaderMaterial({ name: `${label}:caps${index}`, vertexSource: slotVertex, fragmentSource: capFragment, attributes: ["position"],
           uniforms: ["world", "view", "projection", ...frameUniforms], samplers: ["capture"], storageBuffers: [{ name: "caps", type: "array<vec4<f32>>" }],
           needAlphaBlending: true, blend: straightAlpha, depthWrite: true, backFaceCulling: false });
         enableShaderMaterialInstanceWorld(material);
@@ -306,29 +451,50 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         if (!texture) throw new Error(`Layer ${state.id} has no capture to bind to its captured caps`);
         setShaderTexture(material, "capture", texture as never);
         mesh.material = material as unknown as Material;
+        add(capsTask!, mesh);
       } else {
         mesh.material = pbrOf(kind.material) as unknown as Material;
-        // Lite culls thin instances on the GPU; caps index their storage by instance, so they are not culled.
+        // Every PBR part casts into the map and receives from it (2D.7); its bounds are published below.
+        mesh.receiveShadows = !!mapState;
+        mesh.boundMin = boundMin;
+        mesh.boundMax = boundMax;
+        casters.push(mesh);
+        // Lite culls thin instances on the GPU; caps and glow copies index their storage by instance, so they are not culled.
         enableThinInstanceGpuCulling(mesh);
-        // The blended twin draws the same instances while the layer's opacity is fractional. Lite builds a swapped
-        // material's renderable asynchronously and outside explicit tasks, so the twin is built with the scene instead.
-        twin = createMeshFromData(engine, `${label}:kind${index}:blended`, geometry.positions, geometry.normals, geometry.indices, geometry.uvs);
-        setThinInstances(twin, matrices, capacity);
-        setThinInstanceCount(twin, kind.instances.length);
-        twin.material = pbrOf(kind.material, true) as unknown as Material;
-        enableThinInstanceGpuCulling(twin);
-        setMeshVisible(twin, false);
-        add(partsTask, twin);
+        add(partsTask, mesh);
+        if (emitterTask && lensKinds.includes(kind)) {
+          const glow = createMeshFromData(engine, `${label}:kind${index}:glow`, geometry.positions, geometry.normals, geometry.indices, geometry.uvs);
+          setThinInstances(glow, matrices, capacity);
+          setThinInstanceCount(glow, kind.instances.length);
+          const data = new Float32Array(capacity * 4);
+          const buffer = createStorageBuffer(engine, data, `${label}:glow${index}`);
+          storage.push(buffer);
+          const material = createShaderMaterial({ name: `${label}:glow${index}`, vertexSource: slotVertex, fragmentSource: glowFragment, attributes: ["position"],
+            uniforms: ["world", "view", "projection", ...frameUniforms], storageBuffers: [{ name: "glows", type: "array<vec4<f32>>" }],
+            needAlphaBlending: false, depthWrite: false, backFaceCulling: false });
+          enableShaderMaterialInstanceWorld(material);
+          setShaderStorageBuffer(material, "glows", buffer);
+          materials.push(material);
+          glow.material = material as unknown as Material;
+          add(emitterTask, glow);
+          lens = { mesh: glow, buffer, data, dirty: true };
+        }
       }
-      add(partsTask, mesh);
-      return { kind, mesh, twin, matrices, capacity, cap, count: kind.instances.length };
+      return { kind, mesh, matrices, capacity, cap, lens, boxes, local, boundMin, boundMax, count: kind.instances.length };
     });
+    if (mapState) {
+      setShadowTaskCasterMeshes(mapState.generator, casters);
+      mapState.casters = casters.length;
+    }
+    post.lenses = lensKinds.length;
+    post.caps = caps.length;
 
     // Face shadows (I0.5 (a)): one quad per object, up to 8 casters each from a storage buffer, darkest wins.
     // Every object the format allows: adding objects updates in place, without a rebuild.
     const objectCapacity = INSTRUMENT_OBJECTS;
-    const quad = createMeshFromData(engine, `${label}:shadows`, new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), new Float32Array([0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1]),
+    const square = (name: string) => createMeshFromData(engine, name, new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), new Float32Array([0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1]),
       new Uint32Array([0, 1, 2, 0, 2, 3]), new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]));
+    const quad = square(`${label}:shadows`);
     const quads = new Float32Array(objectCapacity * 16);
     setThinInstances(quad, quads, objectCapacity);
     const casterData = new Float32Array(objectCapacity * INSTRUMENT_CASTERS_PER_OBJECT * 8);
@@ -340,7 +506,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     const guardData = new Float32Array((2 + 2 * PROTECTED_PER_LAYER + GUARD_CELLS.x * GUARD_CELLS.y) * 4);
     const guardBuffer = createStorageBuffer(engine, guardData, `${label}:guard`);
     storage.push(guardBuffer);
-    const shade = createShaderMaterial({ name: `${label}:shadows`, vertexSource: shadowVertex, fragmentSource: shadowFragment, attributes: ["position"],
+    const shade = createShaderMaterial({ name: `${label}:shadows`, vertexSource: slotVertex, fragmentSource: shadowFragment, attributes: ["position"],
       uniforms: ["world", "view", "projection", ...frameUniforms, { name: "light", type: "vec4<f32>", defaultValue: [0, 0, 1, 0] }],
       storageBuffers: [{ name: "shapes", type: "array<vec4<f32>>" }, { name: "guard", type: "array<vec4<f32>>" }], needAlphaBlending: true, blend: darken, depthWrite: false, backFaceCulling: false });
     enableShaderMaterialInstanceWorld(shade);
@@ -353,18 +519,70 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     quad.material = shade as unknown as Material;
     add(faceTask, quad);
 
-    // The clip mask: the nearest depth outside the layer's clip, no colour, before every part.
-    const mask = createMeshFromData(engine, `${label}:clip`, new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), new Float32Array([0, 0, -1, 0, 0, -1, 0, 0, -1]),
-      new Uint32Array([0, 1, 2]), new Float32Array([0, 0, 1, 0, 0, 1]));
-    const clipMaterial = createShaderMaterial({ name: `${label}:clip`, vertexSource: maskVertex, fragmentSource: maskFragment, attributes: ["position"],
-      uniforms: ["world", "view", "projection", ...frameUniforms],
-      // Opaque (drawn first, by `renderOrder`) although it has a blend: Lite would otherwise count it as transparent.
-      needAlphaBlending: false, blend: keep, depthWrite: true, depthCompare: "always", backFaceCulling: false });
-    materials.push(clipMaterial);
-    mask.material = clipMaterial as unknown as Material;
-    mask.renderOrder = -1000;
-    setMeshVisible(mask, false);
-    add(partsTask, mask);
+    // The clip mask (decision 4 of item 3): per drawn object a quad over its bounds whose fragment keeps the pixels whose
+    // centre lies inside the rounded box and the layer's clip. It replaces item 1's depth clip mask.
+    const plates = square(`${label}:mask`);
+    const plateMatrices = new Float32Array(objectCapacity * 16);
+    setThinInstances(plates, plateMatrices, objectCapacity);
+    const boxData = new Float32Array(objectCapacity * 8);
+    const boxBuffer = createStorageBuffer(engine, boxData, `${label}:boxes`);
+    storage.push(boxBuffer);
+    const maskMaterial = mandatory("mask", () => createShaderMaterial({ name: `${label}:mask`, vertexSource: slotVertex, fragmentSource: maskFragment, attributes: ["position"],
+      uniforms: ["world", "view", "projection", ...frameUniforms], storageBuffers: [{ name: "boxes", type: "array<vec4<f32>>" }],
+      needAlphaBlending: false, depthWrite: false, backFaceCulling: false }));
+    enableShaderMaterialInstanceWorld(maskMaterial);
+    setShaderStorageBuffer(maskMaterial, "boxes", boxBuffer);
+    materials.push(maskMaterial);
+    plates.material = maskMaterial as unknown as Material;
+    add(maskTask, plates);
+
+    // The optional stages on the mesh target, in order (TAA first: it jitters the parts task; SMAA last), each into the
+    // next ping-pong target. A stage that throws is left out and reported (decision 13 of item 3).
+    let source = mesh, flip = false;
+    const direction = key.direction, length = Math.hypot(direction.x, direction.y, direction.z) || 1;
+    const travel = { x: direction.x / length, y: direction.y / length, z: direction.z / length };
+    const stage = (name: Exclude<PostStage, "bloom">, make: (input: RenderTargetTextureResult, output: RenderTargetTextureResult) => Task) => {
+      if (!flags[name]) return;
+      if (minimal) { stages[name] = { status: "failed", error: minimal }; return; }
+      try {
+        if (hook?.(state.id, name)) throw new Error(`the test hook fails ${name}`);
+        const output = target(flip ? "pong" : "ping");
+        addTask(sceneContext, make(source, output));
+        source = output;
+        flip = !flip;
+      } catch (error) { stages[name] = { status: "failed", error: String(error) }; console.error(`Underglass instrument layer ${state.id}: ${name} left out: ${String(error)}`); }
+    };
+    stage("taa", (input, output) => createTaaPostProcessTask({ name: `${label}:taa`, sourceTexture: input.rt, sourceRenderTask: partsTask, targetTexture: output.rt, ...POST_SETTINGS.taa }, engine, sceneContext));
+    stage("contact", (input, output) => createScreenSpaceContactShadowsPostProcessTask({ name: `${label}:contact`, sourceTexture: input.rt, depthTexture: mesh.rt, camera,
+      lightDirection: travel, targetTexture: output.rt, composition: "multiply", ...POST_SETTINGS.contact }, engine, sceneContext));
+    stage("ssgi", (input, output) => createScreenSpaceGlobalIlluminationPostProcessTask({ name: `${label}:ssgi`, sourceTexture: input.rt, depthTexture: mesh.rt, camera,
+      targetTexture: output.rt, composition: "additive", ...POST_SETTINGS.ssgi }, engine, sceneContext));
+    stage("smaa", (input, output) => createSmaaPostProcessTask({ name: `${label}:smaa`, sourceTexture: input.rt, targetTexture: output.rt, ...POST_SETTINGS.smaa }, engine, sceneContext));
+    if (emitterTask && bloomTask) { addTask(sceneContext, emitterTask); addTask(sceneContext, bloomTask); }
+    if (capsTask) addTask(sceneContext, capsTask);
+
+    // The composite (decisions 3, 5 and 6 of item 3): over the layer's rectangle, premultiplied. Unused inputs read the
+    // mask, gated off by the flags.
+    const composite = mandatory("composite", () => createEffectWrapper(engine, { name: `${label}:composite`, vertexWGSL: compositeWGSL.vertex, fragmentWGSL: compositeWGSL.fragment,
+      blend: premultiplied, bindings: [{ binding: 0, kind: "uniform", uniformByteLength: COMPOSITE_VEC4S * 16, visibility: 3 }, { binding: 1, kind: "texture", name: "parts" },
+        { binding: 2, kind: "texture", name: "mask" }, { binding: 3, kind: "texture", name: "caps" }, { binding: 4, kind: "texture", name: "glow" },
+        { binding: 5, kind: "texture", name: "emitters" }] }));
+    onSceneDispose(sceneContext, () => disposeEffectWrapper(composite));
+    const bind = () => {
+      setEffectTexture(composite, "parts", source.texture);
+      setEffectTexture(composite, "mask", maskTarget.texture);
+      setEffectTexture(composite, "caps", (capsTarget ?? maskTarget).texture);
+      setEffectTexture(composite, "glow", (emitterTask ? target("glow") : maskTarget).texture);
+      setEffectTexture(composite, "emitters", (emitterTask ? target("emitters") : maskTarget).texture);
+    };
+    rebinds.add(bind);
+    onSceneDispose(sceneContext, () => { rebinds.delete(bind); });
+    mandatory("composite", () => {
+      bind();
+      addTask(sceneContext, createEffectRenderTask({ name: `${label}:composite`, effect: composite, target: engine.scRT, clear: false }, engine, sceneContext));
+    });
+    const compositeData = new Float32Array(COMPOSITE_VEC4S * 4);
+    let compositeKey = "";
 
     // Emitters on the parts: one clustered container of 64 point lights, created after every mesh is in the scene (Lite
     // wires the PBR materials present when the container is added, and bakes its capacity then). Unused lights stay at
@@ -377,7 +595,6 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     }
 
     let lastStage = "", lastWorld = "", lastHidden = "";
-    let opacityApplied = 1;
     let boundTexture: DynamicTexture2D | undefined = options.texture(state.id);
     const lastT = new Float64Array(objectCapacity).fill(Number.NaN);
     // Profiles are part of the structure, so their bounds hold for the scene's life.
@@ -389,8 +606,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     };
 
     const pass: Pass = {
-      scene: sceneContext, camera, structure, registered: false, lights, litLights: 0,
-      taskNames: [`${label}:face`, `${label}:parts`],
+      scene: sceneContext, camera, structure, registered: false, lights, litLights: 0, prefix: `${label}:`, post,
       capacityOk: (next, objects) => [...next.values()].every(kind => kind.key === "glass" || meshes.some(entry => entry.kind.key === kind.key && kind.instances.length <= entry.capacity))
         && objects <= objectCapacity,
       update(input, current, hidden, stage, kinds, changed, guard) {
@@ -412,7 +628,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         const inverse = [m.d / det, -m.c / det, (m.c * m.f - m.d * m.e) / det, 0, -m.b / det, m.a / det, (m.b * m.e - m.a * m.f) / det, 0];
         const content = input.content;
         const grid = [content.pixelWidth / Math.max(1, content.width), content.pixelHeight / Math.max(1, content.height)];
-        for (const material of shared()) {
+        for (const material of materials) {
           setShaderUniform(material, "inverseX", inverse.slice(0, 4));
           setShaderUniform(material, "inverseY", inverse.slice(4, 8));
           setShaderUniform(material, "frame", [stage.dpr, input.opacity, grid[0]!, grid[1]!]);
@@ -425,21 +641,9 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         }
         const L = lightVector(current);
         setShaderUniform(shade, "light", [L[0] / L[2], L[1] / L[2], current.shadow.strength, 0]);
-        // The clip mask runs only when the clip cuts the layer's box.
-        const full = input.clip.x <= 0 && input.clip.y <= 0 && input.clip.x + input.clip.width >= input.extent.width && input.clip.y + input.clip.height >= input.extent.height;
-        // Lite records opaque draws in a bundle: visibility goes through `setMeshVisible`, which re-records it.
-        setMeshVisible(mask, !full);
-        // Opacity: 0 draws no part; 1 draws them opaque; between, Lite's material alpha (decision 7 of the note).
-        const visible = input.opacity > 0, fractional = visible && input.opacity < 1;
-        for (const entry of meshes) {
-          setMeshVisible(entry.mesh, visible && (!fractional || !!entry.cap));
-          if (entry.twin) setMeshVisible(entry.twin, fractional);
-        }
-        setMeshVisible(quad, visible);
-        if (fractional && input.opacity !== opacityApplied) {
-          for (const material of blended.values()) { material.alpha = input.opacity; markMaterialUboDirty(material as unknown as Material); }
-          opacityApplied = input.opacity;
-        }
+        // Lite records opaque draws in a bundle: visibility goes through `setMeshVisible`, which re-records it. The parts
+        // always draw into the target; the composite applies the opacity (decision 6 of item 3).
+        setMeshVisible(quad, input.opacity > 0);
         // What moved since the last frame: everything when the geometry, the step-downs or the layer's placement did,
         // otherwise the objects whose `t` changed (poses), so a frame of poses rewrites only what it poses.
         const worldKey = `${m.a},${m.b},${m.c},${m.d},${m.e},${m.f},${stage.width},${stage.height}`;
@@ -452,7 +656,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           if (all || lastT[index] !== t) { moved[index] = 1; lastT[index] = t; }
         });
         // Instances: every part of every object not stepped down, placed at its `t`.
-        let drawn = 0;
+        let drawn = 0, castersMoved = false, lit = 0;
         for (const entry of meshes) {
           entry.kind = kinds.get(entry.kind.key) ?? { ...entry.kind, instances: [] };
           const count = entry.kind.instances.length;
@@ -463,16 +667,66 @@ export function createInstrumentController(options: InstrumentControllerOptions)
               const factor = hidden.has(object) ? 0 : capFactor(current, current.objects[object]!.parts[part]!);
               if (entry.cap.data[index * 4] !== Math.fround(factor)) { entry.cap.data[index * 4] = factor; entry.cap.dirty = true; }
             }
+            if (entry.lens) {
+              // The glow of a lit lens (decision 8 of item 3): its emitter's state is live (`setEmitters`), so it is read every frame.
+              const glow = hidden.has(object) || input.opacity <= 0 ? undefined : partGlow(current, current.objects[object]!.parts[part]!);
+              const value = glow?.lit ? [glow.colour[0], glow.colour[1], glow.colour[2], 1] : [0, 0, 0, 0];
+              if (glow?.lit) lit++;
+              for (let channel = 0; channel < 4; channel++) {
+                if (entry.lens.data[index * 4 + channel] !== Math.fround(value[channel]!)) { entry.lens.data[index * 4 + channel] = value[channel]!; entry.lens.dirty = true; }
+              }
+            }
             if (!all && !moved[object]) return;
             dirty = true;
             const target = entry.matrices.subarray(index * 16, index * 16 + 16);
-            if (hidden.has(object)) { target.fill(0); return; }
+            if (hidden.has(object)) { target.fill(0); entry.boxes.fill(Number.NaN, index * 6, index * 6 + 6); return; }
             const entryObject = current.objects[object]!, placement = multiply(world, partMatrix(entryObject.parts[part]!, entryObject.t ?? 0));
             for (let k = 0; k < 16; k++) target[k] = placement[k]!;
+            if (!entry.cap) placedBox(placement, entry.local.low, entry.local.high, entry.boxes.subarray(index * 6, index * 6 + 6));
           });
-          if (count !== entry.count) { setThinInstanceCount(entry.mesh, count); if (entry.twin) setThinInstanceCount(entry.twin, count); entry.count = count; }
-          if (dirty) { flushThinInstances(entry.mesh); if (entry.twin) flushThinInstances(entry.twin); }
+          if (count !== entry.count) {
+            setThinInstanceCount(entry.mesh, count);
+            if (entry.lens) setThinInstanceCount(entry.lens.mesh, count);
+            entry.boxes.fill(Number.NaN, count * 6);
+            entry.count = count;
+          }
+          if (dirty) {
+            flushThinInstances(entry.mesh);
+            if (entry.lens) flushThinInstances(entry.lens.mesh);
+            if (!entry.cap) {
+              // The kind's bounds: the union of its placed instances, written in place (Lite fits the map to them).
+              const low = [Infinity, Infinity, Infinity], high = [-Infinity, -Infinity, -Infinity];
+              for (let index = 0; index < count; index++) {
+                if (Number.isNaN(entry.boxes[index * 6]!)) continue;
+                for (let axis = 0; axis < 3; axis++) { low[axis] = Math.min(low[axis]!, entry.boxes[index * 6 + axis]!); high[axis] = Math.max(high[axis]!, entry.boxes[index * 6 + 3 + axis]!); }
+              }
+              for (let axis = 0; axis < 3; axis++) {
+                entry.boundMin[axis] = Number.isFinite(low[axis]!) ? low[axis]! : 0;
+                entry.boundMax[axis] = Number.isFinite(high[axis]!) ? high[axis]! : 0;
+              }
+              castersMoved = true;
+            }
+          }
           if (entry.cap?.dirty) { updateStorageBuffer(engine, entry.cap.buffer, entry.cap.data); entry.cap.dirty = false; }
+          if (entry.lens?.dirty) { updateStorageBuffer(engine, entry.lens.buffer, entry.lens.data); entry.lens.dirty = false; }
+        }
+        // A kind with no placed instance takes the others' box, so it never stretches the map's fit to the origin.
+        if (castersMoved) {
+          const placed = meshes.filter(entry => !entry.cap && entry.kind.instances.some((_, index) => !Number.isNaN(entry.boxes[index * 6]!)));
+          for (const entry of meshes) {
+            if (entry.cap || placed.includes(entry) || !placed.length) continue;
+            for (let axis = 0; axis < 3; axis++) { entry.boundMin[axis] = placed[0]!.boundMin[axis]!; entry.boundMax[axis] = placed[0]!.boundMax[axis]!; }
+          }
+          // Lite re-renders the map in a frame its casters' instances changed (and only then): counted here.
+          if (post.map) post.map.renders++;
+        }
+        // Bloom: its tasks run only on frames with a lit lens.
+        post.lit = lit;
+        const blooming = !!emitterTask && lit > 0;
+        if (emitterTask && bloomTask) {
+          emitterTask.executionEnabled = blooming;
+          bloomTask.executionEnabled = blooming;
+          stages.bloom = { status: blooming ? "on" : "idle" };
         }
         // Casters: per object, the darkest of up to 8 rounded boxes, and a quad over the bounds and the shadows' reach.
         const reachPerPx = Math.hypot(L[0], L[1]) / L[2];
@@ -503,6 +757,26 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         if (all) { casterData.fill(0, current.objects.length * INSTRUMENT_CASTERS_PER_OBJECT * 8); quads.fill(0, current.objects.length * 16); }
         if (castersDirty || all) { flushThinInstances(quad); updateStorageBuffer(engine, casterBuffer, casterData); }
         if (all) reaches.fill(0, current.objects.length * 4);
+        // The clip mask's plates: each drawn object's bounds (they follow the layout, not the poses).
+        if (all) {
+          plateMatrices.fill(0);
+          boxData.fill(0);
+          current.objects.forEach((object, index) => {
+            if (index >= objectCapacity || hidden.has(index)) return;
+            const { rect: [x, y, w, h], radius = 0 } = object.bounds ?? { rect: object.rect, radius: 0 };
+            boxData.set([x + w / 2, y + h / 2, w / 2, h / 2, radius, 0, 0, 0], index * 8);
+            // One px wider than the box on every side, so the fragment, not the raster, decides its edge.
+            const box = multiply(world, new Float64Array([w / 2 + 1, 0, 0, 0, 0, h / 2 + 1, 0, 0, 0, 0, 1, 0, x + w / 2, y + h / 2, 0, 1]));
+            for (let k = 0; k < 16; k++) plateMatrices[index * 16 + k] = box[k]!;
+          });
+          flushThinInstances(plates);
+          updateStorageBuffer(engine, boxBuffer, boxData);
+        }
+        // The composite's rectangle, the opacity and what it reads this frame.
+        const rect = compositeRect(m, input.extent, stage) ?? [0, 0, 0, 0];
+        const next = [...rect, stage.width, stage.height, stage.dpr, 0, input.opacity, blooming ? 1 : 0, capsTarget ? 1 : 0, 0];
+        const nextKey = next.join(",");
+        if (nextKey !== compositeKey) { compositeData.set(next); setEffectUniforms(composite, compositeData); compositeKey = nextKey; }
         // The guard: inside each protected rect (or each cell of a protected box), the objects whose shadows reach it
         // share its shadow cap (`shadowScales`, `emitters.ts`).
         const feather = current.feather ?? DEFAULT_FEATHER, strength = current.shadow.strength;
@@ -596,7 +870,25 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         let timer: ReturnType<typeof setTimeout> | undefined;
         let timedOut = false;
         // A test hook may delay the build; it runs inside the build deadline like the build itself.
-        const building = Promise.resolve(options.testHook?.beforeBuild?.(state.id)).then(() => build(state, scene, structure));
+        // A registration that fails with optional stages on is retried once with the chain's mandatory pieces only
+        // (decision 13 of item 3); a failure of those is the `post` step-down.
+        const optional = POST_STAGES.some(name => postFlags(scene)[name]);
+        inFlight++;
+        // The hook runs inside the chain, so a hook that throws ends this build like any failure (and `inFlight` with it).
+        const building = Promise.resolve().then(() => options.testHook?.beforeBuild?.(state.id)).then(() => build(state, scene, structure).catch(error => {
+          // With no optional stage the chain already is the minimal one: its registration failing is `post` too.
+          if (error instanceof RegistrationError && !optional) throw new PostBuildError(`Instrument post chain could not be registered: ${error.message}`);
+          if (!(error instanceof RegistrationError) || !optional || disposed || state.building?.token !== token) throw error;
+          console.error(`Underglass instrument layer ${state.id}: its post chain failed to register; building it without its optional stages: ${error.message}`);
+          // Only the mandatory chain is left: its registration failing is the `post` step-down; any other error (a mesh,
+          // a shader) stays `compile`. Either way the reason names the cause.
+          return build(state, scene, structure, `registration failed with the optional stages on: ${error.message}`).catch(minimal => {
+            throw minimal instanceof RegistrationError ? new PostBuildError(`Instrument post chain could not be registered without its optional stages: ${minimal.message}`) : minimal;
+          });
+        }));
+        // Once the build has ended (its scene registered and handed over or retired, or failed), a stage with no layer left
+        // releases the targets.
+        void building.then(() => undefined, () => undefined).finally(() => { inFlight--; scheduleRelease(); });
         try {
           const pass = await Promise.race([building, new Promise<never>((_, reject) => {
             timer = setTimeout(() => { timedOut = true; reject(new Error(`Instrument scene build timed out after ${INSTRUMENT_BUILD_DEADLINE_MS} ms`)); }, INSTRUMENT_BUILD_DEADLINE_MS);
@@ -626,7 +918,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
             state.pass = undefined;
             state.structure = undefined;
             const reason = `Instrument scene warm-up timed out after ${INSTRUMENT_BUILD_DEADLINE_MS} ms: the GPU queue did not catch up with its registration`;
-            state.failed = { structure, reason };
+            state.failed = { structure, reason, size: sizeKey() };
             console.error(`Underglass instrument layer ${state.id} is drawn at the Relief level: ${reason}`);
             options.requestDraw();
           }
@@ -636,7 +928,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           if (timedOut) { compile.timeouts++; void building.then(retirePass, () => undefined); }
           if (state.building?.token === token) {
             state.building = undefined;
-            state.failed = { structure, reason: String(error) };
+            state.failed = { structure, reason: String(error), size: sizeKey(), ...(error instanceof PostBuildError ? { post: true } : {}) };
             console.error(`Underglass instrument layer ${state.id} is drawn at the Relief level: ${String(error)}`);
             options.requestDraw();
           }
@@ -656,6 +948,12 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       return options.lost.then(release);
     }).finally(() => { retirements.delete(fence); });
     retirements.add(fence);
+    scheduleRelease();
+  }
+  /** The canvas size a failed build is tied to: on another size (a resize, a DPR change) it is tried again. */
+  function sizeKey() {
+    const stage = options.stage();
+    return `${stage.width}x${stage.height}@${stage.dpr}`;
   }
 
   /** The containment of one object at the layer's current placement, cached by its geometry and the placement. */
@@ -691,7 +989,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
    */
   function frame(inputs: readonly InstrumentLayerInput[]) {
     if (disposed) return;
-    const stage = options.stage();
+    const stage = options.stage(), size = sizeKey();
     const present = new Set(inputs.map(input => input.id));
     for (const [id, state] of layers) if (!present.has(id) || !inputs.find(input => input.id === id)?.scene) drop(state);
     let stageParts = 0;
@@ -714,8 +1012,13 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       Object.assign(state, { parts: instrumentPartCount(scene), kinds: kinds.length, objects: scene.objects.length, warnings: [] as string[] });
       if (kinds.length > INSTRUMENT_KINDS_PER_LAYER) state.warnings.push(`kinds: ${kinds.length} part kinds (draw calls), above about ${INSTRUMENT_KINDS_PER_LAYER}`);
       if (scene.objects.some(object => object.parts.some(part => part.glass))) state.warnings.push("glass: glass parts are not drawn until core work item 4");
-      const structure = `${instrumentStructure(scene)}`;
+      // The chain's flags, its map and the map's window on this stage, and which kinds have lenses, are structure too
+      // (`postStructure`): a stage that outgrows the window rebuilds the scene.
+      const lensKinds = kinds.filter(kind => !kind.captured && kind.instances.some(({ object, part }) => scene.objects[object]?.parts[part]?.emitter !== undefined)).map(kind => kind.key);
+      const structure = `${instrumentStructure(scene)}|${postStructure(scene, stage, lensKinds)}`;
       const matrix = similarity(input.matrix);
+      // A failed build is retried once the canvas size changes (a transient failure, a target that could not be sized).
+      if (state.failed && state.failed.size !== size) state.failed = undefined;
       // Whole-layer step-downs, in the order of the note's ladder.
       let whole: SteppedDown[] | undefined, status: Status = "stepped-down";
       if (orderUnavailable) whole = all(scene, "order-unavailable", orderUnavailable);
@@ -723,7 +1026,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       else if (parts > INSTRUMENT_PARTS_PER_LAYER) whole = all(scene, "budget", `${parts} parts in the layer, above ${INSTRUMENT_PARTS_PER_LAYER}`);
       else if (kinds.length > INSTRUMENT_KINDS_CEILING) whole = all(scene, "budget", `${kinds.length} part kinds in the layer, above ${INSTRUMENT_KINDS_CEILING}`);
       else if (stageParts + parts > INSTRUMENT_PARTS_PER_STAGE) whole = all(scene, "budget", `${stageParts + parts} parts on the stage, above ${INSTRUMENT_PARTS_PER_STAGE}`);
-      else if (state.failed?.structure === structure) { whole = all(scene, "compile", state.failed.reason); status = "failed"; }
+      else if (state.failed?.structure === structure) { whole = all(scene, state.failed.post ? "post" : "compile", state.failed.reason); status = "failed"; }
       // A different structure needs a new scene; the old one is taken off at once so no frame shows stale parts.
       if (!whole && (!state.pass || state.structure !== structure || !state.pass.capacityOk(kindMap, scene.objects.length))) {
         if (state.pass) { retirePass(state.pass); state.pass = undefined; state.structure = undefined; }
@@ -784,6 +1087,24 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       timing.enabled = false; timing.status = "disabled";
       if (!options.keepTiming?.()) void setRenderTaskGpuTimingEnabled(engine, false).catch(() => undefined);
     }
+    // ... and the shared targets are released once every retired scene that read them is gone (`scheduleRelease`).
+    scheduleRelease();
+  }
+  /**
+   * Releases the shared targets when no instrument layer, no build and no registered scene is left, after every retired
+   * scene's fence; called when a layer leaves, a build ends and a scene retires, so whichever comes last releases them.
+   */
+  function scheduleRelease() {
+    const idle = () => !disposed && !layers.size && !inFlight && !scenes.size;
+    if (!idle() || !targets.size) return;
+    void settledAll(retirements).then(() => { if (idle() && targets.size) releaseTargets(); });
+  }
+  /** Releases the shared targets; a later layer allocates them again. Every scene that read them is gone. */
+  function releaseTargets() {
+    for (const result of targets.values()) {
+      try { disposeRenderTargetTexture(result); } catch (error) { console.error("Underglass instrument target disposal failed", error); }
+    }
+    targets.clear();
   }
 
   /** The contexts to draw right after layer `id`'s pass: its scene, when it is drawn as parts. */
@@ -804,17 +1125,51 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     timing.status = snapshot.status;
     if (snapshot.status !== "available" || snapshot.frameIndex === timing.frameIndex) return;
     timing.frameIndex = snapshot.frameIndex;
+    const record = (entry: Timing, value: number) => {
+      entry.last = value;
+      if (entry.samples.length === 256) entry.samples.shift();
+      entry.samples.push(value);
+      entry.total++;
+    };
     for (const state of layers.values()) {
       if (!state.pass || state.status !== "ready") continue;
-      const names = state.pass.taskNames, tasks = snapshot.tasks.filter(task => names.includes(task.name));
-      if (!tasks.length) continue;
-      const total = tasks.reduce((sum, task) => sum + task.durationMs, 0);
-      state.gpu.last = total;
-      if (state.gpu.samples.length === 256) state.gpu.samples.shift();
-      state.gpu.samples.push(total);
-      state.gpu.total++;
+      const { prefix, post } = state.pass;
+      // The layer's tasks by stage (decision 14 of item 3); Lite's map task is `shadow`, the task right before the face.
+      const perStage = new Map<string, number>();
+      snapshot.tasks.forEach((task, at) => {
+        let stage: string | undefined;
+        if (task.name.startsWith(prefix)) stage = TASK_STAGES[task.name.slice(prefix.length)];
+        else if (task.name === "shadow" && snapshot.tasks[at + 1]?.name === `${prefix}face` && snapshot.tasks[at + 1]!.index === task.index + 1) stage = "map";
+        if (stage) perStage.set(stage, (perStage.get(stage) ?? 0) + task.durationMs);
+      });
+      if (!perStage.size) continue;
+      if (perStage.has("map") && post.map) post.map.timedRenders++;
+      const total = [...perStage.values()].reduce((sum, value) => sum + value, 0);
+      for (const [stage, value] of perStage) {
+        let entry = post.gpu.get(stage);
+        if (!entry) { entry = { samples: [], last: null, total: 0 }; post.gpu.set(stage, entry); }
+        record(entry, value);
+      }
+      record(state.gpu, total);
       options.onMeasure?.({ kind: "instrumentGpuMs", at: performance.now(), durationMs: total, phase: "content", layerId: state.id });
     }
+  }
+  /** `state().instrument.post`: per layer the stages, the map and the GPU time per stage; the shared targets. */
+  function postState() {
+    const timingOf = (entry: Timing) => ({ lastMs: entry.last, p50Ms: percentile(entry.samples, 0.5), p95Ms: percentile(entry.samples, 0.95), samples: entry.samples.length, total: entry.total });
+    return {
+      budgetMs: POST_STAGE_BUDGET_MS,
+      targets: Object.fromEntries([...targets].map(([name, result]) => [name, { format: TARGET_FORMATS[name].format, width: result.texture.width, height: result.texture.height }])),
+      layers: [...layers.values()].filter(state => state.pass).map(state => {
+        const post = state.pass!.post, map = post.map;
+        return {
+          id: state.id, stages: Object.fromEntries(Object.entries(post.stages).map(([name, value]) => [name, { ...value }])),
+          map: map ? { size: map.size, biasPx: map.biasPx, bias: map.bias, darkness: map.darkness, window: map.window, casters: map.casters, renders: map.renders, timedRenders: map.timedRenders } : null,
+          lenses: post.lenses, lit: post.lit, caps: post.caps,
+          gpu: Object.fromEntries([...post.gpu].map(([stage, entry]) => [stage, timingOf(entry)])),
+        };
+      }),
+    };
   }
 
   return {
@@ -857,7 +1212,8 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       timing: { ...timing },
       compile: { ...compile, building: !!gate },
       order: orderUnavailable ?? "core",
-      resources: { scenes: scenes.size, retiring: retirements.size, grain: grain ? 1 : 0 },
+      resources: { scenes: scenes.size, retiring: retirements.size, grain: grain ? 1 : 0, targets: targets.size, mapTextures: { ...mapTextures } },
+      post: postState(),
     }),
     /** Releases everything at once; the caller has fenced the GPU or the device is lost. */
     dispose() {
@@ -872,6 +1228,8 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       layers.clear();
       scenes.clear();
       if (grain) { releaseTexture(grain); grain = undefined; }
+      // The shared targets go after every scene that reads them.
+      releaseTargets();
     },
   };
 }
@@ -907,15 +1265,23 @@ fn insideClip(local: vec2<f32>) -> bool {
   let clip = shaderUniforms.clip;
   return all(local >= clip.xy) && all(local <= clip.xy + clip.zw);
 }`;
-// A captured cap: the layer pass's own sampling of the capture (premultiplied bilinear, exact on the pixel grid), with
-// the solid cap's interior factor (per instance, from `caps`).
-const capVertex = /* wgsl */ `struct VertexOutput { @builtin(position) position: vec4<f32>, @location(0) @interpolate(flat) slot: u32 };
+// Every thin-instanced shader material: the instance index as its slot into a storage buffer.
+const slotVertex = /* wgsl */ `struct VertexOutput { @builtin(position) position: vec4<f32>, @location(0) @interpolate(flat) slot: u32 };
 @vertex fn mainVertex(input: VertexInput, @builtin(instance_index) instance: u32) -> VertexOutput {
   var out: VertexOutput;
   out.position = shaderSystem.projection * (shaderSystem.view * (getFinalWorld(input) * vec4<f32>(input.position, 1.0)));
   out.slot = instance;
   return out;
 }`;
+const roundedBoxWGSL = /* wgsl */ `
+fn roundedBox(q: vec2<f32>, half: vec2<f32>, r: f32) -> f32 {
+  let radius = min(r, min(half.x, half.y));
+  let a = abs(q) - half + vec2<f32>(radius);
+  return length(max(a, vec2<f32>(0.0))) + min(max(a.x, a.y), 0.0) - radius;
+}`;
+// A captured cap: the layer pass's own sampling of the capture (premultiplied bilinear, exact on the pixel grid), with
+// the solid cap's interior factor (per instance, from `caps`). Drawn into the caps target, straight alpha over its
+// transparent clear (so premultiplied there); the composite applies the layer's opacity.
 const capFragment = /* wgsl */ `struct VertexOutput { @builtin(position) position: vec4<f32>, @location(0) @interpolate(flat) slot: u32 };
 ${localWGSL}
 fn premultipliedTexel(texel: vec2<f32>) -> vec4<f32> {
@@ -937,17 +1303,12 @@ fn filtered(texel: vec2<f32>, captured: vec2<f32>) -> vec4<f32> {
   if (!insideClip(local)) { discard; }
   let sample = filtered(local * shaderUniforms.frame.zw, shaderUniforms.captured.xy);
   let factor = caps[input.slot].x;
-  return vec4<f32>(min(sample.rgb * factor, vec3<f32>(1.0)), sample.a * shaderUniforms.frame.y);
+  return vec4<f32>(min(sample.rgb * factor, vec3<f32>(1.0)), sample.a);
 }`;
 // Face shadows (2.8): per object quad, up to 8 casters `(centre, half size)`, `(radius, height)`; the darkest wins.
-const shadowVertex = capVertex;
 const shadowFragment = /* wgsl */ `struct VertexOutput { @builtin(position) position: vec4<f32>, @location(0) @interpolate(flat) slot: u32 };
 ${localWGSL}
-fn roundedBox(q: vec2<f32>, half: vec2<f32>, r: f32) -> f32 {
-  let radius = min(r, min(half.x, half.y));
-  let a = abs(q) - half + vec2<f32>(radius);
-  return length(max(a, vec2<f32>(0.0))) + min(max(a.x, a.y), 0.0) - radius;
-}
+${roundedBoxWGSL}
 // The guard's weight of a box given by its corners: 1 inside, easing to 0 over the feather outside it.
 fn guardWeight(p: vec2<f32>, rect: vec4<f32>, feather: f32) -> f32 {
   let half = (rect.zw - rect.xy) * 0.5;
@@ -984,25 +1345,70 @@ fn guardWeight(p: vec2<f32>, rect: vec4<f32>, feather: f32) -> f32 {
   }
   return vec4<f32>(0.0, 0.0, 0.0, s * shaderUniforms.frame.y);
 }`;
-// The clip mask: a screen triangle at the nearest depth (reverse-Z: 1), discarded inside the clip.
-const maskVertex = /* wgsl */ `struct VertexOutput { @builtin(position) position: vec4<f32> };
-@vertex fn mainVertex(input: VertexInput) -> VertexOutput {
-  var out: VertexOutput;
-  out.position = vec4<f32>(input.position.xy, 1.0, 1.0);
-  return out;
+// The clip mask (decision 4 of item 3): 1 where the pixel's centre lies inside the object's bounds (`boxes`: centre and
+// half size, then the radius) and inside the layer's clip, in layer px; nothing elsewhere.
+const maskFragment = /* wgsl */ `struct VertexOutput { @builtin(position) position: vec4<f32>, @location(0) @interpolate(flat) slot: u32 };
+${localWGSL}
+${roundedBoxWGSL}
+@fragment fn mainFragment(input: VertexOutput) -> @location(0) vec4<f32> {
+  let p = layerLocal(input.position.xy);
+  let a = boxes[input.slot * 2u];
+  let b = boxes[input.slot * 2u + 1u];
+  if (!insideClip(p) || a.z <= 0.0 || roundedBox(p - a.xy, a.zw, b.x) > 0.0) { discard; }
+  return vec4<f32>(1.0);
 }`;
-const maskFragment = /* wgsl */ `struct VertexOutput { @builtin(position) position: vec4<f32> };
+// A lens's glow in the emitter target (decision 8 of item 3): its colour while its emitter is lit, nothing otherwise
+// (alpha 0 in `glows`), and nothing outside the layer's clip.
+const glowFragment = /* wgsl */ `struct VertexOutput { @builtin(position) position: vec4<f32>, @location(0) @interpolate(flat) slot: u32 };
 ${localWGSL}
 @fragment fn mainFragment(input: VertexOutput) -> @location(0) vec4<f32> {
-  if (insideClip(layerLocal(input.position.xy))) { discard; }
-  return vec4<f32>(0.0);
+  let glow = glows[input.slot];
+  if (glow.a <= 0.0 || !insideClip(layerLocal(input.position.xy))) { discard; }
+  return vec4<f32>(glow.rgb, 1.0);
 }`;
+/** The composite's uniform: the rectangle (CSS px), (canvas width, height, dpr, ·), (opacity, bloom, caps, ·). */
+const COMPOSITE_VEC4S = 3;
+// The composite (decisions 3, 5 and 6 of item 3), over the layer's rectangle: `α · [caps + (1 − caps.a) · (parts + halo) · mask]`,
+// the halo `max(bloom − source, 0)`, premultiplied. Every input is read at its own texel: the targets are the canvas's size.
+const compositeWGSL = {
+  vertex: /* wgsl */ `struct EffectVertexOutput { @builtin(position) position: vec4f, @location(0) uv: vec2f };
+@vertex fn effectFullscreenVertex(@builtin(vertex_index) vertex: u32) -> EffectVertexOutput {
+  let bounds = composite[0];
+  let size = max(composite[1].xy, vec2f(1.0));
+  let corner = vec2f(f32(vertex == 1u), f32(vertex == 2u)) * 2.0;
+  let at = bounds.xy + corner * (bounds.zw - bounds.xy);
+  var output: EffectVertexOutput;
+  output.position = vec4f(at.x / size.x * 2.0 - 1.0, 1.0 - at.y / size.y * 2.0, 0.0, 1.0);
+  output.uv = corner;
+  return output;
+}`,
+  fragment: /* wgsl */ `@group(0) @binding(0) var<uniform> composite: array<vec4f, ${COMPOSITE_VEC4S}>;
+@group(0) @binding(1) var parts: texture_2d<f32>;
+@group(0) @binding(2) var mask: texture_2d<f32>;
+@group(0) @binding(3) var caps: texture_2d<f32>;
+@group(0) @binding(4) var glow: texture_2d<f32>;
+@group(0) @binding(5) var emitters: texture_2d<f32>;
+@fragment fn effectFragment(input: EffectVertexOutput) -> @location(0) vec4f {
+  let texel = vec2i(floor(input.position.xy));
+  let flags = composite[2];
+  var colour = textureLoad(parts, texel, 0);
+  if (flags.y > 0.5) {
+    colour = vec4f(colour.rgb + max(textureLoad(glow, texel, 0).rgb - textureLoad(emitters, texel, 0).rgb, vec3f(0.0)), colour.a);
+  }
+  colour = vec4f(min(colour.rgb, vec3f(1.0)), clamp(colour.a, 0.0, 1.0)) * textureLoad(mask, texel, 0).r;
+  if (flags.z > 0.5) {
+    let cap = textureLoad(caps, texel, 0);
+    colour = cap + (1.0 - cap.a) * colour;
+  }
+  return colour * flags.x;
+}`,
+};
 /** Straight-alpha source-over, as the layer pass blends. */
 const straightAlpha: GPUBlendState = { color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" }, alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" } };
+/** Premultiplied source-over: the composite (a halo with colour and no coverage adds light). */
+const premultiplied: GPUBlendState = { color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" }, alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" } };
 /** Darkens what is beneath by the fragment's alpha and leaves its alpha. */
 const darken: GPUBlendState = { color: { srcFactor: "zero", dstFactor: "one-minus-src-alpha", operation: "add" }, alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" } };
-/** Writes no colour. */
-const keep: GPUBlendState = { color: { srcFactor: "zero", dstFactor: "one", operation: "add" }, alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" } };
 
 /**
  * The studio (design language section 4, rendering model 2D.5) as a Radiance `.hdr` (RLE scanlines of literal runs),

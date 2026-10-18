@@ -36,7 +36,7 @@ import type { Ripple } from "./ripple.js";
 import { isSceneMaterial, type ApplicationEffect, type EffectDescriptor, type MaterialDescriptor } from "./effects.js";
 import type { CompiledMotion, CompiledProgramSet } from "./compiled.js";
 import { instrumentFaceScene, type InstrumentScene } from "./instrument.js";
-import { createInstrumentController, INSTRUMENT_SUCCESSOR_DEFERRAL_MS, type InstrumentController, type InstrumentLayerInput } from "./instrument-pass.js";
+import { createInstrumentController, INSTRUMENT_SUCCESSOR_DEFERRAL_MS, type InstrumentController, type InstrumentLayerInput, type InstrumentTestHook } from "./instrument-pass.js";
 
 /**
  * One enrolled layer as the runtime describes it to the renderer. The callbacks are read again on every
@@ -136,7 +136,7 @@ export interface SurfaceRendererOptions extends MountBoundaryOptions {
    */
   instrumentProbe?: InstrumentProbeHook;
   /** @internal Tests only, like `instrumentProbe`: hooks into the instrument material's builds (see `instrument-pass.ts`). */
-  instrumentTestHook?: { beforeBuild?(layerId: string): Promise<void> | void };
+  instrumentTestHook?: InstrumentTestHook;
 }
 /**
  * @internal Phase I0 prototype path for the Instrument level's mesh pass (probe I0.1), to be replaced by the

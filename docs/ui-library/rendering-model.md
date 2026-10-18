@@ -829,9 +829,8 @@ encodePart(c) = x + 0.2 · (x² · (3 − 2x) − x),   x = clamp((0.8 · c)^(1/
   of the reference shading (2D.10 checks them by presence).
 - **The output transform** `encodePart` is Lite's image processing as Underglass leaves it on an Instrument layer:
   exposure 0.8, gamma 2.2 (not the sRGB curve) and contrast 1.2, applied after the clamp of the gamma-encoded value.
-  Lite's HDR loader sets exposure 0.8 and contrast 1.2 when it loads the studio; core's own setting of 1 and 1 is made
-  before the load and so does not hold (a core finding). If core sets them again after the load, the model changes
-  this transform in a new version.
+  Lite's HDR loader sets exposure 0.8 and contrast 1.2 when it loads the studio, and core sets the same values
+  explicitly after the load (core work item 3), so the transform does not depend on the loader.
 - **Emitters** (`lamp`) keep 2D.4's light with this lobe; at the suite's two emitter-lit sampled points (a lamp's and
   the pointer light's plate) core's emitters agree with it within 1.
 

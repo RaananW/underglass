@@ -739,3 +739,267 @@ lowers part shadows to `interior.max` across the whole face (the guard's rule, n
 saturate their own emissive pucks (the lamp's light falls on its own dome); one fast GPU; `prefers-contrast`,
 `forced-colors`, `pointer: fine` and the fade belong to the helper and are not tested here. The open limits are in
 [open issues](../open-issues.md) (SCOPE-009).
+
+# Core work item 3: shadows and the post chain
+
+**Status:** design note for [core work item 3](instrument.md#core-work-additive), written before the code (2026-10-18),
+then implemented in the same PR ([results](#results-item-3)). One concern: the per-layer **offscreen mesh target** and its
+**clipped composite**, **SMAA**, **emitter bloom**, the **PCF shadow map** for parts on parts, **captured caps after the
+chain**, **exact group opacity** (the blended twins of item 1 go), and TAA, contact shadows and SSGI as options, off by
+default. Also the exposure and contrast fix the calibration found. Not in it: the capture-fed environment probe and glass
+(item 4), custom parts (item 5), and the Strata helper's wiring.
+
+**Upstream check (2026-10-18):**
+
+- **WICG HTML-in-Canvas:** `5fb3df86d84de598c7f0fcfc5ee53de1df067e7d` (2026-10-09) is still the latest commit (`gh api`,
+  2026-10-18). Nothing has changed since item 2: #162 and #155 were closed on 2026-10-15 with no commit, and #186 and #185
+  are still open. None touches this work: the chain draws decoration only and changes no capture, hit geometry or
+  admission.
+- **Chromium hotlist 6783002** (including the ElementCanvasTransform issues): not accessible without sign-in; not
+  rechecked.
+- **Browser tested:** Chrome Canary 158.0.8110.0, Windows 11, RTX 3080 (as items 1 and 2).
+
+## What I0.5 and I0.8 proved and what core adds
+
+[I0.5](instrument-phase0.md#i05-object-on-object-shadow) drew a lever's shadow on its plate with a PCF map of 4,096 at a
+bias of about 1.95 world px, its depth range fitted to the stage, thin-instance bounds published and re-rendered on pose
+change only, and changed no face pixel outside the analytic footprints. [I0.8](instrument-phase0.md#i08-post-chain-and-reflections)
+drew the parts into an offscreen target (`createSurfaceRenderTargetTexture`, rgba16float + depth24plus with
+`withSampledDepthTexture`, drawn by `createRenderTask({ sharedRt: true, autoMirror: false })` and `addMeshToTask`), ran
+TAA, contact shadows, SSGI, SMAA and an emitter bloom on it, and composited it over the face with a premultiplied effect
+task (`createEffectWrapper`, `createEffectRenderTask({ target: engine.scRT, clear: false })`) multiplied by an r8unorm
+mask of the controls' rounded boxes; every stage left text unchanged as long as the composite was clipped. Both were
+probes through the prototype hook; core now owns the construction, behind the scene fields that item 1 validated and
+did not draw (`shadow.map`, `post`).
+
+## API
+
+Nothing new to call. The scene's existing fields now draw:
+
+| Field | Default | Core |
+| --- | --- | --- |
+| `post.smaa` | `true` | SMAA on the mesh target |
+| `post.bloom` | `true` | Emitter bloom (below) |
+| `post.taa` | `false` | TAA, first in the chain when on |
+| `post.contact` | `false` | Screen-space contact shadows between parts |
+| `post.ssgi` | `false` | Screen-space bounced light between parts |
+| `shadow.map` | `{ size: 4096, bias: 1.95, darkness: 0.1 }` | The PCF map; `darkness: 1` builds no map (a map that leaves the whole key term is no map) |
+
+A scene without `post` takes the defaults (2D.1), and a scene without `shadow.map` takes the map's defaults (2D.7): every
+Instrument layer now draws SMAA, bloom and the map unless its scene turns them off. Diagnostics grow by
+`state().instrument.post` and a `post` step-down reason (below). The only other public change is that fractional layer
+opacity is exact.
+
+## The order of one layer's tasks
+
+Each Instrument layer's Lite scene runs, right after its layer's pass (and its face pool):
+
+1. **`shadow`** (Lite's task, installed by `registerSceneWithShadowSupport`): the PCF map, only on frames whose casters or
+   light changed.
+2. **`face`:** the analytic face shadows, straight onto the swapchain, as in item 1 (they belong to the face, `Φ`).
+3. **`mask`:** the clip mask (below) into an r8unorm target.
+4. **`parts`:** every PBR part into the mesh target, cleared transparent, with its own depth.
+5. **`taa`, `contact`, `ssgi`** when on, in that order, each into the next ping-pong target.
+6. **`smaa`** when on.
+7. **`emitters`** and **`bloom`** when the layer has lit lenses this frame.
+8. **`caps`:** the captured caps into the caps target, depth-tested against the mesh target's depth.
+9. **`composite`:** one effect task onto the swapchain over the layer's drawn rectangle.
+
+The composite, per pixel, with `M` the clip mask, `α` the layer's opacity, `P` the chain's result (premultiplied), `C` the
+caps (premultiplied) and `B`, `E` the bloom and its emitter source:
+
+```text
+src = α · [ C + (1 − C.a) · (P + max(B − E, 0)) · M ]        blended one, one-minus-src-alpha over the swapchain
+```
+
+so the canvas becomes `src + (1 − src.a) · out`: 2D.8's composite, with the caps (step 6) laid over the parts inside it.
+
+## Decisions (item 3)
+
+| # | Decision | Recommendation | Alternative |
+| --- | --- | --- | --- |
+| 1 | **Target format and lifetime** | rgba16float colour with a depth24plus depth (sampled), cleared transparent every frame (I0.8). **One set of surface-sized targets per engine, shared by every Instrument layer in paint order:** each layer's chain runs to its composite before the next layer's scene starts, in one command encoder, so the next layer may clear and reuse them. Allocated on first need, only for the stages some layer uses (ping-pong targets for TAA, contact, SSGI and SMAA; caps, emitter and glow targets when a layer has caps or lenses). They are Lite surface render targets, so a resize or a DPR change re-sizes them on the next record; they are released with the controller (engine teardown, device loss), after every scene that reads them | A set per layer (I0.8): memory times layers, about 270 MB per layer at DPR 2 on a 1920 × 1080 window |
+| 2 | **Always through the target** | Every Instrument layer draws its parts through the target and composite, with every `post` flag off too: one path, and group opacity is exact in every configuration. Cost: the composite (0.20–0.26 ms per layer in I0.8) | Direct into the layer's target when every flag is off and the opacity is 1 (2D.8 allows it): two paths, and fractional opacity would need item 1's blended twins again |
+| 3 | **The composite** | An effect task onto the swapchain over the layer's drawn rectangle (its box through the layer's matrix, in device px, clamped to the canvas), premultiplied, by the formula above | A full-screen effect per layer: the same result at the cost of every pixel |
+| 4 | **The clip mask (mandatory)** | An r8unorm mask: one quad per object drawn as parts, whose fragment sets 1 where its pixel centre lies inside the object's `bounds` (rounded box, in layer px through the inverse similarity: exact, no rasterised antialiasing) and inside the layer's clip. The composite multiplies the parts, the chain and the halo by it, so no stage (SMAA, TAA, SSGI, bloom) draws outside a control's box or the clip. It replaces item 1's depth clip mask | No mask, trusting containment: TAA, SMAA and SSGI spill 0.2–2 px past part edges and bloom further (I0.8) |
+| 5 | **Captured caps** | Drawn after the chain into their own **rgba8unorm** target, depth-tested against the mesh target's depth (loaded, not cleared), and laid over the parts inside the composite, so no stage filters them and neither bloom nor the mask touches them. rgba8unorm, so a fully covered cap pixel is its capture texel quantised once, as the direct pass of item 1 drew it. A part in front of a cap (an LED on a key) occludes it through the depth test and goes through the chain (it carries no text) | Caps on the swapchain after the composite (I0.8's construction): exact at opacity 1, but at a fractional opacity the cap blends over the already faded parts, which is not group opacity |
+| 6 | **Opacity** | **The meshes blend as one group over the layer's already faded face:** the composite multiplies the layer's whole mesh result (parts, halo, caps) by `α`, so under an opaque part the canvas is `α · P + (1 − α) · (α · F + (1 − α) · B)`, with `F` the face and `B` what lies beneath the layer. The parts no longer show through each other (the twins' fault), but this is not true group opacity of the layer (`α · P + (1 − α) · B`): the layer pass fades the face before the composite, so a label under a knob shows through at `α (1 − α)` (25% at 0.5). True group opacity needs the face drawn into the chain; it is recorded as a follow-up (open issues, SCOPE-009), a candidate for item 4, which reworks the face path for the capture probe. The blended twins are deleted. The face shadows keep item 1's darkening by `α` (they are part of the face) | Keep the twins: each part blends over the faded face separately |
+| 7 | **SMAA** | Last of the anti-aliasing stages, before bloom, on the mesh target's chain (TAA first when on, since it jitters the parts task), with I0.8's threshold 0.05 and 16 search steps | SMAA after the composite: it would filter the face and the text |
+| 8 | **Bloom from an emitter target** | Parts flagged `emitter` whose emitter is lit (strength and colour above 0) draw into an rgba8unorm emitter target as **flat glow copies**: the same triangles and instances, a shader material that reads a per-instance glow colour (the part material's emissive colour times its strength, display-encoded and clamped; the emitter's own colour when the material has no emissive), and nothing for an unlit lens. Lite's bloom (threshold 0.05, weight 0.8, kernel 48, scale 0.5, I0.8) reads it into a glow target, and the composite adds `max(B − E, 0)` inside `M`. Frames with no lit lens turn the emitter and bloom tasks off (`executionEnabled`) and the composite reads neither; a layer with no flagged part has neither task. Lite's PBR clamps its output, so a luminance threshold would bloom specular highlights too (I0.8) | The lens's own PBR material in the emitter target (I0.8): a material is per kind, not per instance, so an unlit lens of a lit kind would bloom, and a glow that follows the emitter would need a material swap |
+| 9 | **The PCF map** | Lite's directional PCF generator on the key light, created with the scene: `size` from `shadow.map.size` (4,096), `darkness` from the scene, the bias converted from world px (`2 · bias / span`, with `span = 2R` the window's full depth, since Lite's bias offsets light-space depth by half of it: `bias / R`). The light stands on the stage centre's ray, and its depth window is centred on the stage with half-depth `R = max(4096, 2^⌈log₂(r + 256)⌉)` px, `r` the stage's half-diagonal: every part on the stage lies in it at every DPR, so the range is **fitted to the stage**; core checks it every frame, and a stage that outgrows `R` rebuilds the scene (the window is part of its structure key). Every PBR part casts and receives; captured caps, glow copies, mask and face quads do not; the face is not a mesh, so the map never reaches it. Each part kind **publishes the world box of its placements** as its bounds, updated with its instances (Lite fits the map to them). **Re-rendered on pose change only:** Lite re-renders when a caster's instances or the light change, and core flushes a kind only in a frame its instances change. The generator is never disabled (L3); a darkness of 1 builds none | CSM or ESM (ruled out by I0.5); a map re-rendered every frame (120 renders in 120 still frames) |
+| 10 | **Options** | `post.taa`, `post.contact` and `post.ssgi`, off by default, with I0.8's settings (TAA factor 0.1 over 8 samples; contact 8 px, 12 steps, multiplied; SSGI 24 px rays, additive, fade 1e5–2e5, since its fade is a camera distance). **Their resolutions are core constants** (contact 1, SSGI 0.5), not scene fields: 2D.1 defines `post` as five booleans, so a resolution field is a change of the format | Resolution fields in `post`: a change of version 4 that the reference validator refuses today |
+| 11 | **The budget rule** | A stage is on by default only if its task p95 at DPR 2 is about 2 ms or less and the look justifies it (I0.8). Measured costs are recorded per stage below; SMAA and bloom stay on, TAA, contact and SSGI stay options | — |
+| 12 | **Compile gating** | Every task of the chain, the map's task, and the mask, glow and caps pipelines are created in the scene before it registers, so registration (`registerScene[WithShadowSupport]`: the frame graph's build and the async shader pipelines) prepares them inside item 1's build, under its gate and its 10 s deadline. Nothing is created after a scene's first frame, so the first frame of a new composition never waits on a chain pipeline | Build the chain lazily on the first frame: its pipelines would compile outside the gate and race a successor's 1.5 s deadline |
+| 13 | **A stage that fails to build** | An optional stage (SMAA, bloom, TAA, contact, SSGI) whose task throws at creation is left out of the chain, reported as `failed` with its error in `state().instrument.post`, and the layer draws the rest. If registration itself fails while optional stages are on, core rebuilds the layer once with the target, mask, caps and composite only (loading the studio again: Lite attaches an environment to one scene, and the failed scene is disposed with it), and reports the stages as `failed` with the registration's error. Only a failed registration is rebuilt. The layer steps down to Relief with `post` or `compile`: `post` means exactly: the chain's target, mask or composite could not be built, or the minimal chain (the chain without its optional stages: the rebuild after a failed registration, or the first build when no optional stage is on) failed to register. Any other build error (a mesh, a shader material, the studio) stays `compile`. Either way the reason names the cause (the original error's message). A failed build is tied to the canvas size: after a resize or a DPR change it is tried again. GPU stays on in every case | Step the layer down whenever any stage fails: a lost SMAA would cost the whole Instrument look |
+| 14 | **Timings** | Every task is named `instrument:<layer>:<stage>`; Lite's map task (named `shadow`, timed only on frames that render the map) is the layer's when it precedes the layer's `face` task. `instrumentGpuMs` stays the layer's total; `state().instrument.post` keeps p50 and p95 per stage over the last 256 frames | One sum per layer: the budget rule needs the stages apart |
+| 15 | **Exposure and contrast** | After `loadHdrEnvironment`, core sets exposure 0.8, contrast 1.2 and tone mapping off explicitly (`INSTRUMENT_EXPOSURE`, `INSTRUMENT_CONTRAST`). They are the values Lite's loader sets as a side effect (`loader-hdr/load-hdr.js`, L2) and the values of the Rendering Model's 2D.5 output transform (exposure 0.8, gamma 2.2, contrast 1.2; 61 sampled points asserted at tolerance 16 since the calibration, #148), so the drawn result does not change and no longer depends on load order, and the model needs no new draft revision | Exposure 1 and contrast 1 (what core wrote before the load and the loader overwrote): a 13-level change on polished and chrome parts, and a model change |
+
+## Diagnostics
+
+`state().instrument.post`: per layer, each stage's status (`on`, `off`, `failed` with its error, or `idle` for bloom on a
+frame with no lit lens), the map (`size`, `bias` in px and in Lite units, `darkness`, the depth window, `renders`: the
+frames that re-rendered it by Lite's rule, `casters`), and per stage `{ lastMs, p50Ms, p95Ms, samples }` with the layer's
+total; the shared targets (`width`, `height`, which are allocated). A layer that cannot build its target, mask or composite
+lists its objects in `steppedDown` with the reason `post`.
+
+## Verification (item 3)
+
+- Unit: `tests/unit/instrument.unit.test.mjs` grows the pure parts (the bias conversion, the depth window, kind bounds,
+  glow colours, the composite's rectangle).
+- Browser: `tests/browser/core-post.test.mjs` on [`instrument-post-core.html`](../../examples/playground/instrument-post-core.html),
+  DPR 1 and 2, headless, and a headful Canary check.
+- Regression: `core-emitters`, `core-instrument`, `ui-gpu`, `ui-knob`, `ui-switch-forms`, the I0.5 and I0.8 probes and
+  `ui-instrument-conformance`.
+
+## Results (item 3)
+
+Canary 158.0.8110.0, Windows 11, RTX 3080, 1920 × 1080,
+[`instrument-post-core.html`](../../examples/playground/instrument-post-core.html): 250 controls on two overlapping panels
+and six in a clipped viewport (a lit lamp straddling its edge), 247 visible text boxes (faceplate prints and captured key
+labels), 16 visible thin plates and 14 visible bats; three Instrument layers, 662 + 88 + 16 drawn parts, 20 / 20 / 14 kinds.
+Headless at DPR 1 and 2, and headful at DPR 1 (`--headed`, viewport emulated): every pixel number below is the same
+headful and headless.
+
+| Check | DPR 1 | DPR 2 |
+| --- | --- | --- |
+| Text px differing, default chain against every stage off (no map) / every stage on / core's plain pass (lights off) | 0 / 0 / 0 of 67,700 | 0 / 0 / 0 of 274,432 |
+| Changed px with the chain on (halos included) / outside their control | 303,411 / 0 | 1,090,733 / 0 |
+| The same with every stage on (TAA, contact, SSGI too) | 313,796 / 0 | 1,107,084 / 0 |
+| Lamp px drawn inside their boxes; the straddled lamp inside / past the viewport | 41,899; 1,688 / 0 | 63,979; 2,724 / 0 |
+| Native hits on drawn px: mismatches; hit grid (1,536 points) chain on against off | 0 of 4,018; 0 differ | 0 of 4,014; 0 differ |
+| Opacity 0.5 against the group blend: worst error, px over 1 level (61,239 / 251,115 px) | 1 level, 0 | 1 level, 0 |
+| Map on against off (stages off): changed px / outside the parts / outside the controls | 11,818 / 0 / 0 | 46,313 / 0 / 0 |
+| Thin plates' mapped shadow: components (8-neighbour), px each | 1 for all 16; 26–98 | 1 for all 16; 139–376 |
+| Bats' plates shaded by lever and ball (14 bats), px each | 75–181 | 315–729 |
+| Map renders over 120 drawn still frames (each layer) / per pose change | 0 / 1 (5 of 5, posed layer only) | 0 / 1 (5 of 5) |
+| After a resize (1600 × 900) and a DPR change: targets, px outside | 1600 · dpr wide, 0; 3,840 at DPR 2, 0 after the change back | 3,200, 0; 1,920 at DPR 1, 0 |
+| 300 frames of poses (each config): captures, uploads, geometry updates | 0, 0, 0 | 0, 0, 0 |
+
+**Costs** (Lite task timings over 300 animated frames, 250 controls with knobs, faders and bats moving, so the map
+re-renders every frame; per stage, the p50 / p95 of each layer summed over the three layers, ms; headless; the RTX
+3080's demand-driven clocks make these upper bounds, and runs scatter by up to 2×):
+
+| Stage | DPR 1 | DPR 2 |
+| --- | --- | --- |
+| Map (every frame, poses moving) | 0.64 / 1.40 | 0.49 / 0.69 |
+| Face shadows | 0.07 / 0.12 | 0.17 / 0.46 |
+| Mask | 0.01 / 0.02 | 0.02 / 0.03 |
+| Parts | 0.98 / 3.32 | 1.01 / 1.38 |
+| **SMAA** (default) | 0.56 / 1.48 | 1.37 / 1.55 |
+| **Bloom** (emitter target and bloom, default) | 0.30 / 0.66 | 0.66 / 0.74 |
+| Caps | 0.02 / 0.04 | 0.01 / 0.02 |
+| Composite | 0.06 / 0.29 | 0.11 / 0.14 |
+| TAA (option) | 0.53 / 0.60 | 1.02 / 1.07 |
+| Contact shadows (option) | 0.76 / 0.93 | 1.57 / 1.59 |
+| SSGI (option) | 0.50 / 0.59 | 0.89 / 0.92 |
+| Layers' totals (default chain, p50 / p95 per layer) | 1.28 / 4.12, 0.89 / 2.18, 0.46 / 1.12 | 1.91 / 2.62, 1.16 / 1.34, 0.79 / 0.91 |
+
+By the budget rule every stage fits (task p95 at DPR 2 at most 1.59 ms summed over three layers); SMAA and bloom stay on,
+and TAA (it trails), contact shadows (barely visible head-on) and SSGI stay options for the look reasons I0.8 recorded.
+Headful DPR 1 gave the same order (SMAA 0.53 / 1.49, bloom 0.28 / 0.68, contact 1.02 / 1.15).
+
+**Starts:** 10 of 10 reached GPU with all three chains built while a successor composition joined during the builds
+(`?race=1`, alternating DPR 1 and 2), ready in 1.34–1.69 s, each deferring one successor deadline; no fallback, no error.
+**Failures:** with SMAA's creation failing (core's internal test hook) every layer reports `smaa: failed` with the error
+and draws the rest (bloom on), GPU on; with the chain's target failing every layer is drawn at Relief with `post`, GPU on.
+**Lifecycle:** with every instrument material cancelled the shared targets are released (none listed); after `disable`
+there is no instrument state, and `enable` allocates them again.
+
+**Regression** (after merging `main` at #148): `core-emitters` 6, `core-instrument` 7, `ui-gpu` 53, `ui-knob` 13,
+`ui-switch-forms` 9, `ui-fader` 10, the I0.5 probe 2 and the I0.8 probe 6 (its headful test skipped, gated by
+`CANVAS_HEADFUL_POST`), `ui-instrument-conformance` 2 and `core-post` 4: 112 passed. The conformance suite at DPR 1 and 2:
+contained 22, sampled 61, presence 6, exact 46, unchanged 4, ratio 2, relief 6 passed, 0 failed; the shadow map's ratio
+and presence checks, pending until this item, now pass and are asserted; only glass (item 4) stays pending.
+
+**Found while building it** (recorded for the Lite requests):
+
+- A surface render target's textures are replaced when the first scene re-records after a resize or DPR change, and an
+  effect keeps the views it was given: the composite read a destroyed texture in a submit (`Destroyed texture
+  "underglass-instrument:caps" used in a submit`) until core set its textures again from `onRenderTargetTextureResize`.
+- A PCF generator's map texture (64 MB at 4,096²) has no public disposal; core destroys it through its internal
+  `_depthTexture` when the scene goes.
+- `loadHdrEnvironment` sets exposure 0.8 and contrast 1.2 (L2); core now sets them after the load.
+- Playwright shoots at the context's scale whatever a CDP device-metrics override set, and a DPR changed through CDP
+  reaches core's canvas only after a controller operation; the test checks pixels back at the context's DPR.
+
+## Review fixes (item 3, 2026-10-18)
+
+An independent review found no blocker. Its four should-fix items and the cheap nits are fixed here; each fix that changes
+behaviour has a test that fails without it:
+
+- **S1, the shared targets and builds in flight.** A layer that left while its scene was still building scheduled the
+  targets' release; the build then allocated them again, or the release ran while the scene awaited its registration
+  (Lite error 789, a failed build). Core now counts builds in flight and releases the targets only when no layer, no build
+  and no registered scene is left, after every retired scene's fence; the check runs when a layer leaves, a build ends
+  and a scene retires. Test: every instrument material cancelled 300, 600, 900, 1,200 and 1,500 ms after the page starts
+  (`?dropAt`), while the scenes build: no target left, 0 failed builds, no WebGPU warning, GPU on. Before the fix the
+  300 ms run had a failed build.
+- **S2, the map's render counts.** `renders` is the controller's own flush count (it follows Lite's refresh rule: an
+  estimate); `timedRenders` counts the frames in which Lite's timings saw the map task. Lite times a sample of frames, so
+  the test now also checks that the still frames were timed (119 to 120 of 120 per layer) while no map pass was, and, as
+  the positive control, that the timings saw the map render in 247 to 274 of 300 animated frames. A single pose change's
+  render is seen or not (0 to 1 of 5): core reads the timings after its own frames, and a still page draws none after it.
+- **S3, opacity.** Reworded (decision 6, the changeset, the API) and pinned: on 25,523 (DPR 1) and 101,883 (DPR 2) part
+  pixels with face content under them, the result matches `0.5 P + 0.25 F + 0.25 B` within 1.25 levels (three 8-bit
+  inputs and the canvas's own rounding of the faded face), and differs from true group opacity by up to 53 levels.
+- **S4, the minimal rebuild.** Core's internal test hook can now fail a scene's registration. With the optional stages
+  failing (`?failRegistration=optional`) every layer is rebuilt and draws, and SMAA and bloom read `failed` with
+  `registration failed with the optional stages on: …`, GPU on. A failure of the minimal chain too
+  (`?failRegistration=all`) is now the `post` step-down (it was `compile`), and once the failure stops a DPR change
+  retries it and every layer draws (before, a failed build stayed failed for its structure). The retry loads the studio
+  again (decision 13): reusing the first load would mean attaching one scene's environment to another, which Lite does
+  not offer, and the failed scene's textures go with it.
+- **N3.** A shadow map texture that cannot be released through Lite's internal field is counted
+  (`state().instrument.resources.mapTextures.missing`) and warned once; the test asserts 0 missing and 104 released over
+  its rebuilds.
+- **N4.** A layer removed and added again beside two live layers: the targets stay, 0 px outside the controls, the same
+  under reduced motion (30 still frames drawn), and the targets are released when the last layer leaves. A hidden tab is
+  not tested (Playwright cannot hide a page reliably headless).
+- **N1 and N2** are limits, recorded below and in SCOPE-009. Decision 9's bias formula now names the full depth span.
+
+**Second review (2026-10-18).** No blocker; three should-fixes and nits, each fixed and, where a test is possible, tested
+against the code without the fix:
+
+- **The release waits for every fence.** It waited for the fences pending when it was scheduled, so a scene that retired
+  while it waited (a layer added and removed again meanwhile) could be disposed after the targets it read. It now waits
+  until no fence is left (`settledAll`, `instrument-post.ts`) and checks again that no layer, build or scene is left. A
+  fence cannot be held from a browser test, so a unit test covers the loop: with fence A pending, fence B added, A settled,
+  a snapshot of the set settles (the old behaviour) while `settledAll` waits for B.
+- **`post` is defined exactly** (decision 13): `post` means exactly: the chain's target, mask or composite could not be built, or the minimal chain (the chain without its optional stages: the rebuild after a failed registration, or the first build when no optional stage is on) failed to register. Any other build error (a mesh, a shader material, the studio) stays `compile`. Either way the reason names the cause (the original error's message). Test: an ordinary error thrown in the minimal rebuild
+  (`?failRegistration=optional&failBuild=minimal`) is `compile` with `the test hook fails the build of the minimal chain` in
+  its reason (with the first review's wrapping restored, it read `post`); a registration failure of the minimal chain is
+  `post`, naming the hook's error.
+- **The in-flight case is deterministic:** core's `beforeBuild` hook holds a build (`?hold=1`) with its gate taken, every
+  instrument material is cancelled while it is held, and the hold is released: the build runs to its end with no layer
+  left, and no target, no failed build, no warning or error remains. With the first review's release logic undone (the
+  release scheduled only when the layer leaves) it leaves the targets allocated. A run at 300 ms after the page starts
+  stays as a second sample.
+- **Nits:** the build hook runs inside the build's promise chain, so a hook that throws ends the build (and its count);
+  the canvas size is read once per frame; the timed checks skip, with the reason recorded, when Lite's task timings are not
+  available; the assertion that the faded face shows through says to delete it when true group opacity lands.
+
+**Limits added by the review:**
+
+- **A build that never settles** (a GPU hang inside its registration) keeps the shared targets allocated, since its scene
+  may hold their handles, until device loss or `destroyGPU` disposes the controller. This is by design: the build's own
+  10 s deadline steps its layer down, but the promise it is waiting on may never settle.
+
+- **The map's texel grows with the stage** (Lite fits the map to the casters' box) while the bias stays 1.95 px: at
+  3,840 × 2,160 CSS px a texel is about 1.1 px, and below about 38° of light elevation a stage that large may show acne on
+  thin parts. Not measured; the default elevation is 41°.
+- **`state().instrument.post.targets`** reports each shared target's last size: a target that no layer uses this frame
+  is resized only when a scene records with it, so its size may be stale until then.
+
+## Deviations from the draft (item 3)
+
+- **Bloom's halo** is `max(B − E, 0)` with `E` the emitter target (the design language's and I0.8's form), not 2D.8's
+  `max(bloom − parts.rgb, 0)`: over a neighbouring part the model would hide the halo where the part is brighter.
+- **Captured caps** are laid over the parts inside the composite rather than drawn onto the canvas after it: the same
+  colour at opacity 1 (a covered cap pixel is its texel), and group opacity in between.
+- **Group opacity** is the meshes' group over the layer's already faded face, `α · P + (1 − α) · (α · F + (1 − α) · B)` under
+  an opaque part, not the layer's true group opacity `α · P + (1 − α) · B` (the layer pass fades the face before the
+  composite). The browser test pins the implemented formula over face content (within 1.25 levels) and that it differs
+  from true group opacity (by up to 53 levels). True group opacity is a follow-up (SCOPE-009), a candidate for item 4.
+- **Post resolutions** are core constants, not scene fields.
+- **The map's depth window** is fitted to the stage by a power-of-two bucket (at least 4,096 px half-depth), checked every
+  frame, rather than refitted each frame: Lite fixes the window when the generator is created.
