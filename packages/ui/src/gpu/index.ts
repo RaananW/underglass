@@ -21,6 +21,11 @@
  * A Knob's skirt and cap are raised faces (slabs at the Objects level, the cap on the skirt) in the `knob` material,
  * with its input's hover and disabled state; its turning pointer is captured content on the cap.
  *
+ * A Lamp's or StatusLight's lens is an emitter at every level (`gpu/lamp-forms.ts`, `gpu/instrument-lamp.ts`; design language
+ * section 3): a panel with any lens takes a version 4 scene with its `emitters` (the lens's colour, strength and reach from
+ * `--strata-lit` and the `emitter.*` tokens, read each frame, so a blink or a toggle is a uniform update), the `protected`
+ * rects of its text and a `feather`, so core's face pool lights the page around the lens within the contrast guard.
+ *
  * At the Instrument level (`instrument`, between `objects` and `scene` on the ladder, set like the others) a panel with
  * any element at that level takes core's `instrument` material and a version 4 scene (`gpu/instrument.ts`): its knobs
  * become the premium knob's parts, whose pointer turns on a spring as their value changes (uniform updates, no
@@ -41,6 +46,9 @@ import { cssVariable, flatten, numeric, strataTokens } from "../tokens/index.ts"
 import { isSceneObject, type SceneEntry, type SceneFace, type SceneMaterial, type ScenePrimitive, type StrataScene } from "../tokens/scene.ts";
 import { panelMotion, type PanelMover } from "../dom/motion.ts";
 import { switchFormEntries } from "./switch-forms.ts";
+import { lampFormEntries } from "./lamp-forms.ts";
+import { lampHeight, lampMaterialsOf, lampObject, type LampKind } from "./instrument-lamp.ts";
+import { emitterDefaults, lensEmitter, type EmitterTokens, type LampEmitter } from "../shared/lamp.ts";
 import { strataStage, type StagePresenter } from "../dom/stage.ts";
 import type { EnvironmentMap, StageScene } from "../tokens/stage.ts";
 import { advance, asParticle, decodeHdr, environmentFrom, launch, spring, type BurstOptions, type Confetto } from "./scene.ts";
@@ -59,7 +67,11 @@ export type { BurstOptions, Confetto, HdrImage } from "./scene.ts";
 export interface StrataGpuController {
   readonly container: HTMLElement;
   enroll(element: HTMLElement, options: { id: string; origin?: "center"; decorative?: boolean }): () => void;
-  setMaterial(id: string, descriptor: StrataSceneMaterial | StrataStageMaterial): { update(scene: StrataScene | StrataInstrumentScene | StageScene): void; cancel(): void };
+  setMaterial(id: string, descriptor: StrataSceneMaterial | StrataStageMaterial): {
+    update(scene: StrataScene | StrataLightScene | StrataInstrumentScene | StageScene): void; cancel(): void;
+    /** Core's per-frame path for the lights alone (uniform writes only); absent in a controller that has none. */
+    setEmitters?(emitters: LampEmitter[]): void;
+  };
   transition(id: string, motion: StrataPanelMotion): { finished: Promise<{ status: string; reason: string }>; cancel(): void };
   state(): { mode: string };
 }
@@ -70,9 +82,10 @@ export interface StrataPanelMotion {
 }
 /**
  * The material descriptor the helper hands to `setMaterial`: `relief` for a version 1 scene, `objects` for version 2
- * and 3, `instrument` for version 4.
+ * and 3, `instrument` for version 4 of kind `instrument`; a version 4 scene of kind `relief` (a scene with lights) goes to
+ * `relief`, or to `objects` when it has a camera.
  */
-export type StrataSceneMaterial = StrataMaterialBase & ({ kind: "relief" | "objects"; scene: StrataScene } | { kind: "instrument"; scene: StrataInstrumentScene });
+export type StrataSceneMaterial = StrataMaterialBase & ({ kind: "relief" | "objects"; scene: StrataScene | StrataLightScene } | { kind: "instrument"; scene: StrataInstrumentScene });
 /** What every material descriptor of the helper's has in common. */
 export interface StrataMaterialBase {
   bounds: "layer";
@@ -136,7 +149,7 @@ export interface StrataGpu {
   /** Rebuilds every panel's scene now (for example from the runtime's `onStatusChange`). */
   refresh(): void;
   /** The scene last given to a panel, for inspection and tests. */
-  scene(panel: HTMLElement): StrataScene | StrataInstrumentScene | undefined;
+  scene(panel: HTMLElement): StrataScene | StrataLightScene | StrataInstrumentScene | undefined;
   /** Releases every panel: cancels materials, leaves face mode and releases the enrollments. */
   detach(): void;
   /** The highest level the adjust policy currently allows (`scene` when it allows everything, or when it is off). */
@@ -164,7 +177,7 @@ function roleOf(face: SceneFace, element: Element, panel: Element): string {
   if (element === panel || element.matches(".ug-card")) return "panel";
   // A knob's skirt and cap, and a fader's carriage, are raised faces in the knob's material (a fader's slot is a
   // groove, a rail).
-  if (element.matches(".ug-knob__skirt, .ug-knob__cap, .ug-fader__carriage")) return "knob";
+  if (element.matches(".ug-knob__skirt, .ug-knob__cap, .ug-fader__carriage, .ug-lamp__bezel")) return "knob";
   if (face === "raised") return element.matches(".ug-button--accent, .ug-button--primary") ? "buttonPrimary" : "control";
   return ({ well: "field", groove: "rail", knob: "knob", mark: "indicator", ring: "field", flat: "control" } as Record<string, string>)[face] ?? "control";
 }
@@ -221,6 +234,52 @@ function radiusOf(element: Element, width: number) {
   return value.endsWith("%") ? (amount / 100) * width : Number.isFinite(amount) ? amount : 0;
 }
 
+/** The emitters a scene may carry (core's format: 1,024; it draws the 64 with the most reach into each layer, and reports the rest). */
+const MAX_EMITTERS = 1024;
+/** The outset a panel with lights draws at least, px (design language section 3). */
+const EMITTER_OUTSET = 48;
+/** Protected rects a scene may carry (core's format: 4,096); a panel with more protects its whole box. */
+const MAX_PROTECTED = 4096;
+/** A visible lens now: what the Lamp and StatusLight parts need of it. */
+interface LampInfo {
+  kind: LampKind;
+  /** The role colour, `#rrggbb`, and how lit it is (`--strata-lit`, 0–1). */
+  role: string;
+  lit: number;
+  /** The lens's diameter, and its place in the scene's `emitters`. */
+  lens: number;
+  index: number;
+  /** The native control's box in the panel (a lamp's input, a StatusLight's object) and the control itself. */
+  box: [number, number, number, number];
+  control: HTMLElement;
+  feather: number;
+}
+
+/**
+ * The layer's protected rects for the contrast guard (design language section 3, Rendering Model 2D.4): the client rects
+ * of every text run in `panel`, and the boxes of its text fields, grown by 2 px (`display.textGrow`). Past 4,096 the whole box is
+ * protected, which core also does for more than 64 rects a layer.
+ */
+function protectedRects(panel: HTMLElement, grow = 2): [number, number, number, number][] | "extent" {
+  const outer = panel.getBoundingClientRect(), scale = outer.width / Math.max(panel.offsetWidth, 1) || 1;
+  const rects: [number, number, number, number][] = [];
+  const add = (box: DOMRect) => {
+    if (box.width > 0 && box.height > 0) rects.push([(box.left - outer.left) / scale - grow, (box.top - outer.top) / scale - grow, box.width / scale + 2 * grow, box.height / scale + 2 * grow]);
+  };
+  const walker = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  for (let node = walker.nextNode(); node && rects.length <= MAX_PROTECTED; node = walker.nextNode()) {
+    const parent = node.parentElement;
+    if (!node.textContent?.trim() || !parent || parent.closest("option, script, style") || !parent.checkVisibility({ visibilityProperty: true })) continue;
+    range.selectNodeContents(node);
+    for (const box of range.getClientRects()) add(box);
+  }
+  for (const field of panel.querySelectorAll("input:not([type='checkbox'], [type='radio'], [type='range'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='file'], [type='hidden'], [type='color']), textarea, select")) {
+    if (field.checkVisibility({ visibilityProperty: true })) add(field.getBoundingClientRect());
+  }
+  return rects.length > MAX_PROTECTED ? "extent" : rects;
+}
+
 /** A presentation level (design language section 16). */
 export type StrataLevel = "relief" | "objects" | "instrument" | "scene";
 
@@ -264,7 +323,7 @@ export function strataLevel(element: Element, fallback: StrataLevel = "relief"):
  * which includes it), it is a version 2 scene: those components become objects (design language section 6), mixed
  * into the same back-to-front list, seen through the stage's camera.
  */
-export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}): StrataScene | StrataInstrumentScene {
+export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}): StrataScene | StrataLightScene | StrataInstrumentScene {
   registerTokens();
   const tokens = reader(panel);
   const level = (element: Element, fallback: string) =>
@@ -291,7 +350,9 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     // content), so the GPU adds no focus edge of its own.
     const knob = element.closest(".ug-knob__dial")?.querySelector(".ug-knob__input");
     const fader = element.closest(".ug-fader__track")?.querySelector(".ug-fader__input");
-    const owner = knob ?? fader;
+    // A lamp's bezel and lens are its input's object too (hover and disabled; a lamp does not sink when it is pressed).
+    const lamp = element.closest(".ug-lamp")?.querySelector(":scope > .ug-lamp__input");
+    const owner = knob ?? fader ?? lamp;
     const control = element.matches(interactive) ? element : owner ?? element.closest("label")?.querySelector("input, select, textarea") ?? element;
     const target = control.closest("label") ?? control;
     const preview = `${element.getAttribute("data-strata-preview") ?? ""} ${control.getAttribute("data-strata-preview") ?? ""}`.split(/\s+/);
@@ -301,7 +362,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       hover: (isControl && target.matches(":hover")) || preview.includes("hover"),
       // A toggle that is on, the current page of a Pagination, or a SegmentedControl's selected key holds its key down (design language section 6: it
       // latches at its travel).
-      pressed: !fader && (isControl && control.matches(":active, [aria-pressed='true'], [aria-current]:not([aria-current='false']), .ug-segmented__input:checked")) || preview.includes("active"),
+      pressed: !fader && !lamp && (isControl && control.matches(":active, [aria-pressed='true'], [aria-current]:not([aria-current='false']), .ug-segmented__input:checked")) || preview.includes("active"),
       focus: !owner && (control.matches(":focus-visible") || preview.includes("focus")),
       disabled: control.matches(":disabled, [aria-disabled='true']"),
     };
@@ -324,6 +385,25 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   const width = panel.offsetWidth, height = panel.offsetHeight;
   const panelHeight = options.height ?? level(panel, "floating");
   const entries: SceneEntry[] = [];
+  // Lamps and LEDs (design language section 3): each visible lens is an emitter, in document order, so the lens parts' indices
+  // never depend on the state. How lit it is, `--strata-lit`, is read from the lamp now (a toggle, a held button, a blink).
+  const lamps = new Map<HTMLElement, LampInfo>(), emitters: LampEmitter[] = [], instrumentLamps = new Set<HTMLElement>();
+  const moreContrast = typeof matchMedia === "function" && matchMedia("(prefers-contrast: more)").matches;
+  for (const lens of panel.querySelectorAll<HTMLElement>(".ug-lamp__lens, .ug-status-light__lens")) {
+    const lampRoot = lens.closest<HTMLElement>(".ug-lamp, .ug-status-light");
+    if (!lampRoot || emitters.length >= MAX_EMITTERS || !lens.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    const kind: LampKind = lampRoot.matches(".ug-lamp") ? "lamp" : "led", rect = rectWithin(lens, panel);
+    const control = kind === "lamp" ? lampRoot.querySelector<HTMLElement>(":scope > .ug-lamp__input") : lampRoot.querySelector<HTMLElement>(".ug-status-light__object");
+    if (!control || rect[2] <= 0 || rect[3] <= 0) continue;
+    const style = getComputedStyle(lampRoot), lampTokens = reader(lampRoot);
+    const read = Number.parseFloat(style.getPropertyValue("--strata-lit")), lit = Number.isFinite(read) ? Math.min(1, Math.max(0, read)) : 0;
+    const role = hex(style.getPropertyValue("--_c").trim() || "#ff9228");
+    const given: EmitterTokens = emitterDefaults[kind];
+    const own: EmitterTokens = { radius: lampTokens.number(`emitter.${kind}.radius`, given.radius), height: lampTokens.number(`emitter.${kind}.height`, given.height), strength: lampTokens.number(`emitter.${kind}.strength`, given.strength) };
+    lamps.set(lampRoot, { kind, role, lit, lens: rect[2], index: emitters.length, box: rectWithin(control, panel), control, feather: lampTokens.number("emitter.guardFeather", emitterDefaults.guardFeather) });
+    // More contrast turns emitters off (design language section 3): the lens is flat colour, and the face has no light.
+    emitters.push(lensEmitter(kind, [rect[0] + rect[2] / 2, rect[1] + rect[3] / 2], rect[2], moreContrast ? 0 : lit, role, own));
+  }
   if (objects(panel)) {
     entries.push({ object: "slab", rect: [0, 0, width, height], radius: radiusOf(panel, width), height: panelHeight, taper, material: materialFor(panel, "raised") });
     tops.set(panel, panelHeight);
@@ -345,6 +425,9 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       // the ones it draws is hidden while it does.
       const form = element.closest<HTMLElement>(".ug-switch[data-strata-form]");
       if (form && element.closest(".ug-switch__object") && !element.matches(".ug-switch__slot")) { switches.add(form); options.domes?.add(element); continue; }
+      // A lamp's or LED's bezel and lens are drawn as its Instrument object (the socket under the lens stays printed on the face).
+      const lampRoot = element.matches(".ug-lamp__bezel, .ug-lamp__lens, .ug-status-light__lens") ? element.closest<HTMLElement>(".ug-lamp, .ug-status-light") : null;
+      if (lampRoot && lamps.has(lampRoot)) { instrumentLamps.add(lampRoot); options.domes?.add(element); continue; }
       if (face === "raised" && element.matches("button")) { keys.push(element); continue; }
     }
     let rect = rectWithin(element, panel);
@@ -356,6 +439,19 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       knob: { material: material(tokens.raw("material.roles.knob") || "satin"), colour: tokens.colour("knob") }, hoverHeight: tokens.number("state.hoverHeight", 1.6),
       light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, domes: options.domes });
     if (form) { entries.push(...form); continue; }
+    // A Lamp's or StatusLight's bezel and lens (`lamp-forms.ts`): inside the control's box, shadows included.
+    const lampRoot = element.matches(".ug-lamp__bezel, .ug-lamp__lens, .ug-status-light__lens") ? element.closest<HTMLElement>(".ug-lamp, .ug-status-light") : null;
+    const lamp = lampRoot && lamps.get(lampRoot);
+    if (lamp) {
+      const parts = lampFormEntries(element, { rect, state, objects: objects(element), base: baseOf(element), box: lamp.box, role: lamp.role, lit: lamp.lit, domes: options.domes,
+        material: (part, role, partFace) => {
+          const named = part.closest("[data-strata-material]");
+          if (named && panel.contains(named)) return material(named.getAttribute("data-strata-material")!);
+          return role === "bezel" ? materialFor(part, partFace) : material(tokens.raw(`material.roles.${role}`) || (role === "lens" ? "glass" : "emissive"));
+        },
+        light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, hoverHeight: tokens.number("state.hoverHeight", 1.6) });
+      if (parts) { entries.push(...parts); continue; }
+    }
     if (objects(element) && face !== "ring" && face !== "flat") {
       const base = baseOf(element);
       if (element.matches("input[type='range']")) {
@@ -446,7 +542,9 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   const top = (entry: SceneEntry) => (isSceneObject(entry) ? (entry.base ?? 0) + (entry.object === "well" ? 0 : entry.height) : entry.height);
   // Hover multiplies a primitive's height, and raises an object's cap by a quarter of its height.
   const tallest = Math.max(...entries.map(entry => top(entry) * (isSceneObject(entry) ? 1.25 : tokens.number("state.hoverHeight", 1.6))));
-  const reach = Math.min(128, Math.ceil(tallest / Math.tan(elevation) + 1.5 * tallest + 1));
+  const shadowReach = Math.min(128, Math.ceil(tallest / Math.tan(elevation) + 1.5 * tallest + 1));
+  // A panel with lights draws at least the emitters' outset (48 px), so a lamp near its edge lights the page past it.
+  const reach = lamps.size ? Math.max(shadowReach, EMITTER_OUTSET) : shadowReach;
   const settings = {
     extent: { width, height },
     outset: { top: reach, right: reach, bottom: reach, left: reach },
@@ -460,8 +558,10 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     focus: { colour: tokens.colour("accent"), width: tokens.number("focus.width", 3), offset: tokens.number("focus.offset", 0.5) },
     materials,
   };
-  if (instrumentLayer) return instrumentScene(panel, options, { settings, entries: entries as ScenePrimitive[], knobs, faders, switches, keys, states, materialFor, tokens, reach });
-  if (!entries.some(isSceneObject)) return { format: "strata-scene", version: 1, ...settings, primitives: entries };
+  // The lights of the panel's lenses, with the text they must not wash out (the guard, design language section 3).
+  const lights = lamps.size ? { emitters, protected: protectedRects(panel), feather: Math.max(...[...lamps.values()].map(info => info.feather)) } : undefined;
+  if (instrumentLayer) return instrumentScene(panel, options, { settings, entries: entries as ScenePrimitive[], knobs, faders, switches, keys, states, materialFor, tokens, reach, lamps, instrumentLamps, lights });
+  if (!entries.some(isSceneObject)) return lights ? { format: "strata-scene", version: 4, ...settings, primitives: entries as ScenePrimitive[], ...lights } : { format: "strata-scene", version: 1, ...settings, primitives: entries };
   // The camera (design language section 2): centred on the stage, at D = max(camera.distance, r · h / taper + h),
   // with r the stage's half-diagonal, so every solid keeps the taper rule wherever its panel sits.
   const outer = panel.getBoundingClientRect(), stage = (options.stage ?? panel.parentElement ?? panel).getBoundingClientRect();
@@ -470,15 +570,27 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   const highest = Math.max(0, ...entries.map(top));
   const distance = Math.max(tokens.number("camera.distance", 1600), Math.ceil(Math.hypot(stage.width, stage.height) / 2 / scale * steepest + highest + 1));
   return {
-    format: "strata-scene", version: options.environment ? 3 : 2, ...(options.environment ? { environment: options.environment } : {}),
+    format: "strata-scene", version: lights ? 4 : options.environment ? 3 : 2, ...(options.environment ? { environment: options.environment } : {}),
     camera: { distance, vanish: [(stage.left + stage.width / 2 - outer.left) / scale, (stage.top + stage.height / 2 - outer.top) / scale] },
-    ...settings, primitives: entries,
-  };
+    ...settings, primitives: entries, ...lights,
+  } as StrataScene | StrataLightScene;
+}
+
+/**
+ * A version 4 scene of kind `relief` (Rendering Model 2D.1 and 2D.4), as the helper writes it for a panel with lights at
+ * the Relief level (no camera) or the Objects level (a camera): the version 1 or 2 scene's fields, with the lights of its
+ * lamps and LEDs (`emitters`), the text they must not wash out (`protected`) and the guard's `feather`.
+ */
+export interface StrataLightScene extends Omit<StrataScene, "version"> {
+  version: 4;
+  emitters: LampEmitter[];
+  protected: [number, number, number, number][] | "extent";
+  feather: number;
 }
 
 /**
  * A version 4 scene for core's `instrument` material (Rendering Model part 2D), as the helper writes it: the face's
- * relief primitives, and the knobs and keys as objects of parts.
+ * relief primitives, and the knobs, keys, switches, lamps and LEDs as objects of parts, with the lights of the lenses.
  */
 export interface StrataInstrumentScene extends Omit<StrataScene, "version" | "primitives" | "materials" | "environment" | "light"> {
   version: 4;
@@ -490,6 +602,18 @@ export interface StrataInstrumentScene extends Omit<StrataScene, "version" | "pr
   primitives: ScenePrimitive[];
   profiles: Record<string, InstrumentProfile>;
   objects: InstrumentObject[];
+  /** Present when the panel has a lens: its lights, the text they must not wash out, and the guard's feather. */
+  emitters?: LampEmitter[];
+  protected?: [number, number, number, number][] | "extent";
+  feather?: number;
+}
+
+/** Whether a version 4 scene is for the `instrument` material (a lights-only scene is of kind `relief`). */
+export const isInstrumentScene = (scene: { version: number; kind?: string }): scene is StrataInstrumentScene => scene.version === 4 && scene.kind === "instrument";
+/** The material kind a scene goes to: `relief`, `objects` (a scene with a camera) or `instrument`. */
+function materialKind(scene: StrataScene | StrataLightScene | StrataInstrumentScene): "relief" | "objects" | "instrument" {
+  if (isInstrumentScene(scene)) return "instrument";
+  return scene.version === 1 || (scene.version === 4 && !scene.camera) ? "relief" : "objects";
 }
 
 const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -502,6 +626,8 @@ const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(pre
  */
 function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, context: {
   settings: Omit<StrataScene, "format" | "version" | "primitives">; entries: ScenePrimitive[]; knobs: Set<HTMLElement>; faders: Set<HTMLElement>; switches: Set<HTMLElement>; keys: HTMLElement[];
+  /** The lamps and StatusLights at the Instrument level, every visible lens's info, and the panel's lights. */
+  instrumentLamps: Set<HTMLElement>; lamps: Map<HTMLElement, LampInfo>; lights?: { emitters: LampEmitter[]; protected: [number, number, number, number][] | "extent"; feather: number };
   states: (element: Element) => { hover: boolean; pressed: boolean; focus: boolean; disabled: boolean };
   materialFor: (element: Element, face: SceneFace) => string; tokens: ReturnType<typeof reader>; reach: number;
 }): StrataInstrumentScene {
@@ -591,6 +717,19 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     for (const switchPart of object.parts) use(switchPart.material);
     tallest = Math.max(tallest, switchHeight(form, scale));
   }
+  // Lamps and LEDs: a polished bezel and a glass lens whose emitter (index `info.index`) is lit by `--strata-lit`, read this
+  // frame. The parts never depend on the state, so a toggle or a blink changes the emitter alone: no rebuild, no capture.
+  const opaque = typeof matchMedia === "function" && matchMedia("(prefers-reduced-transparency: reduce)").matches;
+  for (const root of context.instrumentLamps) {
+    const info = context.lamps.get(root), part = root.querySelector(".ug-lamp__bezel, .ug-status-light__lens");
+    if (!info || !part || objects.length + entries.length >= 255 || info.box[2] <= 0 || info.box[3] <= 0) continue;
+    const state = context.states(part), bezel = root.querySelector(".ug-lamp__bezel") ?? root.querySelector(".ug-status-light__lens")!;
+    const input = { id: idOf(info.control.id ? info.control : root, info.kind), kind: info.kind, box: info.box, lens: info.lens, scale, role: info.role, emitter: info.index, opaque,
+      state: { hover: state.hover, disabled: state.disabled }, light, relief: { rect: rectWithin(bezel, panel), height: raised } };
+    objects.push(lampObject(input, profile) as unknown as InstrumentObject);
+    Object.assign(materials, lampMaterialsOf(input));
+    tallest = Math.max(tallest, lampHeight(info.kind, info.lens, scale));
+  }
   for (const element of context.keys) {
     if (objects.length + entries.length >= 255) break;
     const colour = hex(getComputedStyle(element).backgroundColor), name = `key ${colour}`;
@@ -616,6 +755,7 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     environment: { source: "studio", strength: Math.min(3, Math.max(0, tokens.number("environment.intensity", 1))) },
     light: { ...settings.light, intensity: 1.6 },
     materials, primitives: entries, profiles, objects,
+    ...(context.lights ?? {}),
   };
 }
 
@@ -655,7 +795,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   const forced = matchMedia("(forced-colors: active)");
   type Motion = { start: number; duration: number; ease: (t: number) => number; from: number; to: number };
   const panels = new Map<HTMLElement, { id: string; release: () => void; handle?: ReturnType<StrataGpuController["setMaterial"]>; kind?: StrataSceneMaterial["kind"];
-    scene?: string; motion?: Motion; domes: Set<Element> }>();
+    scene?: string; structure?: string; motion?: Motion; domes: Set<Element> }>();
   /** Shows the CSS paint of the elements a panel no longer draws as domes, and hides it on those it now does. */
   const markDomes = (entry: { domes: Set<Element> }, domes: Set<Element>) => {
     for (const element of entry.domes) if (!domes.has(element)) element.removeAttribute("data-strata-dome");
@@ -820,7 +960,8 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     if (sceneLevel()) presentBackdrop(); else { withdrawBackdrop(); endParticles(); }
     // A CSS transition (a knob sliding, a face settling) moves geometry with no event per frame: follow it until it
     // ends. Endless CSS animations (the spinner) stay in the captured content and need no new scene.
-    if (gpu && (root.getAnimations({ subtree: true }).some(animation => animation instanceof CSSTransition && animation.playState === "running")
+    // A StatusLight's blink is a CSS animation of `--strata-lit`, which the scene reads: it needs a scene each frame while it runs.
+    if (gpu && (root.getAnimations({ subtree: true }).some(animation => (animation instanceof CSSTransition || (animation instanceof CSSAnimation && animation.animationName === "ug-blink")) && animation.playState === "running")
       || [...panels.values()].some(entry => entry.motion) || moving.size)) schedule();
   }
 
@@ -927,16 +1068,22 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     if (element.hasAttribute("data-strata-instrument") !== (scene.version === 4)) element.toggleAttribute("data-strata-instrument", scene.version === 4);
     const key = JSON.stringify(scene);
     if (entry.scene === key) return;
-    const kind = scene.version === 1 ? "relief" : scene.version === 4 ? "instrument" : "objects";
+    const kind = materialKind(scene);
+    // The lights apart from the rest: when only they moved (a lamp turned on, an LED blinked), core's uniform path is enough.
+    const lights = "emitters" in scene ? scene.emitters : undefined;
+    const structure = lights ? JSON.stringify({ ...scene, emitters: undefined }) : undefined;
     try {
       // A change of level changes the material's kind: the new material replaces the old one in one step.
-      if (entry.handle && entry.kind === kind) entry.handle.update(scene);
-      else {
+      if (entry.handle && entry.kind === kind) {
+        if (lights && structure === entry.structure && entry.handle.setEmitters) entry.handle.setEmitters(lights);
+        else entry.handle.update(scene);
+      } else {
         const base = { bounds: "layer", interaction: "material", media: "identity", fallback: "static" } as const;
-        entry.handle = controller.setMaterial(entry.id, scene.version === 4 ? { kind: "instrument", scene, ...base } : { kind: kind as "relief" | "objects", scene, ...base });
+        entry.handle = controller.setMaterial(entry.id, isInstrumentScene(scene) ? { kind: "instrument", scene, ...base } : { kind: kind as "relief" | "objects", scene, ...base });
       }
       entry.kind = kind;
       entry.scene = key;
+      entry.structure = structure;
     } catch {
       // The runtime is between states (admitting or transitioning): try again on the next change or poll.
       entry.scene = undefined;
@@ -981,7 +1128,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   for (const type of events) root.addEventListener(type, schedule, true);
   const mutation = new MutationObserver(schedule);
   mutation.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "disabled", "checked", "aria-checked",
-    "aria-current", "aria-disabled", "aria-pressed", "aria-selected", "data-strata-closing", "data-strata-face", "data-strata-material", "data-strata-elevation", "data-strata-level", "data-strata-depth", "data-strata-theme", "data-strata-scope", "data-strata-preview", "hidden", "open"] });
+    "aria-current", "aria-disabled", "aria-pressed", "data-strata-lit", "data-strata-blink", "data-strata-colour", "aria-selected", "data-strata-closing", "data-strata-face", "data-strata-material", "data-strata-elevation", "data-strata-level", "data-strata-depth", "data-strata-theme", "data-strata-scope", "data-strata-preview", "hidden", "open"] });
   resize.observe(root);
   const poll = setInterval(schedule, options.poll ?? 500);
   forced.addEventListener("change", schedule);
