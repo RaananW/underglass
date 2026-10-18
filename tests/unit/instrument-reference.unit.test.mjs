@@ -14,7 +14,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import {
   boxForTravel, buildInstrumentConformance, capturedFrom, createStrataTheme, drift, emitterTerm, faceFactor, glassSample, instrumentCases,
-  instrumentFaceScene, instrumentSettings, lightVector, objectContained, partHit, partShadow, partTerms, posedVertices, profileMesh, project,
+  instrumentFaceScene, instrumentSettings, lightVector, encodePart, environmentTurn, specularEnvironment, studioIrradiance, reflectanceTable, objectContained, partHit, partShadow, partTerms, posedVertices, profileMesh, project,
   shadeFace, shadePoint, studioHdr, studioRadiance, studioRotation, validateInstrumentScene, applyVariant, bindingVertex, cameraDistance, shadePart,
   strataTokens,
 } from "../../packages/ui/src/tokens/index.ts";
@@ -319,22 +319,35 @@ test("the studio's softbox lies at the key light, in radiance and in the image (
   }
 });
 
-test("the reference shading: the map keeps darkness of the key term, emitters add light, the quadrature has converged (2D.5)", () => {
+test("the reference shading follows Lite's conventions: no π on the key light, the split-sum environment, the output transform (2D.5)", () => {
   const entry = instrumentCases().find(item => item.name === "shadows"), value = validateInstrumentScene(entry.scene);
   const hit = partHit(value, 104.5, 77.5), part = value.objects[hit.object].parts[hit.part];
-  const lit = partTerms(value, part, hit.point, hit.normal, { shadowed: false, samples: 256 }), dark = partTerms(value, part, hit.point, hit.normal, { shadowed: true, samples: 256 });
+  const lit = partTerms(value, part, hit.point, hit.normal, { shadowed: false }), dark = partTerms(value, part, hit.point, hit.normal, { shadowed: true });
   dark.key.forEach((term, i) => assert.ok(Math.abs(term - 0.1 * lit.key[i]) < 1e-12, "σ = map.darkness"));
   assert.deepEqual(dark.env, lit.env, "the map never touches the environment term");
-  // Doubling the quadrature changes no channel by a level at the suite's sampled points.
-  for (const name of ["knob", "presets", "light-direction"]) {
-    const item = committed.cases.find(entry => entry.name === name), check = item.checks.find(entry => entry.kind === "sampled");
-    const variant = item.variants.find(entry => entry.name === check.variant), scene = validateInstrumentScene(applyVariant(item.scene, variant));
-    for (const sample of check.samples.slice(0, 3)) {
-      const [x, y] = [Math.floor(sample.at[0]) + 0.5, Math.floor(sample.at[1]) + 0.5], spot = partHit(scene, x, y), piece = scene.objects[spot.object].parts[spot.part];
-      const a = shadePart(scene, piece, spot.point, spot.normal, { samples: 2048 }), b = shadePart(scene, piece, spot.point, spot.normal, { samples: 4096 });
-      assert.ok(a.every((channel, i) => Math.abs(channel - b[i]) * 255 < 1), `${name} at ${sample.at}: ${a} against ${b}`);
-    }
-  }
+  // The key light on a rough white dielectric facing it, with no environment: albedo / π · cos · intensity, plus its lobe.
+  const white = validateInstrumentScene({ ...entry.scene, environment: { source: "studio", strength: 0 }, materials: { ...entry.scene.materials, white: { base: { colour: "#ffffff", roughness: 1 } } } });
+  const L = lightVector(white.light.azimuth, white.light.elevation), terms = partTerms(white, { ...part, material: "white" }, [40, 40, 3], L, { shadowed: false });
+  const diffuse = (0.96 / Math.PI) * 1.6;
+  assert.ok(terms.key[0] > diffuse && terms.key[0] < diffuse * 1.2, `albedo (1 − 0.04) / π · 1.6, plus a small lobe: ${terms.key[0]} against ${diffuse}`);
+  // The output transform: exposure 0.8, gamma 2.2, contrast 1.2.
+  assert.equal(encodePart(0), 0);
+  assert.equal(encodePart(1.25), 1);
+  const x = 0.16 ** (1 / 2.2);
+  assert.ok(Math.abs(encodePart(0.2) - (x + 0.2 * (x * x * (3 - 2 * x) - x))) < 1e-12);
+  // The environment turn of Lite's rough mips and irradiance: an involution that turns the screen's up to its down.
+  const light = { azimuth: 323, elevation: 41 }, up = environmentTurn([0, -1, 0], light);
+  assert.ok(Math.abs(up[1] - 1) < 1e-12, "up is seen as down");
+  for (const w of [[0.3, -0.4, 0.866], [1, 0, 0], lightVector(135, 30)]) environmentTurn(environmentTurn(w, light), light).forEach((c, i) => assert.ok(Math.abs(c - w[i]) < 1e-12));
+  // A mirror reads the studio itself (mip 0); a uniform studio's irradiance is its radiance.
+  const r = [0.2, -0.3, 0.93], length = Math.hypot(...r), unit = r.map(c => c / length);
+  assert.deepEqual(specularEnvironment(unit, 0.0005, {}, light), studioRadiance(unit, {}, light));
+  const room = { key: 0, fill: 0, front: 0, strip: 0, floor: 1, ceiling: 1 };
+  studioIrradiance([0, 0, 1], room, light).forEach((c, i) => assert.ok(Math.abs(c - [0.97, 0.99, 1][i]) < 2e-3, `uniform irradiance ${c}`));
+  // The split-sum table: F0 · A + B is at most 1, a smooth mirror seen head-on reflects F0 (A ≈ 1, B ≈ 0).
+  const [A, B] = reflectanceTable(1, 0.04);
+  assert.ok(A > 0.97 && B < 0.02 && A + B <= 1.0001, `${A}, ${B}`);
+  for (const [nv, roughness] of [[0.2, 0.3], [0.7, 0.6], [0.05, 1]]) { const [a, b] = reflectanceTable(nv, roughness); assert.ok(a >= 0 && b >= 0 && a + b <= 1.0001); }
 });
 
 test("the premium character: it resolves, keeps every invariant and reports its provisional values (design language section 19)", () => {
@@ -376,8 +389,8 @@ test("the premium character: it resolves, keeps every invariant and reports its 
 test("the committed instrument-4.json is what the reference implementation produces", () => {
   const built = JSON.parse(JSON.stringify(buildInstrumentConformance()));
   assert.deepEqual(committed, built, "run npm run build:conformance --workspace @underglass/ui");
-  assert.equal(committed.tolerance.sampled, 12);
-  assert.match(committed.status, /provisional/);
+  assert.equal(committed.tolerance.sampled, 16);
+  assert.match(committed.status, /measured against core/);
   assert.deepEqual(committed.scales, [1, 2]);
   const kinds = new Set(committed.cases.flatMap(entry => entry.checks.map(check => check.kind)));
   assert.deepEqual([...kinds].sort(), ["contained", "exact", "presence", "ratio", "relief", "sampled", "unchanged"]);

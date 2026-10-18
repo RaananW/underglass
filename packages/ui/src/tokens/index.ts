@@ -34,7 +34,8 @@ export { backdropColour, environmentColumns, environmentRows, environmentSample,
 export type { EnvironmentMap, StageIssue, StageParticle, StageScene } from "./stage.ts";
 export type { CapturePaint, ConformanceCase, ConformanceSample, ConformanceSuite } from "./conformance.ts";
 export {
-  BOUNDS_TOLERANCE, CAMERA_FLOOR, CONTAINMENT_MARGIN, ENVIRONMENT_SAMPLES, INSTRUMENT_EMITTERS, INSTRUMENT_MATERIALS, INSTRUMENT_OBJECTS, INSTRUMENT_OBJECT_PARTS,
+  BOUNDS_TOLERANCE, CAMERA_FLOOR, CONTAINMENT_MARGIN, DIELECTRIC_F0, ENVIRONMENT_SAMPLES, INSTRUMENT_EMITTERS, PART_CONTRAST, PART_EXPOSURE, PREFILTER_MIPS,
+  encodePart, environmentTurn, reflectanceTable, specularEnvironment, studioIrradiance, INSTRUMENT_MATERIALS, INSTRUMENT_OBJECTS, INSTRUMENT_OBJECT_PARTS,
   INSTRUMENT_PARTS_PER_LAYER, INSTRUMENT_PROFILES, INSTRUMENT_PROTECTED, INSTRUMENT_SCENE_PARTS, InstrumentSceneError, REFERENCE_STAGE, STUDIO_DEFAULTS,
   bindingVertex, boxDistance, boxForTravel, cameraDistance, capColour, captureTexture, drift, emitterTerm, enc, faceEmitters, faceFactor, glassSample,
   instrumentFaceScene, lin, mapShadowed, multiply, objectContained, partCaster, partColour, partHit, partKinds, partMatrix, partShadow, partTerms,

@@ -14,18 +14,20 @@ import { capturedFrom, type CapturePaint } from "./conformance.ts";
 import { instrumentSettings, type InstrumentSettings } from "./character.ts";
 import {
   boxDistance, mapShadowed, objectContained, partColour, partHit, partTerms, protectedDistance, shadeInstrument, validateInstrumentScene,
-  enc, type Box, type InstrumentEmitter, type InstrumentObject, type InstrumentProfile, type InstrumentRecipe, type InstrumentScene, type PartHit, type Vec3,
+  encodePart, type Box, type InstrumentEmitter, type InstrumentObject, type InstrumentProfile, type InstrumentRecipe, type InstrumentScene, type PartHit, type Vec3,
 } from "./instrument.ts";
 import { strataSource } from "./source.ts";
 import type { TokenGroup } from "./model.ts";
 import type { Rgb01 } from "./shade.ts";
 
-/** The tolerances of version 4, per channel in 0–255: exact as version 1; sampled provisional until run against Lite (2D.10). */
-export const instrumentTolerance = { exact: 3, sampled: 12 } as const;
+/**
+ * The tolerances of version 4, per channel in 0–255: exact as version 1; sampled set from the residuals of core's Lite
+ * parts against the calibrated reference (2D.10): at the suite's 61 sampled points the median is 1, the 95th percentile 5
+ * and the maximum 16 (one tilted metal paddle), at DPR 1 and 2, so 16 holds every measured point.
+ */
+export const instrumentTolerance = { exact: 3, sampled: 16 } as const;
 /** The device scales every case is rendered at. */
 export const instrumentScales = [1, 2] as const;
-/** The quadrature's sample count for the suite's expectations (doubling it changes no channel by a level, 2D.5). */
-const SAMPLES = 2048;
 
 /** A scene variant: dotted paths into the case's scene (`objects.0.t`, `post.bloom`) and their values. */
 export interface InstrumentVariant { name: string; description: string; set: Record<string, unknown> }
@@ -475,13 +477,39 @@ export function instrumentCases(source: TokenGroup = strataSource): InstrumentCa
       scene, capture: [panel(440, 80)],
       variants: [{ name: "brushed", description: "Metal and gunmetal with brush 0.9 and grain 0.15", set: { "materials.metal": recipes.metal, "materials.gunmetal": recipes.gunmetal } }],
       checks: [
-        // Seeds where every compared pair differs by 24 levels: gunmetal has one such patch on its crown, the others two.
+        // Seeds where every compared pair differs by 24 levels and the colour changes slowly (found by scanning each crown).
         { kind: "sampled", distinct: ["metal", "polished|chrome", "lacquer", "gold", "gunmetal"], samples: names.flatMap((name, i) =>
-          ({ metal: [[2.5, -1.5], [-8.5, 0.5]], polished: [[11.5, 10.5], [-4.5, 13.5]], lacquer: [[0.5, -8.5], [-4.5, -5.5]], gold: [[2.5, 9.5], [-7.5, 13.5]],
-            gunmetal: [[11.5, -10.5]], chrome: [[11.5, 5.5], [-2.5, 12.5]] } as Record<string, [number, number][]>)[name]!.map(([dx, dy]) =>
+          ({ metal: [[8.5, -3.5], [6.5, -4.5]], polished: [[0.5, -8.5], [-5.5, -5.5]], lacquer: [[0.5, 8.5], [5.5, 5.5]], gold: [[-7.5, -3.5], [0.5, -7.5]],
+            gunmetal: [[10.5, -1.5], [-8.5, 5.5]], chrome: [[4.5, -7.5], [-2.5, -5.5]] } as Record<string, [number, number][]>)[name]!.map(([dx, dy]) =>
             ({ object: name, part: 0, at: [40 + i * 72 + dx, 40 + dy] as [number, number], note: `${name}: the crown, (${dx}, ${dy}) px from its centre` }))) },
         { kind: "presence", feature: "brush", object: "metal", variant: "brushed", share: 0.05, levels: 2, note: "Brushed metal against plain metal (brush 0.9, grain 0.15); provisional" },
       ],
+    });
+  }
+  // 8b. The presets on domes, sampled at several normals (2D.5's calibration against Lite).
+  {
+    const names = ["metal", "polished", "lacquer", "gold", "gunmetal", "chrome", "paint"];
+    const dome = (index: number): Form => {
+      const cx = 40 + index * 72, points: Lathe = Array.from({ length: 17 }, (_, i) => { const a = (i / 16) * (Math.PI / 2); return [round(26 * Math.cos(a)), round(1 + 18 * Math.sin(a)), round(Math.cos(a) / 26 / Math.hypot(Math.cos(a) / 26, Math.sin(a) / 18)), round(Math.sin(a) / 18 / Math.hypot(Math.cos(a) / 26, Math.sin(a) / 18))]; });
+      return { profiles: { [`dome-${index}`]: { type: "lathe", points: [[26, 0, 1, 0], ...points], segments: 96 } },
+        object: { id: `${names[index]!}-dome`, rect: [cx - 34, 6, 68, 68], bounds: { rect: [cx - 34, 6, 68, 68], radius: 34 }, t: 0,
+          parts: [{ kind: "cap", profile: `dome-${index}`, at: [cx, 40, 0], material: names[index]! }], relief: { face: "knob", rect: [cx - 34, 6, 68, 68], height: 0, material: "face" } } };
+    };
+    const recipes = materials(settings, names.slice(0, 6), { paint: { base: { colour: "#8a9099", roughness: 0.5 } } });
+    const plainRecipes = Object.fromEntries(Object.entries(recipes).map(([name, recipe]) => [name, name === "face" ? recipe : plain(recipe)]));
+    const scene = layer(510, 80, names.map((_, i) => dome(i)), { materials: plainRecipes });
+    // Seeds at the dome's top and at about 30° and 50° from it, where 2D.10's placement rule holds (found by scanning).
+    const seeds: Record<string, [number, number][]> = {
+      metal: [[0, 0], [9, 5], [-9, -5], [14, 8]], polished: [[0, 0], [9, 5]], lacquer: [[0, 0], [9, 5], [-9, -5], [14, 8], [-14, -8]],
+      gold: [[-9, -5], [-14, -8], [5, -12]], gunmetal: [[0, 0], [9, 5], [-9, -5], [14, 8], [-14, -8]], chrome: [[0, 0], [9, 5]],
+      paint: [[0, 0], [9, 5], [-9, -5], [14, 8], [-14, -8], [17, -10]],
+    };
+    cases.push({
+      name: "preset-domes",
+      description: "The presets (metal and gunmetal without brush and grain) and a matte paint on domes, sampled at their tops and at normals about 30° and 50° from them: the calibration of the reference shading against Lite (2D.5, 2D.10) at more than face-on normals.",
+      scene, capture: [panel(510, 80)], variants: [],
+      checks: [{ kind: "sampled", samples: names.flatMap((name, i) => seeds[name]!.map(([dx, dy]) =>
+        ({ object: `${name}-dome`, part: 0, at: [40 + i * 72 + dx + 0.5, 40 + dy + 0.5] as [number, number], note: `${name}: the dome (${dx}, ${dy}) px from its top` }))) }],
     });
   }
   // 9. Shadows: a lever's shadow on its plate (the map), and the map never reaching the face.
@@ -669,7 +697,7 @@ function sampled(entry: InstrumentCase, scene: InstrumentScene, seed: SampledSee
   const colourAt = (x: number, y: number, scale: number) => {
     const key = `${x},${y},${scale}`;
     let value = memo.get(key);
-    if (!value) { const hit = partHit(scene, x, y)!; value = partColour(scene, captured, hit, x, y, scale, { samples: SAMPLES }); memo.set(key, value); }
+    if (!value) { const hit = partHit(scene, x, y)!; value = partColour(scene, captured, hit, x, y, scale); memo.set(key, value); }
     return value;
   };
   const reason = (at: [number, number]): string | undefined => {
@@ -697,8 +725,8 @@ function sampled(entry: InstrumentCase, scene: InstrumentScene, seed: SampledSee
       for (const group of distinct) {
         if (group === own) continue;
         for (const other of group.split("|")) {
-          const swapped = partTerms(scene, { ...part, material: other }, hit.point, hit.normal, { samples: SAMPLES });
-          const otherColour = swapped.key.map((_, i) => enc(Math.min(1, Math.max(0, swapped.key[i]! + swapped.lamp[i]! + swapped.fill[i]! + swapped.env[i]! + swapped.emissive[i]!)))) as unknown as Rgb01;
+          const swapped = partTerms(scene, { ...part, material: other }, hit.point, hit.normal);
+          const otherColour = swapped.key.map((_, i) => encodePart(swapped.key[i]! + swapped.lamp[i]! + swapped.fill[i]! + swapped.env[i]! + swapped.emissive[i]!)) as unknown as Rgb01;
           if (levels(here, otherColour) < 24) return `differs from ${other} by under 24 levels`;
         }
       }
@@ -727,7 +755,7 @@ function presence(entry: InstrumentCase, on: InstrumentScene, off: InstrumentSce
     const a = partHit(on, x, y), b = partHit(off, x, y);
     if (!a || a.object !== index || !b) continue;
     total++;
-    const ca = partColour(on, captured, a, x, y, 1, { samples: 128 }), cb = partColour(off, captured, b, x, y, 1, { samples: 128 });
+    const ca = partColour(on, captured, a, x, y, 1), cb = partColour(off, captured, b, x, y, 1);
     if (levels(ca, cb) >= levelsNeeded) changed++;
   }
   return total ? changed / total : 0;
@@ -775,7 +803,7 @@ export function instrumentExpectations(entry: InstrumentCase): InstrumentCase {
             const shadowed = mapShadowed(on, hit!.point);
             if (shadowed !== sample.shadowed) fail(entry, `ratio point ${sample.at} is ${shadowed ? "" : "not "}in the map's shadow`);
             if (!ring(x, y, 3, 8).every(([px, py]) => { const h = partHit(on, px, py); return !!h && mapShadowed(on, h.point) === shadowed; })) fail(entry, `ratio point ${sample.at} is within 3 px of the map's edge`);
-            const a = partColour(on, captured, hit!, x, y, scale, { samples: SAMPLES }), b = partColour(off, captured, hit!, x, y, scale, { samples: SAMPLES });
+            const a = partColour(on, captured, hit!, x, y, scale), b = partColour(off, captured, hit!, x, y, scale);
             // Decoded (sRGB) channels, as a renderer compares its own two renders.
             if (shadowed && !a.every((value, i) => value <= check.ratio * b[i]!)) fail(entry, `ratio point ${sample.at}: the reference's shadow is not at most ${check.ratio} of its lit value`);
             if (!shadowed && levels(a, b) > check.lit) fail(entry, `ratio point ${sample.at}: a lit point changes by more than ${check.lit}`);
@@ -803,7 +831,7 @@ export function buildInstrumentConformance(source: TokenGroup = strataSource): I
   return {
     format: "strata-conformance",
     model: "strata-scene/4",
-    status: "Version 4 is a draft. The sampled tolerance (12) is provisional until the suite first runs against core's Instrument material on Lite (rendering model 2D.10); raising it is a change of version 4.",
+    status: "Version 4 is a draft. The sampled tolerance (16) was measured against core's instrument material on Lite 1.33 (Canary 158.0.8110.0, one RTX 3080): the suite's sampled points lie within 16 of the calibrated reference shading (rendering model 2D.5, 2D.10): median 1, 95th percentile 5, maximum 16 at one point; changing it is a change of version 4.",
     tolerance: instrumentTolerance,
     scales: [...instrumentScales],
     description: "Strata rendering model, version 4: Instrument. Paint each case's capture (rounded rectangles in order, over transparent) as the layer's content and render the scene, and each variant (the scene with `set`'s dotted paths changed), over its backdrop at device scales 1 and 2. The layer stands at a whole device pixel, its vanishing point at the scene's camera.vanish. At scale s, a sample's pixel is the device pixel floor(at · s), layer-local, and expect[s] is the reference at its centre. Checks: exact (every channel within tolerance.exact), sampled (within tolerance.sampled), contained (at each t, every pixel the parts change lies inside the object's bounds), unchanged (identical pixels in every listed variant), presence (the feature on against off changes at least share of the object's part pixels by at least levels, and nothing outside its bounds or in protected rects), ratio (with the map on, shadowed points at most ratio of their lit value in every channel, lit points within lit levels) and relief (the objects are drawn as their Relief primitives and reported). A renderer conforms to version 4 when it passes this suite, scene-3.json, objects-2.json and relief-1.json.",

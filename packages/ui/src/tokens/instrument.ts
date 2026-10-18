@@ -1067,20 +1067,23 @@ export function studioHdr(studio: Partial<StudioTokens> = {}, light: { azimuth: 
 
 /** A recipe's values for the reference shading, with every default of 2D.5. */
 interface Shading {
-  rho: Vec3; F0: Vec3; alpha: number; metallic: number; direct: number;
-  coat: number; coatAlpha: number; coatF0: number; emissive: Vec3;
+  rho: Vec3; albedo: Vec3; F0: Vec3; roughness: number; alpha: number; metallic: number; direct: number;
+  coat: number; coatRoughness: number; coatAlpha: number; coatF0: number; emissive: Vec3;
 }
+/** The dielectric reflectance at normal incidence (2D.5): Lite's `reflectance`, 0.04. */
+export const DIELECTRIC_F0 = 0.04;
 function shadingOf(recipe: InstrumentRecipe): Shading {
-  const base = recipe.base ?? {}, metallic = base.metallic ?? 0, rho = linear(base.colour ?? "#ffffff");
+  const base = recipe.base ?? {}, metallic = base.metallic ?? 0, rho = linear(base.colour ?? "#ffffff"), roughness = clamp(base.roughness ?? 1, 0, 1);
   const f0 = recipe.reflectance?.f0 ?? 1, tint = linear(recipe.reflectance?.tint ?? "#ffffff");
-  const ior = recipe.coat?.ior ?? 1.5;
+  const coat = recipe.coat?.strength ?? 0, coatRoughness = clamp(recipe.coat?.roughness ?? 0, 0, 1), ior = recipe.coat?.ior ?? 1.5;
   const emissive = linear(recipe.emissive?.colour ?? "#ffffff").map(c => c * (recipe.emissive?.strength ?? 0)) as Vec3;
+  let F0 = tint.map((c, i) => mixValue(DIELECTRIC_F0 * f0 * c, rho[i]!, metallic)) as Vec3;
+  // A coat remaps the base's F0 to its reflectance under the coat's index (`getR0RemappedForClearCoat`), by its strength.
+  if (coat > 0) F0 = F0.map(f => { const s = Math.sqrt(f), a = 1 - ior, b = 1 + ior; return mixValue(f, clamp(((a + b * s) / (b + a * s)) ** 2, 0, 1), coat); }) as Vec3;
   return {
-    rho, metallic, direct: base.direct ?? 1,
-    F0: tint.map((c, i) => mixValue(0.04 * f0 * c, rho[i]!, metallic)) as Vec3,
-    alpha: Math.max((base.roughness ?? 1) ** 2, 0.002),
-    coat: recipe.coat?.strength ?? 0, coatAlpha: Math.max((recipe.coat?.roughness ?? 0) ** 2, 0.002), coatF0: ((ior - 1) / (ior + 1)) ** 2,
-    emissive,
+    rho, metallic, direct: base.direct ?? 1, roughness, alpha: roughness * roughness + 0.0005, F0,
+    albedo: rho.map(c => c * (1 - DIELECTRIC_F0) * (1 - metallic)) as Vec3,
+    coat, coatRoughness, coatAlpha: coatRoughness * coatRoughness + 0.0005, coatF0: ((1 - ior) / (1 + ior)) ** 2, emissive,
   };
 }
 const ggx = (nh: number, alpha: number) => { const a2 = alpha * alpha, d = nh * nh * (a2 - 1) + 1; return a2 / (Math.PI * d * d); };
@@ -1088,27 +1091,9 @@ const smith = (nl: number, nv: number, alpha: number) => {
   const a2 = alpha * alpha, denominator = nl * Math.sqrt(nv * nv * (1 - a2) + a2) + nv * Math.sqrt(nl * nl * (1 - a2) + a2);
   return denominator > 0 ? 0.5 / denominator : 0;
 };
-/**
- * `f(ω)` of 2D.5 for a direction `w` (towards it), with the coat: per channel,
- * `(1 − F) · (1 − metallic) · ρ / π + ndf · vis · F`, then `· (1 − coat · F꜀(n · v)) + coat · ndf꜀ · vis꜀ · F꜀`.
- */
-function brdf(s: Shading, n: Vec3, v: Vec3, w: Vec3): Vec3 {
-  const nl = dot(n, w), nv = Math.max(dot(n, v), 1e-4);
-  if (nl <= 0) return [0, 0, 0];
-  const h = normalize([v[0] + w[0], v[1] + w[1], v[2] + w[2]]), nh = Math.max(dot(n, h), 0), vh = clamp(dot(v, h), 0, 1);
-  const schlick = (1 - vh) ** 5, ndf = ggx(nh, s.alpha), vis = smith(nl, nv, s.alpha);
-  const out = s.F0.map((f0, i) => {
-    const F = f0 + (1 - f0) * schlick;
-    return (1 - F) * (1 - s.metallic) * s.rho[i]! / Math.PI + ndf * vis * F;
-  }) as Vec3;
-  if (s.coat <= 0) return out;
-  const Fc = (x: number) => s.coatF0 + (1 - s.coatF0) * (1 - x) ** 5;
-  const lobe = s.coat * ggx(nh, s.coatAlpha) * smith(nl, nv, s.coatAlpha) * Fc(vh), keep = 1 - s.coat * Fc(nv);
-  return out.map(value => value * keep + lobe) as Vec3;
-}
-
-/** The radical inverse in base 2 and 3: a deterministic low-discrepancy sequence for the quadrature. */
-const radical = (index: number, base: number) => { let result = 0, fraction = 1 / base; for (let i = index; i > 0; i = Math.floor(i / base)) { result += (i % base) * fraction; fraction /= base; } return result; };
+const schlick = (cosine: number, f0: number) => f0 + (1 - f0) * (1 - cosine) ** 5;
+/** The base-2 radical inverse: the second coordinate of the Hammersley points of the prefilter and the LUT. */
+const radical = (index: number) => { let result = 0, fraction = 0.5; for (let i = index; i > 0; i = Math.floor(i / 2)) { result += (i % 2) * fraction; fraction /= 2; } return result; };
 /** An orthonormal frame about `n`. */
 function frame(n: Vec3): [Vec3, Vec3] {
   const a: Vec3 = Math.abs(n[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0];
@@ -1116,76 +1101,160 @@ function frame(n: Vec3): [Vec3, Vec3] {
   return [t, [n[1] * t[2] - n[2] * t[1], n[2] * t[0] - n[0] * t[2], n[0] * t[1] - n[1] * t[0]]];
 }
 const along = (n: Vec3, [t, b]: [Vec3, Vec3], x: number, y: number, z: number): Vec3 => [t[0] * x + b[0] * y + n[0] * z, t[1] * x + b[1] * y + n[1] * z, t[2] * x + b[2] * y + n[2] * z];
-
-/** The quadrature's sample count per strategy (`shadePart`'s default): doubling it changes no channel by a level. */
-export const ENVIRONMENT_SAMPLES = 1024;
-/**
- * `∫ studio(ω) · f(ω) · max(n · ω, 0) dω` (2D.5), by deterministic quadrature: multiple importance sampling of four
- * strategies, each with `samples` points of a Hammersley sequence, combined by the balance heuristic: the diffuse lobe
- * (cosine), the base and coat GGX lobes (by half vector) and the cone of the key softbox (uniform). Each strategy
- * catches the part of the integrand the others miss: a near-mirror's lobe, and the small bright softbox on a rough part.
- */
-function environmentIntegral(s: Shading, n: Vec3, v: Vec3, studio: Partial<StudioTokens>, light: { azimuth: number; elevation: number }, samples: number): Vec3 {
-  const tokens = { ...STUDIO_DEFAULTS, ...studio }, basis = frame(n), L = lightVector(light.azimuth, light.elevation), keyBasis = frame(L);
-  const cone = Math.min(Math.PI, tokens.keyRadius + 0.1), coneCos = Math.cos(cone), conePdf = 1 / (2 * Math.PI * (1 - coneCos));
-  const lobes = [s.alpha, ...(s.coat > 0 ? [s.coatAlpha] : [])];
-  const diffuse = s.metallic < 1;
-  const pdfLobe = (w: Vec3, alpha: number) => {
-    const h = normalize([v[0] + w[0], v[1] + w[1], v[2] + w[2]]), nh = dot(n, h), vh = dot(v, h);
-    return nh > 0 && vh > 0 ? (ggx(nh, alpha) * nh) / (4 * vh) : 0;
-  };
-  const density = (w: Vec3) => {
-    const nl = dot(n, w);
-    let total = 0;
-    if (diffuse && nl > 0) total += (samples * nl) / Math.PI;
-    for (const alpha of lobes) total += samples * pdfLobe(w, alpha);
-    if (dot(w, L) >= coneCos) total += samples * conePdf;
-    return total;
-  };
-  const sum: Vec3 = [0, 0, 0];
-  const add = (w: Vec3) => {
-    const nl = dot(n, w);
-    if (nl <= 0) return;
-    const p = density(w);
-    if (!(p > 0)) return;
-    const radiance = studioRadiance(w, studio, light), f = brdf(s, n, v, w);
-    for (let channel = 0; channel < 3; channel++) sum[channel]! += (radiance[channel]! * f[channel]! * nl) / p;
-  };
-  for (let index = 0; index < samples; index++) {
-    const u1 = (index + 0.5) / samples, u2 = radical(index, 2), phi = 2 * Math.PI * u2;
-    if (diffuse) { const r = Math.sqrt(u1); add(along(n, basis, r * Math.cos(phi), r * Math.sin(phi), Math.sqrt(Math.max(0, 1 - u1)))); }
-    for (const alpha of lobes) {
-      const cosH = Math.sqrt((1 - u1) / (1 + (alpha * alpha - 1) * u1)), sinH = Math.sqrt(Math.max(0, 1 - cosH * cosH));
-      const h = along(n, basis, sinH * Math.cos(phi), sinH * Math.sin(phi), cosH), vh = dot(v, h);
-      add([2 * vh * h[0] - v[0], 2 * vh * h[1] - v[1], 2 * vh * h[2] - v[2]]);
-    }
-    { const cosK = 1 - u1 * (1 - coneCos), sinK = Math.sqrt(Math.max(0, 1 - cosK * cosK)); add(along(L, keyBasis, sinK * Math.cos(phi), sinK * Math.sin(phi), cosK)); }
-  }
-  return sum;
+/** The GGX half vector of Hammersley point `i` of `count` at `alpha` about `n`: azimuth `2π i / count`, polar angle from `radical(i)`. */
+function halfVector(n: Vec3, basis: [Vec3, Vec3], i: number, count: number, alpha: number): Vec3 {
+  const phi = (2 * Math.PI * i) / count, u = radical(i), cosH = Math.sqrt((1 - u) / (1 + (alpha * alpha - 1) * u)), sinH = Math.sqrt(Math.max(0, 1 - cosH * cosH));
+  return along(n, basis, sinH * Math.cos(phi), sinH * Math.sin(phi), cosH);
 }
 
-/** Where a part point stands and how it is lit: the scene's camera and light, and whether the map shadows it. */
+/** The point count of the prefilter and of the reflectance table (2D.5). */
+export const ENVIRONMENT_SAMPLES = 1024;
+/** The prefilter's mips: mip `k` holds GGX alpha `2^(k / 0.8) / 256`; a lookup at alpha `α` reads lod `0.8 · log2(256 · α)`. */
+export const PREFILTER_MIPS = 9;
+const mipAlpha = (k: number) => 2 ** (k / 0.8) / 256;
+
+/**
+ * The turn the prefiltered mips see the studio through (2D.5, *Lite's environment orientation*): Lite 1.33 copies the
+ * first mip of its specular cube as loaded, but computes every other mip at the direction its prefilter shader's cube
+ * face table gives each texel (`hdr-prefilter-cube.compute.wgsl`), which is a 180° turn from the direction WebGPU samples
+ * that texel at. So a lookup that reads mip 0 (a mirror) sees the studio where it is, while one that reads mips 1 and up
+ * sees `studio(T(ω))`, with `T` the 180° turn about the horizontal axis `((cos θ − sin θ), 0, −(sin θ + cos θ)) / √2`
+ * (layer axes; `θ = studioRotation(light)`): the screen's up becomes its down. The irradiance (spherical harmonics, from
+ * the image itself) is not turned. It is an engine defect the model follows until it is fixed upstream (change log).
+ */
+export function environmentTurn(direction: Vec3, light: { azimuth: number; elevation: number }): Vec3 {
+  const theta = studioRotation(light), c = Math.cos(theta), s = Math.sin(theta);
+  const axis: Vec3 = [(c - s) / Math.SQRT2, 0, -(s + c) / Math.SQRT2], d = dot(direction, axis);
+  return [2 * d * axis[0] - direction[0], 2 * d * axis[1] - direction[1], 2 * d * axis[2] - direction[2]];
+}
+/**
+ * The prefiltered studio at alpha `q` about `d` (2D.5): `Σ studio(ω_i) · (d · ω_i) / Σ (d · ω_i)` over the 1,024 GGX
+ * reflections `ω_i` of `d` about half vectors at alpha `q`, with `n = v = d` (split-sum's assumption).
+ */
+function prefilter(d: Vec3, q: number, radiance: (w: Vec3) => Vec3): Vec3 {
+  const basis = frame(d), sum: Vec3 = [0, 0, 0];
+  let weight = 0;
+  for (let i = 0; i < ENVIRONMENT_SAMPLES; i++) {
+    const h = halfVector(d, basis, i, ENVIRONMENT_SAMPLES, q), dh = Math.max(dot(d, h), 0);
+    const w: Vec3 = [2 * dh * h[0] - d[0], 2 * dh * h[1] - d[1], 2 * dh * h[2] - d[2]], l = dot(d, w);
+    if (l <= 0) continue;
+    const value = radiance(w);
+    for (let channel = 0; channel < 3; channel++) sum[channel]! += value[channel]! * l;
+    weight += l;
+  }
+  return sum.map(value => value / weight) as Vec3;
+}
+/**
+ * The specular environment `Lspec(r, α)` (2D.5): the prefiltered studio at lod `clamp(0.8 · log2(256 · α), 0, 8)`,
+ * linear between the two mips about it. Mip 0 is the studio at `r`; mip `k ≥ 1` is the prefilter at alpha
+ * `2^(k / 0.8) / 256` of the studio seen through `T` (`environmentTurn`).
+ */
+export function specularEnvironment(r: Vec3, alpha: number, studio: Partial<StudioTokens>, light: { azimuth: number; elevation: number }): Vec3 {
+  const direct = (w: Vec3) => studioRadiance(w, studio, light), turned = (w: Vec3) => direct(environmentTurn(w, light));
+  const mip = (k: number) => (k === 0 ? direct(r) : prefilter(r, mipAlpha(k), turned));
+  const lod = clamp(0.8 * Math.log2(256 * alpha), 0, PREFILTER_MIPS - 1), k = Math.floor(lod), f = lod - k;
+  const low = mip(k);
+  if (f <= 0) return low;
+  const high = mip(Math.min(PREFILTER_MIPS - 1, k + 1));
+  return low.map((value, i) => mixValue(value, high[i]!, f)) as Vec3;
+}
+
+/** The order-2 spherical-harmonic irradiance of a studio, over π (2D.5), cached per studio and light. */
+const irradianceCache = new Map<string, (n: Vec3) => Vec3>();
+/**
+ * `E(n)` (2D.5): the studio projected on the nine real spherical harmonics over a 512 × 256
+ * equirectangular grid, convolved with the clamped cosine and divided by π, then evaluated at `n` as Lite evaluates its
+ * pre-scaled harmonics. It is "average radiance": a white Lambertian surface under a uniform studio of 1 gets 1.
+ */
+export function studioIrradiance(n: Vec3, studio: Partial<StudioTokens>, light: { azimuth: number; elevation: number }): Vec3 {
+  const key = JSON.stringify([studio, light.azimuth, light.elevation]);
+  let evaluate = irradianceCache.get(key);
+  if (!evaluate) {
+    const width = 512, height = 256, sh = [new Float64Array(9), new Float64Array(9), new Float64Array(9)];
+    let total = 0;
+    for (let row = 0; row < height; row++) {
+      const polar = ((row + 0.5) / height) * Math.PI, s = Math.sin(polar), c = Math.cos(polar), dOmega = s * (Math.PI / height) * ((2 * Math.PI) / width);
+      for (let column = 0; column < width; column++) {
+        const azimuth = ((2 * (column + 0.5)) / width - 1) * Math.PI, x = s * Math.sin(azimuth), y = c, z = s * Math.cos(azimuth);
+        // (x, y, z) is in Lite's axes (y up, +z away); the layer's are (x, −y, −z).
+        const value = studioRadiance([x, -y, -z], studio, light);
+        const basis = [0.282094791773878, 0.48860251190292 * y, 0.48860251190292 * z, 0.48860251190292 * x, 1.092548430592079 * x * y, 1.092548430592079 * y * z,
+          0.31539156525252 * (3 * z * z - 1), 1.092548430592079 * x * z, 0.54627421529604 * (x * x - y * y)];
+        total += dOmega;
+        for (let channel = 0; channel < 3; channel++) for (let i = 0; i < 9; i++) sh[channel]![i]! += value[channel]! * basis[i]! * dOmega;
+      }
+    }
+    // The cosine convolution (1, 2/3, 1/4), then Babylon's polynomial over π and its pre-scaled harmonics.
+    const convolve = [1, 2 / 3, 2 / 3, 2 / 3, 0.25, 0.25, 0.25, 0.25, 0.25].map(k => (k * 4 * Math.PI) / total);
+    const harmonics = sh.map(channel => {
+      const c = channel.map((value, i) => value * convolve[i]!), p = 1 / Math.PI;
+      const px = c[3]! * 1.02333 * p, py = c[1]! * 1.02333 * p, pz = c[2]! * 1.02333 * p;
+      const xx = (c[0]! * 0.886227 - c[6]! * 0.247708 + c[8]! * 0.429043) * p, yy = (c[0]! * 0.886227 - c[6]! * 0.247708 - c[8]! * 0.429043) * p, zz = (c[0]! * 0.886227 + c[6]! * 0.495417) * p;
+      const yz = c[5]! * 0.858086 * p, zx = c[7]! * 0.858086 * p, xy = c[4]! * 0.858086 * p;
+      return { L00: (xx + yy) * 0.3333338747897695 + zz * 0.33333298856284405, L1_1: py * 1.4999984284682104, L10: pz * 1.4999984284682104, L11: px * 1.4999984284682104,
+        L2_2: xy * 3.999982863580422, L2_1: yz * 3.999982863580422, L20: zz * 1.3333326611423701 - (xx + yy) * 0.6666653397393608, L21: zx * 3.999982863580422, L22: (xx - yy) * 1.999991431790211 };
+    });
+    evaluate = ([nx, ny, nz]: Vec3) => {
+      const x = nx, y = -ny, z = -nz;
+      return harmonics.map(h => h.L00 + h.L1_1 * y + h.L10 * z + h.L11 * x + h.L2_2 * (y * x) + h.L2_1 * (y * z) + h.L20 * (3 * z * z - 1) + h.L21 * (z * x) + h.L22 * (x * x - y * y)) as Vec3;
+    };
+    if (irradianceCache.size > 16) irradianceCache.clear();
+    irradianceCache.set(key, evaluate);
+  }
+  return evaluate(n);
+}
+
+/** The split-sum reflectance table (2D.5) at `(n · v, roughness)`: `[A, B]`, with `F0 · A + B` the specular reflectance. */
+const tableCache = new Map<string, [number, number]>();
+export function reflectanceTable(nv: number, roughness: number): [number, number] {
+  const b = Math.max(nv, 0.001), r = Math.max(roughness, 0.04), key = `${b},${r}`;
+  const cached = tableCache.get(key);
+  if (cached) return cached;
+  const v: Vec3 = [Math.sqrt(1 - b * b), 0, b], a2 = (r * r) ** 2, n: Vec3 = [0, 0, 1], basis: [Vec3, Vec3] = [[1, 0, 0], [0, 1, 0]];
+  let A = 0, B = 0;
+  for (let i = 0; i < ENVIRONMENT_SAMPLES; i++) {
+    const h = halfVector(n, basis, i, ENVIRONMENT_SAMPLES, Math.sqrt(a2)), vh = Math.max(dot(v, h), 0);
+    const l = 2 * vh * h[2] - v[2], nh = Math.max(h[2], 0);
+    if (l <= 0 || nh <= 0) continue;
+    const g = (0.5 / Math.max(l * Math.sqrt(b * b * (1 - a2) + a2) + b * Math.sqrt(l * l * (1 - a2) + a2), 1e-6)) * l * ((4 * vh) / nh), m = (1 - vh) ** 5;
+    A += (1 - m) * g; B += m * g;
+  }
+  const result: [number, number] = [A / ENVIRONMENT_SAMPLES, B / ENVIRONMENT_SAMPLES];
+  if (tableCache.size > 4096) tableCache.clear();
+  tableCache.set(key, result);
+  return result;
+}
+
+/** The output transform of a part (2D.5): Lite's image processing as core leaves it: exposure 0.8, gamma 2.2, contrast 1.2. */
+export const PART_EXPOSURE = 0.8;
+export const PART_CONTRAST = 1.2;
+/** A part's linear colour to its displayed channel: `x = clamp((0.8 · c)^(1/2.2), 0, 1)`, then `x + 0.2 · (x²(3 − 2x) − x)`. */
+export const encodePart = (c: number) => { const x = clamp(Math.max(c * PART_EXPOSURE, 0) ** (1 / 2.2), 0, 1); return Math.max(x + (PART_CONTRAST - 1) * (x * x * (3 - 2 * x) - x), 0); };
+
+/** Where a part point stands and how it is lit: whether the map shadows it, and whether emitters count. */
 export interface PartShadingOptions {
   /** `σ`'s case: whether the shadow map (2D.7) shadows the point; default: traced (`mapShadowed`). */
   shadowed?: boolean;
-  /** The quadrature's sample count per strategy (`ENVIRONMENT_SAMPLES`). */
-  samples?: number;
   /** Leave the emitters out (for presence checks). */
   emitters?: boolean;
 }
-/** The terms of the reference shading of a part point, linear, before the clamp and encoding (2D.5). */
+/** The terms of the reference shading of a part point, linear, before the output transform (2D.5). */
 export interface PartTerms { key: Vec3; lamp: Vec3; fill: Vec3; env: Vec3; emissive: Vec3 }
 /**
- * The reference shading of a part (2D.5) in linear light, encoded to sRGB at the end, with `X` the point and `n` its
- * interpolated normal (turned towards the viewer):
+ * The reference shading of a part (2D.5): the key light and the environment by the split-sum approximation, in linear
+ * light, with `X` the point, `n` its interpolated normal (turned towards the viewer), `v` towards the camera and `h` the
+ * half vector of `v` and `L`:
  *
  * ```text
- * key  = intensity · direct · σ · π · f(L) · max(n · L, 0)
- * lamp = Σ over emitters of π · f(lₑ) · E
- * fill = ambient · (1 − metallic) · ρ · (0.5 + 0.5 · n.z)
- * env  = environment.strength · ∫ studio(ω) · f(ω) · max(n · ω, 0) dω
- * out  = enc(clamp(key + lamp + fill + env + emissive.strength · lin(emissive.colour), 0, 1))
+ * albedo = ρ · (1 − 0.04) · (1 − metallic)        α = roughness² + 0.0005        [A, B] = table(n · v, roughness)
+ * Ec     = 1 + F0 · (1 / (A + B) − 1)                                             energy compensation
+ * key    = intensity · direct · σ · (albedo / π + F(v · h) · ndf · vis · Ec) · max(n · L, 0)
+ * env    = strength · (E(n) · albedo + mix(Lspec(r, α), E(n), α) · (F0 · A + B) · Ec)        r = reflect(−v, n)
+ * out    = encodePart(key + lamp + fill + env + emissive)
  * ```
+ *
+ * with a coat as Lite layers it (its own F0, a Kelemen visibility for the key light, its own table and lobe, and the
+ * base attenuated by the coat's Fresnel). `lamp` keeps 2D.4's emitter term, `fill` the diffuse fill of 2D.5.
  */
 export function partTerms(scene: InstrumentScene, part: InstrumentPart, point: Vec3, normal: Vec3, options: PartShadingOptions = {}): PartTerms {
   const s = shadingOf(scene.materials[part.material] ?? {});
@@ -1193,27 +1262,45 @@ export function partTerms(scene: InstrumentScene, part: InstrumentPart, point: V
   const v = normalize([C[0] - point[0], C[1] - point[1], C[2] - point[2]]);
   let n = normalize(normal);
   if (dot(n, v) < 0) n = [-n[0], -n[1], -n[2]];
-  const L = lightVector(scene.light.azimuth, scene.light.elevation) as Vec3;
-  const darkness = scene.shadow.map?.darkness ?? 0.1, shadowed = options.shadowed ?? mapShadowed(scene, point);
-  const sigma = shadowed ? darkness : 1;
-  const fL = brdf(s, n, v, L), nl = Math.max(dot(n, L), 0), intensity = scene.light.intensity ?? 1.6;
-  const key = fL.map(f => intensity * s.direct * sigma * Math.PI * f * nl) as Vec3;
+  const L = lightVector(scene.light.azimuth, scene.light.elevation) as Vec3, studio = scene.environment.studio ?? {}, strength = scene.environment.strength;
+  const darkness = scene.shadow.map?.darkness ?? 0.1, shadowed = options.shadowed ?? mapShadowed(scene, point), sigma = shadowed ? darkness : 1;
+  const nv = Math.abs(dot(n, v)) + 1e-7, intensity = (scene.light.intensity ?? 1.6) * s.direct * sigma;
+  const [A, B] = reflectanceTable(nv, s.roughness), Ec = s.F0.map(f => 1 + f * (1 / Math.max(A + B, 0.001) - 1));
+  // The specular lobe of one light direction, with its energy compensation, and the coat's own lobe.
+  const lobe = (w: Vec3) => {
+    const nl = Math.max(dot(n, w), 0), h = normalize([v[0] + w[0], v[1] + w[1], v[2] + w[2]]), nh = clamp(dot(n, h), 1e-7, 1), vh = clamp(dot(v, h), 0, 1);
+    const specular = s.F0.map((f, i) => schlick(vh, f) * ggx(nh, s.alpha) * smith(nl, nv, s.alpha) * nl * Ec[i]!) as Vec3;
+    const diffuse = s.albedo.map(a => (a / Math.PI) * nl) as Vec3;
+    if (s.coat <= 0) return specular.map((value, i) => value + diffuse[i]!) as Vec3;
+    const Fc = schlick(vh, s.coatF0), coat = Fc * ggx(nh, s.coatAlpha) * (0.25 / (vh * vh + 1e-7)) * nl * s.coat, keep = 1 - Fc * s.coat;
+    return specular.map((value, i) => (value + diffuse[i]!) * keep + coat) as Vec3;
+  };
+  const key = lobe(L).map(value => value * intensity) as Vec3;
   const lamp: Vec3 = [0, 0, 0];
   if (options.emitters !== false) for (const emitter of scene.emitters ?? []) {
-    const E = emitterTerm(emitter, point, n), towards = normalize([emitter.position[0] - point[0], emitter.position[1] - point[1], emitter.position[2] - point[2]]);
-    const f = brdf(s, n, v, towards);
-    for (let channel = 0; channel < 3; channel++) lamp[channel]! += Math.PI * f[channel]! * E[channel]!;
+    const towards = normalize([emitter.position[0] - point[0], emitter.position[1] - point[1], emitter.position[2] - point[2]]);
+    const E = emitterTerm(emitter, point, n), nl = Math.max(dot(n, towards), 0), f = lobe(towards);
+    // 2D.4's E carries cos θ / π; the lobe carries cos θ itself.
+    if (nl > 0) for (let channel = 0; channel < 3; channel++) lamp[channel]! += (Math.PI * f[channel]! * E[channel]!) / nl;
   }
   const fill = s.rho.map(rho => (scene.light.ambient ?? 0) * (1 - s.metallic) * rho * (0.5 + 0.5 * n[2])) as Vec3;
-  const integral = environmentIntegral(s, n, v, scene.environment.studio ?? {}, scene.light, options.samples ?? ENVIRONMENT_SAMPLES);
-  const env = integral.map(value => scene.environment.strength * value) as Vec3;
+  const r: Vec3 = [2 * dot(n, v) * n[0] - v[0], 2 * dot(n, v) * n[1] - v[1], 2 * dot(n, v) * n[2] - v[2]];
+  const E = studioIrradiance(n, studio, scene.light).map(value => value * strength) as Vec3;
+  const radiance = specularEnvironment(r, s.alpha, studio, scene.light).map((value, i) => mixValue(value * strength, E[i]!, s.alpha)) as Vec3;
+  let env = s.F0.map((f, i) => E[i]! * s.albedo[i]! + radiance[i]! * (f * A + B) * Ec[i]!) as Vec3;
+  if (s.coat > 0) {
+    const [cA, cB] = reflectanceTable(nv, s.coatRoughness), keep = 1 - schlick(nv, s.coatF0) * s.coat;
+    const coat = specularEnvironment(r, s.coatAlpha, studio, scene.light).map(value => value * strength * (s.coatF0 * (cA + cB) + (1 - s.coatF0) * cB) * s.coat);
+    env = env.map((value, i) => value * keep + coat[i]!) as Vec3;
+  }
   return { key, lamp, fill, env, emissive: s.emissive };
 }
-/** The reference shading of a part point (2D.5), sRGB-encoded, channels 0–1. */
+/** The reference shading of a part point (2D.5), displayed channels 0–1. */
 export function shadePart(scene: InstrumentScene, part: InstrumentPart, point: Vec3, normal: Vec3, options: PartShadingOptions = {}): Rgb01 {
   const { key, lamp, fill, env, emissive } = partTerms(scene, part, point, normal, options);
-  return key.map((_, i) => enc(clamp(key[i]! + lamp[i]! + fill[i]! + env[i]! + emissive[i]!, 0, 1))) as unknown as Rgb01;
+  return key.map((_, i) => encodePart(key[i]! + lamp[i]! + fill[i]! + env[i]! + emissive[i]!)) as unknown as Rgb01;
 }
+
 
 // ---------------------------------------------------------------------------------------------------------------------
 // The posed scene: ray casting the parts' triangles (2D.3), and the shadow map along the light (2D.7).
