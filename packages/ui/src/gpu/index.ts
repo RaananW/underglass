@@ -532,9 +532,9 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       if (face === "raised") {
         // Controls (raised links included) are keys that travel on press; cards, plinths and other raised faces are
         // slabs others stand on.
-        if (element.matches("button, select, [role='button'], a, .ug-segmented__key, .ug-push__cap")) {
+        if (element.matches("button, select, [role='button'], a, .ug-segmented__key")) {
           entries.push({ object: "key", rect, radius, height: keyHeight, base, taper, travel: keyTravel, material: materialFor(element, face),
-            finish: element.matches("button, [role='button'], .ug-button, .ug-segmented__key, .ug-push__cap") && element.getAttribute("data-strata-finish") !== "off", state });
+            finish: element.matches("button, [role='button'], .ug-button, .ug-segmented__key") && element.getAttribute("data-strata-finish") !== "off", state });
         } else {
           const rise = level(element, "raised");
           entries.push({ object: "slab", rect, radius, height: rise, base, taper: Math.min(taper, rise), material: materialFor(element, face), state });
@@ -593,7 +593,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       face, rect, radius,
       height: face === "flat" ? 0 : face === "raised" || face === "knob" ? level(element, "raised") : level(element, "well"),
       material: materialFor(element, face),
-      finish: face === "raised" && element.matches("button, [role='button'], .ug-button, .ug-segmented__key, .ug-push__cap") && element.getAttribute("data-strata-finish") !== "off",
+      finish: face === "raised" && element.matches("button, [role='button'], .ug-button, .ug-segmented__key") && element.getAttribute("data-strata-finish") !== "off",
       state,
     });
   }
