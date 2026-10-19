@@ -18,12 +18,13 @@ const App = defineComponent({
       window.strataJogBinding = { frame: () => frame.value, setFrame: value => { frame.value = value; }, changes: () => [...changes], refs: { root: offset.value!.root, input: offset.value!.input } };
     });
     return () => h("main", [
-      h("div", { "data-contract": "jog-wheel.md", hidden: true }, [h(JogWheel, { label: "Shuttle", id: "shuttle", name: "shuttle", min: 0, max: 99, defaultValue: 12, unit: " fr" })]),
+      h("div", { "data-contract": "jog-wheel:0", hidden: true }, [h(JogWheel, { label: "Shuttle", id: "shuttle", name: "shuttle", min: 0, max: 99, defaultValue: 12, unit: " fr" })]),
+      h("div", { "data-contract": "jog-wheel:1", hidden: true }, [h(JogWheel, { label: "Tune", id: "tune", min: -12, max: 12, turn: 12, detents: true, wrap: false, drag: "vertical", defaultValue: 0, unit: " st", size: "small" })]),
       h("section", { class: "ug-panel", "data-strata-face": "raised", "aria-label": "Jog wheels", style: { display: "flex", flexWrap: "wrap", gap: "20px" } }, [
         h(JogWheel, { label: "Frame", id: "frame", min: 0, max: 99, modelValue: frame.value, unit: " fr", "onUpdate:modelValue": (value: number) => { changes.push(value); frame.value = value; } }),
         h(JogWheel, { ref: offset, label: "Offset", id: "offset", min: -50, max: 50, defaultValue: 10, resetValue: 0, class: "extra", style: { marginRight: "4px" }, "data-testid": "offset" }),
         h(JogWheel, { label: "Scrub", id: "scrub", min: 0, max: 11, turn: 12, detents: true, defaultValue: 3, format: (value: number) => `Mark ${value} of 11` }),
-        h(JogWheel, { label: "Tune", id: "tune", min: -12, max: 12, wrap: false, drag: "vertical", defaultValue: 0, unit: " st", size: "small" }),
+        h(JogWheel, { label: "Tuner", id: "tuner", min: -12, max: 12, wrap: false, drag: "vertical", defaultValue: 0, unit: " st", size: "small" }),
         h(Field, { help: "Turn to set the pitch." }, { default: () => h(JogWheel, { label: "Pitch", min: 0, max: 23, defaultValue: 5, size: "large" }) }),
       ]),
       h("p", { id: "frame-read" }, `Frame ${frame.value} fr`),
