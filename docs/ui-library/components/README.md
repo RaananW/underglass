@@ -39,6 +39,9 @@ native attributes (`:hover`, `:active`, `:focus-visible`, `:checked`, `:disabled
 | `data-strata-wrap` | A JogWheel's input | `"true"`: the value goes round at the ends, as the wheel does ([JogWheel](jog-wheel.md)) |
 | `data-strata-drag` | A JogWheel | `vertical`: a vertical drag, a turn per `jog.dragPx`, instead of the circular one |
 | `data-strata-backlight` | A Display's root (`data-strata-form="display"`, a TextField's `display` form or a read-only Display) | The backlight's role: `glowOn` (default, absent), `accent`, `success`, `warning`, `danger`, `info` or `off`; `data-strata-lit="false"` on it switches the light off ([Display](display.md)) |
+| `data-strata-colour` (pads) | A Pad | The glow's colour role, as a Lamp's ([Pad](pad.md)) |
+| `data-strata-velocity` | A Pad | The last press's velocity, 0–1 (position, pressure or key), set at each press by `attachStrataPads`; optional ([Pad](pad.md#8-keyboard-and-screen-reader)) |
+| `data-strata-shifted` | A Keypad's fieldset | `true`: each key's second legend is printed large and its first small ([Keypad](keypad.md)) |
 
 **Relief primitives.** Each is a rounded box (or a circle) taken from the element's border box and its
 `border-radius`. The GPU reads them from the markers, and the CSS presentation styles the same elements.
@@ -154,3 +157,5 @@ The [Instrument level](../instrument.md)'s components: hardware objects over nat
 | [Meter](meter.md) | `<meter>` (role `meter`) with `min`, `max`, `low`, `high`, `optimum` | A bar of LED segments lit from the value (each an emitter, in its zone's colour), or a needle on a printed arc on `spring.meter`; a held `peak` |
 | [Gauge](gauge.md) | `<meter>` (a bounded measurement; not `<progress>`) | A round dial under glass: a needle on `spring.gauge` over a printed scale, a red zone from `high` |
 | [Display](display.md) | The TextField's `<input>` as `form="display"`, or a read-only `<output>` | A glass window in a bezel over the printed text, backlit by emitters (`backlight` a colour role); the text stays captured content |
+| [Pad, PadGrid](pad.md) | `<button>`, with `aria-pressed` when latching; a grid is a `<div role="group">` | A square soft cap in a grid, a lit rim under it: dark off, glowing and emitting while struck or latched; the cap travels |
+| [Keypad](keypad.md) | A `<fieldset>` of `<button>`s, the Grid navigation pattern for the arrows | Machined square caps with printed legends on one polished plinth; each key travels |

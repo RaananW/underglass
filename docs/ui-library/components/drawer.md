@@ -152,7 +152,8 @@ so is the accessibility snapshot.
 - **Its walls are parts.** At the Instrument level the drawer's box is a tray: a **wall** (the Card's tray lip: a vertical outer face, a flat top 4 wide,
   an inner face 3 px down) along the three sides that are not on the chassis edge, open on the side it slides from, rising out of the chassis with
   the same eased progress as a Dialog's plate (`rise`, a uniform update). The drawer's corners on the edge are square, so the wall runs to the edge's
-  inset. At Relief and Objects the drawer is its slab in the `plate` material with the tight edge break.
+  inset. The slide, like the Dialog's depth entry, captures only what changes in the DOM: a 2.4 s open makes 10 to 12 captures, none in the middle
+  of the motion (`ui-dialog-motion.test.mjs`; the helper no longer rewrites the scrim's mode every frame, #165). At Relief and Objects the drawer is its slab in the `plate` material with the tight edge break.
 - **Containment.** The wall stays at least 0.5 px inside the drawer's box over the whole rise at every corner of the reference stage and every depth (the
   closest is 1.6 px), and the layer's slide does not move it relative to its own box.
 - A drawer's body is not a well: the tray is the drawer itself.

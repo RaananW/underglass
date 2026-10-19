@@ -6,6 +6,8 @@
  * - `?dom` starts in the CSS presentation; `?level=objects` presents the panel at the Objects level, and
  *   `?level=instrument` at the Instrument level (core's `instrument` material: the push buttons as a bezel, a glass ring and a
  *   travelling captured cap, and the plain Button as a key).
+ * - `?keys=N` adds N plain Buttons, each in its own colour (a key body each at the Instrument level), so the panel passes the helper's
+ *   key-body and push-button material rules (`INSTRUMENT_KEY_BODY_MATERIALS`, `INSTRUMENT_PUSH_MATERIALS`).
  * - `?plain` puts the panel in the page's flow with no Underglass at all, as a plain HTML page uses it (the mobile and
  *   preference checks).
  * Momentary buttons Record (danger) and Talk, latching buttons Mute (warning) and 48 V (info, latched), a disabled one of each,
@@ -15,7 +17,7 @@
 import "@underglass/ui/css";
 import { compileStyle, mountApplicationModule, type CanvasController } from "@underglass/core";
 import { attachStrata, attachStrataFeedback, type StrataFeedbackOptions } from "@underglass/ui/dom";
-import { attachStrataGpu, type StrataGpu } from "@underglass/ui/gpu";
+import { attachStrataGpu, INSTRUMENT_KEY_BODY_MATERIALS, INSTRUMENT_PUSH_MATERIALS, type StrataGpu } from "@underglass/ui/gpu";
 
 const params = new URLSearchParams(location.search);
 const host = (id: string) => document.getElementById(id)!;
@@ -53,6 +55,18 @@ const events: { id: string; type: string }[] = [];
 let panel!: HTMLElement;
 let strata: StrataGpu | undefined;
 
+/** Replaces the page's extra plain Buttons (`?keys=N`, and `setKeys(n)` in the probe) by `count` of them, each in its own colour. */
+function addKeys(section: HTMLElement, count: number) {
+  section.querySelectorAll("[id^=key-]").forEach(key => key.remove());
+  for (let index = 0; index < count; index++) {
+    const key = document.createElement("button");
+    key.type = "button"; key.className = "ug-button"; key.id = `key-${index}`; key.setAttribute("data-strata-face", "raised");
+    key.style.backgroundColor = `hsl(${Math.round(index * 360 / count)} 60% 55%)`;
+    key.innerHTML = `<span class="ug-button__label">K${index}</span>`;
+    section.querySelector("#push-form")!.append(key);
+  }
+}
+
 /** Builds the panel and wires its readout and event log. */
 function build(): HTMLElement {
   const section = document.createElement("section");
@@ -62,6 +76,7 @@ function build(): HTMLElement {
   section.setAttribute("data-strata-elevation", "floating");
   section.setAttribute("aria-labelledby", "push-title");
   section.innerHTML = markup;
+  addKeys(section, Number(params.get("keys") ?? 0));
   const read = section.querySelector("#push-read")!;
   for (const type of ["click", "strata-pressed-change"]) section.addEventListener(type, event => {
     const button = (event.target as Element).closest("button");
@@ -115,6 +130,9 @@ window.strataPushProbe = {
   feedback: (options: StrataFeedbackOptions) => { feedback.update(options); },
   instrument: () => (controller?.state() as unknown as { instrument: unknown } | undefined)?.instrument,
   state: () => controller?.state(),
+  diagnostics: () => strata?.diagnostics(panel),
+  setKeys: (count: number) => addKeys(panel, count),
+  rules: { keyBody: INSTRUMENT_KEY_BODY_MATERIALS, push: INSTRUMENT_PUSH_MATERIALS },
   counts: () => { const state = controller?.state() as unknown as { mode: string; metrics: { captures: number; uploads: number; geometryUpdates: number } } | undefined;
     return state ? { mode: state.mode, captures: state.metrics.captures, uploads: state.metrics.uploads, geometryUpdates: state.metrics.geometryUpdates } : undefined; },
 };
@@ -122,6 +140,6 @@ declare global {
   interface Window { strataPushProbe: {
     controller: CanvasController | undefined; panel(): HTMLElement; scene(): ReturnType<StrataGpu["scene"]>; refresh(): void;
     events(): { id: string; type: string }[]; clearEvents(): void;
-    instrument(): unknown; state(): ReturnType<CanvasController["state"]> | undefined; feedback(options: StrataFeedbackOptions): void; counts(): { mode: string; captures: number; uploads: number; geometryUpdates: number } | undefined;
+    setKeys(count: number): void; rules: { keyBody: number; push: number }; diagnostics(): ReturnType<StrataGpu["diagnostics"]> | undefined; instrument(): unknown; state(): ReturnType<CanvasController["state"]> | undefined; feedback(options: StrataFeedbackOptions): void; counts(): { mode: string; captures: number; uploads: number; geometryUpdates: number } | undefined;
   } }
 }

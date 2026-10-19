@@ -41,3 +41,6 @@ export type { ToastHandle, ToastOptions } from "./toast.ts";
 export type { TabChange, TabsActivation } from "./tabs.ts";
 export type { PressedChange } from "./behaviour.ts";
 export { driveStrataDisplay, releaseStrataDisplay } from "./display.ts";
+export { attachStrataGrids, attachStrataHeldButtons, attachStrataPadLatches, attachStrataPads, rovingStrataGrid, strataGridTarget } from "./pad.ts";
+export type { PadVelocity } from "./pad.ts";
+export { attachStrataKeypads } from "./keypad.ts";

@@ -97,6 +97,8 @@ const hapticsOn = (state: FeedbackState, element: Element) => !state.options.mut
   && !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
 /** The Instrument controls feedback belongs to (the switch forms, faders, knobs and lamps; a lamp's row, since a press on its label is a press on it). */
 const controls = ".ug-switch[data-strata-form] .ug-switch__input, .ug-knob__input, .ug-fader__input, .ug-lamp, .ug-push, .ug-rotary__select, .ug-jog-wheel__input, .ug-patch-point";
+/** Those, and the Pad and the Keypad's keys (`dom/pad.ts`, `dom/keypad.ts`): a gesture on one is the visitor's own input, and its press plays `click`. */
+const withPads = `${controls}, .ug-pad, .ug-keypad__key`;
 
 /** The page's feedback state, with its gesture listeners, created once per document. */
 function stateOf(doc: Document): FeedbackState {
@@ -110,7 +112,7 @@ function stateOf(doc: Document): FeedbackState {
   const gesture = (event: Event) => {
     // A press on a latching form's label (a Checkbox's row) is a press on its key.
     const target = event.target as Element | null;
-    const control = target?.closest?.(controls) ?? target?.closest?.("label")?.querySelector?.(":scope > .ug-latch");
+    const control = target?.closest?.(withPads) ?? target?.closest?.("label")?.querySelector?.(":scope > .ug-latch");
     if (!control || !event.isTrusted) return;
     const at = event.timeStamp || performance.now();
     created.gesture.set(control, at);
@@ -154,7 +156,7 @@ export function listenForStrataFeedback(doc: Document = document): void { stateO
 export function strataFeedback(element: Element, kind: StrataSoundKind): void {
   try {
     const doc = element.ownerDocument, state = stateOf(doc);
-    const control = element.closest(controls) ?? element;
+    const control = element.closest(withPads) ?? element;
     const own = (performance.now() - (state.gesture.get(control) ?? -Infinity)) < 1000;
     if (own && hapticsOn(state, control)) (doc.defaultView?.navigator ?? navigator).vibrate?.(strataPulses[kind]);
     const context = state.context;

@@ -169,9 +169,9 @@ object is drawn around it.
 | **[RotarySelector](components/rotary-selector.md)** | `<select>`; the native popup stays in the overlay host, as Select does today | A knob with a pointer over a ring of printed positions, one detent per `<option>` | Cap turns to the selected position | 2 (done) |
 | **PushButton** forms ([Button](components/button.md#11-push-button-form-momentary), [ToggleButton](components/toggle-button.md#11-push-button-form-latching)) | The existing Button and ToggleButton, `<button>` | `momentary`: a machined cap with a lit ring. `latching` (ToggleButton): stays down with an LED on | Travel; ring lights | 2 (done) |
 | **[Display](components/display.md)** | The existing TextField, `<input>`, as `form="display"` ([TextField, section 11](components/text-field.md#11-the-display-form)); read-only displays are `<output>` | A glass window in a bezel, backlit, with the text printed under the glass | None; backlight is an emitter | 2 (done) |
-| **Pad** | `<button>`, with `aria-pressed` for latching pads | A square soft cap in a grid, lit from below when active | Travel; emitter | 3 |
+| **[Pad](components/pad.md)** | `<button>`, with `aria-pressed` for latching pads | A square soft cap in a grid, lit from below when active | Travel; emitter | 3 (done) |
 | **[JogWheel](components/jog-wheel.md)** | `<input type="range">` with `wrap` (an endless encoder: the value steps, the visual position wraps) | A large flat wheel in a bearing recess with a finger dimple | The dimple turns on an accumulated angle; a flick coasts on `spring.jog` | 3 (done) |
-| **Keypad** | A `<fieldset>` of `<button>`s, Grid pattern for arrow keys | Push buttons in a grid on one plinth | Travel | 3 |
+| **[Keypad](components/keypad.md)** | A `<fieldset>` of `<button>`s, Grid pattern for arrow keys | Push buttons in a grid on one plinth | Travel | 3 (done) |
 | **[PatchPoint](components/patch-point.md)** | `<input type="checkbox">` or a `<button>` per jack; a `PatchBay` is a `<fieldset>` | A jack in a washer; a connected jack shows a plug and a short cable | The plug rises out of the hole | 3 (done) |
 
 ### Everyday components at the Instrument level
@@ -239,6 +239,7 @@ of the Rating and the Badge, so selecting is a pose and an emitter, not a rebuil
   source of truth.
 - **Levers and rockers:** a click anywhere on the control throws it; a drag past centre throws it too. The snap is
   visual.
+- **Pad and Keypad:** buttons that are held down while they are pressed (`data-strata-down`), one click per press. A grid of pads or keys is **one tab stop** (a roving tabindex, applied when focus first enters), and the arrow keys move in both axes by the layout's columns, Home and End along the row, Control+Home and Control+End to the ends of the grid, with no wrap and disabled controls skipped; the controls stay `button`s (no `role="grid"`). A pad may report a press **velocity**, 0–1, from the pointer's pressure or the place on the cap, optionally and without effect on the light. See [Pad](components/pad.md#8-keyboard-and-screen-reader) and [Keypad](components/keypad.md#8-keyboard-and-screen-reader).
 - **Sound and haptics:** `feedback: { sound: false, haptics: false }` per application or scope. Sounds are
   synthesised (click, tick, thunk, snap, three parameters each, per character; no assets) through Lite's audio
   engine (`createAudioEngineAsync`), which places each click at its control's position with spatial audio and
@@ -642,6 +643,8 @@ PR 14, wave 2, third part: the RotarySelector ([anatomy](components/rotary-selec
 at every presentation. The selector is a native `<select>` over the Knob's dial with one detent per option and the labels printed round
 it, the knob's round behaviour and its parts at the Instrument level; the push forms are the Button and ToggleButton as a machined cap on
 a bezel with a lit ring (an emitter) and, latching, an LED, with the key's travel, `click` feedback and a panel of emitters at every level.
+
+Wave 3, second part: the Pad and the Keypad ([Pad](components/pad.md), [Keypad](components/keypad.md)) at every presentation: CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Instrument on the GPU. A pad is a native `<button>` (momentary, or latching with `aria-pressed`) drawn as a square soft cap over a rim of light, an emitter lit by `--strata-lit` (the Lamp's wiring) with the cap's travel on the PushButton's `--strata-push-t` and `spring.button`; a keypad is a `<fieldset>` of buttons, machined caps with printed legends on one polished plinth, a plinth object and an object per key. Both stand in a grid with the roving-tabindex Grid navigation; a pad's optional velocity is `data-strata-velocity` and a `strata-pad-velocity` event. The soft cap is a satin lacquer where the plan named subsurface scattering: this core's recipe has no such layer.
 
 PR 15, wave 2, last part: the Display ([anatomy](components/display.md), [TextField, section 11](components/text-field.md#11-the-display-form))
 at every presentation: the TextField as `form="display"` (a native `<input>` that covers a bezel and a glass window, backlit) and a read-only

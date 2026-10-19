@@ -153,6 +153,8 @@ A [Display](components/display.md)'s backlight is a few emitters along its windo
 `emitter.display.height` (0.5†) and `emitter.display.strength` (2,200† for the 36 px reference window, shared between its emitters and scaled with the
 square of its height); the text box is a protected rect, so the light never reaches the text.
 
+A [Pad](components/pad.md)'s lit rim is an emitter with its own tokens, `emitter.pad.radius` (3†, in cap sides), `emitter.pad.height` (0.25†) and `emitter.pad.strength` (3,600† for the 64 px reference cap, scaled with the square of the cap): a grid of pads throws many pools that overlap, so each reaches less than a push button's ring.
+
 A [Meter](components/meter.md)'s lit segment is an LED with its own tokens, `emitter.segment.radius` (3†), `emitter.segment.height`
 (0.8†) and `emitter.segment.strength` (260† for the 10 px lens): a bar throws many small pools, so each reaches less than a lone LED's.
 
@@ -659,9 +661,9 @@ keep their Objects object, drawn as meshes of the same shapes. Lit parts give th
 | Select `display` | As Display (`bezel`, `window`), the `<select>` as the native element, its selected label printed under the glass | As Display, and two momentary push buttons (the PushButton's parts, `--_cap` 0.7 of `size.push`) stepping `selectedIndex` | The backlight; the buttons' travel and ring | Display row: step button, window, step button. Buttons `aria-hidden` with `tabindex="-1"`. [Anatomy](components/select.md#11-hardware-forms-selector-and-display) |
 | Tabs `rail` | `plinth`: the tablist, one polished part 2.4 high (the box rule's margin inside its box, no shadow of its own); each tab's LED a Ø6 glass lens on it | `cap` on a 5 high body, carrying its captured label | Travel 4 held, 1.8 selected: the selected key down, its LED lit | A tab's box is its cap (the control's height) + 6 each side and 12 above for the LED; the plinth 2 outside the tabs. The panel is the faceplate under the rail: captured content, never a face. [Anatomy](components/tabs.md#11-rail-form-rail) |
 | Display | `bezel`, `window`; the text, a native `<input>` or `<output>` printed under the window | None | The backlight, emitters along the window† | Box 236 × 56 at medium (the window 214 × 34, the control's height; the prototype's 236 × 58 had a 36 px window). The native element covers the whole box: the bezel stands 4 px in (the room for its shadow), 7 wide, radius 8, 2.4 high, chamfer 2, polished; the window 2.4 high with a 2.6 bevel. The finish band 0.3 and horizon 0.25 only where no text can reach the zone (an input's text can be anywhere in its content box, so never: a window 34 px high has none). The bezel is a solid under the window, whose exact pixels cover it. [Anatomy](components/display.md) |
-| Pad | `plinth` | `cap`: soft (`subsurface`), lit from below | Travel | Phase I5 |
+| Pad | `lens` (the glow: a glass plate on the face, an emitter), `plinth` (the soft cap's body), `cap` (the captured label) | The `cap`, a satin lacquer in this core (no `subsurface` layer yet) | Travel 3 (1.35, 0.45 of it, latched), while held, with the emitter lit from below | Box = cap + 18 (82 at medium); cap side `size.pad` (48, 64, 80), radius 0.22 of it. Glow a plate 0.5 high, the cap + 6 across, the lit rim 3 px round the cap; body 4 high, taper 0.6, chamfer 1.5, the captured label 1 on it; the emitter 3 cap sides of reach, 0.25 high, 3,600 at 64 (`emitter.pad.*`). Lit by `--strata-lit`, moved by `--strata-push-t`, the PushButton's numbers. [Anatomy](components/pad.md) |
 | JogWheel | `collar` (a bearing ring), `cap`, `chamfer`, `grip` (the finger dimple) | The cap, flat, with its dimple | The dimple turns on an accumulated angle (the value steps, wrapping; the angle never turns back), coasting after a flick on `spring.jog` | Dial box = wheel + 32 (128 at medium); wheel Ø `size.jogWheel` (64, 96, 128) in a recess 8 wider. Cap 8 high with a 2 px polished chamfer and a flat brushed top; collar 3 wide, 1.6 high, 0.4 outside the wheel, polished; the dimple a dish Ø 0.2 of the wheel, 0.34 of its diameter from the centre, flat with a 0.5 lip and the normals of a bowl, in graphite. `t` is the angle modulo 360° over 360 (the dimple turns 0° to 360° about the wheel), so the wrap is the same pose. [Anatomy](components/jog-wheel.md) |
-| Keypad | `plinth` | Push-button `cap`s | Travel | Phase I5 |
+| Keypad | `bezel` (one polished plinth, an object of its own), then per key `plinth` (the body) and `cap` (captured legends) | The caps | Travel 2.5, while held | Key box = cap + 12 (56 at medium); cap side `size.keypad` (36, 44, 52), radius 0.22 of it; body 5 high, taper 0.6, chamfer 2, the captured legends 1 on it; plinth 2.4 high, 0.8 edge break, its shadow fitted to the fieldset's box (12 px of room). Each key an object of its own. No emitter. [Anatomy](components/keypad.md) |
 | PatchPoint | `plate` (a washer), `bushing` (the jack's barrel), `slot` (the hole's floor), `pivot` (the plug), `lever` (the cable) | The plug and a short cable stub, risen out of the hole when connected | The plug rises (`travel`) on `spring.patch`; unplugged it is sunk under the floor and the washer | Box = washer + 20 (56 at medium); washer Ø `size.patchPoint` (28, 36, 44), 2.2 high with a hole of 0.44 of its diameter; barrel 3.2 wide, 1.8 high, polished; plug Ø 0.34 of the washer, 11 high; cable Ø 0.11 of the washer, towards the bottom of the screen, to 2 px short of the washer's edge. The cable is contained, so the box does not grow when connected. An optional LED is a StatusLight lens. [Anatomy](components/patch-point.md) |
 
 ## 7. Elevation and shadow
@@ -1350,6 +1352,39 @@ provisional (†) until the owner's look sign-off; what was judged is in [instru
 
 Serif or wide printed scales are not available: the type tokens carry no per-character face, so the character leaves type
 alone. As with studio, a character may not set `light.*`; its bright room comes from `studio.*`, not the key.
+
+**Playful.** A toy or an appliance: soft-touch rubber caps in sky blue (knobs) and coral (faders), glossy candy lacquers for
+skirts (sun yellow), levers (lime), bezels (cream), rocker plates (pink) and faceplates (mint by day, grape in the dark),
+a bright high-key room, hot-pink lamps, bouncy underdamped springs with overshoot, a fat pointer and a bright, short,
+nearly noiseless sound set. It ships as `characters/playful.json`, a sparse layer that extends premium like studio;
+`data-strata-character="playful"` selects it with no new mechanism. Values are provisional (†) until the owner's look
+sign-off; what was judged is in [instrument-characters.md](instrument-characters.md#playful).
+
+| Token | Premium | Playful† | Why |
+| --- | --- | --- | --- |
+| `material.roles.knobCap`, `faderCap` | metal | `rubberSky`, `rubberCoral` | Soft-touch caps in bold colours; a different hue per control family |
+| `material.roles.knobSkirt`, `lever`, `bezel`, `rockerPlate` | polished, metal, polished, metal | `candyYellow`, `candyLime`, `candyCream`, `candyPink` | Glossy candy lacquers; cream keeps a lamp's bezel bright |
+| `material.roles.plate` | metal / gunmetal (dark) | `candyMint` / `candyGrape` (dark), every theme premium names | A saturated faceplate: dark ink by day, cream ink at night |
+| `instrument.material.rubberSky / rubberCoral` | none | #2d93ff / #ff6a5c, rough 0.82, metallic 0, no coat | Matte dielectrics that take the room as a soft sheen; saturated enough to survive a bright room |
+| `instrument.material.candy*` (yellow, lime, pink, cream, mint, grape) | none | #ffd12e, #8be04a, #ff7ac0, #fff2d6 (rough 0.35), #5fd6c0, #3b2680 (0.4); coat 1 at 0.04 to 0.05 | Candy: a saturated dielectric under a full, sharp coat |
+| `instrument.material.glass` | tint #d6ede6, absorption 0.03, dispersion 0.2 | tint #ffe4f0, 0.03, 0.15 | Clear lenses with a faint pink cast |
+| `instrument.ink.cap` | #26282c | #1a1240 | Indigo ink: 5.9:1 or more on both rubbers |
+| `colour.glowOn`, `pointerLight.colour` | #ff9228, #fff2e0 | #ff3d8b, #fff4cc | Hot-pink lamps read on mint and grape and apart from the yellow skirts; a lemon pointer light |
+| `studio.key / keyRadius / fill / front / strip / floor / ceiling` | 12 / 0.24 / 1.2 / 0.12 / 2.5 / 0.03 / 0.25 | 7 / 0.45 / 2.2 / 0.3 / 1.4 / 0.2 / 0.55 | A bright, soft, high-key room with a lifted floor and ceiling |
+| `environment.intensity` | 1 | 0.9 | A brighter room (1.25) washed the sky rubber to cyan; 0.9 keeps the colour |
+| `emitter.lamp.radius / strength`, `emitter.led.radius / strength` | 6 / 3200, 6 / 520 | 8 / 4600, 7 / 760 | Bigger, punchier lamps and LEDs |
+| `emitter.pushButton.strength`, `emitter.segment.strength` | 2400, 260 | 3400, 380 | A brighter ring and meter segments |
+| `knob.pointer.width` | 2.2 px | 4 px | A fat, friendly pointer |
+| `spring.knob / fader` | 420/41, 420/41 | 340/22, 360/22 | Ratios 0.60 and 0.58: a visible bounce |
+| `spring.detent` | 900/42 | 700/27 | Ratio 0.51, about 15% overshoot of a detent step: lively detents |
+| `spring.slide / rocker / bat / wall / button` | 600/49, 1200/58, 1400/45, 1200/58, 1600/80 | 520/27, 900/31, 1000/33, 900/33, 1300/41 | Ratios 0.52 to 0.59; clamped at the stops, so a throw arrives fast and stops, and only a detent or a meter overshoots |
+| `spring.meter / gauge / patch` | 360/28, 160/20, 1100/60 | 300/18, 140/12, 900/32 | Ratios 0.52, 0.51, 0.53: a needle that wobbles into place |
+| `feedback.click / tick / thunk / snap` (pitch Hz, decay ms, noise) | 2400/4/0.6, 3200/2/0.3, 140/18/0.25, 1800/6/0.75 | 3600/2.5/0.25, 4600/1.2/0.1, 260/9/0.15, 2800/3.5/0.3 | Higher, shorter and cleaner than premium's and studio's on every sound |
+| `form.switch` | `slide` | `wall` | The big paddle of an appliance; recorded, not yet read by the components |
+
+A character cannot set a hue per lamp or the room's tint (among the colour roles only `glowOn` and `glowOff` are its to
+set, and `studio.*` has no hue), so "lamps in several hues" is the glow plus the bold role colours, and "coloured bounce" is
+the saturated faceplate that the metal and lacquer reflect. As with studio, a character may not set `light.*`.
 
 ## 20. Feedback
 

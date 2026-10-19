@@ -38,6 +38,9 @@ import type { CompiledMotion, CompiledProgramSet } from "./compiled.js";
 import { instrumentFaceScene, type InstrumentScene } from "./instrument.js";
 import { createInstrumentController, INSTRUMENT_SUCCESSOR_DEFERRAL_MS, type InstrumentController, type InstrumentLayerInput, type InstrumentTestHook } from "./instrument-pass.js";
 
+/** Marks an element whose presenter draws its value itself with its native paint hidden: its `input` events queue no capture. */
+export const GPU_VALUE_ATTRIBUTE = "data-underglass-gpu-value";
+
 /**
  * One enrolled layer as the runtime describes it to the renderer. The callbacks are read again on every
  * reconcile and frame, so they always report current values.
@@ -215,8 +218,8 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   const resources = { roots: 1, captureCanvases: 1, outputCanvases: 1, engines: 0, pendingEngines: 0, textures: 0, effects: 0, renderers: 0, stagingCanvases: 0, snapshots: 0, comparisonBuffers: 0, listeners: 0, scheduledFrames: 0, paintWaits: 0, lossObservers: 0, pendingCleanups: 0, probeElements: 0, probeReadbacks: 0, lightPasses: 0 };
   // Metrics are cumulative counters and aggregates plus bounded 256-entry sample histories (see `sample`).
   const timing = () => ({ count: 0, totalMs: 0, minMs: null as number | null, maxMs: null as number | null });
-  const layerMetrics: Record<string, { captures: number; pixelCopies: number; pixelReadbacks: number; uploads: number }> = Object.create(null);
-  const metrics = { captures: 0, pixelCopies: 0, pixelReadbacks: 0, reusedUploads: 0, uploads: 0, paintNotifications: 0, deviceLossCount: 0, fenceCount: 0, effectShaderCompilations: 0, incompleteFramesSkipped: 0, shaderSourceGenerations: 0, precompiledShaderSelections: 0,
+  const layerMetrics: Record<string, { captures: number; pixelCopies: number; pixelReadbacks: number; uploads: number; inputCapturesSkipped: number }> = Object.create(null);
+  const metrics = { captures: 0, inputCapturesSkipped: 0, pixelCopies: 0, pixelReadbacks: 0, reusedUploads: 0, uploads: 0, paintNotifications: 0, deviceLossCount: 0, fenceCount: 0, effectShaderCompilations: 0, incompleteFramesSkipped: 0, shaderSourceGenerations: 0, precompiledShaderSelections: 0,
     admission: { attempts: 0, passes: 0, captures: 0, pixelCopies: 0, pixelReadbacks: 0, uploads: 0, gpuFrames: 0, gpuReadbacks: 0, geometryChecks: 0,
       last: undefined as { nativePixels: number[][]; gpuPixels: number[][]; geometry: ReturnType<typeof verifyProbeGeometry>; frameBounds: ReturnType<typeof verifyFrameBounds>; projective?: ReturnType<typeof verifyProjectiveHits> } | undefined },
     timings: { captureMs: timing(), uploadMs: timing(), frameWorkMs: timing(), frameIntervalsMs: timing() },
@@ -1213,7 +1216,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
         coverage: { slot: logicalSlots.get(spec.id)!, capturedSlot: -1, width: 0, height: 0, pixelWidth: 0, pixelHeight: 0 },
         contentExtent: { width: 0, height: 0, pixelWidth: 0, pixelHeight: 0 } };
     });
-    for (const spec of current) metrics.perLayer[spec.id] ??= { captures: 0, pixelCopies: 0, pixelReadbacks: 0, uploads: 0 };
+    for (const spec of current) metrics.perLayer[spec.id] ??= { captures: 0, pixelCopies: 0, pixelReadbacks: 0, uploads: 0, inputCapturesSkipped: 0 };
     const custom = next.map(customOf);
     // Each layer keeps its pass while its texture, custom effect and material are unchanged.
     // Finds an existing pass bound to the same texture and custom definitions, searching the given compositions.
@@ -1792,7 +1795,21 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       void recover(`Native publication failed: ${String(error)}`).catch(reportFailure);
     }
   });
-  listen(container, "input", queueCapture);
+  /**
+   * An `input` event queues a capture, because a native control's value is not a DOM mutation (a range thumb moves with
+   * it). A control whose presenter draws the value itself and hides its native paint opts out with `GPU_VALUE_ATTRIBUTE`
+   * on the element: its `input` queues nothing and is counted instead. Nothing else changes: DOM the handlers write is
+   * seen by the mutation observer, and the browser's own paint event still reports any native repaint.
+   */
+  listen(container, "input", event => {
+    const target = event.target;
+    if (!(target instanceof Element) || !target.hasAttribute(GPU_VALUE_ATTRIBUTE)) { queueCapture(event); return; }
+    metrics.inputCapturesSkipped++;
+    for (const layer of current) if (layer.element.contains(target) || target.contains(layer.element)) {
+      const own = metrics.perLayer[layer.id];
+      if (own) own.inputCapturesSkipped++;
+    }
+  });
   listen(container, "focusin", queueCapture);
   listen(container, "focusout", queueCapture);
   status();

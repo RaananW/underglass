@@ -219,10 +219,15 @@ A meter has no keyboard interaction: it is not focusable and takes no input.
 
 ## 9. CSS presentation
 
-A window (a well with an inner shadow and a 1 px `edge` border), the segments as radial-gradient beads on their sockets, lit
+A window (a well with an inner shadow and a 1 px `edge` border), the segments as radial-gradient beads (their `::after`) on their sockets (their `::before`), lit
 by `--strata-lit` computed from the value (`clamp()`), with a glow shadow when lit, and the needle a 2.2 px blade turning with
 `--strata-meter-t`, the value's place on its spring (`transition` on a `linear()` sampled from `spring.meter`: 192 ms).
 Marks sit on whole pixels (CSS `round()`).
+
+A segment is two layers: the socket (`::before`, at `z-index: -1` in the segment's own stacking context) and the glass over it
+(`::after`, the gradient, lit by `--strata-lit`), as the indicator forms do. The glass cannot be the segment's own background:
+a negative-z-index child paints over its parent's background, which left every lit segment looking dark in CSS mode (#163).
+When the GPU draws a segment as a part (`data-strata-dome`) its `::after` and glow are hidden and the socket stays.
 
 - **Reflow:** a bar is as wide as its segments (286 px at medium, 16 segments) and shrinks to its container
   (`max-width: 100%`, the segments in a grid of equal columns); a needle meter's geometry is in container units, so it

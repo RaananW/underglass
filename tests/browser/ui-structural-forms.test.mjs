@@ -643,8 +643,8 @@ for (const dpr of [1, 2]) for (const level of levels) test(`a plate Dialog opens
   }
   // The rise is a uniform update: the plate dialog's captures, uploads and hit-geometry updates are the flush dialog's, within the frames' jitter.
   console.log(`DPR ${dpr} ${level}: open ${JSON.stringify(results.plate.open)} plate vs ${JSON.stringify(results.flush.open)} flush (${results.plate.frames} and ${results.flush.frames} frames); open and close ${JSON.stringify(results.plate.whole)} vs ${JSON.stringify(results.flush.whole)}`);
-  // The dialog's depth entry recaptures its layer every frame today (about two captures a frame, flush or plate alike, #165): the rise adds none of
-  // its own, so the counts are the flush dialog's within the frames' jitter. The two dialogs open in separate runs, so the frames each motion took
+  // The motion captures only the DOM's own changes (#165, `ui-dialog-motion.test.mjs` pins the number): the rise adds none of its own, so the
+  // counts are the flush dialog's within the frames' jitter. The two dialogs open in separate runs, so the frames each motion took
   // differ with the machine's pacing: measured up to 5.6 % apart (387 vs 410, 825 vs 781) on an idle RTX 3080, so the bound is 15 % plus 4.
   const within = (a, b) => Math.abs(a - b) <= 0.15 * b + 4;
   expect(within(results.plate.open.captures, results.flush.open.captures), `captures: plate ${results.plate.open.captures}, flush ${results.flush.open.captures}`).toBe(true);

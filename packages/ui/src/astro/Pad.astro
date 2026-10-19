@@ -1,0 +1,32 @@
+---
+/**
+ * Pad (anatomy page `pad.md`): a native `<button>` drawn as a square soft cap lit from below. The slot is the label that names it, and
+ * an optional `icon` slot is a decorative icon before it. `latching` makes it a toggle (`aria-pressed`, `pressed` its initial state):
+ * `attachStrata`, which it loads, toggles it in the browser and dispatches `strata-pressed-change`. Held and lit while pressed, the
+ * optional velocity (`data-strata-velocity`, a `strata-pad-velocity` event), opt-in feedback and the grid keys also come from
+ * `attachStrata`. `colour` is the glow's role (`glowOn`, amber, by default).
+ */
+import Behaviour from "./Behaviour.astro";
+import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+import { padMarkup } from "../shared/pad.ts";
+import type { StrataLampColour } from "../shared/lamp.ts";
+
+interface Props {
+  type?: "button" | "submit" | "reset";
+  /** The glow's colour: `glowOn` (amber) by default, or a status role. */
+  colour?: StrataLampColour;
+  /** A latching pad: a toggle (`aria-pressed`) that stays down and lit while on. */
+  latching?: boolean;
+  /** The initial state of a latching pad. */
+  pressed?: boolean;
+  size?: StrataSize;
+  material?: string;
+  level?: StrataLevel;
+  class?: string;
+  [attribute: string]: unknown;
+}
+
+const { type = "button", colour, latching = false, pressed = false, size, material, level, class: className, ...rest } = Astro.props;
+---
+<button type={type} class={classes("ug-pad", className)} data-strata-colour={colour} aria-pressed={latching ? String(pressed) : undefined} {...strataAttributes({ size, material, level })} {...rest}><span class="ug-pad__object" aria-hidden="true">{padMarkup.map(part => <span class={part.className} data-strata-face={part.face}></span>)}</span><span class="ug-pad__cap" data-strata-face="raised">{Astro.slots.has("icon") && <span class="ug-pad__icon" aria-hidden="true"><slot name="icon" /></span>}<span class="ug-pad__label"><slot /></span></span></button>
+<Behaviour />
