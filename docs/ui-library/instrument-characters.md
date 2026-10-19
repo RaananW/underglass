@@ -42,3 +42,39 @@ throws are CSS transitions), lamp and meter glass tints, the sound set's use bey
 
 **Evidence** (not committed): `evidence/regression/current/ui-probes/instrument-i5-studio/` (premium and studio
 screenshots and `variants.json`), from `tests/browser/ui-character-studio.test.mjs`.
+
+## Hifi
+
+**Mechanism.** The same as studio: `characters/hifi.json` extends premium and `data-strata-character="hifi"` selects it from the
+shipped stylesheet. It adds two presets (`champagne`, `walnut`) and a coat to the Instrument part materials
+(`gpu/instrument-character.ts` now reads a preset's `coat.*`; premium's presets in use have none, so the premium tables are
+still built exactly). The prototype page's **Character** switch gained Hi-fi, with page tables for champagne, walnut and
+chrome; the cap's ink now follows whichever material the cap role names.
+
+**Judged on the page** (premium beside hifi, Instrument, Objects and CSS, light and dark, DPR 2): the walnut plate with
+cream print is the strongest change and keeps the layout legible; champagne caps against cool chrome rings read as the two
+metals of a receiver; the pale-gold lamps and display read warm and distinct from studio's amber. Print contrast on decoded
+pixels (4.5 required), minimum per presentation at DPR 2: light Instrument 6.60, Objects 6.82, CSS 6.66 (premium 5.96, 7.20,
+7.11); dark 8.06, 8.23, 8.14. The display text is 14.1:1 and texel-exact. Mesh pixels stay inside the controls with 0 hit
+mismatches in light and dark (about 3,030 hits sampled).
+
+**Decisions the plan left open.**
+
+- Plates: walnut by day, black lacquer in the dark; the faceplate on the page follows. A silver faceplate was not tried: it
+  would have read as premium with a warm cap.
+- Glow: pale incandescent gold (#ffd36b), not blue-white: blue would sit next to the blue accent and lose the lamp.
+- Geometry (larger knobs) is not wired: the runtime builds parts from constants, as for studio, so only the pointer
+  width (3 px) is set. Larger knob proportions wait for part tokens to be read.
+- Chrome edge breaks are not wired: a cap's chamfer is its own metal polished (champagne), not a role; chrome is on the
+  skirt, lever and bezel.
+- Type: no per-character face exists in the type tokens, so serif or wide scales are not done.
+- Default forms: Switch is `bat`; the others are premium's. Recorded (`form.switch`), not wired.
+- Sound: a muted set (lower pitch, longer decay, less noise than premium and studio on every sound).
+- Conformance (`instrument-4.json`): character-independent, as for studio.
+
+**Not wired yet** (in the bundle and the prototype, not read by the runtime): as studio's, plus `form.switch` and the
+geometry above. The gallery's character switch (#172) does not list hifi: follow-up to add it there.
+
+**Evidence** (not committed): `evidence/regression/current/ui-probes/instrument-i5-hifi/` (premium and hifi screenshots and
+`variants.json`), from `tests/browser/ui-character-hifi.test.mjs`. Tested on Chrome Canary 158.0.8110.0, headless and
+headed; WICG html-in-canvas main at 5fb3df8 (2026-10-09).

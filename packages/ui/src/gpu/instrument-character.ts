@@ -26,6 +26,9 @@ export function characterMaterials(raw: Raw, glow: string): Record<string, Instr
     if (brush && strength > 0) recipe.brush = { strength, direction };
     const hairline = number(`${at}.grain.strength`, 0);
     if (grain && hairline > 0) recipe.grain = { kind: "hairline", strength: hairline };
+    // A coated preset (hifi's oiled walnut) names its coat; the premium presets in use have none.
+    const coat = number(`${at}.coat.strength`, 0);
+    if (coat > 0) recipe.coat = { strength: coat, roughness: number(`${at}.coat.roughness`, 0), ior: number(`${at}.coat.ior`, 1.5) };
     return recipe;
   };
   /** The same metal polished: the chamfer of a cap and a lever. */

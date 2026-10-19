@@ -1,0 +1,1033 @@
+{
+  "$description": "The hifi character (design language section 19): home hi-fi of the brushed-champagne and walnut kind. Warm champagne aluminium caps with polished chrome rings, levers and bezels, oiled-walnut (light) and black-lacquer (dark) plates, a warm dial-lamp glow, a wide bright soft room, heavy slow springs with soft detents, a chunky pointer and a muted, soft sound set. A sparse validated theme layer: it sets only what differs from premium. Its values are the I5 tuning on the prototype page (look sign-off pending with the owner); `provisional` names every one of them but the role assignments.",
+  "$extensions": {
+    "dev.underglass.strata": {
+      "character": {
+        "name": "hifi",
+        "version": 1,
+        "status": "draft",
+        "source": "docs/ui-library/instrument-characters.md#hifi",
+        "provisional": [
+          "spring",
+          "emitter",
+          "studio",
+          "environment.intensity",
+          "pointerLight.colour",
+          "colour.glowOn",
+          "knob.pointer.width",
+          "instrument.material",
+          "instrument.ink",
+          "material.presets",
+          "feedback"
+        ],
+        "extends": "premium"
+      }
+    }
+  },
+  "form": {
+    "switch": {
+      "$type": "string",
+      "$value": "bat",
+      "$description": "Switch's default form in hifi: the chunky chrome bat toggle of a receiver; slide, rocker and wall are available as forms.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "options": [
+            "slide",
+            "rocker",
+            "bat",
+            "wall"
+          ]
+        }
+      }
+    }
+  },
+  "instrument": {
+    "material": {
+      "champagne": {
+        "$description": "Brushed champagne anodised aluminium: the faceplate silver of a 1970s receiver, a warm tint on premium's circular brush.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#e6d9bd",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.3,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "brush": {
+          "strength": {
+            "$type": "number",
+            "$value": 0.95,
+            "$description": "The brush layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direction": {
+            "$type": "string",
+            "$value": "circular",
+            "$description": "The brush layer's direction."
+          }
+        },
+        "grain": {
+          "kind": {
+            "$type": "string",
+            "$value": "hairline",
+            "$description": "The grain layer's kind."
+          },
+          "strength": {
+            "$type": "number",
+            "$value": 0.12,
+            "$description": "The grain layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        }
+      },
+      "walnut": {
+        "$description": "Oiled walnut veneer: a warm dark dielectric under a satin coat, with a faint linear grain streak.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#4a2f1d",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.42,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 0.3,
+            "$description": "The coat layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.3,
+            "$description": "The coat layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "ior": {
+            "$type": "number",
+            "$value": 1.5,
+            "$description": "The coat layer's ior.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 1,
+                "max": 3
+              }
+            }
+          }
+        },
+        "brush": {
+          "strength": {
+            "$type": "number",
+            "$value": 0.35,
+            "$description": "The brush layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direction": {
+            "$type": "string",
+            "$value": "linear",
+            "$description": "The brush layer's direction."
+          }
+        }
+      },
+      "chrome": {
+        "$description": "Polished chrome: cooler and a little clearer than premium's.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#f4f7fc",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.03,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        }
+      },
+      "glass": {
+        "$description": "Warm dial glass.",
+        "glass": {
+          "tint": {
+            "$type": "color",
+            "$value": "#ecdfc6",
+            "$description": "The glass layer's tint."
+          },
+          "absorption": {
+            "$type": "number",
+            "$value": 0.05,
+            "$description": "The glass layer's absorption.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 10
+              }
+            }
+          }
+        },
+        "dispersion": {
+          "strength": {
+            "$type": "number",
+            "$value": 0.12,
+            "$description": "The dispersion layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "ink": {
+      "cap": {
+        "$type": "color",
+        "$value": "#241c12",
+        "$description": "The ink engraved in a cap: warm near-black on champagne."
+      }
+    }
+  },
+  "material": {
+    "presets": {
+      "champagne": {
+        "$description": "Brushed champagne aluminium, by its base colour.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "{colour.panel}",
+            "$description": "Colour role.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.3,
+            "$description": "Base roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "Base metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        }
+      },
+      "walnut": {
+        "$description": "Oiled walnut, by its base colour and a satin coat.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#4a2f1d",
+            "$description": "Colour role.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.42,
+            "$description": "Base roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "Base metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 0.3,
+            "$description": "Clear coat strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.3,
+            "$description": "Clear coat roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "roles": {
+      "knobCap": {
+        "$type": "string",
+        "$value": "champagne",
+        "$description": "A knob's cap; its chamfer the same metal polished."
+      },
+      "knobSkirt": {
+        "$type": "string",
+        "$value": "chrome",
+        "$description": "A knob's skirt."
+      },
+      "faderCap": {
+        "$type": "string",
+        "$value": "champagne",
+        "$description": "A fader's carriage."
+      },
+      "lever": {
+        "$type": "string",
+        "$value": "chrome",
+        "$description": "A bat's lever, polished as a chamfer is."
+      },
+      "rockerPlate": {
+        "$type": "string",
+        "$value": "walnut",
+        "$description": "A rocker's paddle."
+      },
+      "plate": {
+        "$type": "string",
+        "$value": "walnut",
+        "$description": "Wall plates: metal on light themes, gunmetal on dark.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "themes": {
+              "light": "walnut",
+              "dark": "lacquer",
+              "contrast": "walnut",
+              "contrast-dark": "lacquer"
+            }
+          }
+        }
+      },
+      "bezel": {
+        "$type": "string",
+        "$value": "chrome",
+        "$description": "Bezels of rockers, push buttons and displays; a bat's nut and bushing."
+      },
+      "lens": {
+        "$type": "string",
+        "$value": "glass",
+        "$description": "Lenses."
+      },
+      "display": {
+        "$type": "string",
+        "$value": "glass",
+        "$description": "A display's window."
+      },
+      "glowOn": {
+        "$type": "string",
+        "$value": "emissive",
+        "$description": "Lit lenses, rings and flags."
+      },
+      "glowOff": {
+        "$type": "string",
+        "$value": "glass",
+        "$description": "Unlit lenses."
+      }
+    }
+  },
+  "pointerLight": {
+    "colour": {
+      "$type": "color",
+      "$value": "#ffe9c2",
+      "$description": "A warm white: (1, 0.95, 0.88) as light."
+    }
+  },
+  "colour": {
+    "glowOn": {
+      "$type": "color",
+      "$value": "#ffd36b",
+      "$description": "Lit lenses, rings and flags.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "themes": {
+            "light": "#ffd36b",
+            "dark": "#ffd36b",
+            "contrast": "#ffd36b",
+            "contrast-dark": "#ffd36b"
+          }
+        }
+      }
+    }
+  },
+  "environment": {
+    "intensity": {
+      "$type": "number",
+      "$value": 1.1,
+      "$description": "Environment lighting strength: a duller room than the default's.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 3,
+          "scope": false
+        }
+      }
+    }
+  },
+  "studio": {
+    "key": {
+      "$type": "number",
+      "$value": 8,
+      "$description": "The key softbox.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 40,
+          "scope": false
+        }
+      }
+    },
+    "keyRadius": {
+      "$type": "number",
+      "$value": 0.42,
+      "$description": "The softbox's angular radius, radians.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0.05,
+          "max": 0.6,
+          "scope": false
+        }
+      }
+    },
+    "fill": {
+      "$type": "number",
+      "$value": 2.2,
+      "$description": "A broad fill opposite the key.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 10,
+          "scope": false
+        }
+      }
+    },
+    "front": {
+      "$type": "number",
+      "$value": 0.3,
+      "$description": "A dim panel behind the viewer.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 2,
+          "scope": false
+        }
+      }
+    },
+    "strip": {
+      "$type": "number",
+      "$value": 1.8,
+      "$description": "A ring 12–20° above the horizon.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 10,
+          "scope": false
+        }
+      }
+    },
+    "floor": {
+      "$type": "number",
+      "$value": 0.12,
+      "$description": "The room below the horizon.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 1,
+          "scope": false
+        }
+      }
+    },
+    "ceiling": {
+      "$type": "number",
+      "$value": 0.5,
+      "$description": "The room above it.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 2,
+          "scope": false
+        }
+      }
+    }
+  },
+  "emitter": {
+    "lamp": {
+      "radius": {
+        "$type": "number",
+        "$value": 9,
+        "$description": "Reach, in lens diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 1,
+            "max": 20
+          }
+        }
+      },
+      "strength": {
+        "$type": "number",
+        "$value": 3600,
+        "$description": "Intensity I.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 32000
+          }
+        }
+      }
+    },
+    "led": {
+      "radius": {
+        "$type": "number",
+        "$value": 7,
+        "$description": "Reach, in lens diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 1,
+            "max": 20
+          }
+        }
+      },
+      "strength": {
+        "$type": "number",
+        "$value": 480,
+        "$description": "Intensity I.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 32000
+          }
+        }
+      }
+    }
+  },
+  "knob": {
+    "pointer": {
+      "width": {
+        "$type": "dimension",
+        "$value": "3px",
+        "$description": "Pointer width, engraved in the cap's ink along the crown.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0.5,
+            "max": 6
+          }
+        }
+      }
+    }
+  },
+  "spring": {
+    "knob": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 260,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 32,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "detent": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 600,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 46,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "fader": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 300,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 35,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "slide": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 420,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 41,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "rocker": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 800,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 57,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "bat": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 900,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 57,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "wall": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 800,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 57,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "button": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 1100,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 66,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "meter": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 240,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 24,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "gauge": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 120,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 17,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    }
+  },
+  "feedback": {
+    "click": {
+      "pitch": {
+        "$type": "number",
+        "$value": 1800,
+        "$description": "The tone, Hz.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 40,
+            "max": 8000
+          }
+        }
+      },
+      "decay": {
+        "$type": "number",
+        "$value": 6,
+        "$description": "The envelope's time constant, ms.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0.5,
+            "max": 60
+          }
+        }
+      },
+      "noise": {
+        "$type": "number",
+        "$value": 0.35,
+        "$description": "The noise share, 0 to 1.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    },
+    "tick": {
+      "pitch": {
+        "$type": "number",
+        "$value": 2400,
+        "$description": "The tone, Hz.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 40,
+            "max": 8000
+          }
+        }
+      },
+      "decay": {
+        "$type": "number",
+        "$value": 3,
+        "$description": "The envelope's time constant, ms.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0.5,
+            "max": 60
+          }
+        }
+      },
+      "noise": {
+        "$type": "number",
+        "$value": 0.15,
+        "$description": "The noise share, 0 to 1.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    },
+    "thunk": {
+      "pitch": {
+        "$type": "number",
+        "$value": 90,
+        "$description": "The tone, Hz.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 40,
+            "max": 8000
+          }
+        }
+      },
+      "decay": {
+        "$type": "number",
+        "$value": 28,
+        "$description": "The envelope's time constant, ms.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0.5,
+            "max": 60
+          }
+        }
+      },
+      "noise": {
+        "$type": "number",
+        "$value": 0.18,
+        "$description": "The noise share, 0 to 1.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    },
+    "snap": {
+      "pitch": {
+        "$type": "number",
+        "$value": 1400,
+        "$description": "The tone, Hz.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 40,
+            "max": 8000
+          }
+        }
+      },
+      "decay": {
+        "$type": "number",
+        "$value": 9,
+        "$description": "The envelope's time constant, ms.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0.5,
+            "max": 60
+          }
+        }
+      },
+      "noise": {
+        "$type": "number",
+        "$value": 0.55,
+        "$description": "The noise share, 0 to 1.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    }
+  }
+}
