@@ -26,6 +26,9 @@
  * `--strata-lit` and the `emitter.*` tokens, read each frame, so a blink or a toggle is a uniform update), the `protected`
  * rects of its text and a `feather`, so core's face pool lights the page around the lens within the contrast guard.
  *
+ * The indicator forms' lenses (a Rating's lamps, a Badge's LED, a ProgressBar's segments, a Spinner's ring; `gpu/indicator-forms.ts`) are the same lenses, one
+ * emitter each, lit by the `--strata-lit` the stylesheet gives them (a hover preview, a value, a chase), drawn at every level as a Meter's segments are.
+ *
  * A Meter's or Gauge's segments are the same LED lenses (`gpu/meter-forms.ts`, `gpu/instrument-meter.ts`; design language section 6): one
  * emitter each, in the colour of its zone, lit from the native meter's value (or the live value `driveStrataMeter` gave it) and its held
  * peak, so a value change is a uniform update at every level. A needle meter's and a gauge's window and bezel are Relief and Objects
@@ -65,6 +68,7 @@ import { emitterDefaults, lensEmitter, type EmitterTokens, type LampEmitter } fr
 import { meterFormEntries } from "./meter-forms.ts";
 import { meterBarObject, meterDialObject, meterHeight, meterMaterials } from "./instrument-meter.ts";
 import { advancePeak, meterFraction, meterSprings, meterZoneRoles, peakDefaults, peakIndex, segmentEmitterDefaults, segmentsLit, segmentZones, type PeakState } from "../shared/meter.ts";
+import { DISABLED_LIGHT, INDICATOR_LENS, indicatorOf, roomAround } from "./indicator-forms.ts";
 import { strataStage, type StagePresenter } from "../dom/stage.ts";
 import type { EnvironmentMap, StageScene } from "../tokens/stage.ts";
 import { advance, asParticle, decodeHdr, environmentFrom, launch, spring, type BurstOptions, type Confetto } from "./scene.ts";
@@ -487,6 +491,24 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   // Meters and Gauges (design language section 6): a bar's segments are LEDs, each an emitter in its zone's colour, lit from the
   // native meter's value (and its held peak) read here, so a live level is a uniform update. The needle and the scale are not lights.
   const meterInfos = new Map<HTMLElement, MeterInfo>(), segmentInfos = new Map<HTMLElement, LampInfo>(), now = options.now ?? performance.now();
+  // The indicator forms' lenses (a Rating's lamps, a Badge's LED, a ProgressBar's segments, a Spinner's ring; `gpu/indicator-forms.ts`) are the
+  // same LED lenses, each an emitter, lit by the `--strata-lit` the stylesheet gives it now (a hover preview, a value, a chase), so they join
+  // the segments' infos and are drawn as those are; at the Instrument level the ones drawn as objects are collected as they are met.
+  const instrumentIndicators = new Set<HTMLElement>();
+  for (const lens of panel.querySelectorAll<HTMLElement>(INDICATOR_LENS)) {
+    const place = indicatorOf(lens), rect = rectWithin(lens, panel);
+    if (!place || emitters.length >= MAX_EMITTERS || rect[2] <= 0 || rect[3] <= 0 || !lens.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    const whole = rectWithin(place.box, panel), box = place.tight ? roomAround(rect, whole) : whole;
+    if (box[2] <= 0 || box[3] <= 0) continue;
+    const style = getComputedStyle(lens), lensTokens = reader(lens), read = Number.parseFloat(style.getPropertyValue("--strata-lit"));
+    const lit = Number.isFinite(read) ? Math.min(1, Math.max(0, read)) : 0, role = hex(style.getPropertyValue("--_c").trim() || "#ff9228");
+    const given: EmitterTokens = place.emitter === "segment" ? segmentEmitterDefaults : emitterDefaults[place.emitter];
+    const own: EmitterTokens = { radius: lensTokens.number(`emitter.${place.emitter}.radius`, given.radius), height: lensTokens.number(`emitter.${place.emitter}.height`, given.height), strength: lensTokens.number(`emitter.${place.emitter}.strength`, given.strength) };
+    // A disabled control keeps its lit lenses, dimmed, so what it is set to is still said; more contrast turns the light off.
+    const dim = place.control.matches(":disabled") ? DISABLED_LIGHT : 1;
+    segmentInfos.set(lens, { kind: "led", role, lit, lens: rect[2], index: emitters.length, box, control: place.control, feather: lensTokens.number("emitter.guardFeather", emitterDefaults.guardFeather) });
+    emitters.push(lensEmitter(place.emitter === "lamp" ? "lamp" : "led", [rect[0] + rect[2] / 2, rect[1] + rect[3] / 2], rect[2], moreContrast ? 0 : lit * dim, role, own));
+  }
   for (const root of panel.querySelectorAll<HTMLElement>(".ug-meter")) {
     const native = root.querySelector<HTMLMeterElement>("meter.ug-meter__native");
     if (!native || !root.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
@@ -551,6 +573,8 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       // A lamp's or LED's bezel and lens are drawn as its Instrument object (the socket under the lens stays printed on the face).
       const lampRoot = element.matches(".ug-lamp__bezel, .ug-lamp__lens, .ug-status-light__lens") ? element.closest<HTMLElement>(".ug-lamp, .ug-status-light") : null;
       if (lampRoot && lamps.has(lampRoot)) { instrumentLamps.add(lampRoot); options.domes?.add(element); continue; }
+      // An indicator form's lens (a Rating's lamp, a Badge's LED, a bar's segment, a ring's LED) is an LED object of its own.
+      if (element.matches(INDICATOR_LENS) && segmentInfos.has(element)) { instrumentIndicators.add(element); options.domes?.add(element); continue; }
       if (face === "raised" && element.matches("button")) { keys.push(element); continue; }
     }
     let rect = rectWithin(element, panel);
@@ -588,7 +612,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     if (segment) {
       // The segments are drawn from the native meter's value at every level, so a live value needs no write to the DOM (`driveStrataMeter`).
       if (meterRoot) options.domes?.add(meterRoot);
-      const floor = baseOf(element) - (objects(element) ? Math.max(1, level(element.closest(".ug-meter__window") ?? element, "well")) : 0);
+      const floor = baseOf(element) - (objects(element) && meterRoot ? Math.max(1, level(element.closest(".ug-meter__window") ?? element, "well")) : 0);
       const parts = lampFormEntries(element, { rect, state, objects: objects(element), base: floor, box: segment.box, role: segment.role, lit: segment.lit, domes: options.domes,
         material: (part, role, partFace) => {
           const named = part.closest("[data-strata-material]");
@@ -715,7 +739,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   };
   // The lights of the panel's lenses, with the text they must not wash out (the guard, design language section 3).
   const lights = emitters.length ? { emitters, protected: protectedRects(panel), feather: Math.max(...[...lamps.values(), ...segmentInfos.values()].map(info => info.feather)) } : undefined;
-  if (instrumentLayer) return instrumentScene(panel, options, { settings, entries: entries as ScenePrimitive[], knobs, faders, switches, keys, states, materialFor, tokens, reach, lamps, instrumentLamps, lights, instrumentMeters, meterInfos, segmentInfos });
+  if (instrumentLayer) return instrumentScene(panel, options, { settings, entries: entries as ScenePrimitive[], knobs, faders, switches, keys, states, materialFor, tokens, reach, lamps, instrumentLamps, lights, instrumentMeters, meterInfos, segmentInfos, instrumentIndicators });
   if (!entries.some(isSceneObject)) return lights ? { format: "strata-scene", version: 4, ...settings, primitives: entries as ScenePrimitive[], ...lights } : { format: "strata-scene", version: 1, ...settings, primitives: entries };
   // The camera (design language section 2): centred on the stage, at D = max(camera.distance, r · h / taper + h),
   // with r the stage's half-diagonal, so every solid keeps the taper rule wherever its panel sits.
@@ -785,6 +809,8 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
   instrumentLamps: Set<HTMLElement>; lamps: Map<HTMLElement, LampInfo>; lights?: { emitters: LampEmitter[]; protected: [number, number, number, number][] | "extent"; feather: number };
   /** The Meters and Gauges at the Instrument level, every visible meter's info and every visible segment's. */
   instrumentMeters: Set<HTMLElement>; meterInfos: Map<HTMLElement, MeterInfo>; segmentInfos: Map<HTMLElement, LampInfo>;
+  /** The indicator forms' lenses drawn as objects (their infos are in `segmentInfos`). */
+  instrumentIndicators: Set<HTMLElement>;
   states: (element: Element) => { hover: boolean; pressed: boolean; focus: boolean; disabled: boolean };
   materialFor: (element: Element, face: SceneFace) => string; tokens: ReturnType<typeof reader>; reach: number;
 }): StrataInstrumentScene {
@@ -887,6 +913,18 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     objects.push(lampObject(input, profile) as unknown as InstrumentObject);
     Object.assign(materials, lampMaterialsOf(input));
     tallest = Math.max(tallest, lampHeight(info.kind, info.lens, scale));
+  }
+  // The indicator forms' lenses: a glass LED lens each, its emitter (index `info.index`) lit by the `--strata-lit` read this frame, so a chase, a
+  // hover preview or a value changes the emitter alone: no rebuild, no capture.
+  for (const lens of context.instrumentIndicators) {
+    const info = context.segmentInfos.get(lens);
+    if (!info || objects.length + entries.length >= 255 || info.box[2] <= 0 || info.box[3] <= 0) continue;
+    const state = context.states(lens), place = rectWithin(lens, panel);
+    const input = { id: idOf(info.control.id ? info.control : lens, "led"), kind: "led" as const, box: info.box, lens: info.lens, centre: [place[0] + place[2] / 2, place[1] + place[3] / 2] as [number, number], scale, role: info.role, emitter: info.index, opaque,
+      state: { hover: state.hover, disabled: state.disabled }, light, relief: { rect: place, height: raised } };
+    objects.push(lampObject(input, profile) as unknown as InstrumentObject);
+    Object.assign(materials, lampMaterialsOf(input));
+    tallest = Math.max(tallest, lampHeight("led", info.lens, scale));
   }
   // Meters and Gauges: a bar is a glass window and an LED lens per segment (lit by its emitter, so the parts never depend on the
   // value); a needle meter or gauge is a window, a needle turned by its value's place on its spring, and its hub (a gauge: a bezel).
@@ -1195,8 +1233,8 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     if (sceneLevel()) presentBackdrop(); else { withdrawBackdrop(); endParticles(); }
     // A CSS transition (a knob sliding, a face settling) moves geometry with no event per frame: follow it until it
     // ends. Endless CSS animations (the spinner) stay in the captured content and need no new scene.
-    // A StatusLight's blink is a CSS animation of `--strata-lit`, which the scene reads: it needs a scene each frame while it runs.
-    if (gpu && (root.getAnimations({ subtree: true }).some(animation => (animation instanceof CSSTransition || (animation instanceof CSSAnimation && animation.animationName === "ug-blink")) && animation.playState === "running")
+    // A StatusLight's blink and a chase (a Spinner ring, an indeterminate bar) are CSS animations of `--strata-lit`, which the scene reads: they need a scene each frame while they run.
+    if (gpu && (root.getAnimations({ subtree: true }).some(animation => (animation instanceof CSSTransition || (animation instanceof CSSAnimation && /^ug-(blink|chase)/.test(animation.animationName))) && animation.playState === "running")
       || [...panels.values()].some(entry => entry.motion) || moving.size)) schedule();
   }
 
