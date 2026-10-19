@@ -30,6 +30,7 @@ native attributes (`:hover`, `:active`, `:focus-visible`, `:checked`, `:disabled
 | `data-strata-colour` | A Lamp or StatusLight | The lens's colour role: `glowOn` (default), `accent`, `success`, `warning`, `danger` or `info` ([Lamp](lamp.md)) |
 | `data-strata-lit` | A StatusLight | `false`: an unlit light (lit when absent) |
 | `data-strata-blink` | A StatusLight | A tempo token, `slow`, `normal` or `fast`: a lit light blinks, off under reduced motion ([StatusLight](status-light.md)) |
+| `data-strata-form` (indicator forms) | A Rating's fieldset, a Badge, a ProgressBar's wrapper (`.ug-progress-bar`) or a Spinner | `lamps` (Rating), `led` (Badge), `meter` (ProgressBar) or `ring` (Spinner): the control drawn as LED lenses, each an emitter lit by `--strata-lit`; `flush`, or none, is the look before. `data-strata-colour` is the lenses' role there too, `accent` by default for a bar and a ring ([Rating](rating.md#11-indicator-form-lamps), [Badge](badge.md#11-indicator-form-led), [ProgressBar](progress-bar.md#11-indicator-form-meter), [Spinner](spinner.md#11-indicator-form-ring)) |
 
 **Relief primitives.** Each is a rounded box (or a circle) taken from the element's border box and its
 `border-radius`. The GPU reads them from the markers, and the CSS presentation styles the same elements.
@@ -89,9 +90,9 @@ light and depth, reduced motion, keyboard input and reflow.
 | [Card](card.md) | `<article>` or `<section>` | Raised slab |
 | [Panel](panel.md) | `<section>` | Raised slab, the GPU layer unit |
 | [Divider](divider.md) | `<hr>` | Groove |
-| [Badge](badge.md) | `<span>` | Flat pill |
-| [Spinner](spinner.md) | `<span role="status">` | Ring groove with an emissive arc |
-| [ProgressBar](progress-bar.md) | `<progress>` | Groove with an emissive fill |
+| [Badge](badge.md) | `<span>` | Flat pill; `form="led"`: an LED pill, the StatusLight's lens before the text ([Indicator form](badge.md#11-indicator-form-led)) |
+| [Spinner](spinner.md) | `<span role="status">` | Ring groove with an emissive arc; `form="ring"`: a ring of eight LEDs chasing at `chase.spinner` ([Indicator form](spinner.md#11-indicator-form-ring)) |
+| [ProgressBar](progress-bar.md) | `<progress>` | Groove with an emissive fill; `form="meter"`: a groove of LED segments lit from the value, a running head while indeterminate ([Indicator form](progress-bar.md#11-indicator-form-meter)) |
 
 ## Tier B
 
@@ -119,7 +120,7 @@ light and depth, reduced motion, keyboard input and reflow.
 | Component | Native element | Object |
 | --- | --- | --- |
 | [SegmentedControl](segmented-control.md) | Native radios in a `<fieldset>` | Keys on one plinth; the selected key is held down |
-| [Rating](rating.md) | Native radios in a `<fieldset>`; a `role="img"` display | Stars printed on the panel (captured, no relief) |
+| [Rating](rating.md) | Native radios in a `<fieldset>`; a `role="img"` display | Stars printed on the panel (captured, no relief); `form="lamps"`: a row of lamp lenses lit up to the score ([Indicator form](rating.md#11-indicator-form-lamps)) |
 | [Stepper](stepper.md) | An `<ol>` with `aria-current="step"` | Coins on a groove; steps to come are flat |
 | [NavigationRail](navigation-rail.md) | A `<nav>` with a list of links, `aria-current="page"` | Keys on a raised slab down the start edge |
 | [Popover](popover.md) | `<div popover role="dialog">` opened by a `<button popovertarget>` | A floating slab in the top layer |

@@ -192,13 +192,21 @@ divider a groove) or stay flat, because they are print on the faceplate.
 | TextField, TextArea | `display` (a glass window in a bezel) | `flush` (a well, as Objects) |
 | Tabs | Latching buttons on a rail; the panel is the faceplate under them | `flush` |
 | SegmentedControl | Interlocking latching buttons on one plinth | `flush` |
-| ProgressBar, Spinner | Segment meter, ring of LEDs | `flush` |
-| Badge | An LED pill (a StatusLight with text) | `flush` |
-| Rating | A row of lamps | `flush` |
+| ProgressBar, Spinner | Segment meter, ring of LEDs ([`meter`](components/progress-bar.md#11-indicator-form-meter), [`ring`](components/spinner.md#11-indicator-form-ring), done) | `flush` |
+| Badge | An LED pill (a StatusLight with text) ([`led`, done](components/badge.md#11-indicator-form-led)) | `flush` |
+| Rating | A row of lamps ([`lamps`, done](components/rating.md#11-indicator-form-lamps)) | `flush` |
 | Card, Panel | A machined plate (`plate`); no screws in premium | `plate`, `tray` |
 | Dialog | A plate that rises out of the chassis (depth entry), with its controls on it | `flush` |
 | Drawer | A tray that slides out of the chassis edge | `flush` |
 | Tooltip, Menu, Popover, Toast | Unchanged: overlay-host CSS, as today | — |
+
+**Indicator forms (the second everyday forms).** The Rating, the Badge, the ProgressBar and the Spinner take their premium forms through `form` (`lamps`, `led`, `meter`,
+`ring`; `flush` names today's look, and an absent `form` is `flush`, so a page that does not opt in is unchanged). They are the Lamp's lens and the Meter's segments on the
+native controls: the radios, the `<span>`, the `<progress>` and the status stay the controls, and the form is decoration over them whose lenses are lit by one number,
+`--strata-lit`, each lens an emitter (a 5-star rating is 5 emitters, a 20-segment bar 20, a ring 8). A value, a score or a chase is a uniform write at every GPU level; a
+chase is a CSS animation of `--strata-lit` at a tempo token (`chase.spinner`, `chase.bar`, never under 334 ms, so never over three flashes a second per lens), steady under reduced
+motion (a comet, every other segment). [Rating](components/rating.md#11-indicator-form-lamps), [Badge](components/badge.md#11-indicator-form-led),
+[ProgressBar](components/progress-bar.md#11-indicator-form-meter), [Spinner](components/spinner.md#11-indicator-form-ring).
 
 ### Interaction, in detail
 
@@ -570,3 +578,8 @@ presentation: CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Inst
 Lamp's LED lens with an emitter each (the Lamp's wiring, so this PR is based on the Lamp's); a needle meter and a gauge are a glass
 window, a needle on `spring.meter` or `spring.gauge` and a hub. `driveStrataMeter` drives a live value as a uniform and a pose with
 no capture. RotarySelector, the PushButton forms and Display follow.
+
+PR 15, everyday forms, second part: the indicator family, at every presentation: the Rating as lamps ([`lamps`](components/rating.md#11-indicator-form-lamps)), the Badge as an LED pill
+([`led`](components/badge.md#11-indicator-form-led)), the ProgressBar as a segment meter ([`meter`](components/progress-bar.md#11-indicator-form-meter)) and the Spinner as a ring of
+LEDs ([`ring`](components/spinner.md#11-indicator-form-ring)). The native control stays the control in each, and `flush` is today's markup and look. Every lens is the Lamp's LED lens with an
+emitter, read from `--strata-lit` each frame; the ProgressBar's `attachStrataProgress` keeps the bar's value; a chase is a tempo token and costs no capture.

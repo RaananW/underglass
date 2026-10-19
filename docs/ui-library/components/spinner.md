@@ -112,3 +112,46 @@ Under `forced-colors`: a `CanvasText` ring and a `Highlight` arc, no glow; the l
   under reduced motion the arc is static, the label is visible and 5 consecutive frames are identical; arc
   against ring at least 3:1.
 - **Parity:** Relief and CSS within the P0.6 budget at two fixed angles and under reduced motion.
+
+## 11. Indicator form: `ring`
+
+Instrument, everyday forms ([plan](../instrument.md#everyday-components-at-the-instrument-level)). `form="ring"` draws the same status as **a ring of
+eight LEDs** with a lit head chasing round it, in place of the turning arc. `flush`, or no `form`, is the arc above, in the markup and the look it had
+before, pixel for pixel. The status is unchanged: the outer `<span>` is the boundary element, `role="status"` (or `decorative`: no role, hidden), its label the
+announcement, and nothing else announces; the ring is decoration (`aria-hidden`).
+
+| Part | Shape | Moves |
+| --- | --- | --- |
+| Ring | The lenses' box, a square: the ring diameter `size.spinner` (24, 36 or 52 px at small, medium and large) plus 16 px (the halo): 40, 52 or 68 px | No |
+| Lenses | Eight glass LED lenses Ø `max(5 px, ring × 0.2)` (7.2 px at medium), their centres on the ring at 45° steps clockwise from the top, each with its socket and emitter | Lit 0 to 1 by `--strata-lit` |
+| Label | The status text, visually hidden while the ring chases, shown under reduced motion (or with `showLabel`) | No |
+
+- **The chase.** A lens lights once a lap, lens *i* at *i* / 8 of the lap (`animation-delay`), the head going clockwise, with a trail behind it: 1 at the head, 0.55 at 12% of the lap, 0.2 at 30%, dark from 55%
+  (`ug-chase`, linear between). The lap is `chase.spinner`, **900 ms**: 1.11 flashes a second per lens, and the token's floor is 334 ms, so no lens ever flashes more than three times a second (WCAG 2.3.1).
+  The head visits every lens, and the tests compare the CSS with the model (`chaseLit` in `shared/indicator-forms.ts`) frame by frame.
+- **Reduced motion.** Nothing chases: the ring is a steady comet stopped at lens 0, lit 1, 0.75, 0.5, 0.25 for lenses 0, 7, 6 and 5, dark elsewhere, and the label is visible.
+- **Colour.** `accent` by default; `colour` names another role.
+- **Emitters.** One per lens (`emitter.led.*`: 520 at the 10 px reference, so 270 at 7.2 px, reach 43 px), eight per ring. The chase is a CSS animation of `--strata-lit`, which the GPU helper
+  reads each frame: **300 frames of a chasing ring cause 0 captures, 0 uploads and 0 hit-geometry updates** at Relief, Objects and Instrument alike (the lens's CSS paint is hidden while it is
+  drawn as a lens, so nothing repaints). Under `prefers-contrast: more` the emitters are off. The `ring` face (and its arc) of the flush spinner is not used by this form.
+- **GPU.** Relief draws each lens as a ring face in its colour, Objects as a dome, the Instrument level as a glass LED lens ([StatusLight](status-light.md)), bounded by the ring's box.
+- **Presentation.** Forced colours: `Highlight` lit lenses and `Canvas` dark ones with `CanvasText` edges, the label shown. The decorative Spinner inside a busy [Button](button.md) stays flush: the ring is larger than the button's icon slot.
+
+```html
+<span class="ug-spinner ug-spinner--md" role="status" data-strata-form="ring">
+  <span class="ug-spinner__ring" aria-hidden="true">
+    <span class="ug-spinner__lens" data-strata-face="knob" style="--_i: 0;"></span>
+    <span class="ug-spinner__lens" data-strata-face="knob" style="--_i: 1;"></span>
+    <span class="ug-spinner__lens" data-strata-face="knob" style="--_i: 2;"></span>
+    <span class="ug-spinner__lens" data-strata-face="knob" style="--_i: 3;"></span>
+    <span class="ug-spinner__lens" data-strata-face="knob" style="--_i: 4;"></span>
+    <span class="ug-spinner__lens" data-strata-face="knob" style="--_i: 5;"></span>
+    <span class="ug-spinner__lens" data-strata-face="knob" style="--_i: 6;"></span>
+    <span class="ug-spinner__lens" data-strata-face="knob" style="--_i: 7;"></span>
+  </span>
+  <span class="ug-spinner__label">Loading</span>
+</span>
+```
+
+- React: `<Spinner form="ring" label="Loading" colour="warning">`; Vue: the same props; Astro: `<Spinner form="ring" label="Loading">`. No behaviour script is needed.
+- **Tests:** `ui-indicator-forms.test.mjs`, `ui-indicator-forms-bindings.test.mjs`, `ui-indicator-forms-astro.test.mjs`.
