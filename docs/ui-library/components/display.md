@@ -238,7 +238,7 @@ in the monospace family (tabular numerals), and, lit, a glow shadow round the be
   updates, a script's text change once, an unchanged text never; a backlight toggle is its attribute's one capture; 300 frames idle with the backlight on add 0 captures, uploads
   and hit-geometry updates; a driven display's captures are its own writes; past 64 emitters the rest are dropped with the diagnostic; more
   contrast turns the lights off and reduced transparency leaves the pane out; the accessibility snapshot is the same in DOM and GPU modes; a
-  resize, a DPR change, a hidden tab and a structure change keep GPU on. Checked in a headful Canary window as well.
+  resize, a DPR change, a hidden tab and a structure change keep GPU on. Checked in a headful Canary window as well (a headful window's clipboard is closed to automation, so there the paste is an inserted text).
 - **Bindings and Astro** (`ui-display-bindings.test.mjs`, `ui-display-astro.test.mjs`): React, Vue and Astro render the markup above exactly;
   typing writes the state and a changed state moves the text; the ref, `className`, `style` and attributes; a `form` that is not `display`
   stays the native form owner's id.

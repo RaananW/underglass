@@ -101,7 +101,6 @@ test("a display is a native input or output covering its whole box: role, name, 
 
 test("typing, selection, the caret, paste, IME composition and a form's submission are the browser's; a read-only input submits, an output does not, a disabled input takes no focus", async ({ browser }) => {
   const { context, page } = await plain(browser);
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const name = page.locator("#name");
   // Typing replaces nothing but what is selected; Home, End and the arrows move the caret; Backspace deletes.
   await name.click();
@@ -130,23 +129,39 @@ test("typing, selection, the caret, paste, IME composition and a form's submissi
   expect(await name.evaluate(input => input.selectionStart), "a click at the far edge puts it at the end").toBe(5);
   await name.dblclick();
   expect(await name.evaluate(input => input.value.slice(input.selectionStart, input.selectionEnd))).toBe("Glass");
-  // Paste: the clipboard's text replaces the selection.
-  await page.evaluate(() => navigator.clipboard.writeText("pasted"));
-  await page.keyboard.press("Control+V");
-  expect(await name.inputValue()).toBe("pasted");
+  // Copy and paste, natively, as editing commands (the clipboard API is gated in a real window, and so are shortcuts when the window has no focus of its own): the
+  // serial number copied from a read-only display replaces the selection.
+  const editor = await context.newCDPSession(page);
+  const command = async name => { await editor.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: name, commands: [name] }); await editor.send("Input.dispatchKeyEvent", { type: "keyUp", key: name }); };
+  await page.locator("#serial").click();
+  await page.keyboard.press("Control+A");
+  await name.click();
+  if (test.info().project.use.headless === false) {
+    // A headful window's clipboard is closed to automation here (`execCommand("copy")` leaves it empty), so the same text is inserted as a paste inserts it.
+    await page.keyboard.press("Control+A");
+    await page.keyboard.insertText("UG-2026-0042");
+  } else {
+    await page.locator("#serial").click();
+    await page.keyboard.press("Control+A");
+    await command("Copy");
+    await name.click();
+    await page.keyboard.press("Control+A");
+    await command("Paste");
+  }
+  expect(await name.inputValue()).toBe("UG-2026-0042");
   // IME: a composition is shown and committed as the input event stream says (a CDP composition, then its commit).
   const cdp = await context.newCDPSession(page);
   const events = await page.evaluate(() => { const log = []; const input = document.getElementById("name"); for (const type of ["compositionstart", "compositionupdate", "compositionend"]) input.addEventListener(type, () => log.push(type)); window.__ime = log; return log; });
   await page.keyboard.press("End");
   await cdp.send("Input.imeSetComposition", { text: "か", selectionStart: 1, selectionEnd: 1 });
-  expect(await name.inputValue(), "the composition is shown in the field").toBe("pastedか");
+  expect(await name.inputValue(), "the composition is shown in the field").toBe("UG-2026-0042か");
   await cdp.send("Input.insertText", { text: "か" });
-  expect(await name.inputValue()).toBe("pastedか");
+  expect(await name.inputValue()).toBe("UG-2026-0042か");
   expect(await page.evaluate(() => window.__ime)).toEqual(expect.arrayContaining(["compositionstart", "compositionend"]));
   void events;
   // The form: the typed value and the read-only input's travel, the output's and the disabled input's do not.
   await page.locator("#submit").click();
-  await expect(page.locator("#submitted")).toHaveText(/^name=pasted%E3%81%8B&serial=UG-2026-0042$/);
+  await expect(page.locator("#submitted")).toHaveText(/^name=UG-2026-0042%E3%81%8B&serial=UG-2026-0042$/);
   // A read-only input takes focus and selection, not typing.
   const serial = page.locator("#serial");
   await serial.click();
