@@ -494,6 +494,81 @@
       }
     }
   },
+  "jog": {
+    "$description": "JogWheel interaction (section 14, Instrument controls): the endless wheel whose value steps and whose dimple turns on an accumulated angle.",
+    "turn": {
+      "$type": "number",
+      "$value": 24,
+      "$description": "Steps in one turn of the wheel: its angle per step is 360 over this.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 4,
+          "max": 120,
+          "scope": true
+        }
+      }
+    },
+    "dragPx": {
+      "$type": "dimension",
+      "$value": "240px",
+      "$description": "Vertical drag for one turn of the wheel (the alternative to a circular drag).",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 50,
+          "max": 1000
+        }
+      }
+    },
+    "fine": {
+      "$type": "number",
+      "$value": 0.1,
+      "$description": "The drag rate while Shift is held.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0.01,
+          "max": 1,
+          "scope": true
+        }
+      }
+    },
+    "tapSlop": {
+      "$type": "dimension",
+      "$value": "4px",
+      "$description": "A press that moves less than this is a tap.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 1,
+          "max": 12
+        }
+      }
+    },
+    "flick": {
+      "$type": "number",
+      "$value": 180,
+      "$description": "The release speed, in degrees a second, under which the wheel stops where it was let go; over it, it coasts on spring.jog.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 2000,
+          "scope": true
+        }
+      }
+    },
+    "maxRate": {
+      "$type": "number",
+      "$value": 240,
+      "$description": "The most steps a second a coasting wheel applies: each is one native step and one input event.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 10,
+          "max": 1000,
+          "scope": true
+        }
+      }
+    }
+  },
   "material": {
     "$description": "Open, layered materials: presets, roles, and any custom materials an application adds (design-language.md section 4).",
     "presets": {
@@ -1886,6 +1961,82 @@
             "scope": true,
             "min": 80,
             "max": 400
+          }
+        }
+      }
+    },
+    "jogWheel": {
+      "small": {
+        "$type": "dimension",
+        "$value": "64px",
+        "$description": "JogWheel diameter at small.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 240
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "96px",
+        "$description": "JogWheel diameter at medium (the premium jog wheel).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 240
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "128px",
+        "$description": "JogWheel diameter at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 240
+          }
+        }
+      }
+    },
+    "patchPoint": {
+      "small": {
+        "$type": "dimension",
+        "$value": "28px",
+        "$description": "PatchPoint washer diameter at small.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 20,
+            "max": 96
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "36px",
+        "$description": "PatchPoint washer diameter at medium (the premium jack).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 20,
+            "max": 96
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "44px",
+        "$description": "PatchPoint washer diameter at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 20,
+            "max": 96
           }
         }
       }

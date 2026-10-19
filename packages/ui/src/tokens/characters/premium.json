@@ -1476,6 +1476,56 @@
           }
         }
       }
+    },
+    "jog": {
+      "$description": "A jog wheel coasting after a flick: a soft pull to the nearest detent (stiffness) and a light friction (damping), so a flick runs on for about a second.",
+      "stiffness": {
+        "$type": "number",
+        "$value": 40,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 3.2,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0.5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "patch": {
+      "$description": "A plug seating in its jack.",
+      "stiffness": {
+        "$type": "number",
+        "$value": 1100,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 60,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
     }
   },
   "studio": {
