@@ -86,9 +86,9 @@ for (const binding of ["react", "vue"]) test(`the ${binding} Slider, Card, Panel
   expect(await value(page, "trim")).toBe(12);
   await expect(page.locator("#trim")).toHaveAttribute("aria-valuetext", "12 dB");
   expect(await page.evaluate(() => document.getElementById("trim").closest(".ug-fader").style.getPropertyValue("--strata-fader-value"))).toBe("1");
-  // In a Field: the Field's id and description reach the input; the size is the root's.
+  // In a Field: the Field's description reaches the input (the Field's id and label); the size is the root's.
   expect(await page.evaluate(() => { const input = window.strataStructureBinding.refs.knob, field = input.closest(".ug-field"); return { id: input.id.startsWith("field-"), label: field.querySelector("label")?.getAttribute("for") === input.id, describedby: !!input.getAttribute("aria-describedby"), size: input.closest(".ug-knob").dataset.strataSize, value: input.value }; }))
-    .toEqual({ id: true, label: false, describedby: true, size: "small", value: "3" });
+    .toEqual({ id: true, label: true, describedby: true, size: "small", value: "3" });
   // A `form` that names no form is the native form owner, on the groove slider's input; `flush` is the groove slider too.
   const owned = page.locator("#owned");
   await expect(owned).toHaveAttribute("form", "owner");
@@ -111,7 +111,7 @@ for (const binding of ["react", "vue"]) test(`the ${binding} Slider, Card, Panel
   await page.locator("body").click({ position: { x: 2, y: 2 } });
   await page.evaluate(() => window.strataStructureBinding.open("dialog"));
   await page.waitForFunction(() => document.activeElement?.closest("#dialog-plate"));
-  expect(await page.evaluate(() => { const dialog = document.getElementById("dialog-plate"); return { form: dialog.dataset.strataForm, testid: dialog.dataset.testid, modal: dialog.getAttribute("aria-modal"), mainInert: document.querySelector("main").inert, inside: dialog.contains(document.activeElement), knob: !!dialog.querySelector(".ug-knob[data-strata-form='knob']") }; }))
+  expect(await page.evaluate(() => { const dialog = document.getElementById("dialog-plate"); return { form: dialog.dataset.strataForm, testid: dialog.dataset.testid, modal: dialog.getAttribute("aria-modal"), mainInert: document.getElementById("root").inert, inside: dialog.contains(document.activeElement), knob: !!dialog.querySelector(".ug-knob[data-strata-form='knob']") }; }))
     .toEqual({ form: "plate", testid: "dialog", modal: "true", mainInert: true, inside: true, knob: true });
   await page.locator("#dialog-level").focus();
   await page.keyboard.press("ArrowRight");

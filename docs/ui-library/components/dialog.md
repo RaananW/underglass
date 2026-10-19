@@ -186,7 +186,9 @@ the same accessibility snapshot. Its controls are the same Strata components at 
   the face) to 0 on entering and back on leaving, so the plate comes up out of the chassis as the layer scales in from `elevation.modal` and fades.
   Under reduced motion the duration is 1 ms and the rise snaps. The rise is one number in the scene: **a uniform update**. It is the same
   `t` core applies as a pose each frame, with no recapture and no hit-geometry update of its own; opening a plate dialog costs the captures, uploads
-  and hit-geometry updates a flush dialog costs (measured side by side in `ui-structural-forms.test.mjs`, the numbers in the PR).
+  and hit-geometry updates a flush dialog costs: the depth entry recaptures the layer every frame, flush or plate alike (about 2.3 captures a frame: 407 captures, 407 uploads and
+  144 hit-geometry updates over the 177 frames of a 2.4 s motion at Instrument, against 408, 408 and 143 for the flush dialog's 176; DPR 1 and 2 and all three levels within 2%). The
+  parts of an Instrument layer show about 0.1 s after it is enrolled.
 - **Containment over the whole rise.** Every vertex of the rim lies at least 0.5 px inside the dialog's box, at every rise and depth and at every
   corner and edge middle of the reference stage (core's own check, `strata-structural-forms.unit.test.mjs`: the closest is 1.9 px at 50% depth), so a
   pixel of the plate is never outside the dialog; against a flush dialog moving in step, no pixel outside the plate's box differs at any sampled frame.

@@ -63,7 +63,7 @@ function App() {
       <section className="ug-panel" data-strata-face="raised" aria-label="Structural forms" style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: 20 }}>
         <Slider form="knob" id="drive" name="drive" aria-label="Drive" marks={[0, 50, 100]} value={drive} onChange={event => { changes.push(Number(event.target.value)); setDrive(Number(event.target.value)); }} unit="%" />
         <Slider form="fader" id="trim" ref={fader} aria-label="Trim" min={-12} max={12} step={6} detents={5} defaultValue={0} unit=" dB" className="extra" style={{ marginRight: 4 }} data-testid="trim" />
-        <Field help="Mixes the dry signal."><Slider form="knob" id="wet" ref={knob} min={0} max={10} defaultValue={3} size="small" /></Field>
+        <Field label="Wet" help="Mixes the dry signal."><Slider form="knob" ref={knob} min={0} max={10} defaultValue={3} size="small" /></Field>
         <Slider form="owner" id="owned" name="owned" aria-label="Owned" min={0} max={10} defaultValue={5} />
         <Slider form="flush" id="flat" aria-label="Flat" defaultValue={60} />
         <Card form="plate" ref={card} id="card-plate" title="Plate card" className="extra" style={{ marginRight: 4 }} data-testid="card" footer={<button type="button" className="ug-button" data-strata-face="raised"><span className="ug-button__label">Save</span></button>}>A machined plate.</Card>

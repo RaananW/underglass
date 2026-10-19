@@ -190,9 +190,10 @@ test("a tray Drawer slides out of its edge and a flush one moves through depth, 
   await openOverlay(page, "drawer");
   await page.waitForFunction(() => document.getElementById("sf-drawer"));
   const early = await page.evaluate(() => { const box = document.getElementById("sf-drawer").getBoundingClientRect(); return { left: box.left, width: box.width, opacity: Number(getComputedStyle(document.getElementById("sf-drawer")).opacity) }; });
-  expect(early.left, "early in the slide the drawer is mostly beyond the end edge").toBeGreaterThan(900 - early.width * 0.4);
+  const edge = await page.evaluate(() => document.documentElement.clientWidth);
+  expect(early.left, "early in the slide the drawer is mostly beyond the end edge").toBeGreaterThan(edge - early.width * 0.4);
   await page.waitForFunction(() => !document.getElementById("sf-drawer").dataset.strataMotion, null, { timeout: 8000 });
-  expect(await page.evaluate(() => Math.round(document.getElementById("sf-drawer").getBoundingClientRect().right))).toBe(900);
+  expect(await page.evaluate(() => Math.round(document.getElementById("sf-drawer").getBoundingClientRect().right))).toBe(edge);
   await context.close();
 });
 

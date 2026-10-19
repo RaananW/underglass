@@ -33,7 +33,7 @@ const App = defineComponent({
     const drive = ref(40), shown = ref<"dialog" | "drawer" | "none">("none"), contracts = ref(false);
     onMounted(() => {
       window.strataStructureBinding = { drive: () => drive.value, setDrive: value => { drive.value = value; }, changes: () => [...changes], open: which => { shown.value = which; }, contracts: open => { contracts.value = open; },
-        refs: { knob: document.getElementById("wet") as HTMLInputElement, fader: document.getElementById("trim") as HTMLInputElement, card: document.getElementById("card-plate")!, panel: document.getElementById("panel-plate")! } };
+        refs: { knob: document.querySelector(".ug-field .ug-knob__input") as HTMLInputElement, fader: document.getElementById("trim") as HTMLInputElement, card: document.getElementById("card-plate")!, panel: document.getElementById("panel-plate")! } };
     });
     return () => {
       if (mode === "legacy") return h("main", [h("div", { id: "probe", innerHTML: legacy })]);
@@ -55,7 +55,7 @@ const App = defineComponent({
         h("section", { class: "ug-panel", "data-strata-face": "raised", "aria-label": "Structural forms", style: { display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "20px" } }, [
           h(Slider, { form: "knob", id: "drive", name: "drive", "aria-label": "Drive", marks: [0, 50, 100], modelValue: drive.value, unit: "%", "onUpdate:modelValue": (value: number) => { changes.push(value); drive.value = value; } }),
           h(Slider, { form: "fader", id: "trim", "aria-label": "Trim", min: -12, max: 12, step: 6, detents: 5, defaultValue: 0, unit: " dB", class: "extra", style: { marginRight: "4px" }, "data-testid": "trim" }),
-          h(Field, { help: "Mixes the dry signal." }, { default: () => h(Slider, { form: "knob", id: "wet", min: 0, max: 10, defaultValue: 3, size: "small" }) }),
+          h(Field, { label: "Wet", help: "Mixes the dry signal." }, { default: () => h(Slider, { form: "knob", min: 0, max: 10, defaultValue: 3, size: "small" }) }),
           h(Slider, { form: "owner", id: "owned", name: "owned", "aria-label": "Owned", min: 0, max: 10, defaultValue: 5 }),
           h(Slider, { form: "flush", id: "flat", "aria-label": "Flat", defaultValue: 60 }),
           h(Card, { form: "plate", id: "card-plate", title: "Plate card", class: "extra", style: { marginRight: "4px" }, "data-testid": "card" }, { default: () => "A machined plate.", footer: save }),
