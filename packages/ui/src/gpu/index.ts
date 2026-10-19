@@ -1507,7 +1507,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     for (const [element, entry] of scrims) {
       if (element.parentElement !== root || !shown(element)) { releaseScrim(element); continue; }
       if (!gpu) { element.removeAttribute("data-strata-mode"); continue; }
-      element.setAttribute("data-strata-mode", "face");
+      if (element.getAttribute("data-strata-mode") !== "face") element.setAttribute("data-strata-mode", "face");
       if (element.hasAttribute("data-strata-closing") && !entry.closing) fadeScrim(element, true);
     }
     for (const [element, entry] of panels) {

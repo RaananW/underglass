@@ -186,9 +186,12 @@ the same accessibility snapshot. Its controls are the same Strata components at 
   the face) to 0 on entering and back on leaving, so the plate comes up out of the chassis as the layer scales in from `elevation.modal` and fades.
   Under reduced motion the duration is 1 ms and the rise snaps. The rise is one number in the scene: **a uniform update**. It is the same
   `t` core applies as a pose each frame, with no recapture and no hit-geometry update of its own; opening a plate dialog costs the captures, uploads
-  and hit-geometry updates a flush dialog costs: the depth entry recaptures the layer every frame, flush or plate alike (about 2.3 captures a frame: 407 captures, 407 uploads and
-  144 hit-geometry updates over the 177 frames of a 2.4 s motion at Instrument, against 408, 408 and 143 for the flush dialog's 176; DPR 1 and 2 and all three levels within 2%). The
-  parts of an Instrument layer show about 0.1 s after it is enrolled.
+  and hit-geometry updates a flush dialog costs. **A motion captures only what changes in the DOM** (#165): a 2.4 s open makes 9 to 11 captures over its
+  177 frames (the panel and the scrim enrolled, `inert`, focus, the first build of the parts), none in the middle of the motion, and the close 3 to 5; the
+  hit geometry follows the moving layer once a frame (about 143 updates), as it must. Until this was fixed the helper rewrote the scrim's `data-strata-mode`
+  with the value it already had on every frame, and every DOM mutation is a capture, so the open recaptured every layer each frame (407 captures at
+  Instrument, 408 for the flush dialog). A change made to the dialog's content mid-motion is captured at once and the pixels at rest are the new ones.
+  Under reduced motion the open snaps with 3 captures. The parts of an Instrument layer show about 0.1 s after it is enrolled.
 - **Containment over the whole rise.** Every vertex of the rim lies at least 0.5 px inside the dialog's box, at every rise and depth and at every
   corner and edge middle of the reference stage (core's own check, `strata-structural-forms.unit.test.mjs`: the closest is 1.9 px at 50% depth), so a
   pixel of the plate is never outside the dialog; against a flush dialog moving in step, no pixel outside the plate's box differs at any sampled frame.
