@@ -71,10 +71,9 @@ different from currently failing supported code.
 
 ## Instrument gallery findings (2026-10-19)
 
-- **16 materials per Instrument layer.** A panel that mixes many component kinds (the full synthesiser: 29) is refused whole by core
-  (`Instrument scene materials holds more than 16 materials`) and the helper retries silently, so its controls vanish under GPU with no diagnostic. The gallery's panels are
-  split to fit. A diagnostic from the helper, or a larger limit, is core work.
-- **A push button silently falls back to a Relief key** when the scene already holds 12 materials (`gpu/index.ts`, the `key` material test).
+- **16 materials per Instrument layer (issue #173, narrowed).** Resolved: a scene naming 17 to 64 materials is drawn at Relief as a whole, reported (`budget`, `materials: { count, cap }`, a warning), and the helper warns once per panel and trims its own key bodies to stay under (`StrataGpu.diagnostics`); no silent loss. Still open: the 16 itself (a panel that mixes many component kinds, such as the full synthesiser at 29, is drawn at Relief, so the gallery keeps its panels split) and the first-16-in-scene-order alternative, rejected because a part in the wrong material is worse than a stepped-down layer ([note](ui-library/instrument-phase2.md#the-material-cap-issue-173)).
+- **A button whose background colour transitions** creates a new `key ${colour}` material for each frame it is in flight (a key body per colour), so it can push a scene past the rules mid-animation: the conversion trims it, and the warning re-arms when the panel fits again. This predates the cap work and is now visible.
+- **A push button falling back to a Relief key at 12 materials** (resolved with the above): the rule is named `INSTRUMENT_PUSH_MATERIALS`, documented in `button.md` section 11 and reported by `diagnostics` and a once-per-panel warning.
 - **The pointer light is not in the helper yet.** The gallery's `pointer-light.ts` does what the plan says the helper will.
 - **A GPU stage cannot take its height from its content** (the content lives in the canvas): the gallery sets `--ig-stage-height` from its panels.
 

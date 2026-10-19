@@ -45,7 +45,7 @@ import { INSTRUMENT_CUSTOM_TRIANGLES_PER_LAYER, meshGeometry, type MeshProfile }
 import {
   boundsInside, checkContainment, containmentFrontier, containmentKey, customParts, instrumentFaceScene, instrumentLayout, instrumentPartCount, instrumentStructure, meshReady, meshReferences,
   multiply, partCaster, partDrawn, partKindKey, partKinds,
-  partMatrix, profileBounds, profileGeometry, sameGeometry, similarity, INSTRUMENT_CASTERS_PER_OBJECT, INSTRUMENT_KINDS_CEILING, INSTRUMENT_KINDS_PER_LAYER, INSTRUMENT_OBJECTS, INSTRUMENT_PARTS_PER_LAYER,
+  partMatrix, profileBounds, profileGeometry, sameGeometry, similarity, INSTRUMENT_CASTERS_PER_OBJECT, INSTRUMENT_KINDS_CEILING, INSTRUMENT_KINDS_PER_LAYER, INSTRUMENT_MATERIALS, faceMaterialCount, INSTRUMENT_OBJECTS, INSTRUMENT_PARTS_PER_LAYER,
   INSTRUMENT_PARTS_PER_STAGE, STUDIO_DEFAULTS, type Containment, type ContainmentFrontier, type InstrumentCaster, type InstrumentObject,
   type InstrumentProfile, type InstrumentRecipe, type InstrumentScene, type Matrix, type PartKind, type StudioTokens,
 } from "./instrument.js";
@@ -187,6 +187,8 @@ interface LayerState {
   stepped: number[];
   steppedDown: SteppedDown[];
   warnings: string[];
+  /** The materials the scene names, for `state().instrument.layers[].materials` (the cap is `INSTRUMENT_MATERIALS`). */
+  materialCount: number;
   parts: number;
   drawnParts: number;
   kinds: number;
@@ -1230,7 +1232,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       let state = layers.get(input.id);
       if (state) state.input = input;
       if (!state) {
-        state = { id: input.id, slot: ++slots, status: "pending", stepped: [], steppedDown: [], warnings: [], parts: 0, drawnParts: 0, kinds: 0, objects: 0,
+        state = { id: input.id, slot: ++slots, status: "pending", stepped: [], steppedDown: [], warnings: [], materialCount: 0, parts: 0, drawnParts: 0, kinds: 0, objects: 0,
           frontiers: new Map(), exact: new Map(), gpu: { samples: [], last: null, total: 0 }, input };
         layers.set(input.id, state);
       }
@@ -1241,7 +1243,9 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         state.layout = layout;
       }
       const kindMap = state.kindMap, kinds = [...kindMap.values()], parts = kinds.reduce((sum, kind) => sum + kind.instances.length, 0);
-      Object.assign(state, { parts: instrumentPartCount(scene), kinds: kinds.length, objects: scene.objects.length, warnings: [] as string[] });
+      Object.assign(state, { parts: instrumentPartCount(scene), kinds: kinds.length, objects: scene.objects.length, warnings: [] as string[], materialCount: Object.keys(scene.materials).length });
+      if (state.materialCount > INSTRUMENT_MATERIALS) state.warnings.push(`materials: ${state.materialCount} materials, above the ${INSTRUMENT_MATERIALS} a layer draws with; the layer is drawn at the Relief level`);
+      if (state.materialCount > INSTRUMENT_MATERIALS && faceMaterialCount(scene) > INSTRUMENT_MATERIALS) state.warnings.push(`materials: ${faceMaterialCount(scene)} face materials, above ${INSTRUMENT_MATERIALS}; the face draws the first ${INSTRUMENT_MATERIALS} and the rest in the first`);
       if (kinds.length > INSTRUMENT_KINDS_PER_LAYER) state.warnings.push(`kinds: ${kinds.length} part kinds (draw calls), above about ${INSTRUMENT_KINDS_PER_LAYER}`);
       // The chain's flags, its map and the map's window on this stage, and which kinds have lenses, are structure too
       // (`postStructure`): a stage that outgrows the window rebuilds the scene.
@@ -1255,6 +1259,11 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       if (orderUnavailable) whole = all(scene, "order-unavailable", orderUnavailable);
       else if (!matrix) whole = all(scene, "transform", "the layer's matrix is not a similarity (rotation, uniform scale and translation)");
       else if (parts > INSTRUMENT_PARTS_PER_LAYER) whole = all(scene, "budget", `${parts} parts in the layer, above ${INSTRUMENT_PARTS_PER_LAYER}`);
+      else if (state.materialCount > INSTRUMENT_MATERIALS) {
+        // The face binds 16 too: past that its own primitives are drawn in the first 16 face materials (the layer is stepped down already).
+        const faceCount = faceMaterialCount(scene);
+        whole = all(scene, "budget", `${state.materialCount} materials in the layer, above ${INSTRUMENT_MATERIALS}${faceCount > INSTRUMENT_MATERIALS ? `; ${faceCount} face materials, above ${INSTRUMENT_MATERIALS}` : ""}`);
+      }
       else if (kinds.length > INSTRUMENT_KINDS_CEILING) whole = all(scene, "budget", `${kinds.length} part kinds in the layer, above ${INSTRUMENT_KINDS_CEILING}`);
       else if (stageParts + parts > INSTRUMENT_PARTS_PER_STAGE) whole = all(scene, "budget", `${stageParts + parts} parts on the stage, above ${INSTRUMENT_PARTS_PER_STAGE}`);
       else if (state.failed?.structure === structure) { whole = all(scene, state.failed.post ? "post" : "compile", state.failed.reason); status = "failed"; }
@@ -1451,7 +1460,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     active: () => layers.size > 0,
     state: () => ({
       layers: [...layers.values()].map(state => ({ id: state.id, status: state.status, objects: state.objects, parts: state.parts, drawnParts: state.drawnParts,
-        kinds: state.kinds, steppedDown: state.steppedDown.map(entry => ({ ...entry })), warnings: [...state.warnings],
+        kinds: state.kinds, materials: { count: state.materialCount, cap: INSTRUMENT_MATERIALS }, steppedDown: state.steppedDown.map(entry => ({ ...entry })), warnings: [...state.warnings],
         // Custom parts (core work item 5): each part whose profile is a mesh, and whether its triangles are there.
         customParts: state.scene ? customParts(state.scene).map(({ object, part, profile }) => {
           const shape = state.scene!.profiles[profile] as MeshProfile;
@@ -1473,7 +1482,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         glass: state.pass ? { ...state.pass.glass } : null,
         gpu: { lastMs: state.gpu.last, p50Ms: percentile(state.gpu.samples, 0.5), p95Ms: percentile(state.gpu.samples, 0.95), samples: state.gpu.samples.length, total: state.gpu.total } })),
       stage: { parts: [...layers.values()].reduce((sum, state) => sum + state.drawnParts, 0), budget: INSTRUMENT_PARTS_PER_STAGE },
-      budgets: { partsPerLayer: INSTRUMENT_PARTS_PER_LAYER, partsPerStage: INSTRUMENT_PARTS_PER_STAGE, kindsPerLayer: INSTRUMENT_KINDS_PER_LAYER, kindsCeiling: INSTRUMENT_KINDS_CEILING,
+      budgets: { partsPerLayer: INSTRUMENT_PARTS_PER_LAYER, partsPerStage: INSTRUMENT_PARTS_PER_STAGE, kindsPerLayer: INSTRUMENT_KINDS_PER_LAYER, kindsCeiling: INSTRUMENT_KINDS_CEILING, materialsPerLayer: INSTRUMENT_MATERIALS,
         customTrianglesPerLayer: INSTRUMENT_CUSTOM_TRIANGLES_PER_LAYER },
       assets: { ...assets.state(), uploads: { ...uploads } },
       timing: { ...timing },

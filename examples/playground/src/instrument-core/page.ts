@@ -152,6 +152,8 @@ const controller: CanvasController = mountApplicationModule(runtimeOptions, { mo
 const scenes = new Map<string, InstrumentScene>();
 const handles = new Map<string, MaterialHandle>();
 let budgetParts: number | undefined;
+// The material count the upper panel's scene names (spare, unused materials pad it), for the material cap (`padMaterials(count)`).
+let materialTarget: number | undefined;
 // Scene changes for the review's cases: the light's azimuth, an object whose bounds leave the lower panel, and extra
 // objects (copies of the lower panel's first knob) that need no new kind.
 const extras = { azimuth: 323, outside: false, copies: 0, swatches: false };
@@ -190,6 +192,7 @@ const sceneOf = (panel: HTMLElement) => {
         parts: knob.parts.map(part => ({ ...part, at: [part.at[0] + dx, part.at[1], part.at[2]] as [number, number, number] })) });
     }
   }
+  if (materialTarget !== undefined && panel === upper) for (let index = 0; Object.keys(base.materials).length < materialTarget; index++) base.materials[`spare-${index}`] = { base: { roughness: 1 } };
   return budgetParts !== undefined && panel === upper ? budgetScene(base, budgetParts) : base;
 };
 /** Rebuilds a panel's scene from the DOM and hands it to core (`setMaterial` once, then `update`). */
@@ -358,6 +361,8 @@ const api = {
   async move(id: string, x: number, y: number) { controller.setTransform(id, { x, y }); await settle(); },
   async theme(name: Theme["name"]) { theme = themes[name]; document.body.dataset.theme = name; refreshAll(); await settle(); },
   async budget(parts: number | null) { budgetParts = parts ?? undefined; refresh(upper); await settle(); return state().instrument; },
+  /** Pads the upper panel's scene to `count` materials (null: its own), and returns core's instrument state. */
+  async padMaterials(count: number | null) { materialTarget = count ?? undefined; refresh(upper); await settle(); return state().instrument; },
   async relabel(id: string, text: string) { document.getElementById(id)!.querySelector(".ic-label")!.textContent = text; await settle(); },
   async relight(azimuth: number) { extras.azimuth = azimuth; refreshAll(); await settle(); },
   async outside(on: boolean) { extras.outside = on; refresh(lower); await settle(); },

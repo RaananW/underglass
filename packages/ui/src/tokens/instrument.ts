@@ -30,7 +30,10 @@ export const INSTRUMENT_OBJECT_PARTS = 64;
 export const INSTRUMENT_EMITTERS = 64;
 export const INSTRUMENT_PROTECTED = 64;
 export const INSTRUMENT_PROFILES = 64;
+/** Materials a layer draws with: a scene naming more is valid but drawn at Relief (`budget`, detail names the count). */
 export const INSTRUMENT_MATERIALS = 16;
+/** Materials a scene may name; above it the format refuses the scene (between the two the layer steps down). */
+export const INSTRUMENT_MATERIALS_CEILING = 64;
 /** The containment margin of 2D.9: every vertex projects at least this far inside `bounds`. */
 export const CONTAINMENT_MARGIN = 0.5;
 /** The camera rule's floor (2D.3). */
@@ -236,7 +239,7 @@ export function validateInstrumentScene(input: unknown): InstrumentScene {
   if (map?.size !== undefined && map.size !== 2048 && map.size !== 4096) fail("shadow.map.size", "requires 2048 or 4096");
   const materials = record(scene.materials, "materials");
   const names = Object.keys(materials);
-  if (names.length > INSTRUMENT_MATERIALS) fail("materials", `holds more than ${INSTRUMENT_MATERIALS} materials`);
+  if (names.length > INSTRUMENT_MATERIALS_CEILING) fail("materials", `holds more than ${INSTRUMENT_MATERIALS_CEILING} materials`);
   const recipes = Object.fromEntries(names.map(name => [name, recipe(record(materials[name], `materials.${name}`), `materials.${name}`)]));
   const profiles = record(scene.profiles, "profiles");
   const profileNames = Object.keys(profiles);

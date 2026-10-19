@@ -164,6 +164,22 @@ captured caps after it ([I0.8](instrument-phase0.md#i08-post-chain-and-reflectio
   the face's list, and `state().instrument` names the object, the part, the smallest projected inset and the
   overshoot past `bounds` in px. GPU stays on.
 
+## The material cap (issue #173)
+
+A layer draws with at most 16 materials (`INSTRUMENT_MATERIALS`: one PBR material per name its kinds use, and the Relief face's own binding holds 16). The scene format
+is wider: `INSTRUMENT_MATERIALS_CEILING` (64) is what validation refuses. Between the two the layer is **stepped down as a whole**, the way a parts
+budget is (decision 9): status `stepped-down`, every object `budget` with `detail` `N materials in the layer, above 16`, a `materials:` warning, GPU on, and
+`state().instrument.layers[].materials` (`{ count, cap }`) says by how much. The alternative, to draw the first 16 materials in scene order and give the parts of
+the rest a fallback material, was rejected: a part in the wrong material is worse than a layer at Relief, the cap's usual cause is a panel mixing component
+kinds (each brings its own materials), and a silent partial scene would make the same bug as the refusal did. The ceiling of 64 is a format limit (the bound of `INSTRUMENT_PROFILES` and `INSTRUMENT_PROTECTED`), not a budget. Because the face's Relief
+binding also holds 16 materials, a scene past the cap gives the face only the materials its primitives use (a scene under it is unchanged); if those
+are more than 16 (every object's own `relief.material`), the face draws the first 16 in scene order and the others' entries in the first, and the layer's
+`detail` adds `N face materials, above 16`. A Relief face in a wrong material is acceptable there because the layer is already reported as stepped down,
+unlike an Instrument part. The helper's side: every key-like object registers its body with the registry of `gpu/instrument-keys.ts`
+(`registerKeyBody`, `keyAtRelief`, the constants `INSTRUMENT_KEY_BODY_MATERIALS` and `INSTRUMENT_PUSH_MATERIALS`) so the conversion that keeps a scene within 16
+can trim it; a loop that does not register stays outside the conversion. Before this, core refused the
+scene at `setMaterial` and the Strata helper swallowed the error, so the controls vanished with no diagnostic.
+
 ## The fallback ladder
 
 `instrument → relief primitives`, per object or per layer, never DOM:
@@ -219,6 +235,7 @@ layers exist, would let a real GPU stall hold the last frame longer and would st
 | Parts per layer | 2,048 | Above it the layer steps down, `budget` |
 | Parts per stage | 6,000 | Layers that push it over step down, in paint order |
 | Part kinds per layer | about 16 | Reported above 16 (`kinds`); step-down above 64 |
+| Materials per layer | 16 | Above it the layer steps down, `budget`; the format refuses more than 64 |
 | Objects per layer | 256 | Validation error (with the face's primitives, 256 in all) |
 
 ## GPU timings and diagnostics
