@@ -34,6 +34,17 @@ test("an attribute added and removed in one task is changed (its second record's
   const records = [{ type: "attributes", target, attributeName: "x", attributeNamespace: null, oldValue: null }, { type: "attributes", target, attributeName: "x", attributeNamespace: null, oldValue: "B" }];
   assert.equal(ignored(records), false);
 });
+test("a same-value write to an attribute that acts on write is never a no-op", () => {
+  for (const name of ["src", "srcset", "srcdoc", "href", "data", "poster"]) {
+    assert.equal(isNoOpMutation({ type: "attributes", target: { localName: "img", getAttribute: () => "A" }, attributeName: name, attributeNamespace: null, oldValue: "A" }), false, name);
+  }
+});
+test("width and height are never no-ops on a canvas, and stay eligible on other elements", () => {
+  for (const name of ["width", "height"]) {
+    assert.equal(isNoOpMutation({ type: "attributes", target: { localName: "canvas", getAttribute: () => "5" }, attributeName: name, attributeNamespace: null, oldValue: "5" }), false);
+    assert.equal(isNoOpMutation({ type: "attributes", target: { localName: "img", getAttribute: () => "5" }, attributeName: name, attributeNamespace: null, oldValue: "5" }), true);
+  }
+});
 test("a namespaced attribute compares its namespaced value", () => {
   const target = { getAttribute: () => "wrong", getAttributeNS: (namespace, name) => (namespace === "ns" && name === "x" ? "A" : null) };
   assert.equal(isNoOpMutation({ type: "attributes", target, attributeName: "x", attributeNamespace: "ns", oldValue: "A" }), true);

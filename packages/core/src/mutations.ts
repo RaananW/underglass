@@ -1,4 +1,23 @@
 /**
+ * Attributes whose write acts even when the value is unchanged, so the pixels can change although the DOM string is identical.
+ * A record for one of them is never a no-op:
+ * - `src`, `srcset`: an image, video, iframe or embed re-runs its update steps (a re-fetch and re-decode when the resource is
+ *   not in the available-images list or after an error); `<source>` re-selects.
+ * - `srcdoc`: an iframe navigates again.
+ * - `href`: a `<link rel=stylesheet>` re-fetches, and an SVG `<use>` re-resolves its reference (also as `xlink:href`).
+ * - `data`: an `<object>` re-loads.
+ * - `poster`: a video re-fetches its poster frame.
+ * - `width`, `height` on a `<canvas>`: the specification resets the bitmap to transparent black on every set, even to the same
+ *   value. On any other element they stay eligible.
+ */
+const SIDE_EFFECT_ATTRIBUTES: ReadonlySet<string> = new Set(["src", "srcset", "srcdoc", "href", "data", "poster"]);
+const CANVAS_RESET_ATTRIBUTES: ReadonlySet<string> = new Set(["width", "height"]);
+function hasSideEffect(target: Element, name: string) {
+  if (SIDE_EFFECT_ATTRIBUTES.has(name)) return true;
+  return CANVAS_RESET_ATTRIBUTES.has(name) && target.localName === "canvas";
+}
+
+/**
  * Which mutation records change nothing. The browser reports `setAttribute(name, sameValue)` and a same-value
  * `Text.data` write as records even though the DOM is identical, so an observer that recaptures on every record
  * recaptures for work that cannot change a pixel.
@@ -23,6 +42,7 @@ export function isNoOpMutation(record: Pick<MutationRecord, "type" | "target" | 
   if (record.oldValue === null) return false;
   if (record.type === "attributes") {
     const target = record.target as Element;
+    if (hasSideEffect(target, record.attributeName!)) return false;
     const current = record.attributeNamespace
       ? target.getAttributeNS(record.attributeNamespace, record.attributeName!)
       : target.getAttribute(record.attributeName!);

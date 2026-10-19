@@ -21,7 +21,24 @@ const controller: CanvasController = mountApplicationModule({ ...createCanvasHos
   card.setAttribute("drawable", "");
   const list = make("div", { id: "list" });
   list.append(make("span"));
-  card.append(make("h2", {}, "No-op mutations"), make("div", { id: "swatch", class: "", style: RED, "data-tick": "0" }), make("span", { id: "text" }, "steady"), list);
+  const pad = make("canvas", { id: "pad", width: "60", height: "30" });
+  pad.getContext("2d")!.fillStyle = "rgb(200, 40, 40)";
+  pad.getContext("2d")!.fillRect(0, 0, 60, 30);
+  const pic = make("img", { id: "pic", width: "60", height: "30", alt: "" });
+  pic.setAttribute("src", "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="60" height="30"><rect width="60" height="30" fill="rgb(40,40,200)"/></svg>'));
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("id", "uses"); svg.setAttribute("width", "60"); svg.setAttribute("height", "30");
+  const symbol = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  symbol.setAttribute("id", "gold"); symbol.innerHTML = '<rect width="60" height="30" fill="rgb(220,180,20)"/>';
+  const other = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  other.setAttribute("id", "teal"); other.innerHTML = '<rect width="60" height="30" fill="rgb(20,160,160)"/>';
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", "#gold");
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  defs.append(symbol, other);
+  use.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:title", "tip");
+  svg.append(defs, use);
+  card.append(make("h2", {}, "No-op mutations"), make("div", { id: "swatch", class: "", style: RED, "data-tick": "0" }), make("span", { id: "text" }, "steady"), list, pad, pic, svg);
   container.append(card);
   const release = enroll({ id: "card", element: card, layout: {}, transform: {} });
   return () => { release(); container.replaceChildren(); };
@@ -58,6 +75,16 @@ window.mutationNoop = { ready: Promise.resolve({
       await nextFrame();
     }
   },
+  /** Same-value writes with a side effect: a canvas's width (the bitmap is cleared), an image's src, and a <use>'s xlink:href. */
+  sameCanvas: () => { const pad = document.getElementById("pad") as HTMLCanvasElement; pad.setAttribute("width", pad.getAttribute("width")!); },
+  canvasWidthProperty: () => { const pad = document.getElementById("pad") as HTMLCanvasElement; pad.width = pad.width; },
+  sameSrc: () => { const pic = document.getElementById("pic")!; pic.setAttribute("src", pic.getAttribute("src")!); },
+  sameUse: () => { const use = document.querySelector("#uses use")!; use.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", use.getAttributeNS("http://www.w3.org/1999/xlink", "href")!); },
+  sameUseTitle: () => { document.querySelector("#uses use")!.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:title", "tip"); },
+  changeUse: () => { document.querySelector("#uses use")!.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", "#teal"); },
+  /** classList.add of a class the element already has, and style.x set to its current value. */
+  classListSame: () => { swatch().classList.add("hot-already"); },
+  styleSame: () => { swatch().style.background = swatch().style.background; },
   /** Writes through to a different value, one write. */
   change: (kind: "style" | "class" | "text" | "unset" | "set") => {
     if (kind === "style") swatch().setAttribute("style", GREEN);
@@ -67,7 +94,7 @@ window.mutationNoop = { ready: Promise.resolve({
     else swatch().setAttribute("data-new", "1");
   },
   /** Restores the swatch and text to their initial state (the test settles after). */
-  reset: () => { swatch().setAttribute("style", RED); swatch().className = ""; swatch().setAttribute("data-tick", "0"); swatch().removeAttribute("data-new"); text().data = "steady"; },
+  reset: () => { swatch().className = "";  swatch().setAttribute("style", RED); swatch().className = ""; swatch().setAttribute("data-tick", "0"); swatch().removeAttribute("data-new"); text().data = "steady"; },
   /** One task: the style goes A -> B (-> C) -> A (or stays at the last value), so one observer batch holds every record. */
   batch: (steps: string[]) => { for (const value of steps) swatch().setAttribute("style", value); },
   append: () => { document.getElementById("list")!.append(make("span")); },

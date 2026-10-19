@@ -6,6 +6,8 @@
  *   record counted, pixels unchanged;
  * - a real change (style, class, text, an attribute added or removed) is captured within a frame or two with fresh pixels;
  * - one task A -> B -> A, A -> B -> C and A -> B writes: captured (the unit test proves the rule for every batch shape), A -> A ignored;
+ * - writes that act on a same value (canvas width, img src, SVG href) are never ignored (the observer's decision, counted by `mutationsIgnored`);
+ * - `classList.add(existing)` and `style.x = same` capture nothing;
  * - a child appended or reordered is captured.
  */
 import { test, expect } from "../helpers/current-browser.mjs";
@@ -141,6 +143,74 @@ for (const dpr of [1, 2]) {
       } finally { await context.close(); }
     });
   }
+
+/** One write through `call(name)`: the capture and ignore counts it caused, after a frame or two and a settle. */
+  async function write(call, frames, name) {
+    await call("settle");
+    const before = await gpu(call, name);
+    await call(name);
+    await frames();
+    await call("settle");
+    const after = await gpu(call, `after ${name}`);
+    console.log(`DPR ${dpr} ${name}: ${after.captures - before.captures} captures, ${after.mutationsIgnored - before.mutationsIgnored} ignored`);
+    return { captures: after.captures - before.captures, ignored: after.mutationsIgnored - before.mutationsIgnored };
+  }
+
+  test(`a same-value canvas width write clears the bitmap in the DOM: captured, not ignored (DPR ${dpr})`, async ({ browser }) => {
+    const { context, call, frames, errors } = await open(browser, dpr);
+    try {
+      // The pixels cannot prove this one: this Canary build paints a <canvas> descendant's bitmap blank into a layer's capture whether or
+      // not it was cleared (open-issues), so the probe asserts the observer's decision: the record is counted by neither path as ignored.
+      const result = await write(call, frames, "sameCanvas");
+      expect(result.ignored, "not ignored").toBe(0);
+      expect(result.captures, "captured").toBeGreaterThanOrEqual(1);
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  });
+
+  test(`a same-value img src write is captured, not ignored (DPR ${dpr})`, async ({ browser }) => {
+    const { context, call, frames, errors } = await open(browser, dpr);
+    try {
+      const result = await write(call, frames, "sameSrc");
+      expect(result.ignored, "not ignored").toBe(0);
+      expect(result.captures, "captured").toBeGreaterThanOrEqual(1);
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  });
+
+  test(`namespaced attributes: a same-value xlink:title is ignored, a same-value xlink:href (it acts on write) and a changed one are captured with fresh pixels (DPR ${dpr})`, async ({ browser }) => {
+    const { context, page, call, frames, errors } = await open(browser, dpr);
+    try {
+      await call("settle");
+      const uses = await call("box", "uses");
+      expect(near(colour(await shot(page), uses, dpr), [220, 180, 20], 20), "starts gold").toBe(true);
+      const title = await write(call, frames, "sameUseTitle");
+      expect(title, "ignored").toEqual({ captures: 0, ignored: 1 });
+      const same = await write(call, frames, "sameUse");
+      expect(same.ignored, "same href not ignored").toBe(0);
+      expect(same.captures, "same href captured").toBeGreaterThanOrEqual(1);
+      const changed = await write(call, frames, "changeUse");
+      expect(changed.ignored).toBe(0);
+      expect(changed.captures).toBeGreaterThanOrEqual(1);
+      expect(near(colour(await shot(page), uses, dpr), [20, 160, 160], 20), "ends teal").toBe(true);
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  });
+
+  test(`classList.add(existing) and style.x = same: the measured outcome (DPR ${dpr})`, async ({ browser }) => {
+    const { context, call, frames, errors } = await open(browser, dpr);
+    try {
+      await call("classListSame");
+      await call("settle");
+      const classes = await write(call, frames, "classListSame");
+      const style = await write(call, frames, "styleSame");
+      console.log(`DPR ${dpr} classList.add(existing): ${JSON.stringify(classes)}; style.background = same: ${JSON.stringify(style)}`);
+      // Either no record at all, or a record that is ignored: never a capture.
+      expect(classes.captures, "classList.add(existing) captures nothing").toBe(0);
+      expect(style.captures, "style.x = same captures nothing").toBe(0);
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  });
 
   test(`a child appended or reordered is captured, never ignored (DPR ${dpr})`, async ({ browser }) => {
     const { context, page, errors, call, frames } = await open(browser, dpr);

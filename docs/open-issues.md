@@ -82,6 +82,10 @@ different from currently failing supported code.
   (`metrics.mutationsIgnored`; [api](api.md#same-value-mutations-are-ignored)); 300 frames of one cost 299 captures before and 0 now. Not covered, by design:
   a custom-property or style write that changes a value, and any write the DOM sees as a change (a different value, an added or removed attribute).
 
+- **A `<canvas>` inside a layer is captured blank (Canary 158, found with #181).** In `core-mutation-noop.html` a 2D canvas with drawn content shows its
+  bitmap in ordinary DOM and in a screenshot of the DOM presentation, but the GPU capture of its layer paints it as the layer background, also after a redraw.
+  Not investigated further (browser or core); a layer that contains a `<canvas>` needs its own probe before it is relied on.
+
 ## Unsupported or untargeted scope
 
 | ID | Current boundary and impact | Concrete closure criterion |
