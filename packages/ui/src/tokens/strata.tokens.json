@@ -2217,6 +2217,69 @@
       }
     }
   },
+  "plate": {
+    "$description": "Plate and tray forms at the Instrument level (anatomy pages card.md, panel.md, dialog.md, drawer.md; section 6): the rim of a machined plate and the wall of a recessed tray, in px at 50% depth (heights scale with depth, 0.6, 1, 1.6).",
+    "rim": {
+      "$type": "dimension",
+      "$value": "4px",
+      "$description": "A plate's rim: the width of its machined edge, inside the box.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 2,
+          "max": 12
+        }
+      }
+    },
+    "height": {
+      "$type": "dimension",
+      "$value": "3px",
+      "$description": "A plate's and a tray's height above the face at 50% depth.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 1,
+          "max": 8
+        }
+      }
+    },
+    "chamfer": {
+      "$type": "dimension",
+      "$value": "1.4px",
+      "$description": "The edge break on a plate's outer edge.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 0.5,
+          "max": 3
+        }
+      }
+    },
+    "wall": {
+      "$type": "dimension",
+      "$value": "4px",
+      "$description": "A tray's wall: the width of its top.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 2,
+          "max": 12
+        }
+      }
+    },
+    "slope": {
+      "$type": "dimension",
+      "$value": "3px",
+      "$description": "A tray's wall: how far its inner face runs into the recess.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 1,
+          "max": 8
+        }
+      }
+    }
+  },
   "level": {
     "$type": "string",
     "$value": "relief",

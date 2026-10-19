@@ -1,6 +1,7 @@
 ---
 /** Panel (anatomy page `panel.md`): a `<section>` slab at the floating level, the GPU layer unit, named by its title. */
 import { nextId } from "./field.ts";
+import { PANEL_TRAY_CLASS, surfaceForm, type StrataSurfaceForm } from "../shared/structure-forms.ts";
 import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
 
 interface Props {
@@ -8,6 +9,8 @@ interface Props {
   titleLevel?: 2 | 3 | 4 | 5 | 6;
   titleId?: string;
   elevation?: "ground" | "raised" | "floating" | "overlay" | "modal";
+  /** `plate`: a machined plate. `tray`: the content sits in a recessed tray. `flush` or none: the panel of before. */
+  form?: StrataSurfaceForm | "flush";
   size?: StrataSize;
   material?: string;
   level?: StrataLevel;
@@ -15,11 +18,12 @@ interface Props {
   [attribute: string]: unknown;
 }
 
-const { title, titleLevel = 2, titleId, elevation = "floating", size, material, level, class: className, ...rest } = Astro.props;
+const { title, titleLevel = 2, titleId, elevation = "floating", form, size, material, level, class: className, ...rest } = Astro.props;
 const id = titleId ?? nextId("panel-title");
 const Heading = `h${titleLevel}`;
+const formed = surfaceForm(form);
 ---
-<section class={classes("ug-panel", className)} data-strata-face="raised" data-strata-elevation={elevation} aria-labelledby={title !== undefined ? id : undefined} {...strataAttributes({ size, material, level })} {...rest}>
+<section class={classes("ug-panel", className)} data-strata-face="raised" data-strata-elevation={elevation} aria-labelledby={title !== undefined ? id : undefined} data-strata-form={formed} {...strataAttributes({ size, material, level })} {...rest}>
   {title !== undefined && <Heading id={id}>{title}</Heading>}
-  <slot />
+  {formed === "tray" ? <div class={PANEL_TRAY_CLASS} data-strata-face="well"><slot /></div> : <slot />}
 </section>
