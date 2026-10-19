@@ -15,6 +15,7 @@ import { flatten, namespace, numeric, valueOf, type ResolveOptions, type Token, 
 import { sceneSettings } from "./scene.ts";
 import type { InstrumentRecipe, InstrumentScene, StudioTokens } from "./instrument.ts";
 import type { Issue } from "./validate.ts";
+import playful from "./characters/playful.json" with { type: "json" };
 
 /** A character's metadata, under `$extensions["dev.underglass.strata"].character` on its root. */
 export interface CharacterInfo {
@@ -33,8 +34,8 @@ export interface StrataCharacter extends CharacterInfo {
 }
 
 /** The built-in characters by name. */
-const builtIn: Record<string, TokenGroup> = { premium: premium as TokenGroup, studio: studio as TokenGroup };
-/** The names of the built-in characters (`premium`, `studio`); `premium` is the default. */
+const builtIn: Record<string, TokenGroup> = { premium: premium as TokenGroup, studio: studio as TokenGroup, playful: playful as TokenGroup };
+/** The names of the built-in characters (`premium`, `studio`, `playful`); `premium` is the default. */
 export const characterNames = Object.keys(builtIn);
 export const defaultCharacter = "premium";
 
