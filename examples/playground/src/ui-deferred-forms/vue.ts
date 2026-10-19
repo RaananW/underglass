@@ -45,7 +45,7 @@ const App = defineComponent({
       refs: { get pan() { return document.getElementById("pan") as HTMLInputElement; }, get group() { return document.getElementById("mode") as HTMLFieldSetElement; } } };
     return () => h("main", [
       h("div", { "data-contract": "slider.md#wheel", hidden: true }, [h(Slider, { form: "wheel", id: "gain-example", name: "gain", "aria-label": "Gain", defaultValue: 40, marks: [0, 50, 100] })]),
-      h("div", { "data-contract": "radio.md#selector", hidden: true }, [h(RadioGroup, { form: "selector", legend: "Mode", name: "mode-example", defaultValue: "solo" }, { default: modes })]),
+      h("div", { "data-contract": "radio.md#selector", hidden: true }, [h(RadioGroup, { form: "selector", legend: "Mode", name: "mode-example" }, { default: modes })]),
       h("div", { "data-contract": "display.md#segments", hidden: true }, [h(Display, { segments: true, id: "clock-example", label: "Clock" }, { default: () => "12:34" })]),
       h("section", { class: "ug-panel", "data-strata-face": "raised", "aria-label": "Deferred forms", style: { display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "flex-start" } }, [
         h("form", { id: "owner-form" }),

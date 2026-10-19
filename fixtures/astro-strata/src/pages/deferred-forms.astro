@@ -17,7 +17,7 @@ const routes = Array.from({ length: 9 }, (_, index) => ({ value: `r${index + 1}`
 </head>
 <body>
   <div data-contract="slider.md#wheel" hidden><Slider form="wheel" id="gain-example" name="gain" aria-label="Gain" value={40} marks={[0, 50, 100]} /></div>
-  <div data-contract="radio.md#selector" hidden><RadioGroup form="selector" legend="Mode" name="mode-example" options={modes} value="solo" /></div>
+  <div data-contract="radio.md#selector" hidden><RadioGroup form="selector" legend="Mode" name="mode-example" options={modes} /></div>
   <div data-contract="display.md#segments" hidden><Display segments id="clock-example" label="Clock">12:34</Display></div>
   <main>
     <form class="ug-panel" data-strata-face="raised" aria-label="Deferred forms" id="deferred" style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">

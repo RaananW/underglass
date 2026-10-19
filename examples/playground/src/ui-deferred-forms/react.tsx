@@ -63,7 +63,7 @@ function App() {
   return (
     <main>
       <div data-contract="slider.md#wheel" hidden><Slider form="wheel" id="gain-example" name="gain" aria-label="Gain" defaultValue={40} marks={[0, 50, 100]} /></div>
-      <div data-contract="radio.md#selector" hidden><RadioGroup form="selector" legend="Mode" name="mode-example" defaultValue="solo">{modes}</RadioGroup></div>
+      <div data-contract="radio.md#selector" hidden><RadioGroup form="selector" legend="Mode" name="mode-example">{modes}</RadioGroup></div>
       <div data-contract="display.md#segments" hidden><Display segments id="clock-example" label="Clock">12:34</Display></div>
       <section className="ug-panel" data-strata-face="raised" aria-label="Deferred forms" style={{ display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "flex-start" }}>
         <form id="owner-form" />

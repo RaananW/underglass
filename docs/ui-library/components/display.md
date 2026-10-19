@@ -247,5 +247,43 @@ in the monospace family (tabular numerals), and, lit, a glow shadow round the be
 - **A finding for core** (the Meter's, again): against the layer core draws with no window, no bezel and no relief (the same capture through the layer pass),
   the text boxes differ at 23,832 of 30,726 px at DPR 1 and 93,648 of 120,700 at DPR 2, by at most 10 levels: the layer pass does not reproduce the capture bit
   for bit where the exact twin does, so the comparison that is exact is the glass against the DOM's own rendering, which the suite asserts.
-- **Not yet:** the `segments` look (a seven-segment or dot-matrix typeface needs a font asset: a follow-up), the manual screen-reader script
+- **Not yet:** a fourteen-segment or dot-matrix face (the `segments` look is the seven-segment one, section 11), the manual screen-reader script
   for a live readout (VAL-002) and a real operating-system IME (VAL-001), both in [open issues](../../open-issues.md) until performed, a low-end GPU.
+
+## 11. The `segments` look: a seven-segment face
+
+`segments` (a prop on the Display and on a TextField with `form="display"`; `data-strata-segments="seven"` on the display's root) prints the text under the glass in a
+**seven-segment face**, with the **unlit segments faintly printed** behind it, so a lit digit shows against the ghost of an 8, as on a real display. Without it (or with
+`segments={false}`) the display is the one above, in the markup and the look it had before, pixel for pixel. Everything else holds: the native `<output>` or `<input>` is
+the control and covers the whole display, its text is its own (exact, selectable, announced as the text it is: the face changes the glyphs, never the characters), the
+glass stays over it, and the backlight is the emitters.
+
+```html
+<span class="ug-display ug-display--output" data-strata-form="display" data-strata-segments="seven"><span class="ug-display__object" aria-hidden="true"><span class="ug-display__bezel" data-strata-face="groove"><span class="ug-display__window" data-strata-face="flat"></span></span></span><output class="ug-display__text" id="clock-example" aria-label="Clock">12:34</output></span>
+```
+
+- **Decided: a font Strata draws itself, embedded in the stylesheet.** The three ways were (a) a CSS-only effect on the existing text, honest but weak: a monospace
+  stack cannot make an 8 out of segments; (b) a font asset; (c) per-character CSS pseudo-elements, which needs each character in an element of its own and so a
+  different markup from the native text, which the control must stay. (b) was taken, with no third-party font: the repository's dependencies carry no seven-segment
+  font, and a vendored one (DSEG, OFL) would need a binary from outside the repository, its licence recorded and the package's file allowlist extended. Instead
+  `shared/segments.ts` holds the seven hexagonal segments as data, the lit segments of each character, and writes a TrueType file from them (deterministic, 10 KB:
+  `.notdef`, 62 glyphs, one 600-unit advance each, ascent 850 and descent 150 so the digit's centre is the line box's). The build embeds it in `components.css` as a
+  `data:font/ttf` `@font-face` named `Strata Segments` (token `font.segments`: the face, then the code face). **No licence is taken on**: the face is this repository's own work
+  under its licence (Apache-2.0), nothing new ships beside the stylesheet, and `packages/ui` is not packed (its allowlists are core's, react's and vue's), so
+  `scripts/package-policy.mjs` needs no entry and `npm run test:package` is unaffected.
+- **Coverage.** The digits, the letters a seven-segment display can draw (A b C c d E F G H h I J L n o P q r S t U u y, with the other case where the shape is the same:
+  B D e f g j l N O p Q R s T V Y Z), `-`, `_`, `=`, space, and the full stop and colon (each takes a cell). **Every other character has no glyph here, so the stack falls to the code
+  face for it** (an `m` or a `w` prints as ordinary monospace text, the display stays legible, and the look is honestly partial). A fourteen-segment or dot-matrix face for the rest of the letters is
+  a follow-up.
+- **The ghost.** All seven segments of the cell as an SVG tile, a mask in the text colour at `display.segments.ghost` (0.14), tiled along the window's content box behind
+  the text: the lit and unlit segments are one drawing, so they line up. It is static (part of the capture): changing the text changes no ghost pixel, and the backlight, the
+  bezel and the glass are as without the look. Disabled: half as strong. More contrast: 0.18 (the ghost is wanted, not hidden, but the text keeps its full contrast; the
+  backlight is off there as before). Forced colours: the ghost is `CanvasText` at the same strength.
+- **Size.** The text is 1.25 times the control font (the segments are lighter than letters), the letter spacing 0.08em, the line height 1.2; the window's height
+  rule (the control's height, or a line and a half) is unchanged, so a display is the same box with or without the look, at 320 px and at 200% text (the text wraps
+  as an `<output>`'s does; the ghost tiles the first line).
+- **GPU.** Nothing of its own: the face and the ghost are captured content under the glass at Relief, Objects and Instrument, and the glass over them is the display's, so the digits
+  are exact (measured against the DOM's own rendering, as the display's text is). A changed text is a DOM mutation and a capture, as ever (`driveStrataDisplay` bounds a fast one).
+- **Props.** `segments` (`true` or `"seven"`). React, Vue and Astro render the markup above for `<Display segments>`; the TextField's is the same attribute on its display root.
+- **Tests:** `ui-deferred-forms.test.mjs` (the digits render with the ghost segments and stay exact under the glass, at every level, DPR 1 and 2),
+  `ui-deferred-forms-bindings.test.mjs`, `ui-deferred-forms-astro.test.mjs`, `strata-deferred-forms.unit.test.mjs` (the font read back with a font reader: glyph advances, boxes, coverage).

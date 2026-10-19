@@ -134,14 +134,13 @@ when disabled, a `Highlight` focus outline. The dot's presence shows the state.
   pixels; dot contrast against the lit well floor.
 - **Parity:** Relief and CSS within the P0.6 budget at rest, hover, focus and selected.
 
-## 11. Latching form: the preset bank (`bank`)
+## 11. Hardware forms: the preset bank (`bank`) and the rotary selector (`selector`)
 
 Instrument, everyday forms ([plan](../instrument.md#everyday-components-at-the-instrument-level)). `form="bank"` on a RadioGroup draws the
 same native radios as a **preset bank**: interlocking latching buttons on one plinth, exactly one down at a time (the radio buttons of
 a car radio, where the name comes from), each label printed on its cap, and an LED above the key that is down. The group's `<legend>`
 stays on the faceplate above the plinth. `flush`, or no `form`, is the group above, in the markup and the look it had before, pixel for pixel;
-any other `form` string is the native `form` attribute of the fieldset, as before. The `selector` form (a RotarySelector over the group) is not
-built yet: it is a later change, and `form="selector"` is for now the native form owner's id, as any other string. `colour` names the LEDs' role. As with the Switch's hardware forms, the premium character's default form is reached by naming it: with no `form` the control is its flush look, so a page that does not opt in is unchanged.
+any other `form` string is the native `form` attribute of the fieldset, as before. `form="selector"` is the other hardware form (below). `colour` names the LEDs' role. As with the Switch's hardware forms, the premium character's default form is reached by naming it: with no `form` the control is its flush look, so a page that does not opt in is unchanged.
 
 | Part | Shape | Moves |
 | --- | --- | --- |
@@ -208,3 +207,52 @@ built yet: it is a later change, and `form="selector"` is for now the native for
 - `attachStrataPushButtons` adds only the held state and the feedback (`click` once per real selection, including an arrow key's).
   React: `<RadioGroup form="bank" colour="success" legend="Preset" value onChange>`; Vue: the same with `v-model`; Astro renders the radios from `options`.
 - **Tests:** `ui-latching-forms.test.mjs`, `ui-latching-forms-bindings.test.mjs`, `ui-latching-forms-astro.test.mjs`.
+
+### The rotary selector (`selector`)
+
+`form="selector"` draws the same native radios as the [RotarySelector](rotary-selector.md)'s dial: **one detent per radio**, each radio's own label printed
+round the dial at its position, a cap whose pointer turns to the checked one on `spring.detent`. The group's `<legend>` stays above it. The native radios stay
+the control: each `<input type="radio">` lies inside its printed label's text as an invisible overlay at least 24 px square, so **a click on a printed
+position is a click on that radio**, and Tab, the arrow keys (which move and check, wrapping, skipping a disabled radio) and Space are the group's, exactly
+as above; `aria` is unchanged (the fieldset and its legend name the group, each label its radio) and the dial, the ticks and the numbered legend are `aria-hidden`
+decoration. A group with nothing checked has its cap at the first position and no print selected.
+
+```html
+<fieldset class="ug-radio-group" data-strata-form="selector">
+  <legend class="ug-radio-group__legend">Mode</legend>
+  <div class="ug-rotary ug-rotary--group" style="--strata-rotary-value: 0;">
+    <div class="ug-rotary__dial">
+      <span class="ug-rotary__scale">
+        <label class="ug-rotary__mark" style="--strata-rotary-at: 0;" data-strata-value="mix" data-strata-selected="false"><span class="ug-rotary__tick" aria-hidden="true"></span><span class="ug-rotary__text"><input class="ug-rotary__radio" type="radio" name="mode-example" value="mix">Mix</span></label>
+        <label class="ug-rotary__mark" style="--strata-rotary-at: 0.3333;" data-strata-value="solo" data-strata-selected="false"><span class="ug-rotary__tick" aria-hidden="true"></span><span class="ug-rotary__text"><input class="ug-rotary__radio" type="radio" name="mode-example" value="solo">Solo</span></label>
+        <label class="ug-rotary__mark" style="--strata-rotary-at: 0.6667;" data-strata-value="mute" data-strata-selected="false"><span class="ug-rotary__tick" aria-hidden="true"></span><span class="ug-rotary__text"><input class="ug-rotary__radio" type="radio" name="mode-example" value="mute">Mute</span></label>
+        <label class="ug-rotary__mark" style="--strata-rotary-at: 1;" data-strata-value="bypass" data-strata-selected="false"><span class="ug-rotary__tick" aria-hidden="true"></span><span class="ug-rotary__text"><input class="ug-rotary__radio" type="radio" name="mode-example" value="bypass">Bypass</span></label>
+      </span>
+      <span class="ug-rotary__skirt" data-strata-face="raised" aria-hidden="true"><span class="ug-rotary__cap" data-strata-face="raised"><span class="ug-rotary__pointer"></span></span></span>
+    </div>
+    <ol class="ug-rotary__legend" aria-hidden="true">
+      <li data-strata-selected="false">Mix</li>
+      <li data-strata-selected="false">Solo</li>
+      <li data-strata-selected="false">Mute</li>
+      <li data-strata-selected="false">Bypass</li>
+    </ol>
+  </div>
+</fieldset>
+```
+
+- **The Select's limits.** The same as the [Select's selector](select.md#11-hardware-forms-selector-and-display): a dial's labels sit on a 270° arc, which fits **at most 8 radios of at
+  most 12 characters**. A group asked as a selector that does not fit (nine radios, a longer label, one radio, or radios a binding cannot read: a child that is not a `Radio`, a label that is
+  not plain text) is **drawn as a `bank`**, which keeps the hardware face and takes any group; `data-strata-form` says which. React and Vue read the `Radio` children
+  (directly or through fragments), Astro its `options`.
+- **Gestures.** The radios take their own clicks and the keys. The dial adds what they do not cover, each ending in a radio's native `click()` (so `input` and `change` fire as for a
+  click on it): a click on the ring where no label is checks the radio nearest that angle; a click on the skirt or cap steps to the next radio on its upper half and the previous
+  one on its lower half (the single-pointer alternative, WCAG 2.5.7); the wheel over the dial steps one radio and the page does not scroll. There is no drag: the dial is
+  the group's decoration, and a vertical drag over radios has no native meaning. A changed radio plays `tick` through `strataFeedback` (off unless the page or scope turns it on).
+- **Presentations.** The RotarySelector's, unchanged: its CSS (`ug-rotary__*`, `ug-rotary--group` on the root; at under 104 px + 7em the positions are numbers on the dial and the
+  labels a numbered legend under it, for 320 px and 200% text), its Relief and Objects faces, and at the Instrument level the **Knob's object** (`gpu/instrument.ts`) over the dial's box,
+  turned to the checked radio on `spring.detent`; a turn is a uniform update with no capture and no hit-geometry update, and the printed labels (captured content) change
+  colour with the selection, as the Select's do. The group's `<fieldset>` is the native element the object lies in (its box holds the dial, as the bank's holds its plinth), so a
+  click on a part lands on the group and, where a label is, on its radio.
+- **Props.** `form`, `sweep` (the cap's turn from the first to the last radio in degrees; `knob.sweep`, 270). React and Vue keep the group controlled with `value` and `onChange`
+  (`v-model`) or uncontrolled with `defaultValue`; a selector keeps its own value when uncontrolled so the dial follows it.
+- **Tests:** `ui-deferred-forms.test.mjs`, `ui-deferred-forms-bindings.test.mjs`, `ui-deferred-forms-astro.test.mjs`, `strata-deferred-forms.unit.test.mjs`.
