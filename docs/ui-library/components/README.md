@@ -27,7 +27,8 @@ native attributes (`:hover`, `:active`, `:focus-visible`, `:checked`, `:disabled
 | `data-strata-mode` | The root or a scope | `face`: the GPU paints relief, so CSS paints flat faces (no bevel, shadow or finish) |
 | `data-strata-preview` | A control | `hover`, `active` or `focus`: shows a state statically, for specimens and tests only |
 | `data-strata-form` | A Switch's row, or a Button or ToggleButton | `slide`, `rocker`, `bat` or `wall`: the switch's hardware form ([Switch, Forms](switch.md#11-forms)); `momentary` (Button) or `latching` (ToggleButton): a push button ([Button](button.md#11-push-button-form-momentary), [ToggleButton](toggle-button.md#11-push-button-form-latching)) |
-| `data-strata-down` | A push button | `true` while it is held (the pointer or a key down), `false` once released: its ring lit and its cap down; set by `attachStrataPushButtons` |
+| `data-strata-down` | A push button, or a latching form's key (`.ug-latch`) | `true` while it is held (the pointer or a key down), `false` once released: its ring lit and its cap down; set by `attachStrataPushButtons` |
+| `data-strata-form` (latching forms) | A Checkbox's row, a RadioGroup's or SegmentedControl's fieldset | `latching` (Checkbox, SegmentedControl) or `bank` (RadioGroup): the native control drawn as latching buttons; `flush`, or none, is the look before ([Checkbox](checkbox.md#11-latching-form-latching), [RadioGroup](radio.md#11-latching-form-the-preset-bank-bank), [SegmentedControl](segmented-control.md#11-latching-form-latching)) |
 | `data-strata-form` (structural forms) | A Slider's drawn root (`.ug-knob`, `.ug-fader`), a Card, a Panel, a Dialog or a Drawer | `knob` or `fader` (Slider), `plate` or `tray` (Card, Panel), `plate` (Dialog) or `tray` (Drawer): the control drawn as the Knob's or the Fader's object over the Slider's own input, as a machined plate or a recessed tray, a plate that rises out of the chassis or a tray that slides out of its edge; `flush`, or none, is the look before ([Slider](slider.md#11-hardware-forms-knob-and-fader), [Card](card.md#11-plate-and-tray-forms), [Panel](panel.md#11-plate-and-tray-forms), [Dialog](dialog.md#11-plate-form), [Drawer](drawer.md#11-tray-form)) |
 | `data-strata-colour` | A Lamp or StatusLight | The lens's colour role: `glowOn` (default), `accent`, `success`, `warning`, `danger` or `info` ([Lamp](lamp.md)) |
 | `data-strata-lit` | A StatusLight | `false`: an unlit light (lit when absent) |
@@ -90,8 +91,8 @@ light and depth, reduced motion, keyboard input and reflow.
 | [Field](field.md) | `<div>` with `<label>`, help and error | None (layout) |
 | [TextField](text-field.md) | `<input>`; `form="display"`: a glass window in a bezel ([Display](display.md)) | Well with a bezel |
 | [TextArea](text-area.md) | `<textarea>` | Well with a bezel |
-| [Checkbox](checkbox.md) | `<input type="checkbox">` | Small well with a raised mark |
-| [Radio and RadioGroup](radio.md) | `<input type="radio">` in `<fieldset>` | Round well with a knob |
+| [Checkbox](checkbox.md) | `<input type="checkbox">` | Small well with a raised mark; `form="latching"`: a small latching square button whose ring lights when checked ([Latching form](checkbox.md#11-latching-form-latching)) |
+| [Radio and RadioGroup](radio.md) | `<input type="radio">` in `<fieldset>` | Round well with a knob; `form="bank"`: a preset bank, interlocking latching keys on one plinth ([Latching form](radio.md#11-latching-form-the-preset-bank-bank)) |
 | [Switch](switch.md) | `<input type="checkbox" role="switch">` | Track well with a knob; hardware [forms](switch.md#11-forms): slide, rocker, bat and wall |
 | [Select](select.md) | `<select>` | Key with a chevron |
 | [Slider](slider.md) | `<input type="range">` | Rail groove with a puck; `form="knob"` or `"fader"`: the Knob's or the Fader's object over the same input ([Hardware forms](slider.md#11-hardware-forms-knob-and-fader)) |
@@ -127,7 +128,7 @@ light and depth, reduced motion, keyboard input and reflow.
 
 | Component | Native element | Object |
 | --- | --- | --- |
-| [SegmentedControl](segmented-control.md) | Native radios in a `<fieldset>` | Keys on one plinth; the selected key is held down |
+| [SegmentedControl](segmented-control.md) | Native radios in a `<fieldset>` | Keys on one plinth; the selected key is held down; `form="latching"`: interlocking latching keys with an LED each ([Latching form](segmented-control.md#11-latching-form-latching)) |
 | [Rating](rating.md) | Native radios in a `<fieldset>`; a `role="img"` display | Stars printed on the panel (captured, no relief) |
 | [Stepper](stepper.md) | An `<ol>` with `aria-current="step"` | Coins on a groove; steps to come are flat |
 | [NavigationRail](navigation-rail.md) | A `<nav>` with a list of links, `aria-current="page"` | Keys on a raised slab down the start edge |

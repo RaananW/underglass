@@ -4,7 +4,10 @@
  * input. `v-model` works on Checkbox and Switch (a boolean) and on RadioGroup (the selected value).
  */
 import { computed, defineComponent, h, inject, mergeProps, onMounted, onUpdated, provide, ref, useId, type ComputedRef, type InjectionKey, type PropType, type VNode } from "vue";
+import { attachStrataPushButtons } from "../dom/push-button.ts";
 import { attachStrataSwitches } from "../dom/switch.ts";
+import { bankForm, bankMarkup, checkboxMarkup, latchForm, nativeForm } from "../shared/latching-forms.ts";
+import type { StrataLampColour } from "../shared/lamp.ts";
 import { isSwitchForm, switchFormMarkup, type StrataSwitchForm, type SwitchPart } from "../shared/switch-forms.ts";
 import { classes, splitAttrs, strataAttributes, strataProps, useFieldControl } from "./shared.ts";
 
@@ -21,24 +24,44 @@ export const Checkbox = defineComponent({
     ...choiceProps,
     /** The mixed state, set as a property on every render; a click clears it, as native. */
     indeterminate: { type: Boolean, default: false },
+    /**
+     * The form (anatomy page `checkbox.md`, *Latching forms*): `latching`, a small latching square button whose ring lights when it is
+     * checked; `flush`, or absent, is the look it had before. Any other string is the native `form` attribute, as before.
+     */
+    form: { type: String as PropType<"latching" | "flush" | (string & {})>, default: undefined },
+    /** The lit ring's colour of a latching checkbox. */
+    colour: { type: String as PropType<StrataLampColour>, default: undefined },
   },
   emits: ["update:modelValue"],
   setup(props, { attrs, slots, emit, expose }) {
     const field = useFieldControl();
     const input = ref<HTMLInputElement | null>(null);
     const sync = () => { if (input.value) input.value.indeterminate = props.indeterminate; };
-    onMounted(sync);
-    onUpdated(sync);
+    // A latching key is held down while it is pressed and plays its feedback (`dom/push-button.ts`), once per document.
+    const attach = () => { if (latchForm(props.form)) attachStrataPushButtons(); };
+    onMounted(() => { sync(); attach(); });
+    onUpdated(() => { sync(); attach(); });
     expose({ input });
     return () => {
       const { row, control } = splitAttrs(attrs);
+      const latching = latchForm(props.form), owner = nativeForm(props.form, "latching");
+      const native = h("input", mergeProps({
+        ref: input, class: "ug-checkbox__input", ...(latching ? {} : { "data-strata-face": "well" }), type: "checkbox", ...field?.value,
+        ...(props.invalid ? { "aria-invalid": "true" } : {}),
+        ...(owner !== undefined ? { form: owner } : {}),
+        ...(props.modelValue !== undefined ? { checked: props.modelValue } : {}),
+        onChange: (event: Event) => emit("update:modelValue", (event.target as HTMLInputElement).checked),
+      }, control));
+      if (latching) return h("label", { ...row, class: classes("ug-checkbox", row.class as string), ...strataAttributes(props), "data-strata-form": latching }, [
+        h("span", { class: "ug-push ug-latch ug-latch--key", ...(props.colour ? { "data-strata-colour": props.colour } : {}) }, [
+          native,
+          h("span", { class: "ug-push__object", "aria-hidden": "true" }, checkboxMarkup.map(part => h("span", { class: part.className, "data-strata-face": part.face }))),
+          h("span", { class: "ug-push__cap", "data-strata-face": "raised", "aria-hidden": "true" }, [h("span", { class: "ug-checkbox__mark" })]),
+        ]),
+        h("span", { class: "ug-checkbox__label" }, slots.default?.()),
+      ]);
       return h("label", { ...row, class: classes("ug-checkbox", row.class as string), ...strataAttributes(props) }, [
-        h("input", mergeProps({
-          ref: input, class: "ug-checkbox__input", "data-strata-face": "well", type: "checkbox", ...field?.value,
-          ...(props.invalid ? { "aria-invalid": "true" } : {}),
-          ...(props.modelValue !== undefined ? { checked: props.modelValue } : {}),
-          onChange: (event: Event) => emit("update:modelValue", (event.target as HTMLInputElement).checked),
-        }, control)),
+        native,
         h("span", { class: "ug-checkbox__mark", "data-strata-face": "mark", "aria-hidden": "true" }),
         h("span", { class: "ug-checkbox__label" }, slots.default?.()),
       ]);
@@ -94,6 +117,8 @@ interface GroupContext {
   defaultValue?: string;
   invalid: boolean;
   required: boolean;
+  bank: boolean;
+  colour?: StrataLampColour;
   select: (value: string) => void;
 }
 
@@ -112,6 +137,13 @@ export const RadioGroup = defineComponent({
     error: { type: String, default: undefined },
     required: { type: Boolean, default: false },
     errorPrefix: { type: String, default: "Error:" },
+    /**
+     * The form (anatomy page `radio.md`, *Latching forms*): `bank`, a preset bank of interlocking latching buttons on one plinth;
+     * `flush`, or absent, is the look it had before. Any other string is the native `form` attribute of the fieldset, as before.
+     */
+    form: { type: String as PropType<"bank" | "flush" | (string & {})>, default: undefined },
+    /** The LEDs' colour of a bank. */
+    colour: { type: String as PropType<StrataLampColour>, default: undefined },
     ...strataProps,
   },
   emits: ["update:modelValue"],
@@ -120,13 +152,18 @@ export const RadioGroup = defineComponent({
     const name = computed(() => props.name ?? `radio-${generated.replace(/[^a-zA-Z0-9_-]/g, "")}`);
     provide(groupKey, computed(() => ({
       name: name.value, value: props.modelValue, defaultValue: props.defaultValue, invalid: !!props.error, required: props.required,
+      bank: !!bankForm(props.form), colour: props.colour,
       select: (value: string) => emit("update:modelValue", value),
     })));
+    // A bank's keys are held down while they are pressed and play their feedback (`dom/push-button.ts`), once per document.
+    onMounted(() => { if (bankForm(props.form)) attachStrataPushButtons(); });
+    onUpdated(() => { if (bankForm(props.form)) attachStrataPushButtons(); });
     return () => {
       const describedBy = [props.help ? `${name.value}-help` : undefined, props.error ? `${name.value}-error` : undefined].filter(Boolean).join(" ") || undefined;
-      return h("fieldset", { class: "ug-radio-group", "aria-describedby": describedBy, ...strataAttributes(props) }, [
+      const bank = bankForm(props.form), owner = nativeForm(props.form, "bank");
+      return h("fieldset", { class: "ug-radio-group", "aria-describedby": describedBy, ...strataAttributes(props), ...(bank ? { "data-strata-form": bank } : {}), ...(owner !== undefined ? { form: owner } : {}) }, [
         h("legend", { class: "ug-radio-group__legend" }, props.legend),
-        slots.default?.(),
+        bank ? h("div", { class: "ug-bank__plinth", "data-strata-face": "raised" }, slots.default?.()) : slots.default?.(),
         props.help && h("p", { class: "ug-field__help", id: `${name.value}-help` }, props.help),
         props.error && h("p", { class: "ug-field__error", id: `${name.value}-error` }, `${props.errorPrefix} ${props.error}`),
       ]);
@@ -151,13 +188,22 @@ export const Radio = defineComponent({
       // Controlled: the checked property. Uncontrolled: the checked attribute (the default selection), as in HTML.
       const selection = context?.value !== undefined ? { checked: context.value === props.value }
         : context?.defaultValue === props.value ? { "^checked": "" } : {};
+      const native = h("input", mergeProps({
+        ref: input, class: "ug-radio__input", ...(context?.bank ? {} : { "data-strata-face": "well" }), type: "radio", name: context?.name, value: props.value,
+        ...(context?.required ? { required: true } : {}), ...(context?.invalid ? { "aria-invalid": "true" } : {}),
+        ...selection,
+        onChange: (event: Event) => { if ((event.target as HTMLInputElement).checked) context?.select(props.value); },
+      }, control));
+      // A key of a preset bank: the input over the key, the LED on the plinth, the label printed on the cap.
+      if (context?.bank) return h("label", { ...row, class: classes("ug-radio", row.class as string), ...strataAttributes(props) }, [
+        h("span", { class: "ug-push ug-latch ug-latch--bank", ...(context.colour ? { "data-strata-colour": context.colour } : {}) }, [
+          native,
+          h("span", { class: "ug-push__object", "aria-hidden": "true" }, bankMarkup.map(part => h("span", { class: part.className, "data-strata-face": part.face }))),
+          h("span", { class: "ug-push__cap", "data-strata-face": "raised" }, [h("span", { class: "ug-radio__label" }, slots.default?.())]),
+        ]),
+      ]);
       return h("label", { ...row, class: classes("ug-radio", row.class as string), ...strataAttributes(props) }, [
-        h("input", mergeProps({
-          ref: input, class: "ug-radio__input", "data-strata-face": "well", type: "radio", name: context?.name, value: props.value,
-          ...(context?.required ? { required: true } : {}), ...(context?.invalid ? { "aria-invalid": "true" } : {}),
-          ...selection,
-          onChange: (event: Event) => { if ((event.target as HTMLInputElement).checked) context?.select(props.value); },
-        }, control)),
+        native,
         h("span", { class: "ug-radio__dot", "data-strata-face": "knob", "aria-hidden": "true" }),
         h("span", { class: "ug-radio__label" }, slots.default?.()),
       ]);

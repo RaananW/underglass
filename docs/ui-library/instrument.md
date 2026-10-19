@@ -185,13 +185,13 @@ divider a groove) or stay flat, because they are print on the faceplate.
 | Button | `momentary` push button, machined cap, lit ring on focus | `flush` (a key, as Objects) |
 | ToggleButton | `latching` push button with an LED | `rocker` |
 | Switch | `slide` | `rocker`, `bat`, `wall` |
-| Checkbox | A small latching square button whose cap lights when checked | `flush` |
-| Radio, RadioGroup | A **preset bank**: interlocking latching buttons, one down at a time (where the name comes from) | `selector` (a RotarySelector over the group) |
+| Checkbox | A small latching square button whose cap lights when checked ([`latching`, done](components/checkbox.md#11-latching-form-latching)) | `flush` |
+| Radio, RadioGroup | A **preset bank**: interlocking latching buttons, one down at a time (where the name comes from) ([`bank`, done](components/radio.md#11-latching-form-the-preset-bank-bank)) | `selector` (a RotarySelector over the group; later), `flush` |
 | Select | `selector` (RotarySelector) | `display` (a display with step buttons), `flush` |
 | Slider | `fader` | `knob`, `wheel` |
 | TextField, TextArea | `display` (a glass window in a bezel) | `flush` (a well, as Objects) |
 | Tabs | Latching buttons on a rail; the panel is the faceplate under them | `flush` |
-| SegmentedControl | Interlocking latching buttons on one plinth | `flush` |
+| SegmentedControl | Interlocking latching buttons on one plinth ([`latching`, done](components/segmented-control.md#11-latching-form-latching)) | `flush` |
 | ProgressBar, Spinner | Segment meter, ring of LEDs | `flush` |
 | Badge | An LED pill (a StatusLight with text) | `flush` |
 | Rating | A row of lamps | `flush` |
@@ -199,6 +199,15 @@ divider a groove) or stay flat, because they are print on the faceplate.
 | Dialog | A plate that rises out of the chassis (depth entry), with its controls on it | `flush` |
 | Drawer | A tray that slides out of the chassis edge | `flush` |
 | Tooltip, Menu, Popover, Toast | Unchanged: overlay-host CSS, as today | — |
+
+**Latching forms (the first everyday forms).** The Checkbox, the RadioGroup and the SegmentedControl take their premium forms through
+`form` (`latching`, `bank`, `latching`; `flush` names today's look, and an absent `form` is `flush`, as the Switch's hardware forms are, so a page that
+does not opt in is unchanged; the character's default form is reached by naming it). They are the PushButton's machinery on native inputs: the
+input is an invisible overlay on its key's box inside a push button's host, the lit ring, the LED and the cap's travel are the same three
+numbers, the same spring and the same emitters, and the keys of a bank stand on one polished plinth that is a part of its own. A bank key has no
+bezel and no ring: the plinth is the frame, and the LED above each key shows the one that is down. The `selector` form of the RadioGroup is a later
+change. [Checkbox](components/checkbox.md#11-latching-form-latching), [RadioGroup](components/radio.md#11-latching-form-the-preset-bank-bank),
+[SegmentedControl](components/segmented-control.md#11-latching-form-latching).
 
 **Structural forms (everyday forms, third part).** The Slider, the Card and Panel, and the Dialog and Drawer take their forms through `form` at
 every presentation (`flush`, and an absent `form`, are the control of before). A Slider's `knob` and `fader` are the Knob's and the Fader's object
@@ -427,7 +436,7 @@ the premium sound set.
 
 Lamp, StatusLight, Meter, Gauge, RotarySelector, the PushButton forms and Display; then the everyday forms table
 above. The showcase gains an **Instrument** gallery page and one showpiece (a synthesiser panel or a smart-home wall,
-decided then).
+decided then): done, see *The gallery and the showpiece* below.
 
 ## Phase I5: wave 3 and characters
 
@@ -565,8 +574,24 @@ One concern per PR, each based on `main`:
 9. Knob (wave 1: [anatomy](components/knob.md); CSS, Relief, Objects and Instrument done, with the helper's `instrument` level, and its detents' `tick`).
 10. Fader (wave 1: [anatomy](components/fader.md); CSS, Relief, Objects and Instrument done, with the helper's
    `instrument` level, and its detents' `tick`). 11. Switch forms, with sound and haptics as the opt-in option.
-12. Wave 2 components, one or two per PR. 13. Everyday forms, a few per PR. 14. Instrument gallery and showpiece.
+12. Wave 2 components, one or two per PR. 13. Everyday forms, a few per PR. 14. Instrument gallery and showpiece (done: [`#/instrument`](../showcase.md), see *The gallery and the showpiece* below).
 15. Wave 3 components (first part: the JogWheel and the PatchPoint, done: [JogWheel](components/jog-wheel.md), [PatchPoint and PatchBay](components/patch-point.md)). 16. Characters: studio, hifi, playful, one per PR.
+
+### The gallery and the showpiece (item 14, 2026-10-19)
+
+The showcase's `#/instrument` page shows every Instrument component on main in its premium form, by the catalogue's groups (wave 1, wave 2, wave 3, the everyday
+forms), each with its name, a line, the native control it is, its anatomy page and a live instance, behind a level switch (CSS, Relief, Objects, Instrument), a
+theme switch, a character switch (premium, studio) and the pointer light. The latching everyday forms, Pad and Keypad join it when they merge.
+
+**The showpiece is a synthesiser, not a smart-home wall.** Main supports the hardware a voice is made of (knobs, faders, switches, lamps, a meter, a gauge, a display, a
+jog wheel, a patch bay, push buttons, rotary selectors) and they wire to each other the way a panel does; a wall wants Pad, Keypad, a thermostat dial and latching
+switches, which are still in review.
+
+**It is four module panels, not one.** A scene holds at most 16 materials (`INSTRUMENT_MATERIALS`) and every component brings its own: a knob four, a fader three, the
+four switch forms eight, a meter its glass and a lens per zone colour, a lens colour each. The voice measured 29 on one panel, and core refuses such a scene whole.
+So the voice is a rack (master, sound, output, modulation), each module a plate under 16 (13, 12, 13 and 9 materials at premium; studio adds `anodised`), wired
+through shared state. A push button is also drawn as a Relief key, with no diagnostic, when the scene already holds 12 materials, so the master panel keeps its
+push buttons ahead of everything else. Parts and emitters per panel are in the page's notes and pinned by `tests/browser/showcase-instrument.test.mjs`.
 
 PR 11, the Switch forms ([anatomy](components/switch.md#11-forms)): `slide`, `rocker`, `bat` and `wall` done in CSS, Relief and
 Objects and Instrument (the helper's `instrument` level), with sound and haptics as the opt-in option, and the Knob's

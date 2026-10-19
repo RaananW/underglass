@@ -3,7 +3,7 @@
  * proportions, finish and feel. It is a validated theme layer over the defaults, so an application's theme still
  * overrides any of its tokens. The first is `premium` (`characters/premium.json`, W3C Design Tokens), whose provisional
  * values are listed inside the file so the runtime can report them in development; `studio` (`characters/studio.json`) is
- * a sparse layer that sets only what differs from it.
+ * a sparse layer that sets only what differs from it, as is `hifi` (`characters/hifi.json`).
  *
  * A character may set its own part, spring, emitter and material tokens, its sound set (`feedback.<sound>.*`), the `glowOn` and `glowOff` colours, and (only
  * as the application's character) the studio and the environment. It may not set the light, the elevation order, any
@@ -11,6 +11,7 @@
  */
 import premium from "./characters/premium.json" with { type: "json" };
 import studio from "./characters/studio.json" with { type: "json" };
+import hifi from "./characters/hifi.json" with { type: "json" };
 import { flatten, namespace, numeric, valueOf, type ResolveOptions, type Token, type TokenGroup, type TokenNode } from "./model.ts";
 import { sceneSettings } from "./scene.ts";
 import type { InstrumentRecipe, InstrumentScene, StudioTokens } from "./instrument.ts";
@@ -33,8 +34,8 @@ export interface StrataCharacter extends CharacterInfo {
 }
 
 /** The built-in characters by name. */
-const builtIn: Record<string, TokenGroup> = { premium: premium as TokenGroup, studio: studio as TokenGroup };
-/** The names of the built-in characters (`premium`, `studio`); `premium` is the default. */
+const builtIn: Record<string, TokenGroup> = { premium: premium as TokenGroup, studio: studio as TokenGroup, hifi: hifi as TokenGroup };
+/** The names of the built-in characters (`premium`, `studio`, `hifi`); `premium` is the default. */
 export const characterNames = Object.keys(builtIn);
 export const defaultCharacter = "premium";
 
