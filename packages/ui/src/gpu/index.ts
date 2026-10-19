@@ -32,6 +32,11 @@
  * primitives (fitted so their shadows stay in the native meter's box) with the needle as captured content; at the Instrument level the
  * needle is a part turned by its spring (`spring.meter`, `spring.gauge`), over a glass window that keeps the printed scale exact.
  *
+ * A Card's, Panel's or Dialog's plate and a tray (a Card's or Panel's recessed well, a Drawer) are a rim and a wall of parts at the
+ * Instrument level (`gpu/instrument-plate.ts`, design language section 6): a mesh swept along the element's rounded outline inside its
+ * box, rising out of the chassis with a Dialog's or Drawer's motion (`rise`, a uniform update), and at the other levels the
+ * element's material (`material.roles.plate`, satin without a character) and its well.
+ *
  * At the Instrument level (`instrument`, between `objects` and `scene` on the ladder, set like the others) a panel with
  * any element at that level takes core's `instrument` material and a version 4 scene (`gpu/instrument.ts`): its knobs
  * become the premium knob's parts, whose pointer turns on a spring as their value changes (uniform updates, no
@@ -66,6 +71,7 @@ import { advanceSpring, depthScale, INSTRUMENT_CAMERA, keyObject, knobObject, kn
   type InstrumentProfile, type InstrumentRecipe, type KnobSpring } from "./instrument.ts";
 import { faderMaterials, faderObject, faderParts, faderSpring } from "./instrument-fader.ts";
 import { switchHeight, switchMaterials, switchObject } from "./instrument-switch.ts";
+import { plateMargin, plateMaterials, plateObject, plateParts, plateTokenDefaults, type PlateForm, type PlateOpen } from "./instrument-plate.ts";
 import type { StrataSwitchForm } from "../shared/switch-forms.ts";
 
 export type { CustomPartInput, CustomPartSource, InstrumentMeshProfile, InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentRecipe, KnobSpring } from "./instrument.ts";
@@ -88,7 +94,7 @@ export interface StrataGpuController {
 }
 /** A panel motion as core's typed motion: numeric keyframes and timing. */
 export interface StrataPanelMotion {
-  keyframes: { offset: number; opacity?: number; scaleX?: number; scaleY?: number; tiltX?: number; perspective?: number }[];
+  keyframes: { offset: number; opacity?: number; scaleX?: number; scaleY?: number; tiltX?: number; perspective?: number; x?: number; y?: number }[];
   timing: { duration: number; easing: string };
 }
 /**
@@ -333,6 +339,8 @@ export interface StrataSceneOptions {
   parts?: { knobCap?: CustomPartSource };
   /** The time the springs advance to (ms, `performance.now()` by default). */
   now?: number;
+  /** How far a Dialog's plate or a Drawer's tray stands out of the chassis now, 0–1 (the panel motion's eased progress; 1 at rest). */
+  rise?: number;
 }
 
 /** The levels from lowest to highest. */
@@ -369,7 +377,9 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   };
   const materialFor = (element: Element, face: SceneFace) => {
     const named = element.closest("[data-strata-material]");
-    return material(named && panel.contains(named) ? named.getAttribute("data-strata-material")! : tokens.raw(`material.roles.${roleOf(face, element, panel)}`) || "matte");
+    // A plate (a Card, Panel or Dialog) and a Drawer's tray are machined: the plate role, satin without a character that has one.
+    const machined = element.getAttribute("data-strata-form") === "plate" || (element.matches(".ug-drawer") && element.getAttribute("data-strata-form") === "tray");
+    return material(named && panel.contains(named) ? named.getAttribute("data-strata-material")! : machined ? tokens.raw("material.roles.plate") || "satin" : tokens.raw(`material.roles.${roleOf(face, element, panel)}`) || "matte");
   };
   const states = (element: Element) => {
     // A knob's skirt and cap are its input's object: they take its hover, press and disabled state. A fader's slot and
@@ -402,6 +412,8 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   const instrumentLayer = [panel, ...panel.querySelectorAll("[data-strata-level]")].some(element => effective(element) === "instrument");
   const objects = (element: Element) => !instrumentLayer && effective(element) !== "relief";
   const knobs = new Set<HTMLElement>(), faders = new Set<HTMLElement>(), switches = new Set<HTMLElement>(), instrumentMeters = new Set<HTMLElement>(), keys: HTMLElement[] = [];
+  // Plates and trays at the Instrument level: a Card's, Panel's or Dialog's plate, a Card's or Panel's recessed tray, a Drawer's tray.
+  const plates: PlateInfo[] = [];
   // Objects (design language section 6): the tokens of their proportions, and the height each surface's top stands at.
   const keyHeight = tokens.number("object.keyHeight", 8), keyTravel = tokens.number("object.keyTravel", 6), taper = tokens.number("object.taper", 3);
   const tops = new Map<Element, number>(), floors = new Map<Element, number>();
@@ -470,12 +482,23 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     entries.push({ object: "slab", rect: [0, 0, width, height], radius: radiusOf(panel, width), height: panelHeight, taper, material: materialFor(panel, "raised") });
     tops.set(panel, panelHeight);
   } else entries.push({ face: "raised", rect: [0, 0, width, height], radius: radiusOf(panel, width), height: panelHeight, material: materialFor(panel, "raised") });
+  // The panel itself, when it is a plate (a Panel, a Dialog) or a Drawer's tray: its rim or walls stand inside its box.
+  const panelForm = panel.getAttribute("data-strata-form");
+  if (instrumentLayer && effective(panel) !== "relief") {
+    if (panelForm === "plate") plates.push({ element: panel, form: "plate", rises: panel.matches(".ug-dialog") });
+    else if (panelForm === "tray" && panel.matches(".ug-drawer")) plates.push({ element: panel, form: "tray", rises: true, open: drawerEdge(panel) });
+  }
   for (const element of panel.querySelectorAll<HTMLElement>("[data-strata-face]")) {
     if (entries.length >= 254) break;
     const face = element.getAttribute("data-strata-face") as SceneFace;
     // The slide's flag is invisible (opacity 0) while the switch is off, but the object draws it: hide its CSS paint all the same.
     if (instrumentLayer && element.matches(".ug-switch[data-strata-form] .ug-switch__object .ug-switch__flag") && effective(element) !== "relief") options.domes?.add(element);
     if (!faces.includes(face) || !element.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    // A Card's plate, and a Card's or Panel's tray (its body, or the wrapper after its title): the face is drawn as ever, with the rim or the wall of parts on it.
+    if (instrumentLayer && effective(element) !== "relief") {
+      if (element.matches(".ug-card") && element.getAttribute("data-strata-form") === "plate") plates.push({ element, form: "plate", rises: false });
+      else if (element.matches(".ug-card__body, .ug-panel__tray") && face === "well") plates.push({ element, form: "tray", rises: false });
+    }
     // A Meter's or Gauge's segments, hub and a Gauge's bezel are drawn as its Instrument object (its window stays the well of the face).
     const meterRoot = element.closest<HTMLElement>(".ug-meter"), meter = meterRoot && meterInfos.get(meterRoot);
     if (meterRoot && meter && instrumentLayer && effective(element) !== "relief") {
@@ -653,7 +676,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   };
   // The lights of the panel's lenses, with the text they must not wash out (the guard, design language section 3).
   const lights = emitters.length ? { emitters, protected: protectedRects(panel), feather: Math.max(...[...lamps.values(), ...segmentInfos.values()].map(info => info.feather)) } : undefined;
-  if (instrumentLayer) return instrumentScene(panel, options, { settings, entries: entries as ScenePrimitive[], knobs, faders, switches, keys, states, materialFor, tokens, reach, lamps, instrumentLamps, lights, instrumentMeters, meterInfos, segmentInfos });
+  if (instrumentLayer) return instrumentScene(panel, options, { settings, entries: entries as ScenePrimitive[], knobs, faders, switches, keys, plates, states, materialFor, tokens, reach, lamps, instrumentLamps, lights, instrumentMeters, meterInfos, segmentInfos });
   if (!entries.some(isSceneObject)) return lights ? { format: "strata-scene", version: 4, ...settings, primitives: entries as ScenePrimitive[], ...lights } : { format: "strata-scene", version: 1, ...settings, primitives: entries };
   // The camera (design language section 2): centred on the stage, at D = max(camera.distance, r · h / taper + h),
   // with r the stage's half-diagonal, so every solid keeps the taper rule wherever its panel sits.
@@ -718,7 +741,7 @@ const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(pre
  * key with a captured cap. Everything else stays a Relief primitive.
  */
 function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, context: {
-  settings: Omit<StrataScene, "format" | "version" | "primitives">; entries: ScenePrimitive[]; knobs: Set<HTMLElement>; faders: Set<HTMLElement>; switches: Set<HTMLElement>; keys: HTMLElement[];
+  settings: Omit<StrataScene, "format" | "version" | "primitives">; entries: ScenePrimitive[]; knobs: Set<HTMLElement>; faders: Set<HTMLElement>; switches: Set<HTMLElement>; keys: HTMLElement[]; plates: PlateInfo[];
   /** The lamps and StatusLights at the Instrument level, every visible lens's info, and the panel's lights. */
   instrumentLamps: Set<HTMLElement>; lamps: Map<HTMLElement, LampInfo>; lights?: { emitters: LampEmitter[]; protected: [number, number, number, number][] | "extent"; feather: number };
   /** The Meters and Gauges at the Instrument level, every visible meter's info and every visible segment's. */
@@ -737,7 +760,7 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     profiles[key] ??= shape;
     return key;
   };
-  const use = (name: string) => { materials[name] ??= premiumMaterials[name] ?? faderMaterials[name as keyof typeof faderMaterials] ?? switchMaterials[name as keyof typeof switchMaterials] ?? meterMaterials[name as keyof typeof meterMaterials]; return name; };
+  const use = (name: string) => { materials[name] ??= premiumMaterials[name] ?? faderMaterials[name as keyof typeof faderMaterials] ?? switchMaterials[name as keyof typeof switchMaterials] ?? meterMaterials[name as keyof typeof meterMaterials] ?? plateMaterials[name as keyof typeof plateMaterials]; return name; };
   const scale = depthScale(tokens.number("depth", 0.5)), raised = tokens.number("elevation.raised", 3);
   const outer = panel.getBoundingClientRect(), stageBox = (options.stage ?? panel.parentElement ?? panel).getBoundingClientRect();
   const zoom = outer.width / Math.max(panel.offsetWidth, 1) || 1;
@@ -864,6 +887,24 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
       tallest = Math.max(tallest, meterHeight(info.form, 0, scale));
     }
   }
+  // Plates and trays: a rim or a wall of parts inside each element's box, rising with a Dialog's or Drawer's motion.
+  const panelColour = tokens.colour("panel"), [pr = 1, pg = 3, pb = 5] = [1, 3, 5].map(at => Number.parseInt(panelColour.slice(at, at + 2), 16) / 255);
+  const dark = 0.2126 * pr + 0.7152 * pg + 0.0722 * pb < 0.4;
+  const plateTokens = { rim: tokens.number("plate.rim", plateTokenDefaults.rim), height: tokens.number("plate.height", plateTokenDefaults.height), chamfer: tokens.number("plate.chamfer", plateTokenDefaults.chamfer),
+    wall: tokens.number("plate.wall", plateTokenDefaults.wall), slope: tokens.number("plate.slope", plateTokenDefaults.slope) };
+  for (const plate of context.plates) {
+    if (objects.length + entries.length >= 255) break;
+    const box = plate.element === panel ? [0, 0, panel.offsetWidth, panel.offsetHeight] as [number, number, number, number] : rectWithin(plate.element, panel);
+    const parts = plateParts(plate.form, scale, plateTokens);
+    // Room for the margin, the part and some of the face inside it; a smaller element stays a Relief slab or well.
+    if (Math.min(box[2], box[3]) < 2 * (plateMargin(plate.form, scale, stage, plateTokens) + parts.width) + 8) continue;
+    const state = context.states(plate.element), name = plate.form === "plate" ? (dark ? "plateEdgeDark" : "plateEdge") : dark ? "trayWallDark" : "trayWall";
+    objects.push(plateObject({ id: idOf(plate.element, plate.form), box, radii: radiiOf(plate.element, box[2]), form: plate.form, t: options.rise ?? 1, rises: plate.rises, ...(plate.open ? { open: plate.open } : {}),
+      scale, stage, dark, disabled: state.disabled, tokens: plateTokens,
+      relief: { height: plate.form === "plate" ? raised : tokens.number("elevation.well", 2), material: context.materialFor(plate.element, plate.form === "plate" ? "raised" : "well") } }, profile) as unknown as InstrumentObject);
+    use(name);
+    tallest = Math.max(tallest, parts.height + 0.5);
+  }
   for (const element of context.keys) {
     if (objects.length + entries.length >= 255) break;
     const colour = hex(getComputedStyle(element).backgroundColor), name = `key ${colour}`;
@@ -894,6 +935,26 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
 }
 
 type Movable = HTMLElement & { [panelMotion]?: PanelMover };
+
+/** A plate or tray at the Instrument level: its element, its form, whether the panel motion lifts it and a tray's open side. */
+interface PlateInfo { element: HTMLElement; form: PlateForm; rises: boolean; open?: PlateOpen }
+
+/** The four corner radii of an element, clockwise from the top left, in px (a percentage is of the width). */
+function radiiOf(element: Element, width: number): [number, number, number, number] {
+  const style = getComputedStyle(element);
+  const read = (value: string) => { const amount = Number.parseFloat(value); return value.endsWith("%") ? (amount / 100) * width : Number.isFinite(amount) ? amount : 0; };
+  return [read(style.borderTopLeftRadius), read(style.borderTopRightRadius), read(style.borderBottomRightRadius), read(style.borderBottomLeftRadius)];
+}
+
+/** The edge of the stage a Drawer sits on, which its tray is open on (`start` and `end` follow the writing direction). */
+function drawerEdge(drawer: Element): PlateOpen | undefined {
+  const rtl = getComputedStyle(drawer).direction === "rtl";
+  if (drawer.classList.contains("ug-drawer--top")) return "top";
+  if (drawer.classList.contains("ug-drawer--bottom")) return "bottom";
+  if (drawer.classList.contains("ug-drawer--start")) return rtl ? "right" : "left";
+  if (drawer.classList.contains("ug-drawer--end")) return rtl ? "left" : "right";
+  return undefined;
+}
 
 /** A resolved CSS time (`.32s`, `320ms`) in milliseconds. */
 function milliseconds(value: string): number {
@@ -927,7 +988,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   const root = controller.container;
   // Under forced colours everything is flat (design language section 4): the CSS presentation stays.
   const forced = matchMedia("(forced-colors: active)");
-  type Motion = { start: number; duration: number; ease: (t: number) => number; from: number; to: number };
+  type Motion = { start: number; duration: number; ease: (t: number) => number; from: number; to: number; kind: "enter" | "leave" };
   const panels = new Map<HTMLElement, { id: string; release: () => void; handle?: ReturnType<StrataGpuController["setMaterial"]>; kind?: StrataSceneMaterial["kind"];
     scene?: string; structure?: string; motion?: Motion; domes: Set<Element> }>();
   /** Shows the CSS paint of the elements a panel no longer draws as domes, and hides it on those it now does. */
@@ -1195,8 +1256,10 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     if (element.getAttribute("data-strata-mode") !== "face") element.setAttribute("data-strata-mode", "face");
     const motion = entry.motion;
     const domes = new Set<Element>();
+    // A Dialog's plate and a Drawer's tray come out of the chassis with the motion's eased progress, and go back into it as it leaves.
+    const progress = motion ? Math.min(1, Math.max(0, motion.ease(Math.min(1, (performance.now() - motion.start) / motion.duration)))) : 1;
     const scene = strataScene(element, { level: options.level, cap, stage: stageBox(), domes, environment, springs, moving, peaks, ...(options.parts ? { parts: options.parts } : {}),
-      ...(motion ? { height: motion.from + (motion.to - motion.from) * motion.ease(Math.min(1, (performance.now() - motion.start) / motion.duration)) } : {}) });
+      ...(motion ? { height: motion.from + (motion.to - motion.from) * motion.ease(Math.min(1, (performance.now() - motion.start) / motion.duration)), rise: motion.kind === "enter" ? progress : 1 - progress } : {}) });
     markDomes(entry, domes);
     // A panel drawn with the instrument material says so, so the CSS can hold the motion of the parts it draws.
     if (element.hasAttribute("data-strata-instrument") !== (scene.version === 4)) element.toggleAttribute("data-strata-instrument", scene.version === 4);
@@ -1240,9 +1303,12 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
       const duration = Math.max(1, milliseconds(tokens.raw("motion.slow")) || 320);
       const easing = tokens.raw("motion.easing.standard") || "cubic-bezier(0.2, 0, 0, 1)";
       const depth = distance / Math.max(distance - modal, 1);
-      const far = { opacity: 0, scaleX: depth, scaleY: depth, ...(tilt ? { tiltX: tilt, perspective: distance } : {}) };
+      // A Drawer's tray slides out of its chassis edge (and back into it): the layer travels its own width or height, fading as it goes.
+      const edge = element.matches(".ug-drawer") && element.getAttribute("data-strata-form") === "tray" ? drawerEdge(element) : undefined;
+      const slide = edge === "left" ? { x: -element.offsetWidth } : edge === "right" ? { x: element.offsetWidth } : edge === "top" ? { y: -element.offsetHeight } : edge === "bottom" ? { y: element.offsetHeight } : undefined;
+      const far = slide ? { opacity: 0, ...slide } : { opacity: 0, scaleX: depth, scaleY: depth, ...(tilt ? { tiltX: tilt, perspective: distance } : {}) };
       // At the Scene level a panel entering settles: a damped spring through depth and tilt, sampled into keyframes.
-      const settles = motion === "enter" && sceneLevel() && lower(strataLevel(element, options.level), cap) === "scene";
+      const settles = !slide && motion === "enter" && sceneLevel() && lower(strataLevel(element, options.level), cap) === "scene";
       const length = settles ? duration * 2 : duration;
       const settle = (t: number) => spring((t * length) / 1000);
       const keyframes = !settles ? (motion === "enter" ? [{ offset: 0, ...far }, { offset: 1 }] : [{ offset: 0 }, { offset: 1, ...far }])
@@ -1253,7 +1319,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
       let handle: ReturnType<StrataGpuController["transition"]>;
       try { handle = controller.transition(entry.id, { keyframes, timing: { duration: length, easing: settles ? "linear" : easing } }); }
       catch (error) { console.warn(`Strata GPU: ${entry.id} did not move: ${String(error)}`); return; }
-      entry.motion = { start: performance.now(), duration: length, ease: settles ? settle : bezier(easing), from: motion === "enter" ? modal : own, to: motion === "enter" ? own : modal };
+      entry.motion = { start: performance.now(), duration: length, ease: settles ? settle : bezier(easing), from: motion === "enter" ? modal : own, to: motion === "enter" ? own : modal, kind: motion };
       schedule();
       try { await handle.finished; } finally { entry.motion = undefined; schedule(); }
     };

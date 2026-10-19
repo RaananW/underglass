@@ -27,7 +27,8 @@ export type InstrumentProfile =
   | { type: "lathe"; points: [number, number, number, number][]; segments?: number }
   | { type: "prism"; width: number; length: number; radius?: number; height: number; taper?: number; chamfer?: number }
   | { type: "extrude"; outline: Vec2[]; width: number }
-  | InstrumentMeshProfile;
+  | InstrumentMeshProfile
+  | InstrumentInlineMesh;
 /** A `mesh` profile as the helper writes it: a reference to a glB or glTF (core's `InstrumentMeshProfile` also takes inline triangles). */
 export interface InstrumentMeshProfile {
   type: "mesh";
@@ -40,6 +41,12 @@ export interface InstrumentMeshProfile {
   offset?: Vec3;
   pivot?: Vec3;
 }
+/**
+ * An inline `mesh` profile (Rendering Model 2D.2): the triangles are in the scene, flat `x, y, z` per vertex. The helper writes one
+ * for a plate's rim and a tray's wall (`gpu/instrument-plate.ts`); `id` names the shape in `profiles`, so the arrays are not
+ * stringified to key them.
+ */
+export interface InstrumentInlineMesh { type: "mesh"; id: string; positions: number[]; normals: number[]; indices: number[] }
 /**
  * What an application gives for a custom part: a glB (or glTF with embedded buffers) and the box its vertices must lie
  * in, in part-local px. glTF axes become the part's as core's reader says (a vertex `(x, y, z)` becomes `(x, z, y)` times
@@ -64,6 +71,7 @@ const buffers = new WeakMap<ArrayBuffer, number>();
 let bufferCount = 0;
 /** The key of a profile in a scene's `profiles`: its name and shape (a buffer by identity, since JSON cannot tell two apart). */
 export function profileKey(name: string, shape: InstrumentProfile): string {
+  if (shape.type === "mesh" && "positions" in shape) return `${name}:${shape.id}`;
   if (shape.type === "mesh" && shape.source.data) {
     let id = buffers.get(shape.source.data);
     if (id === undefined) { id = ++bufferCount; buffers.set(shape.source.data, id); }
