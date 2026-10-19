@@ -435,7 +435,7 @@ the premium sound set.
 
 Lamp, StatusLight, Meter, Gauge, RotarySelector, the PushButton forms and Display; then the everyday forms table
 above. The showcase gains an **Instrument** gallery page and one showpiece (a synthesiser panel or a smart-home wall,
-decided then).
+decided then): done, see *The gallery and the showpiece* below.
 
 ## Phase I5: wave 3 and characters
 
@@ -573,8 +573,24 @@ One concern per PR, each based on `main`:
 9. Knob (wave 1: [anatomy](components/knob.md); CSS, Relief, Objects and Instrument done, with the helper's `instrument` level, and its detents' `tick`).
 10. Fader (wave 1: [anatomy](components/fader.md); CSS, Relief, Objects and Instrument done, with the helper's
    `instrument` level, and its detents' `tick`). 11. Switch forms, with sound and haptics as the opt-in option.
-12. Wave 2 components, one or two per PR. 13. Everyday forms, a few per PR. 14. Instrument gallery and showpiece.
+12. Wave 2 components, one or two per PR. 13. Everyday forms, a few per PR. 14. Instrument gallery and showpiece (done: [`#/instrument`](../showcase.md), see *The gallery and the showpiece* below).
 15. Wave 3 components (first part: the JogWheel and the PatchPoint, done: [JogWheel](components/jog-wheel.md), [PatchPoint and PatchBay](components/patch-point.md)). 16. Characters: studio, hifi, playful, one per PR.
+
+### The gallery and the showpiece (item 14, 2026-10-19)
+
+The showcase's `#/instrument` page shows every Instrument component on main in its premium form, by the catalogue's groups (wave 1, wave 2, wave 3, the everyday
+forms), each with its name, a line, the native control it is, its anatomy page and a live instance, behind a level switch (CSS, Relief, Objects, Instrument), a
+theme switch, a character switch (premium, studio) and the pointer light. The latching everyday forms, Pad and Keypad join it when they merge.
+
+**The showpiece is a synthesiser, not a smart-home wall.** Main supports the hardware a voice is made of (knobs, faders, switches, lamps, a meter, a gauge, a display, a
+jog wheel, a patch bay, push buttons, rotary selectors) and they wire to each other the way a panel does; a wall wants Pad, Keypad, a thermostat dial and latching
+switches, which are still in review.
+
+**It is four module panels, not one.** A scene holds at most 16 materials (`INSTRUMENT_MATERIALS`) and every component brings its own: a knob four, a fader three, the
+four switch forms eight, a meter its glass and a lens per zone colour, a lens colour each. The voice measured 29 on one panel, and core refuses such a scene whole.
+So the voice is a rack (master, sound, output, modulation), each module a plate under 16 (13, 12, 13 and 9 materials at premium; studio adds `anodised`), wired
+through shared state. A push button is also drawn as a Relief key, with no diagnostic, when the scene already holds 12 materials, so the master panel keeps its
+push buttons ahead of everything else. Parts and emitters per panel are in the page's notes and pinned by `tests/browser/showcase-instrument.test.mjs`.
 
 PR 11, the Switch forms ([anatomy](components/switch.md#11-forms)): `slide`, `rocker`, `bat` and `wall` done in CSS, Relief and
 Objects and Instrument (the helper's `instrument` level), with sound and haptics as the opt-in option, and the Knob's

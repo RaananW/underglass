@@ -69,6 +69,15 @@ different from currently failing supported code.
 | VAL-010 | **Open: Strata's full-stage layers and the captured-pixel budget.** A Dialog or Drawer's scrim, the Scene level's lit backdrop and its confetti layer are each captured as a layer the size of the Underglass root, so they count fully against the 2M CSS px default budget. A page whose panels fill a large root can exceed it when a dialog opens, and GPU then falls back with `Captured-pixel safety budget exceeded`. The showcase's Strata gallery (1040x700, about 3.1M px at the Scene level with a dialog open) raises its budget to 4M. | Present uniform full-stage layers (scrim tint, backdrop, particles) without capturing a full-size texture, or document a budget rule for Strata pages, and test a dialog over a full-viewport panel at the default budget. |
 | VAL-008 | **Open: numeric app/hardware budgets.** No agreed production frame/input/capture/resource thresholds or speedup have been established. CPU submission is not GPU execution or physical input latency. [Phase12 envelope](archive/measurements.md#phase12-bounded-engineering-envelope). | Choose app/hardware/workloads and numerical exit budgets, then measure matched DOM/baseline/final paths and independently evaluate correctness and costs. Settled 300-frame zero-churn applies only after preparation/native settling; live editing/caret/scroll paints remain real costs. |
 
+## Instrument gallery findings (2026-10-19)
+
+- **16 materials per Instrument layer.** A panel that mixes many component kinds (the full synthesiser: 29) is refused whole by core
+  (`Instrument scene materials holds more than 16 materials`) and the helper retries silently, so its controls vanish under GPU with no diagnostic. The gallery's panels are
+  split to fit. A diagnostic from the helper, or a larger limit, is core work.
+- **A push button silently falls back to a Relief key** when the scene already holds 12 materials (`gpu/index.ts`, the `key` material test).
+- **The pointer light is not in the helper yet.** The gallery's `pointer-light.ts` does what the plan says the helper will.
+- **A GPU stage cannot take its height from its content** (the content lives in the canvas): the gallery sets `--ig-stage-height` from its panels.
+
 ## Unsupported or untargeted scope
 
 | ID | Current boundary and impact | Concrete closure criterion |
