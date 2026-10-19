@@ -99,6 +99,14 @@ upstream check (WICG proposal `5fb3df86d84de598c7f0fcfc5ee53de1df067e7d`,
 157.0.8102.0 on Windows 11) are in [api.md](api.md#changes-2026-10-13). These are
 implementer checks, not independent acceptance.
 
+The runtime's mutation observer turns a mutation record into a capture of the layers containing or contained by its target,
+except a record that changes nothing: an attribute or text write whose old value equals the node's current value when the batch
+is delivered (`setAttribute(name, sameValue)`, `data = sameData`) is ignored and counted (`metrics.mutationsIgnored`). A batch is
+ignored only if every one of its records is: A to A is ignored, while A to B, A to B to A and A to B to C are captured, because
+the DOM passed through B and the observer cannot prove the painted state equals the last capture. A record with no old value
+(the attribute was added) and every child-list record (re-appending a node reorders it) always capture. The paint event's
+`changedElements` path is separate and unaffected ([api](api.md#same-value-mutations-are-ignored)).
+
 ### Capability versus implementation matrix
 
 **Upstream review (2026-10-11):** the current

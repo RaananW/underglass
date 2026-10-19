@@ -78,6 +78,10 @@ different from currently failing supported code.
 - **The pointer light is not in the helper yet.** The gallery's `pointer-light.ts` does what the plan says the helper will.
 - **A GPU stage cannot take its height from its content** (the content lives in the canvas): the gallery sets `--ig-stage-height` from its panels.
 
+- **Same-value mutation records recaptured (#181): resolved.** A same-value `setAttribute` or text write no longer queues a capture
+  (`metrics.mutationsIgnored`; [api](api.md#same-value-mutations-are-ignored)); 300 frames of one cost 299 captures before and 0 now. Not covered, by design:
+  a custom-property or style write that changes a value, and any write the DOM sees as a change (a different value, an added or removed attribute).
+
 ## Unsupported or untargeted scope
 
 | ID | Current boundary and impact | Concrete closure criterion |

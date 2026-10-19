@@ -254,6 +254,7 @@ not CSS-sized downsampling; allocation growth prepares a successor.
 
 `state().publication` exposes generation, pending state and capture coverage;
 `metrics.incompleteFramesSkipped` counts withheld incomplete compositions.
+`metrics.mutationsIgnored` counts ignored same-value mutation records ([below](#same-value-mutations-are-ignored)).
 Compatibility admission/readmission counters remain, but automatic attempts
 and retry frames stay zero. Visibility pauses scheduling, reduced motion uses
 its canonical endpoint/identity contract and forced colors refreshes native
@@ -551,6 +552,23 @@ See [measurement definitions and raw evidence](archive/measurements.md).
 With an `instrument` material, `instrumentGpuMs` samples (`layerId`, `phase: "content"`) carry the GPU time of one
 layer's mesh pass and post chain in one frame, and with emitters, `emitterGpuMs` samples the GPU time of one layer's face pool pass,
 both from Babylon Lite's per-task timings when the device has timestamp queries.
+
+### Same-value mutations are ignored
+
+A write that leaves the DOM as it was costs no capture. The runtime observes the root with `attributeOldValue` and
+`characterDataOldValue`, and when a batch of records is delivered it ignores each record whose `oldValue` equals the node's
+current attribute value (`getAttribute`, or `getAttributeNS` for a namespaced attribute) or current `data`. This covers
+`setAttribute(name, sameValue)` (including `style` and `class`) and `node.data = sameData`; `element.style.x = same` and
+`classList.add(existing)` produce no record at all. The rule is exact for a batch of writes v0, v1, ..., vn to one value: every record
+holds the value it replaced, so all are equal to the current value only if nothing changed, and any change leaves a record with an
+old value different from the current one. Therefore A to A is ignored, and A to B, A to B to A and A to B to C are captured. A record whose old value is
+`null` (an attribute added), an attribute that is now absent, and every child-list record are never ignored. A batch that is entirely ignored also skips
+the policy refresh and the reconcile it would have requested.
+
+- `state().metrics.mutationsIgnored` counts ignored records, and `state().metrics.perLayer[id].mutationsIgnored` counts them for each layer that
+  contains the target or is contained by it (as `queueCapture` attributes), so the per-layer sum can differ from the global count.
+- Writing `textContent` is not a same-value write (it replaces the text node: a child-list record) and captures.
+- A component that writes a value on every frame should still guard the write: it costs one record and one comparison per write, not a capture.
 
 ### The instrument material
 

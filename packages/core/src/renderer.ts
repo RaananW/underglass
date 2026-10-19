@@ -215,8 +215,8 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   const resources = { roots: 1, captureCanvases: 1, outputCanvases: 1, engines: 0, pendingEngines: 0, textures: 0, effects: 0, renderers: 0, stagingCanvases: 0, snapshots: 0, comparisonBuffers: 0, listeners: 0, scheduledFrames: 0, paintWaits: 0, lossObservers: 0, pendingCleanups: 0, probeElements: 0, probeReadbacks: 0, lightPasses: 0 };
   // Metrics are cumulative counters and aggregates plus bounded 256-entry sample histories (see `sample`).
   const timing = () => ({ count: 0, totalMs: 0, minMs: null as number | null, maxMs: null as number | null });
-  const layerMetrics: Record<string, { captures: number; pixelCopies: number; pixelReadbacks: number; uploads: number }> = Object.create(null);
-  const metrics = { captures: 0, pixelCopies: 0, pixelReadbacks: 0, reusedUploads: 0, uploads: 0, paintNotifications: 0, deviceLossCount: 0, fenceCount: 0, effectShaderCompilations: 0, incompleteFramesSkipped: 0, shaderSourceGenerations: 0, precompiledShaderSelections: 0,
+  const layerMetrics: Record<string, { captures: number; pixelCopies: number; pixelReadbacks: number; uploads: number; mutationsIgnored: number }> = Object.create(null);
+  const metrics = { captures: 0, mutationsIgnored: 0, pixelCopies: 0, pixelReadbacks: 0, reusedUploads: 0, uploads: 0, paintNotifications: 0, deviceLossCount: 0, fenceCount: 0, effectShaderCompilations: 0, incompleteFramesSkipped: 0, shaderSourceGenerations: 0, precompiledShaderSelections: 0,
     admission: { attempts: 0, passes: 0, captures: 0, pixelCopies: 0, pixelReadbacks: 0, uploads: 0, gpuFrames: 0, gpuReadbacks: 0, geometryChecks: 0,
       last: undefined as { nativePixels: number[][]; gpuPixels: number[][]; geometry: ReturnType<typeof verifyProbeGeometry>; frameBounds: ReturnType<typeof verifyFrameBounds>; projective?: ReturnType<typeof verifyProjectiveHits> } | undefined },
     timings: { captureMs: timing(), uploadMs: timing(), frameWorkMs: timing(), frameIntervalsMs: timing() },
@@ -1092,6 +1092,18 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     scheduleCapture();
   }
   /**
+   * Counts a mutation record the observer ignored because it changed nothing (see `changedMutations`), attributed as
+   * `queueCapture` attributes: to every layer that contains the target or is contained by it.
+   */
+  function ignoreMutation(node: Node) {
+    metrics.mutationsIgnored++;
+    const element = node instanceof Element ? node : node.parentElement;
+    for (const layer of current) if (element && (layer.element.contains(element) || element.contains(layer.element))) {
+      const own = metrics.perLayer[layer.id];
+      if (own) own.mutationsIgnored++;
+    }
+  }
+  /**
    * Waits until scheduled frames, lifecycle work, successor preparation and the paint already requested are done
    * (3000 ms cap). Once a paint has completed during the wait, a still-requested paint is newer work from content
    * that keeps changing (a requestAnimationFrame loop, a video): it does not hold settling, or a page that never
@@ -1213,7 +1225,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
         coverage: { slot: logicalSlots.get(spec.id)!, capturedSlot: -1, width: 0, height: 0, pixelWidth: 0, pixelHeight: 0 },
         contentExtent: { width: 0, height: 0, pixelWidth: 0, pixelHeight: 0 } };
     });
-    for (const spec of current) metrics.perLayer[spec.id] ??= { captures: 0, pixelCopies: 0, pixelReadbacks: 0, uploads: 0 };
+    for (const spec of current) metrics.perLayer[spec.id] ??= { captures: 0, pixelCopies: 0, pixelReadbacks: 0, uploads: 0, mutationsIgnored: 0 };
     const custom = next.map(customOf);
     // Each layer keeps its pass while its texture, custom effect and material are unchanged.
     // Finds an existing pass bound to the same texture and custom definitions, searching the given compositions.
@@ -1813,7 +1825,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     idle: () => serialize(async () => {}), state, dispose: () => {
       cancelAdmission("Runtime disposed: pending admission cancelled.");
       return serialize(dispose);
-    }, invalidate: queueCapture, draw,
+    }, invalidate: queueCapture, ignoreMutation, draw,
     reconcile,
     // The layer set or layout moved: refresh native geometry now and skip drawing until `reconcile` runs.
     reconcileGeometry: () => {

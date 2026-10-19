@@ -20,6 +20,7 @@ import { compileMotion, type CoordinatedMotion, type MotionDescriptor, type Moti
 import { EnrollmentError, type EnrollmentOptions } from "./enrollment.js";
 import { nativeEditingControl, nativeScrollKind } from "./native.js";
 import { scrollOrigin, intersectViewport, localViewport, canvasContentOrigin, viewportContains, axisAligned, type ViewportRect } from "./viewport.js";
+import { isNoOpMutation } from "./mutations.js";
 import { validateCompiledPrograms, verifyCompiledAnimation, type CompiledAnimation } from "./compiled.js";
 
 /** Upper bound for `budgets.layers`; each layer is one blended pass, so this only bounds per-frame work. */
@@ -206,8 +207,15 @@ export class CanvasRuntime {
     // observer is also pointed at external ancestors' style/class later (see `refreshViewportGeometry`).
     this.mutation = new MutationObserver(records => {
       if (this.stopped) return;
-      this.invalidatePolicy();
+      // A record that changed nothing (the same value written again) costs no capture, policy refresh or reconcile.
+      const changed: MutationRecord[] = [];
       for (const record of records) {
+        if (isNoOpMutation(record)) this.core?.ignoreMutation(record.target);
+        else changed.push(record);
+      }
+      if (!changed.length) return;
+      this.invalidatePolicy();
+      for (const record of changed) {
         const target = record.target instanceof Element ? record.target : record.target.parentElement;
         if (target && this.rootContainer?.contains(target)) this.core?.invalidate(target);
       }
@@ -273,7 +281,7 @@ export class CanvasRuntime {
       this.resources.mutationObservers = this.resources.resizeObservers = 0;
       throw error;
     }
-    this.mutation.observe(this.core.container, { subtree: true, attributes: true, characterData: true, childList: true });
+    this.mutation.observe(this.core.container, { subtree: true, attributes: true, attributeOldValue: true, characterData: true, characterDataOldValue: true, childList: true });
     // The hosts' shared parent is the frame whose client size is the output size (see `size()`).
     this.resize.observe(options.ordinaryHost.parentElement!);
     for (const layer of this.registry.values()) this.resize.observe(layer.element);
@@ -510,9 +518,9 @@ export class CanvasRuntime {
       || [...this.externalAncestors].some(node => !external.has(node))) {
       // MutationObserver has no per-target unobserve: re-observe the root plus the new external chain.
       this.mutation.disconnect();
-      this.mutation.observe(this.core!.container, { subtree: true, attributes: true, characterData: true, childList: true });
-      for (const node of external) this.mutation.observe(node, { attributes: true, attributeFilter: ["style", "class"] });
-      this.mutation.observe(owner, { attributes: true, attributeFilter: ["style", "class"] });
+      this.mutation.observe(this.core!.container, { subtree: true, attributes: true, attributeOldValue: true, characterData: true, characterDataOldValue: true, childList: true });
+      for (const node of external) this.mutation.observe(node, { attributes: true, attributeOldValue: true, attributeFilter: ["style", "class"] });
+      this.mutation.observe(owner, { attributes: true, attributeOldValue: true, attributeFilter: ["style", "class"] });
     }
     this.externalAncestors = external;
     for (const layer of this.registry.values()) {
