@@ -690,13 +690,14 @@ footer { display: flex; justify-content: space-between; align-items: center; gap
 .syn-out { align-items: flex-start; }
 .syn-foot { display: flex; flex-wrap: wrap; gap: var(--strata-gap-group, 20px); align-items: center; border-top: 1px solid var(--strata-colour-edge); padding-top: var(--strata-gap-group, 16px); }
 .syn-foot .syn-readout { flex: 1 1 12ch; }
-@container (max-width: 420px) { .syn-head { grid-template-columns: minmax(0, 1fr); } }
+@container (max-width: 420px) { .syn-head { grid-template-columns: minmax(0, 1fr); } .syn-body { column-gap: 12px; } .syn-faders { column-gap: 12px; } }
 /* A wide stage lays the voice out as a rack: the master across the top, then the sound beside the output and the modulation. */
 @container igstage (min-width: 1000px) {
   .stage-fluid .app-container { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: dense; }
   .stage-fluid .ig-syn-master { grid-column: 1 / -1; }
   .stage-fluid .ig-syn-sound { grid-column: 2; grid-row: span 2; }
   .stage-fluid .ig-syn-output, .stage-fluid .ig-syn-patch { grid-column: 1; }
+  .stage-fluid .ig-syn-pads { grid-column: 1 / -1; }
 }
 /* A phone: the page chrome gives the stage nearly all the width, and the panels give their content nearly all of the stage's. */
 @media (max-width: 600px) {
@@ -708,6 +709,9 @@ footer { display: flex; justify-content: space-between; align-items: center; gap
   .stage-frame:has(.stage-fluid) { padding: 4px; border-radius: 16px; }
   .stage-frame:has(.stage-fluid) .stage-chrome { padding: 2px 8px 6px; }
   .stage-frame:has(.stage-fluid) .stage-scroll { border-radius: 12px; }
-  .stage-fluid .app-container { padding: 8px; gap: 12px; }
+  .stage-fluid .app-container { padding: 8px; gap: 8px; }
+  /* The stage may be at most 4,096 CSS px tall at DPR 2 (the device limit of 8,192 px), and the synthesiser is the tallest page: the intro goes. */
+  .stage-fluid .ig-lede { display: none; }
   .stage-fluid .ug-panel { padding: 12px; }
 }
+.ig-note { margin: 0; color: var(--strata-colour-muted); font-size: var(--strata-font-size-small, 13px); }

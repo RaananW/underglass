@@ -72,10 +72,11 @@ function App() {
     // Mount outside this effect's React commit: the adapter flushes its own root synchronously.
     // The captured-pixel budget is raised from 2M to 4M CSS px for the Strata gallery: at its Scene level with a dialog
     // open, the stage holds three full-stage layers (the backdrop, Strata's lit backdrop and the dialog's scrim) and two
-    // panels, about 3.1M px with their shadows.
+    // panels, about 3.1M px with their shadows. It is 6M for the Instrument gallery: its stage is a wall of the stage's size under four or five
+    // panels, and an open dialog adds a scrim the stage's size, about 5M px on the tallest tab (the everyday forms) at a 1090 px stage.
     queueMicrotask(() => {
       if (cancelled) return;
-      app = mountCanvasApp({ outputCanvas, ordinaryHost, overlayHost, budgets: { layers: 32, pixels: 4_000_000 },
+      app = mountCanvasApp({ outputCanvas, ordinaryHost, overlayHost, budgets: { layers: 32, pixels: 6_000_000 },
         onStatusChange(status) { setDiagnostic(status.reason); setMode(status.mode); } }, <Demo id={route(location.hash)} onReady={ready} />);
       controller.current = app;
       // Handle for inspecting the running example from the console.

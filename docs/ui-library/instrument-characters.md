@@ -73,7 +73,7 @@ mismatches in light and dark (about 3,030 hits sampled).
 - Conformance (`instrument-4.json`): character-independent, as for studio.
 
 **Not wired yet** (in the bundle and the prototype, not read by the runtime): as studio's, plus `form.switch` and the
-geometry above. The gallery's character switch (#172) does not list hifi: follow-up to add it there.
+geometry above. The gallery's character switch lists hifi (and every Instrument tab keeps GPU on with it, `showcase-instrument.test.mjs`).
 
 **Evidence** (not committed): `evidence/regression/current/ui-probes/instrument-i5-hifi/` (premium and hifi screenshots and
 `variants.json`), from `tests/browser/ui-character-hifi.test.mjs`. Tested on Chrome Canary 158.0.8110.0, headless and
@@ -116,7 +116,7 @@ stop.
 - Conformance (`instrument-4.json`): character-independent, as for studio.
 
 **Not wired yet** (in the bundle and the prototype, not read by the runtime): as studio's, plus `form.switch`, the geometry
-above, and the switch and meter springs (CSS transitions). The gallery's character switch does not list playful: follow-up.
+above, and the switch and meter springs (CSS transitions). The gallery's character switch lists playful (and every Instrument tab keeps GPU on with it).
 
 **Evidence** (not committed): `evidence/regression/current/ui-probes/instrument-i5-playful/` (premium and playful screenshots
 and `variants.json`), from `tests/browser/ui-character-playful.test.mjs`. Tested on Chrome Canary 158.0.8110.0, headless and
