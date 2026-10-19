@@ -3,10 +3,13 @@
  * control sits in its label row: `class` and `style` go on the row, every other attribute and listener on the native
  * input. `v-model` works on Checkbox and Switch (a boolean) and on RadioGroup (the selected value).
  */
-import { computed, defineComponent, h, inject, mergeProps, onMounted, onUpdated, provide, ref, useId, type ComputedRef, type InjectionKey, type PropType, type VNode } from "vue";
+import { Comment, Fragment, Text, computed, defineComponent, h, inject, mergeProps, onMounted, onUpdated, provide, ref, useId, type ComputedRef, type InjectionKey, type PropType, type VNode, type VNodeChild } from "vue";
 import { attachStrataPushButtons } from "../dom/push-button.ts";
+import { attachStrataRotarySelectors } from "../dom/rotary-selector.ts";
 import { attachStrataSwitches } from "../dom/switch.ts";
-import { bankForm, bankMarkup, checkboxMarkup, latchForm, nativeForm } from "../shared/latching-forms.ts";
+import { bankMarkup, checkboxMarkup, latchForm, nativeForm } from "../shared/latching-forms.ts";
+import { radioAt, radioForm, radioFormFor, radioOwner, radioSelectorModel, type RadioOption, type StrataRadioForm } from "../shared/radio-forms.ts";
+import { optionLabel } from "../shared/select-forms.ts";
 import type { StrataLampColour } from "../shared/lamp.ts";
 import { isSwitchForm, switchFormMarkup, type StrataSwitchForm, type SwitchPart } from "../shared/switch-forms.ts";
 import { classes, splitAttrs, strataAttributes, strataProps, useFieldControl } from "./shared.ts";
@@ -119,10 +122,45 @@ interface GroupContext {
   required: boolean;
   bank: boolean;
   colour?: StrataLampColour;
+  /** `selector`: the group is a rotary selector, and its radios are printed round the dial at their positions. */
+  selector?: { positions: ReadonlyMap<string, number>; count: number };
   select: (value: string) => void;
 }
 
 const groupKey: InjectionKey<ComputedRef<GroupContext>> = Symbol("strata-radio-group");
+
+/** The text of a node, or undefined where it is not plain text. */
+function textOf(node: unknown): string | undefined {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (node === null || node === undefined || typeof node === "boolean") return "";
+  if (Array.isArray(node)) { const parts = node.map(textOf); return parts.some(part => part === undefined) ? undefined : parts.join(""); }
+  if (typeof node === "object" && (node as VNode).type === Text) return textOf((node as VNode).children);
+  return undefined;
+}
+
+/** The radios a group's slot holds (through fragments), or undefined when one cannot be read: a child that is not a `Radio`, or a label that is not plain text. */
+function readRadios(nodes: VNodeChild): RadioOption[] | undefined {
+  const options: RadioOption[] = [];
+  let readable = true;
+  const walk = (children: unknown) => {
+    for (const child of Array.isArray(children) ? children : [children]) {
+      if (child === null || child === undefined || typeof child === "boolean") continue;
+      if (typeof child === "string" || typeof child === "number") { if (String(child).trim()) readable = false; continue; }
+      const node = child as VNode;
+      if (node.type === Comment) continue;
+      if (node.type === Text) { if (String(node.children ?? "").trim()) readable = false; continue; }
+      if (node.type === Fragment) { walk(node.children); continue; }
+      const props = (node.props ?? {}) as { value?: unknown; disabled?: unknown };
+      if (node.type === Radio && typeof props.value === "string") {
+        const slot = (node.children as { default?: () => unknown } | null)?.default, text = textOf(typeof slot === "function" ? slot() : node.children);
+        if (text === undefined) { readable = false; continue; }
+        options.push({ value: props.value, label: optionLabel(text), ...(props.disabled !== undefined && props.disabled !== false ? { disabled: true } : {}) });
+      } else readable = false;
+    }
+  };
+  walk(nodes);
+  return readable ? options : undefined;
+}
 
 export const RadioGroup = defineComponent({
   name: "StrataRadioGroup",
@@ -138,10 +176,14 @@ export const RadioGroup = defineComponent({
     required: { type: Boolean, default: false },
     errorPrefix: { type: String, default: "Error:" },
     /**
-     * The form (anatomy page `radio.md`, *Latching forms*): `bank`, a preset bank of interlocking latching buttons on one plinth;
-     * `flush`, or absent, is the look it had before. Any other string is the native `form` attribute of the fieldset, as before.
+     * The form (anatomy page `radio.md`, section 11): `bank`, a preset bank of interlocking latching buttons on one plinth; `selector`, the
+     * RotarySelector's dial over the same native radios (2 to 8 radios of at most 12 characters, otherwise it is drawn as a `bank`; the `Radio`s
+     * must be direct children with a plain-text label). `flush`, or absent, is the look it had before. Any other string is the native `form`
+     * attribute of the fieldset, as before.
      */
-    form: { type: String as PropType<"bank" | "flush" | (string & {})>, default: undefined },
+    form: { type: String as PropType<StrataRadioForm | "flush" | (string & {})>, default: undefined },
+    /** A selector's turn from the first to the last radio in degrees; the `knob.sweep` token (270) by default. */
+    sweep: { type: Number, default: undefined },
     /** The LEDs' colour of a bank. */
     colour: { type: String as PropType<StrataLampColour>, default: undefined },
     ...strataProps,
@@ -150,20 +192,45 @@ export const RadioGroup = defineComponent({
   setup(props, { slots, emit }) {
     const generated = useId();
     const name = computed(() => props.name ?? `radio-${generated.replace(/[^a-zA-Z0-9_-]/g, "")}`);
-    provide(groupKey, computed(() => ({
-      name: name.value, value: props.modelValue, defaultValue: props.defaultValue, invalid: !!props.error, required: props.required,
-      bank: !!bankForm(props.form), colour: props.colour,
-      select: (value: string) => emit("update:modelValue", value),
-    })));
-    // A bank's keys are held down while they are pressed and play their feedback (`dom/push-button.ts`), once per document.
-    onMounted(() => { if (bankForm(props.form)) attachStrataPushButtons(); });
-    onUpdated(() => { if (bankForm(props.form)) attachStrataPushButtons(); });
+    const own = ref<string | undefined>(props.defaultValue);
+    // The form actually drawn, from the radios the slot holds (`radioFormFor`): a selector that does not fit is a bank.
+    let options: RadioOption[] | undefined;
+    const drawnOf = (children: VNodeChild) => {
+      const asked = radioForm(props.form);
+      options = asked === "selector" ? readRadios(children) : undefined;
+      return radioFormFor(asked, options);
+    };
+    let drawn: StrataRadioForm | undefined = radioForm(props.form);
+    // Read fresh on every access (not a cached computed): the radios render after the group has worked out which form it draws, which the slot can change.
+    provide(groupKey, { get value() { return context(); } } as unknown as ComputedRef<GroupContext>);
+    const context = (): GroupContext => ({
+      name: name.value, value: drawn === "selector" ? props.modelValue ?? own.value : props.modelValue, defaultValue: drawn === "selector" ? undefined : props.defaultValue, invalid: !!props.error, required: props.required,
+      bank: drawn === "bank", colour: props.colour,
+      ...(drawn === "selector" && options ? { selector: { positions: new Map(options.map((option, index) => [option.value, index])), count: options.length } } : {}),
+      select: (value: string) => { own.value = value; emit("update:modelValue", value); },
+    });
+    // A bank's keys are held down while they are pressed and play their feedback (`dom/push-button.ts`); a selector's dial has its own behaviour; both once per document.
+    const attach = () => { if (drawn === "bank") attachStrataPushButtons(); if (drawn === "selector") attachStrataRotarySelectors(); };
+    onMounted(attach);
+    onUpdated(attach);
     return () => {
       const describedBy = [props.help ? `${name.value}-help` : undefined, props.error ? `${name.value}-error` : undefined].filter(Boolean).join(" ") || undefined;
-      const bank = bankForm(props.form), owner = nativeForm(props.form, "bank");
-      return h("fieldset", { class: "ug-radio-group", "aria-describedby": describedBy, ...strataAttributes(props), ...(bank ? { "data-strata-form": bank } : {}), ...(owner !== undefined ? { form: owner } : {}) }, [
+      const children = slots.default?.();
+      drawn = drawnOf(children);
+      const owner = radioOwner(props.form);
+      const current = props.modelValue ?? own.value;
+      const model = drawn === "selector" && options ? radioSelectorModel(options, current, props.sweep) : undefined;
+      return h("fieldset", { class: "ug-radio-group", "aria-describedby": describedBy, ...strataAttributes(props), ...(drawn ? { "data-strata-form": drawn } : {}), ...(owner !== undefined ? { form: owner } : {}) }, [
         h("legend", { class: "ug-radio-group__legend" }, props.legend),
-        bank ? h("div", { class: "ug-bank__plinth", "data-strata-face": "raised" }, slots.default?.()) : slots.default?.(),
+        drawn === "bank" ? h("div", { class: "ug-bank__plinth", "data-strata-face": "raised" }, children) : model
+          ? h("div", { class: "ug-rotary ug-rotary--group", style: model.style }, [
+            h("div", { class: "ug-rotary__dial" }, [
+              h("span", { class: "ug-rotary__scale" }, children),
+              h("span", { class: "ug-rotary__skirt", "data-strata-face": "raised", "aria-hidden": "true" }, [h("span", { class: "ug-rotary__cap", "data-strata-face": "raised" }, [h("span", { class: "ug-rotary__pointer" })])]),
+            ]),
+            h("ol", { class: "ug-rotary__legend", "aria-hidden": "true" }, model.marks.map(mark => h("li", { key: mark.value, "data-strata-selected": String(current === mark.value) }, mark.text))),
+          ])
+          : children,
         props.help && h("p", { class: "ug-field__help", id: `${name.value}-help` }, props.help),
         props.error && h("p", { class: "ug-field__error", id: `${name.value}-error` }, `${props.errorPrefix} ${props.error}`),
       ]);
@@ -189,11 +256,17 @@ export const Radio = defineComponent({
       const selection = context?.value !== undefined ? { checked: context.value === props.value }
         : context?.defaultValue === props.value ? { "^checked": "" } : {};
       const native = h("input", mergeProps({
-        ref: input, class: "ug-radio__input", ...(context?.bank ? {} : { "data-strata-face": "well" }), type: "radio", name: context?.name, value: props.value,
+        ref: input, class: context?.selector ? "ug-rotary__radio" : "ug-radio__input", ...(context?.bank || context?.selector ? {} : { "data-strata-face": "well" }), type: "radio", name: context?.name, value: props.value,
         ...(context?.required ? { required: true } : {}), ...(context?.invalid ? { "aria-invalid": "true" } : {}),
         ...selection,
         onChange: (event: Event) => { if ((event.target as HTMLInputElement).checked) context?.select(props.value); },
       }, control));
+      // A radio of a selector: its label printed round the dial at its position, the input an invisible overlay on the print.
+      if (context?.selector) return h("label", { ...row, class: classes("ug-rotary__mark", row.class as string), style: [radioAt(context.selector.positions.get(props.value) ?? 0, context.selector.count), row.style as never],
+        "data-strata-value": props.value, "data-strata-selected": String(context.value === props.value), ...(control.disabled !== undefined && control.disabled !== false ? { "data-strata-disabled": "true" } : {}), ...strataAttributes(props) }, [
+        h("span", { class: "ug-rotary__tick", "aria-hidden": "true" }),
+        h("span", { class: "ug-rotary__text" }, [native, slots.default?.()]),
+      ]);
       // A key of a preset bank: the input over the key, the LED on the plinth, the label printed on the cap.
       if (context?.bank) return h("label", { ...row, class: classes("ug-radio", row.class as string), ...strataAttributes(props) }, [
         h("span", { class: "ug-push ug-latch ug-latch--bank", ...(context.colour ? { "data-strata-colour": context.colour } : {}) }, [

@@ -115,6 +115,7 @@ import { advanceSpring, depthScale, INSTRUMENT_CAMERA, keyObject, knobObject, kn
   type InstrumentProfile, type InstrumentRecipe, type KnobSpring } from "./instrument.ts";
 import { characterMaterials } from "./instrument-character.ts";
 import { faderMaterials, faderObject, faderParts, faderSpring } from "./instrument-fader.ts";
+import { wheelHeight, wheelObject } from "./instrument-wheel.ts";
 import { switchHeight, switchMaterials, switchObject } from "./instrument-switch.ts";
 import { plateMargin, plateMaterials, plateObject, plateParts, plateTokenDefaults, type PlateForm, type PlateOpen } from "./instrument-plate.ts";
 import type { StrataSwitchForm } from "../shared/switch-forms.ts";
@@ -1091,6 +1092,16 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     const t = follow(input, springOf("fader", faderSpring));
     const state = context.states(carriage), box = rectWithin(input, panel), slotBox = rectWithin(slot, panel);
     if (box[2] <= 0 || box[3] <= 0 || slotBox[2] <= 0 || slotBox[3] <= 0) continue;
+    // A thumbwheel (the Slider's `wheel` form): the roller stays in the slot and rolls under the value; its ridges are the part's geometry (`instrument-wheel.ts`).
+    if (root.matches(".ug-fader--wheel")) {
+      const read = reader(root);
+      objects.push(wheelObject({ id: idOf(input, "wheel"), box, slot: slotBox, t, scale, light, sweep: read.number("wheel.sweep", 150), ridges: read.number("wheel.ridges", 12),
+        state: { hover: state.hover, disabled: state.disabled }, relief: { rect: rectWithin(carriage, panel), height: raised, material: use("faderCap") } }, profile));
+      use("faderChamfer"); use("faderInk");
+      options.domes?.add(carriage);
+      tallest = Math.max(tallest, wheelHeight(scale));
+      continue;
+    }
     const vertical = !root.matches(".ug-fader--horizontal");
     // The carriage's caster is capped where its shadow would leave the box (full depth), so the shadow stays in it.
     objects.push(faderObject({ id: idOf(input, "fader"), box, slot: slotBox, vertical, t, scale, light, state: { hover: state.hover, disabled: state.disabled },
@@ -1260,14 +1271,17 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
   // CSS throw (`--strata-push-t`), and a latching button's LED.
   const mine = found.get(panel);
   for (const root of mine?.rotaries ?? []) {
+    // A Select's selector has its select to follow; a RadioGroup's (`.ug-rotary--group`) has its dial's box and the checked radio (the cap rests at the first position when none is).
     const select = root.querySelector<HTMLSelectElement>(".ug-rotary__select"), skirt = root.querySelector(".ug-rotary__skirt"), cap = root.querySelector(".ug-rotary__cap");
-    if (!select || !skirt || !cap || objects.length + entries.length >= 255) continue;
-    const box = rectWithin(select, panel);
+    const radios = select ? [] : [...root.querySelectorAll<HTMLInputElement>(".ug-rotary__radio")], host = select ?? (radios.length ? root.querySelector<HTMLElement>(".ug-rotary__dial") : null);
+    if (!host || !skirt || !cap || objects.length + entries.length >= 255) continue;
+    const box = rectWithin(host, panel);
     if (box[2] <= 0 || box[3] <= 0) continue;
-    const t = followSpring(options.springs, options.moving, select, rotaryFraction(Math.max(0, select.selectedIndex), select.options.length), knobSprings.detent, now, instant);
+    const index = select ? Math.max(0, select.selectedIndex) : Math.max(0, radios.findIndex(radio => radio.checked)), count = select ? select.options.length : radios.length;
+    const t = followSpring(options.springs, options.moving, host, rotaryFraction(index, count), knobSprings.detent, now, instant);
     const state = context.states(skirt);
-    objects.push(knobObject({ id: idOf(select, "rotary"), box, skirt: rectWithin(skirt, panel)[2], cap: rectWithin(cap, panel)[2], t, sweep: reader(root).number("knob.sweep", 270), scale,
-      state: { hover: state.hover, disabled: state.disabled }, relief: { height: raised, material: use("knobCap") } }, profile));
+    objects.push(knobObject({ id: idOf(host, "rotary"), box, skirt: rectWithin(skirt, panel)[2], cap: rectWithin(cap, panel)[2], t, sweep: reader(root).number("knob.sweep", 270), scale,
+      state: { hover: state.hover, disabled: state.disabled || (!select && !!root.closest("fieldset:disabled")) }, relief: { height: raised, material: use("knobCap") } }, profile));
     for (const name of ["knobSkirt", "knobChamfer", "knobInk"]) use(name);
     options.domes?.add(skirt); options.domes?.add(cap);
     tallest = Math.max(tallest, (2.5 + 16 + 1.2) * scale);

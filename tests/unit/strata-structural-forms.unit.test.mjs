@@ -27,11 +27,12 @@ sourceImports.deregister();
 const css = readFileSync(new URL("../../packages/ui/src/css/components.css", import.meta.url), "utf8");
 const round = value => Math.round(value * 1000) / 1000;
 
-test("a Slider takes `knob` or `fader` as a form; `flush`, `wheel` and every other string are not drawn forms, and only the others are native form owners", () => {
+test("a Slider takes `knob`, `fader` or `wheel` as a form; `flush` and every other string are not drawn forms, and only the others are native form owners", () => {
   assert.equal(SLIDER_FLUSH, "flush");
   assert.equal(sliderForm("knob"), "knob");
   assert.equal(sliderForm("fader"), "fader");
-  for (const form of ["flush", "wheel", "settings", "", undefined, null, 3]) assert.equal(sliderForm(form), undefined, String(form));
+  assert.equal(sliderForm("wheel"), "wheel");
+  for (const form of ["flush", "settings", "", undefined, null, 3]) assert.equal(sliderForm(form), undefined, String(form));
   // `form` is also the native attribute (the id of a form owner): the reserved names are never one.
   for (const form of ["flush", "knob", "fader", "wheel", undefined, 3]) assert.equal(sliderOwner(form), undefined, String(form));
   assert.equal(sliderOwner("settings"), "settings");

@@ -9,7 +9,7 @@ import { attachStrataKnobs } from "../dom/knob.ts";
 import type { FaderMark } from "../shared/fader.ts";
 import type { KnobMark } from "../shared/knob.ts";
 import { sliderForm, sliderFormModel, sliderNumber, sliderOwner } from "../shared/slider-forms.ts";
-import { displayAttributes, displayClasses, displayMarkup, isTextForm, type StrataDisplayBacklight } from "../shared/display.ts";
+import { displayAttributes, displayClasses, displayMarkup, isTextForm, type StrataDisplayBacklight, type StrataDisplaySegments } from "../shared/display.ts";
 import { classes, fieldKey, strataAttributes, strataProps, useFieldControl, type FieldControl } from "./shared.ts";
 
 export const Field = defineComponent({
@@ -75,6 +75,8 @@ export const TextField = defineComponent({
     backlight: { type: String as PropType<StrataDisplayBacklight>, default: undefined },
     /** A display's backlight is lit by default; `false` switches it off. */
     lit: { type: Boolean, default: undefined },
+    /** The segments look (anatomy page `display.md`, section 11): the text in a seven-segment face with the unlit segments faintly printed behind it. Only with `form="display"`. */
+    segments: { type: [Boolean, String] as PropType<StrataDisplaySegments>, default: undefined },
     ...strataProps,
   },
   emits: ["update:modelValue"],
@@ -89,7 +91,7 @@ export const TextField = defineComponent({
       const native = mergeProps({ ...field?.value, ...(props.invalid ? { "aria-invalid": "true" } : {}), ...(props.form !== undefined && !display ? { form: props.form } : {}), ...(display ? {} : { style }),
         ...model(props, emit, target => target.value), ref: input }, rest);
       if (display) {
-        return h("span", { class: classes(...displayClasses(false), className as string), style, ...strataAttributes(props), ...displayAttributes({ backlight: props.backlight, lit: props.lit }) }, [
+        return h("span", { class: classes(...displayClasses(false), className as string), style, ...strataAttributes(props), ...displayAttributes({ backlight: props.backlight, lit: props.lit, segments: props.segments }) }, [
           displayObject(), h("input", { ...native, class: "ug-display__text" }),
         ]);
       }
@@ -134,8 +136,8 @@ export const Slider = defineComponent({
     /** Initial value when uncontrolled, written as the `value` attribute. */
     defaultValue: { type: Number, default: undefined },
     /**
-     * `knob` or `fader` draws the same native input as the Knob's or the Fader's object (the Fader's horizontal); `flush` and no form
-     * are the groove slider, and `wheel` is reserved. Any other string is the native `form` attribute (the id of a form owner), as before.
+     * `knob`, `fader` or `wheel` draws the same native input as the Knob's or the Fader's object (the Fader's horizontal), or as a thumbwheel: a ridged
+     * roller rolling in a slot on the Fader's track; `flush` and no form are the groove slider. Any other string is the native `form` attribute (the id of a form owner), as before.
      * With a form, `class` and `style` reach the drawn root and every other attribute the input.
      */
     form: { type: String, default: undefined },
@@ -143,9 +145,9 @@ export const Slider = defineComponent({
     marks: { type: [Number, Array] as PropType<number | readonly (number | KnobMark | FaderMark)[]>, default: undefined },
     /** A form's stepped positions, each a detent. */
     detents: { type: Number, default: undefined },
-    /** A knob's turn from minimum to maximum in degrees; the `knob.sweep` token (270) by default. */
+    /** A knob's turn from minimum to maximum in degrees (the `knob.sweep` token, 270); a wheel's roll over the range (`wheel.sweep`, 150, at most 180). */
     sweep: { type: Number, default: undefined },
-    /** A fader's carriage travel in CSS px; the size's `size.fader` by default. */
+    /** A fader's carriage travel in CSS px (`size.fader` by default); a wheel's drag travel (0.4 of that by default). */
     travel: { type: Number, default: undefined },
     /** A form's unit for `aria-valuetext`, appended as written (" dB", "%"). */
     unit: { type: String, default: undefined },
@@ -161,7 +163,7 @@ export const Slider = defineComponent({
     const generated = (useId() ?? "").replace(/[^a-zA-Z0-9_-]/g, "");
     const own = ref(sliderNumber(props.defaultValue ?? props.modelValue ?? attrs.min, 0));
     const initial = own.value;
-    const attach = () => { const formed = sliderForm(props.form); if (formed === "knob") attachStrataKnobs(); else if (formed === "fader") attachStrataFaders(); };
+    const attach = () => { const formed = sliderForm(props.form); if (formed === "knob") attachStrataKnobs(); else if (formed === "fader" || formed === "wheel") attachStrataFaders(); };
     onMounted(attach);
     watch(() => props.form, attach);
     return () => {
@@ -209,7 +211,9 @@ export const Slider = defineComponent({
           : h("div", { class: "ug-fader__track" }, [
             h("span", { class: "ug-fader__scale", "aria-hidden": "true" }, scale),
             h("span", { class: "ug-fader__slot", "data-strata-face": "groove", "aria-hidden": "true" }),
-            h("span", { class: "ug-fader__carriage", "data-strata-face": "raised", "aria-hidden": "true" }, [h("span", { class: "ug-fader__grip" })]),
+            formed === "wheel"
+              ? h("span", { class: "ug-fader__carriage ug-fader__wheel", "data-strata-face": "raised", "aria-hidden": "true" }, [h("span", { class: "ug-fader__ridges" })])
+              : h("span", { class: "ug-fader__carriage", "data-strata-face": "raised", "aria-hidden": "true" }, [h("span", { class: "ug-fader__grip" })]),
             control,
           ]),
       ]);

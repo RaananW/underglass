@@ -171,11 +171,11 @@ function StepButton({ step, disabled }: { step: -1 | 1; disabled?: boolean }) {
 
 export interface SliderProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "size" | "form">, StrataProps, SliderFormOptions {
   /**
-   * `knob` or `fader` draws the same native input as the Knob's or the Fader's object (the Fader's horizontal); `flush` and no form
-   * are the groove slider, and `wheel` is reserved. Any other string is the native `form` attribute (the id of a form owner), as before.
+   * `knob`, `fader` or `wheel` draws the same native input as the Knob's or the Fader's object (the Fader's horizontal), or as a thumbwheel: a ridged
+   * roller rolling in a slot on the Fader's track; `flush` and no form are the groove slider. Any other string is the native `form` attribute (the id of a form owner), as before.
    * With a form, `className` and `style` reach the drawn root and every other attribute the input.
    */
-  form?: StrataSliderForm | "flush" | "wheel" | (string & {});
+  form?: StrataSliderForm | "flush" | (string & {});
 }
 
 export const Slider = forwardRef<HTMLInputElement, SliderProps>(function Slider(
@@ -214,6 +214,7 @@ const SliderObject = forwardRef<HTMLInputElement, Omit<SliderProps, "form"> & { 
   const current = value !== undefined ? sliderNumber(value, low) : own;
   const model = sliderFormModel(form, { value: current, min: low, max: sliderNumber(max, 100), step: step !== undefined ? sliderNumber(step, 1) : undefined, marks, detents, sweep, travel, unit, format });
   useEffect(() => { if (form === "knob") attachStrataKnobs(); else attachStrataFaders(); }, [form]);
+  const wheel = form === "wheel";
   const knob = form === "knob", part = knob ? "knob" : "fader";
   const control = (
     <input
@@ -252,7 +253,9 @@ const SliderObject = forwardRef<HTMLInputElement, Omit<SliderProps, "form"> & { 
         <div className="ug-fader__track">
           <span className="ug-fader__scale" aria-hidden="true">{scale}</span>
           <span className="ug-fader__slot" data-strata-face="groove" aria-hidden="true" />
-          <span className="ug-fader__carriage" data-strata-face="raised" aria-hidden="true"><span className="ug-fader__grip" /></span>
+          {wheel
+            ? <span className="ug-fader__carriage ug-fader__wheel" data-strata-face="raised" aria-hidden="true"><span className="ug-fader__ridges" /></span>
+            : <span className="ug-fader__carriage" data-strata-face="raised" aria-hidden="true"><span className="ug-fader__grip" /></span>}
           {control}
         </div>
       )}

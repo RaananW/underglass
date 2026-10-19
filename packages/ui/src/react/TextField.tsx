@@ -8,7 +8,7 @@
  */
 import { forwardRef, type CSSProperties, type InputHTMLAttributes, type ReactNode } from "react";
 import { useFieldControl } from "./Field.tsx";
-import { displayAttributes, displayClasses, displayMarkup, isTextForm, type StrataDisplayBacklight, type StrataTextForm } from "../shared/display.ts";
+import { displayAttributes, displayClasses, displayMarkup, isTextForm, type StrataDisplayBacklight, type StrataDisplaySegments, type StrataTextForm } from "../shared/display.ts";
 import { classes, strataAttributes, type StrataProps } from "./shared.ts";
 
 export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "size" | "form">, StrataProps {
@@ -22,6 +22,8 @@ export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElemen
   backlight?: StrataDisplayBacklight;
   /** A display's backlight is lit by default; `false` switches it off. */
   lit?: boolean;
+  /** The segments look (anatomy page `display.md`, section 11): the text in a seven-segment face with the unlit segments faintly printed behind it. Only with `form="display"`. */
+  segments?: StrataDisplaySegments;
 }
 
 /** The decorative object of a display: a bezel with the window in it, under the native element. */
@@ -36,7 +38,7 @@ export function DisplayObject() {
 }
 
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
-  { invalid, icon, form, backlight, lit, size, material, level, className, style, ...rest }, ref,
+  { invalid, icon, form, backlight, lit, segments, size, material, level, className, style, ...rest }, ref,
 ) {
   const field = useFieldControl();
   const strata = strataAttributes({ size, material, level });
@@ -44,7 +46,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   const native = { ...field, ...(invalid ? { "aria-invalid": true as const } : {}), ...(form !== undefined && !display ? { form } : {}), ...(display ? {} : { style }), ...rest };
   if (display) {
     return (
-      <span className={classes(...displayClasses(false), className)} style={style as CSSProperties | undefined} {...strata} {...displayAttributes({ backlight, lit })}>
+      <span className={classes(...displayClasses(false), className)} style={style as CSSProperties | undefined} {...strata} {...displayAttributes({ backlight, lit, segments })}>
         <DisplayObject />
         <input ref={ref} className="ug-display__text" {...native} />
       </span>

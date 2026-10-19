@@ -6,7 +6,7 @@
  * never submitted with a form: a value that must submit is a TextField with `form="display"` and `readonly`. The native
  * attributes (`id`, `name`, `for`, `aria-*`) reach the `<output>`; `class` and `style` go on the display's root.
  */
-import { displayAttributes, displayClasses, displayMarkup, type StrataDisplayBacklight, type StrataDisplayLive } from "../shared/display.ts";
+import { displayAttributes, displayClasses, displayMarkup, type StrataDisplayBacklight, type StrataDisplayLive, type StrataDisplaySegments } from "../shared/display.ts";
 import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
 
 interface Props {
@@ -18,6 +18,8 @@ interface Props {
   backlight?: StrataDisplayBacklight;
   /** The backlight is lit by default; `false` switches it off. */
   lit?: boolean;
+  /** The segments look (anatomy page `display.md`, section 11): the text in a seven-segment face with the unlit segments faintly printed behind it. */
+  segments?: StrataDisplaySegments;
   size?: StrataSize;
   material?: string;
   level?: StrataLevel;
@@ -26,6 +28,6 @@ interface Props {
   [attribute: string]: unknown;
 }
 
-const { label, live, backlight, lit, size, material, level, class: className, style, ...rest } = Astro.props;
+const { label, live, backlight, lit, segments, size, material, level, class: className, style, ...rest } = Astro.props;
 ---
-<span class={classes(...displayClasses(true), className)} style={style} {...strataAttributes({ size, material, level })} {...displayAttributes({ backlight, lit })}><span class="ug-display__object" aria-hidden="true"><span class={displayMarkup.bezel.className} data-strata-face={displayMarkup.bezel.face}><span class={displayMarkup.window.className} data-strata-face={displayMarkup.window.face}></span></span></span><output class="ug-display__text" aria-label={label} aria-live={live === "off" || live === "assertive" ? live : undefined} {...rest}><slot /></output></span>
+<span class={classes(...displayClasses(true), className)} style={style} {...strataAttributes({ size, material, level })} {...displayAttributes({ backlight, lit, segments })}><span class="ug-display__object" aria-hidden="true"><span class={displayMarkup.bezel.className} data-strata-face={displayMarkup.bezel.face}><span class={displayMarkup.window.className} data-strata-face={displayMarkup.window.face}></span></span></span><output class="ug-display__text" aria-label={label} aria-live={live === "off" || live === "assertive" ? live : undefined} {...rest}><slot /></output></span>

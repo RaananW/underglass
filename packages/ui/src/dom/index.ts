@@ -23,7 +23,7 @@ export { attachStrataTrees, rovingStrataTree, strataTreeAction, strataTreeTabSto
 export type { StrataTreeAction } from "./tree.ts";
 export { attachStrataFaders, syncStrataFader } from "./fader.ts";
 export { attachStrataPushButtons } from "./push-button.ts";
-export { attachStrataRotarySelectors, syncStrataRotarySelector } from "./rotary-selector.ts";
+export { attachStrataRotarySelectors, syncStrataRadioSelector, syncStrataRotarySelector } from "./rotary-selector.ts";
 export { attachStrataSelectDisplays, stepStrataSelect } from "./select-display.ts";
 export { attachStrataCarousels, showStrataSlide, strataSlideIndex, strataSlideTarget } from "./carousel.ts";
 export { attachStrataMenus, strataMenuTarget } from "./menu.ts";

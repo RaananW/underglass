@@ -96,7 +96,7 @@ const soundOn = (state: FeedbackState, element: Element) => !state.options.muted
 const hapticsOn = (state: FeedbackState, element: Element) => !state.options.muted && (state.options.haptics ?? token(element, "haptics"))
   && !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
 /** The Instrument controls feedback belongs to (the switch forms, faders, knobs and lamps; a lamp's row, since a press on its label is a press on it). */
-const controls = ".ug-switch[data-strata-form] .ug-switch__input, .ug-knob__input, .ug-fader__input, .ug-lamp, .ug-push, .ug-rotary__select, .ug-jog-wheel__input, .ug-patch-point";
+const controls = ".ug-switch[data-strata-form] .ug-switch__input, .ug-knob__input, .ug-fader__input, .ug-lamp, .ug-push, .ug-rotary__select, .ug-rotary__radio, .ug-jog-wheel__input, .ug-patch-point";
 /** Those, and the Pad and the Keypad's keys (`dom/pad.ts`, `dom/keypad.ts`): a gesture on one is the visitor's own input, and its press plays `click`. */
 const withPads = `${controls}, .ug-pad, .ug-keypad__key`;
 

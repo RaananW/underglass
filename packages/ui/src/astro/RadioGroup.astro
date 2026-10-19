@@ -5,11 +5,13 @@
  * joins the help in the fieldset's description. Arrow keys, Tab and Space are native. `form="bank"` draws the group as a preset
  * bank (*Latching forms*): interlocking latching buttons on one plinth, one down at a time, each label printed on its cap, with a
  * `colour` for the LEDs; `flush`, or no `form`, is the look it had before, and any other string is the native `form` attribute of
- * the fieldset, as before.
+ * the fieldset, as before. `form="selector"` draws it as the RotarySelector's dial over the same native radios (2 to 8 options of at most 12
+ * characters, otherwise it is drawn as a bank): one detent per radio, each label printed round the dial, the radio an invisible overlay on its print.
  */
 import { nextId } from "./field.ts";
 import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
-import { bankForm, bankMarkup, nativeForm } from "../shared/latching-forms.ts";
+import { bankMarkup } from "../shared/latching-forms.ts";
+import { radioAt, radioForm, radioFormFor, radioOwner, radioSelectorModel, type StrataRadioForm } from "../shared/radio-forms.ts";
 import type { StrataLampColour } from "../shared/lamp.ts";
 import Behaviour from "./Behaviour.astro";
 
@@ -24,8 +26,10 @@ interface Props {
   error?: string;
   required?: boolean;
   errorPrefix?: string;
-  /** The form: `bank`; `flush` is today's look; any other string is the native `form` attribute of the fieldset. */
-  form?: "bank" | "flush" | (string & {});
+  /** The form: `bank` or `selector`; `flush` is today's look; any other string is the native `form` attribute of the fieldset. */
+  form?: StrataRadioForm | "flush" | (string & {});
+  /** A selector's turn from the first to the last radio in degrees; the `knob.sweep` token (270) by default. */
+  sweep?: number;
   /** The LEDs' colour of a bank. */
   colour?: StrataLampColour;
   size?: StrataSize;
@@ -35,13 +39,24 @@ interface Props {
   [attribute: string]: unknown;
 }
 
-const { legend, options, name = nextId("radio"), value, help, error, required, errorPrefix = "Error:", form, colour, size, material, level, class: className, ...rest } = Astro.props;
-const bank = bankForm(form), owner = nativeForm(form, "bank");
+const { legend, options, name = nextId("radio"), value, help, error, required, errorPrefix = "Error:", form, sweep, colour, size, material, level, class: className, ...rest } = Astro.props;
+const drawn = radioFormFor(radioForm(form), options), bank = drawn === "bank" ? "bank" : undefined, selector = drawn === "selector", owner = radioOwner(form);
+const model = selector ? radioSelectorModel(options, value, sweep) : undefined;
 const describedBy = [help ? `${name}-help` : "", error ? `${name}-error` : ""].filter(Boolean).join(" ") || undefined;
 ---
-<fieldset class={classes("ug-radio-group", className)} aria-describedby={describedBy} data-strata-form={bank} form={owner} {...strataAttributes({ size, material, level })} {...rest}>
+<fieldset class={classes("ug-radio-group", className)} aria-describedby={describedBy} data-strata-form={drawn} form={owner} {...strataAttributes({ size, material, level })} {...rest}>
   <legend class="ug-radio-group__legend">{legend}</legend>
-  {bank
+  {model
+    ? <div class="ug-rotary ug-rotary--group" style={model.style}>
+        <div class="ug-rotary__dial">
+          <span class="ug-rotary__scale">{options.map((option, index) => (
+            <label class="ug-rotary__mark" style={radioAt(index, options.length)} data-strata-value={option.value} data-strata-selected={String(option.value === value)} data-strata-disabled={option.disabled ? "true" : undefined}><span class="ug-rotary__tick" aria-hidden="true"></span><span class="ug-rotary__text"><input class="ug-rotary__radio" type="radio" name={name} value={option.value} checked={option.value === value} disabled={option.disabled} required={required} aria-invalid={error ? "true" : undefined} />{option.label}</span></label>
+          ))}</span>
+          <span class="ug-rotary__skirt" data-strata-face="raised" aria-hidden="true"><span class="ug-rotary__cap" data-strata-face="raised"><span class="ug-rotary__pointer"></span></span></span>
+        </div>
+        <ol class="ug-rotary__legend" aria-hidden="true">{options.map(option => <li data-strata-selected={String(option.value === value)}>{option.label}</li>)}</ol>
+      </div>
+    : bank
     ? <div class="ug-bank__plinth" data-strata-face="raised">{options.map(option => (
         <label class="ug-radio"><span class="ug-push ug-latch ug-latch--bank" data-strata-colour={colour}><input class="ug-radio__input" type="radio" name={name} value={option.value} checked={option.value === value} disabled={option.disabled} required={required} aria-invalid={error ? "true" : undefined} /><span class="ug-push__object" aria-hidden="true">{bankMarkup.map(part => <span class={part.className} data-strata-face={part.face}></span>)}</span><span class="ug-push__cap" data-strata-face="raised"><span class="ug-radio__label">{option.label}</span></span></span></label>
       ))}</div>
@@ -51,4 +66,4 @@ const describedBy = [help ? `${name}-help` : "", error ? `${name}-error` : ""].f
   {help && <p class="ug-field__help" id={`${name}-help`}>{help}</p>}
   {error && <p class="ug-field__error" id={`${name}-error`}>{`${errorPrefix} ${error}`}</p>}
 </fieldset>
-{bank && <Behaviour />}
+{(bank || selector) && <Behaviour />}
