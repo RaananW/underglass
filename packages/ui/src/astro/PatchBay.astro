@@ -1,0 +1,27 @@
+---
+/**
+ * PatchBay (anatomy page `patch-point.md`): a `<fieldset>` of PatchPoints on one plinth, named by its `legend`. `columns` fixes its
+ * columns (as many as fit, by default). `disabled` disables every jack in it. The slot is the PatchPoints; `class`, `style` and other
+ * attributes reach the fieldset.
+ */
+import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+import { patchBayModel } from "../shared/patch-point.ts";
+
+interface Props {
+  /** The legend, which names the group. */
+  legend: string;
+  /** Fixed columns; as many as fit by default. */
+  columns?: number;
+  size?: StrataSize;
+  material?: string;
+  level?: StrataLevel;
+  class?: string;
+  style?: string;
+  [attribute: string]: unknown;
+}
+
+const { legend, columns, size, material, level, class: className, style, ...rest } = Astro.props;
+const model = patchBayModel({ columns });
+const inline = [model.style, style].filter(Boolean).join(" ") || undefined;
+---
+<fieldset class={classes("ug-patch-bay", className)} data-strata-face="raised" {...strataAttributes({ size, material, level })} style={inline} {...rest}><legend class="ug-patch-bay__legend">{legend}</legend><div class="ug-patch-bay__jacks"><slot /></div></fieldset>

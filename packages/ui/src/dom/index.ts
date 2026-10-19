@@ -28,6 +28,8 @@ export { attachStrataCarousels, showStrataSlide, strataSlideIndex, strataSlideTa
 export { attachStrataMenus, strataMenuTarget } from "./menu.ts";
 export { attachStrataKnobs, syncStrataKnob } from "./knob.ts";
 export { attachStrataLamps } from "./lamp.ts";
+export { attachStrataJogWheels, flingStrataJogWheel, liveStrataJog, syncStrataJogWheel } from "./jog-wheel.ts";
+export { attachStrataPatchPoints } from "./patch-point.ts";
 export { attachStrataMeters, driveStrataMeter, liveStrataMeter, releaseStrataMeter, syncStrataMeter } from "./meter.ts";
 export { attachStrataGauges, syncStrataGauge } from "./gauge.ts";
 export { attachStrataProgress, syncStrataProgress } from "./progress.ts";
