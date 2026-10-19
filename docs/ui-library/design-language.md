@@ -1316,6 +1316,36 @@ owner's look sign-off; the decisions and what was judged are in [instrument-char
 A character may not set `light.*`, so studio's lower, warmer key is the application's choice
 (`createStrataTheme({ character: "studio", light: { elevation: 33 } })`), not the character's.
 
+**Hifi.** Home hi-fi of the brushed-champagne and walnut kind: warm champagne aluminium caps with polished chrome rings,
+levers and bezels, oiled-walnut plates by day and black lacquer in the dark, a dial-lamp gold glow, a wide bright soft room,
+heavy slow springs with soft detents, a chunky pointer and a muted, soft sound set. It ships as `characters/hifi.json`, a
+sparse layer that extends premium like studio; `data-strata-character="hifi"` selects it with no new mechanism. Values are
+provisional (†) until the owner's look sign-off; what was judged is in [instrument-characters.md](instrument-characters.md#hifi).
+
+| Token | Premium | Hifi† | Why |
+| --- | --- | --- | --- |
+| `material.roles.knobCap`, `faderCap` | metal | `champagne` | Champagne-silver caps are the receiver's face; warm against the cool chrome |
+| `material.roles.knobSkirt`, `lever`, `bezel` | polished, metal, polished | `chrome` | Polished chrome rings, toggles and bezels |
+| `material.roles.plate`, `rockerPlate` | metal / gunmetal (dark), metal | `walnut` / `lacquer` (dark), `walnut` | Wood by day, black lacquer in the dark (every theme premium names) |
+| `instrument.material.champagne` | none | #e6d9bd, rough 0.3, metallic 1, brush 0.95, grain 0.12 | A warm tint on premium's metal |
+| `instrument.material.walnut` | none | #4a2f1d, rough 0.42, coat 0.3 / 0.3, linear brush 0.35 | Oiled veneer: dark, warm, a satin glint and a faint grain streak |
+| `instrument.material.chrome` | #fafafc, 0.04 | #f4f7fc, 0.03 | Cooler, clearer mirror |
+| `instrument.material.glass` | tint #d6ede6, absorption 0.03, dispersion 0.2 | tint #ecdfc6, 0.05, 0.12 | Warm dial glass, less rainbow |
+| `instrument.ink.cap` | #26282c | #241c12 | Warm near-black on champagne |
+| `colour.glowOn`, `pointerLight.colour` | #ff9228, #fff2e0 | #ffd36b, #ffe9c2 | Incandescent dial lamp, yellower than studio's amber; blue would sit beside the blue accent |
+| `studio.key / keyRadius / fill / front / strip / floor / ceiling` | 12 / 0.24 / 1.2 / 0.12 / 2.5 / 0.03 / 0.25 | 8 / 0.42 / 2.2 / 0.3 / 1.8 / 0.12 / 0.5 | A bright, wide, low-contrast room |
+| `environment.intensity` | 1 | 1.1 | Brighter reflections |
+| `emitter.lamp.radius / strength`, `emitter.led.radius / strength` | 6 / 3200, 6 / 520 | 9 / 3600, 7 / 480 | Bigger, softer dial lamps |
+| `knob.pointer.width` | 2.2 px | 3 px | A bold engraved line on a big knob |
+| `spring.knob / detent / fader` | 420/41, 900/42, 420/41 | 260/32, 600/46, 300/35 | Slow, weighted, soft detents, near critical damping |
+| `spring.slide / rocker / bat / wall / button` | 600/49, 1200/58, 1400/45, 1200/58, 1600/80 | 420/41, 800/57, 900/57, 800/57, 1100/66 | Heavy, damped throws, no bounce |
+| `spring.meter / gauge` | 360/28, 160/20 | 240/24, 120/17 | A needle that settles slowly, with a little overshoot |
+| `feedback.click / tick / thunk / snap` (pitch Hz, decay ms, noise) | 2400/4/0.6, 3200/2/0.3, 140/18/0.25, 1800/6/0.75 | 1800/6/0.35, 2400/3/0.15, 90/28/0.18, 1400/9/0.55 | Muted clicks, soft ticks, a soft thump |
+| `form.switch` | `slide` | `bat` | Chunky chrome toggles; recorded, not yet read by the components |
+
+Serif or wide printed scales are not available: the type tokens carry no per-character face, so the character leaves type
+alone. As with studio, a character may not set `light.*`; its bright room comes from `studio.*`, not the key.
+
 ## 20. Feedback
 
 Instrument controls may click, tick and snap, and pulse under a finger. Feedback is **decorative**: nothing depends on
