@@ -1289,6 +1289,18 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
 
 type Movable = HTMLElement & { [panelMotion]?: PanelMover };
 
+/**
+ * A JogWheel's input carries core's `data-underglass-gpu-value` (api.md, "Input events and captures") exactly while the GPU draws the dimple: its
+ * thumb is never painted, so an `input` changes no pixel. Set and removed with the dimple's dome, so the mark is gone before the next `input` once the
+ * dimple is CSS-painted again (a step-down, `releasePanel`, `detach`). The literal must match core's `GPU_VALUE_ATTRIBUTE` (`ui` does not import core).
+ */
+function markValue(element: Element, on: boolean) {
+  if (!element.matches(".ug-jog-wheel__dimple")) return;
+  const input = element.closest(".ug-jog-wheel")?.querySelector(".ug-jog-wheel__input");
+  if (!input) return;
+  if (on) input.setAttribute("data-underglass-gpu-value", ""); else input.removeAttribute("data-underglass-gpu-value");
+}
+
 /** A plate or tray at the Instrument level: its element, its form, whether the panel motion lifts it and a tray's open side. */
 interface PlateInfo { element: HTMLElement; form: PlateForm; rises: boolean; open?: PlateOpen }
 
@@ -1352,8 +1364,8 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     scene?: string; structure?: string; motion?: Motion; domes: Set<Element>; report?: StrataGpuDiagnostics; warned?: Set<string> }>();
   /** Shows the CSS paint of the elements a panel no longer draws as domes, and hides it on those it now does. */
   const markDomes = (entry: { domes: Set<Element> }, domes: Set<Element>) => {
-    for (const element of entry.domes) if (!domes.has(element)) element.removeAttribute("data-strata-dome");
-    for (const element of domes) if (!element.hasAttribute("data-strata-dome")) element.setAttribute("data-strata-dome", "");
+    for (const element of entry.domes) if (!domes.has(element)) { element.removeAttribute("data-strata-dome"); markValue(element, false); }
+    for (const element of domes) if (!element.hasAttribute("data-strata-dome")) { element.setAttribute("data-strata-dome", ""); markValue(element, true); }
     entry.domes = domes;
   };
   // Scrims under open dialogs: plain layers (no material) that the GPU fades in and out.

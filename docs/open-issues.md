@@ -75,6 +75,10 @@ different from currently failing supported code.
 - **A button whose background colour transitions** creates a new `key ${colour}` material for each frame it is in flight (a key body per colour), so it can push a scene past the rules mid-animation: the conversion trims it, and the warning re-arms when the panel fits again. This predates the cap work and is now visible.
 - **A push button falling back to a Relief key at 12 materials** (resolved with the above): the rule is named `INSTRUMENT_PUSH_MATERIALS`, documented in `button.md` section 11 and reported by `diagnostics` and a once-per-panel warning.
 - **The pointer light is not in the helper yet.** The gallery's `pointer-light.ts` does what the plan says the helper will.
+- **Input events captured (#167): narrowed, resolved for the JogWheel.** An `input` event captures its layer unless its target carries
+  `data-underglass-gpu-value` (`api.md#input-events-and-captures`); the JogWheel's helper marks its input while the GPU draws the dimple, so a
+  flick costs no capture per step. Not marked, by design: a Knob and a Fader (their value is a custom-property write that recaptures anyway,
+  #165: attribute and custom-property writes recapture the layer and are not in scope here), and every control whose native paint shows the value.
 - **A GPU stage cannot take its height from its content** (the content lives in the canvas): the gallery sets `--ig-stage-height` from its panels.
 
 ## Unsupported or untargeted scope
