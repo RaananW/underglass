@@ -123,6 +123,35 @@
   :where(.ug-card__body) { min-width: 0; }
   :where(.ug-card__footer) { display: flex; flex-wrap: wrap; gap: var(--strata-space-3); }
 
+  /* ---- Plate and tray forms: a Card or Panel as a machined plate or a recessed tray, a Dialog as a plate and a Drawer as a tray (anatomy pages card.md, panel.md, dialog.md, drawer.md) ---- */
+
+  /*
+   * The plate: the same slab as before with a tight edge break (half the bevel's width, a stronger highlight) and a brushed
+   * finish, so it reads as machined metal and not as a soft card. No screws. The Instrument level draws the edge as a rim of
+   * parts (`gpu/instrument-plate.ts`); `flush`, or no form, is the slab of before. A Drawer's tray form has the same machined edge.
+   */
+  :where([data-strata-form="plate"], .ug-drawer[data-strata-form="tray"]) {
+    --_bevel: calc(var(--strata-bevel-width) * 0.5);
+    --_gain: calc(var(--strata-bevel-gain) / 0.55 * 1.25);
+    --_finish:
+      repeating-linear-gradient(90deg, rgb(255 255 255 / calc(0.05 * min(1, var(--_gain)))) 0 1px, rgb(0 0 0 / calc(0.04 * min(1, var(--_gain)))) 1px 2.5px),
+      var(--strata-finish-role-panel);
+  }
+  /*
+   * The tray: the content sits in a recessed well with a groove wall (the well recipe above), in the field's colour. A Card's
+   * body is the tray; a Panel wraps what follows its title. The Instrument level adds the wall's parts. A Drawer's tray is the drawer itself: a machined edge like the plate's,
+   * and at the Instrument level walls open on the edge it slides from.
+   */
+  :where(.ug-card__body)[data-strata-face="well"], :where(.ug-panel__tray) {
+    --_finish: var(--strata-finish-role-field);
+    box-sizing: border-box;
+    margin: 0;
+    padding: var(--strata-space-4);
+    border-radius: var(--strata-radius-control);
+    background-color: var(--strata-colour-field);
+  }
+  :where(.ug-panel__tray) { display: block; min-width: 0; }
+
   /* ---- Layout ---- */
 
   /* Components have no outer margin; these put the design language's gaps between them (section 13), scaled by
@@ -3602,6 +3631,26 @@
     to { opacity: 0; transform: perspective(var(--strata-camera-distance)) translateZ(var(--strata-elevation-modal)) rotateX(var(--_tilt)); }
   }
 
+  /*
+   * A tray Drawer slides out of its edge and back into it, in place of the depth motion: the panel travels its own width or height
+   * (`translate` in percent of itself) fading as it goes. Named `ug-panel-*`, so `strataEnter` and `strataLeave` wait for it. On the
+   * GPU the layer slides (`gpu/index.ts`), and in face mode and under reduced motion there is no CSS motion.
+   */
+  :where(.ug-drawer--end) { --_slide-x: 100%; --_slide-y: 0%; }
+  :where(.ug-drawer--start) { --_slide-x: -100%; --_slide-y: 0%; }
+  :where(.ug-drawer--top) { --_slide-x: 0%; --_slide-y: -100%; }
+  :where(.ug-drawer--bottom) { --_slide-x: 0%; --_slide-y: 100%; }
+  :where(.ug-drawer--end:dir(rtl), .ug-drawer--start:dir(rtl)) { --_slide-x: calc(-1 * var(--_slide-x)); }
+  :where(.ug-drawer)[data-strata-form="tray"][data-strata-motion="enter"] { animation-name: ug-panel-slide-enter; }
+  :where(.ug-drawer)[data-strata-form="tray"][data-strata-motion="leave"] { animation-name: ug-panel-slide-leave; }
+  @keyframes ug-panel-slide-enter {
+    from { opacity: 0; transform: translate(var(--_slide-x), var(--_slide-y)); }
+  }
+  @keyframes ug-panel-slide-leave {
+    from { opacity: 1; transform: none; }
+    to { opacity: 0; transform: translate(var(--_slide-x), var(--_slide-y)); }
+  }
+
   @keyframes ug-progress-sweep { from { background-position: -40% 0; } to { background-position: 140% 0; } }
   @keyframes ug-spinner-turn { to { rotate: 1turn; } }
 
@@ -3642,6 +3691,7 @@
   :where([data-strata-mode="face"]) .ug-lamp__bezel[data-strata-dome] { border-color: transparent; }
   /* Under the GPU, an enrolled panel's boundary never carries a CSS transform: the GPU presentation moves it. */
   :where([data-strata-mode="face"]):is(.ug-panel, .ug-card)[data-strata-motion], :where([data-strata-mode="face"]) :is(.ug-panel, .ug-card)[data-strata-motion] { animation: none; }
+  :where([data-strata-mode="face"]).ug-drawer[data-strata-form="tray"][data-strata-motion] { animation: none; }
 
   /* ---- Preferences ---- */
 
@@ -3654,6 +3704,7 @@
     :where(.ug-carousel__slide) { transition: none; }
     :where(.ug-scrim) { transition: none; }
     :where(.ug-panel, .ug-card)[data-strata-motion] { animation: none; }
+    :where(.ug-drawer)[data-strata-form="tray"][data-strata-motion] { animation: none; }
     :where(.ug-spinner__label) { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
     :where(.ug-skeleton) { animation: none; background-image: none; }
     :where(.ug-tooltip, .ug-toast, .ug-popover, .ug-menu) { transition: none; }
@@ -3707,6 +3758,7 @@
     :where(.ug-fader:has(.ug-fader__input:disabled)) :where(.ug-fader__carriage) { border-color: GrayText; }
     :where(.ug-fader:has(.ug-fader__input:disabled)) :where(.ug-fader__slot, .ug-fader__grip) { background: GrayText; }
     :where(.ug-panel, .ug-card) { border: 1px solid CanvasText; }
+    :where(.ug-card__body)[data-strata-face="well"], :where(.ug-panel__tray) { border: 1px solid CanvasText; background-color: Canvas; }
     :where(.ug-scrim) { forced-color-adjust: none; }
     :where(.ug-button, .ug-icon-button, .ug-toggle-button, .ug-select, .ug-button-group, .ug-toolbar) { border: 1px solid ButtonBorder; }
     :where(.ug-toggle-button[aria-pressed="true"]) { forced-color-adjust: none; background-color: Highlight; color: HighlightText; }

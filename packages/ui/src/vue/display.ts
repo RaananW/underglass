@@ -8,6 +8,7 @@ import { computed, defineComponent, h, onMounted, onUpdated, useId, type PropTyp
 import { attachStrataProgress } from "../dom/progress.ts";
 import { badgeForm, badgeLensMarkup, lensStyle, progressForm, progressFraction, progressSegmentCount, progressSegments, progressStyle, spinnerForm, spinnerLensIndices } from "../shared/indicator-forms.ts";
 import type { StrataLampColour } from "../shared/lamp.ts";
+import { PANEL_TRAY_CLASS, surfaceForm, type StrataSurfaceForm } from "../shared/structure-forms.ts";
 import { classes, splitAttrs, strataAttributes, strataProps, useFieldControl } from "./shared.ts";
 
 type Elevation = "ground" | "raised" | "floating" | "overlay" | "modal";
@@ -22,15 +23,21 @@ export const Panel = defineComponent({
     titleLevel: { type: Number as PropType<2 | 3 | 4 | 5 | 6>, default: 2 },
     titleId: { type: String, default: undefined },
     elevation: { type: String as PropType<Elevation>, default: "floating" },
+    /** `plate`: a machined plate. `tray`: the content sits in a recessed tray. `flush` or none: the panel of before. */
+    form: { type: String as PropType<StrataSurfaceForm | "flush">, default: undefined },
     ...strataProps,
   },
   setup(props, { slots }) {
     const generated = useId();
     const id = computed(() => headingId(props.titleId, generated, "panel-title"));
-    return () => h("section", {
-      class: "ug-panel", "data-strata-face": "raised", "data-strata-elevation": props.elevation,
-      "aria-labelledby": props.title !== undefined ? id.value : undefined, ...strataAttributes(props),
-    }, [props.title !== undefined && h(`h${props.titleLevel}`, { id: id.value }, props.title), slots.default?.()]);
+    return () => {
+      const formed = surfaceForm(props.form);
+      return h("section", {
+        class: "ug-panel", "data-strata-face": "raised", "data-strata-elevation": props.elevation,
+        "aria-labelledby": props.title !== undefined ? id.value : undefined, ...(formed ? { "data-strata-form": formed } : {}), ...strataAttributes(props),
+      }, [props.title !== undefined && h(`h${props.titleLevel}`, { id: id.value }, props.title),
+        formed === "tray" ? h("div", { class: PANEL_TRAY_CLASS, "data-strata-face": "well" }, slots.default?.()) : slots.default?.()]);
+    };
   },
 });
 
@@ -41,18 +48,23 @@ export const Card = defineComponent({
     titleLevel: { type: Number as PropType<2 | 3 | 4 | 5 | 6>, default: 3 },
     titleId: { type: String, default: undefined },
     as: { type: String as PropType<"article" | "section" | "div">, default: "article" },
+    /** `plate`: a machined plate. `tray`: the body sits in a recessed tray. `flush` or none: the card of before. */
+    form: { type: String as PropType<StrataSurfaceForm | "flush">, default: undefined },
     ...strataProps,
   },
   setup(props, { slots }) {
     const generated = useId();
     const id = computed(() => headingId(props.titleId, generated, "card-title"));
-    return () => h(props.as, {
-      class: "ug-card", "data-strata-face": "raised", "aria-labelledby": props.title !== undefined ? id.value : undefined, ...strataAttributes(props),
-    }, [
-      props.title !== undefined && h(`h${props.titleLevel}`, { id: id.value, class: "ug-card__title" }, props.title),
-      h("div", { class: "ug-card__body" }, slots.default?.()),
-      slots.footer && h("div", { class: "ug-card__footer" }, slots.footer()),
-    ]);
+    return () => {
+      const formed = surfaceForm(props.form);
+      return h(props.as, {
+        class: "ug-card", "data-strata-face": "raised", "aria-labelledby": props.title !== undefined ? id.value : undefined, ...(formed ? { "data-strata-form": formed } : {}), ...strataAttributes(props),
+      }, [
+        props.title !== undefined && h(`h${props.titleLevel}`, { id: id.value, class: "ug-card__title" }, props.title),
+        h("div", { class: "ug-card__body", ...(formed === "tray" ? { "data-strata-face": "well" } : {}) }, slots.default?.()),
+        slots.footer && h("div", { class: "ug-card__footer" }, slots.footer()),
+      ]);
+    };
   },
 });
 

@@ -7,6 +7,7 @@
  */
 import Behaviour from "./Behaviour.astro";
 import { nextId } from "./field.ts";
+import { drawerForm, type StrataDrawerForm } from "../shared/structure-forms.ts";
 import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
 
 interface Props {
@@ -15,6 +16,8 @@ interface Props {
   descriptionId?: string;
   description?: string;
   side?: "start" | "end" | "top" | "bottom";
+  /** `tray`: a recessed tray that slides out of the chassis edge when it opens. `flush` or none: the drawer of before. */
+  form?: StrataDrawerForm | "flush";
   size?: StrataSize;
   material?: string;
   level?: StrataLevel;
@@ -24,12 +27,13 @@ interface Props {
   [attribute: string]: unknown;
 }
 
-const { title, titleId, descriptionId: givenDescriptionId, description, side = "end", size, material, level, closeOnScrim, class: className, ...rest } = Astro.props;
+const { title, titleId, descriptionId: givenDescriptionId, description, side = "end", size, material, level, closeOnScrim, form, class: className, ...rest } = Astro.props;
 const id = titleId ?? nextId("drawer-title");
 const descriptionId = givenDescriptionId ?? nextId("drawer-description");
+const formed = drawerForm(form);
 ---
 <div class="ug-scrim" aria-hidden="true" hidden></div>
-<section class={classes("ug-panel", "ug-drawer", `ug-drawer--${side}`, className)} role="dialog" aria-modal="true" aria-labelledby={id} aria-describedby={description !== undefined ? descriptionId : undefined} data-strata-face="raised" data-strata-elevation="modal" tabindex="-1" hidden {...strataAttributes({ size, material, level })} data-strata-close-on-scrim={closeOnScrim ? "" : undefined} {...rest}>
+<section class={classes("ug-panel", "ug-drawer", `ug-drawer--${side}`, className)} role="dialog" aria-modal="true" aria-labelledby={id} aria-describedby={description !== undefined ? descriptionId : undefined} data-strata-face="raised" data-strata-elevation="modal" data-strata-form={formed} tabindex="-1" hidden {...strataAttributes({ size, material, level })} data-strata-close-on-scrim={closeOnScrim ? "" : undefined} {...rest}>
   <h2 class="ug-drawer__title" id={id}>{title}</h2>
   <div class="ug-drawer__body">{description !== undefined && <p class="ug-drawer__description" id={descriptionId}>{description}</p>}<slot /></div>
   {Astro.slots.has("actions") && <div class="ug-drawer__actions"><slot name="actions" /></div>}

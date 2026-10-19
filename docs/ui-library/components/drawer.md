@@ -120,3 +120,42 @@ for the Dialog.
 - **Accessibility:** axe in light and dark.
 - **GPU:** as for the Dialog, and a real click outside a `closeOnScrim` drawer, on the scrim the GPU draws, closes
   it with GPU on.
+
+## 11. Tray form
+
+The Drawer as a tray that slides out of the chassis edge ([Instrument plan](../instrument.md#everyday-components-at-the-instrument-level)):
+`form="tray"` (prop) or `data-strata-form="tray"` (on the `<section>`). Without it, or with `flush`, the Drawer is the panel above, in the markup, the look
+and the motion it had before. Sections 1, 7 and 8 hold: the modal contract, the edge it sits on (`side`), the scrim and `closeOnScrim` are the same, and
+so is the accessibility snapshot.
+
+```html
+<div class="ug-scrim" aria-hidden="true"></div>
+<section class="ug-panel ug-drawer ug-drawer--end" role="dialog" aria-modal="true"
+         aria-labelledby="filters-title" aria-describedby="filters-description" data-strata-face="raised"
+         data-strata-elevation="modal" data-strata-form="tray" tabindex="-1">
+  <h2 class="ug-drawer__title" id="filters-title">Filters</h2>
+  <div class="ug-drawer__body">
+    <p class="ug-drawer__description" id="filters-description">Narrow the list.</p>
+  </div>
+  <div class="ug-drawer__actions">
+    <button type="button" class="ug-button" data-strata-face="raised" data-strata-close>
+      <span class="ug-button__label">Done</span>
+    </button>
+  </div>
+</section>
+```
+
+- **It slides.** A tray drawer moves from beyond its edge to rest and back, in place of the depth entry: in CSS a `translate` of its own width or
+  height with a fade (`ug-panel-slide-enter`, `ug-panel-slide-leave`, named for `strataEnter` and `strataLeave` to wait for), and on the GPU the layer
+  itself travels (core's panel transition with `x` or `y` keyframes, `motion.slow` and `motion.easing.standard`), the start and end sides following the
+  writing direction. Native hits follow the layer's travel (core keeps the hit geometry); the drawer is inert while it moves. Reduced motion: instant.
+- **Its walls are parts.** At the Instrument level the drawer's box is a tray: a **wall** (the Card's tray lip: a vertical outer face, a flat top 4 wide,
+  an inner face 3 px down) along the three sides that are not on the chassis edge, open on the side it slides from, rising out of the chassis with
+  the same eased progress as a Dialog's plate (`rise`, a uniform update). The drawer's corners on the edge are square, so the wall runs to the edge's
+  inset. At Relief and Objects the drawer is its slab in the `plate` material with the tight edge break.
+- **Containment.** The wall stays at least 0.5 px inside the drawer's box over the whole rise at every corner of the reference stage and every depth (the
+  closest is 1.6 px), and the layer's slide does not move it relative to its own box.
+- A drawer's body is not a well: the tray is the drawer itself.
+
+**Tests.** `ui-structural-forms.test.mjs` (the CSS slide and reduced motion, the GPU slide's travel and rise at DPR 1 and 2, the wall's pixels inside the drawer's
+box), `ui-structural-forms-bindings.test.mjs`, `ui-structural-forms-astro.test.mjs`.

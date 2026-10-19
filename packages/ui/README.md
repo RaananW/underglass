@@ -736,6 +736,33 @@ button the opt-in `click` as it goes down. Anatomy: [RotarySelector](../../docs/
 [Button](../../docs/ui-library/components/button.md#11-push-button-form-momentary),
 [ToggleButton](../../docs/ui-library/components/toggle-button.md#11-push-button-form-latching).
 
+## Structural forms: Slider, Card, Panel, Dialog and Drawer
+
+The third of the Instrument level's everyday forms. `form="knob"` or `form="fader"` on a **Slider** draws its own native `<input type="range">` as the Knob's or the
+Fader's object (the same markup, behaviour and GPU parts, without their legend; the fader is horizontal); `form="plate"` or `form="tray"` on a **Card** or **Panel** makes
+it a machined plate or a recessed tray (a Card's body, or a wrapper round a Panel's content, is the tray); `form="plate"` on a **Dialog** is a plate that rises out of the
+chassis as it opens, and `form="tray"` on a **Drawer** a tray that slides out of its edge. `flush`, or no `form`, is the control of before, in markup, look and motion; on a
+Slider any other `form` string is still the native form owner, and `wheel` is reserved for the thumbwheel (not built yet).
+
+```tsx
+<Field label="Drive"><Slider form="knob" min={0} max={100} value={drive} onChange={event => setDrive(Number(event.target.value))} unit="%" /></Field>
+<Card form="plate" title="Output">…</Card>
+<Card form="tray" title="Notes">…</Card>
+<Dialog form="plate" open={open} onClose={close} title="Discard changes?">…</Dialog>
+<Drawer form="tray" side="end" open={filters} onClose={closeFilters} title="Filters">…</Drawer>
+```
+
+Vue takes the same props; Astro takes `value` and `unit` on the Slider. The native controls stay the controls (the same accessibility snapshot, focus order and form data with and
+without a form). On the GPU the plate and the tray take the `plate` material role and a well at Relief and Objects; at the Instrument level a plate is a rim and a tray a wall:
+an inline mesh swept along the element's rounded outline, inside its box by the box rule's margin, over a face that stays captured, so text and hits are untouched (every
+vertex is at least 0.5 px inside its box over the whole rise: the closest is 1.9 px for a plate and 1.6 for a tray, at DPR 1 and 2; against the same page without the form no pixel
+outside the element's box changes). A Dialog's and a Drawer's motion drive the rise as one scene number (a uniform update), and the Drawer's layer slides through core's panel
+transition (`x`, `y`). The first build of an Instrument layer shows its parts about 0.1 s after it is enrolled. A value change on a Slider form is the Knob's and Fader's: 4 captures
+for 8 native changes, none in the frames the springs turn, 0 hit-geometry updates. A moving layer's boxes carry float noise, so the plate's mesh, the knob's diameters and the
+keys' bodies are quantised (a quarter or half px) and the layer is not rebuilt as it moves. Anatomy: [Slider](../../docs/ui-library/components/slider.md#11-hardware-forms-knob-and-fader),
+[Card](../../docs/ui-library/components/card.md#11-plate-and-tray-forms), [Panel](../../docs/ui-library/components/panel.md#11-plate-and-tray-forms),
+[Dialog](../../docs/ui-library/components/dialog.md#11-plate-form), [Drawer](../../docs/ui-library/components/drawer.md#11-tray-form).
+
 ## Lamp and StatusLight
 
 Hardware lights, the second wave of the Instrument level. A **Lamp** is a lens on a bezel over a native
