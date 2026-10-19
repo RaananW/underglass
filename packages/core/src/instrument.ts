@@ -286,13 +286,14 @@ export function validateInstrumentScene(input: InstrumentScene): InstrumentScene
     radius: object.bounds.radius, height: Math.min(16, Math.max(1, ...object.parts.map(part => part.at[2] + profileHeight(shapes[part.profile]!)))), material: object.parts[0]!.material };
   // The face binds at most RELIEF_MATERIALS (16): a scene past the layer's cap (drawn at Relief, `budget`) gives it the materials its primitives use.
   const faceEntries = [...(primitivesIn as ReliefPrimitive[]), ...objects.map(reliefOf)];
-  const reliefMaterials = faceMaterials(names.map(name => [name, recipes[name]!] as const), faceEntries);
+  const collapsed = collapseFace(names.map(name => [name, recipes[name]!] as const), faceEntries);
+  const reliefMaterials = collapsed.materials;
   let face: ReliefScene;
   try {
     face = validateReliefScene({ format: "strata-scene", version: 1, extent: scene.extent, ...(scene.outset === undefined ? {} : { outset: scene.outset }),
       backdrop: scene.backdrop, light: { azimuth: light.azimuth, elevation: light.elevation }, bevel: scene.bevel, shadow: { strength: shadow.strength },
       interior: scene.interior, state: scene.state, focus: scene.focus, materials: reliefMaterials,
-      primitives: faceEntries } as ReliefScene);
+      primitives: collapsed.entries } as ReliefScene);
   } catch (error) {
     // Report the face's paths in the Instrument scene's terms: an object's step-down primitive is `objects[i].relief`.
     const count = (primitivesIn as unknown[]).length;
@@ -313,9 +314,9 @@ export function validateInstrumentScene(input: InstrumentScene): InstrumentScene
       darkness: optional(map.darkness, "shadow.map.darkness", 0, 1, 0.1) } } : {}) },
     interior: face.interior, state: face.state, focus: face.focus,
     materials: recipes,
-    primitives: face.primitives.slice(0, (primitivesIn as unknown[]).length) as ReliefPrimitive[],
+    primitives: face.primitives.slice(0, (primitivesIn as unknown[]).length).map((entry, at) => ({ ...entry, material: faceEntries[at]!.material })) as ReliefPrimitive[],
     profiles: shapes,
-    objects: objects.map((object, index) => ({ ...object, relief: face.primitives[(primitivesIn as unknown[]).length + index] as ReliefPrimitive })),
+    objects: objects.map((object, index) => ({ ...object, relief: { ...face.primitives[(primitivesIn as unknown[]).length + index], material: faceEntries[(primitivesIn as unknown[]).length + index]!.material } as ReliefPrimitive })),
     ...lights,
     ...(scene.post !== undefined ? { post: post(record(scene.post, "post")) } : {}),
   };
@@ -910,9 +911,18 @@ export function partCaster(part: InstrumentPart, shape: InstrumentProfile, t: nu
  * The face's materials: every material of the scene, or, past the 16 the Relief binding holds (a scene the layer steps down for its
  * materials), those the face's `entries` use.
  */
-function faceMaterials(all: (readonly [string, InstrumentRecipe])[], entries: readonly ReliefPrimitive[]) {
-  const used = all.length > INSTRUMENT_MATERIALS ? new Set(entries.map(entry => entry.material)) : undefined;
-  return Object.fromEntries(all.filter(([name]) => !used || used.has(name)).map(([name, recipe]) => [name, faceMaterial(recipe)]));
+function collapseFace(all: (readonly [string, InstrumentRecipe])[], entries: readonly ReliefPrimitive[]) {
+  if (all.length <= INSTRUMENT_MATERIALS) return { materials: Object.fromEntries(all.map(([name, recipe]) => [name, faceMaterial(recipe)])), entries: [...entries] };
+  const used = new Set(entries.map(entry => entry.material));
+  // The face binds 16: the first 16 used, in scene order; the rest of the face's entries are drawn in the first (the layer is stepped down, `budget`).
+  const kept = all.filter(([name]) => used.has(name)).slice(0, INSTRUMENT_MATERIALS);
+  const keep = new Set(kept.map(([name]) => name));
+  return { materials: Object.fromEntries(kept.map(([name, recipe]) => [name, faceMaterial(recipe)])),
+    entries: entries.map(entry => (keep.has(entry.material) || !kept.length ? entry : { ...entry, material: kept[0]![0] })) };
+}
+/** The materials the face's own entries (the primitives and every object's Relief primitive) use; the face binds 16 (`budget` above). */
+export function faceMaterialCount(scene: InstrumentScene): number {
+  return new Set([...scene.primitives, ...scene.objects.map(object => object.relief!)].map(entry => entry.material)).size;
 }
 
 /**
@@ -927,11 +937,12 @@ export function instrumentFaceScene(scene: InstrumentScene, stepped: readonly nu
   const cached = cache.get(key);
   if (cached) return cached;
   if (cache.size > 64) cache.clear();
+  const collapsed = collapseFace(Object.entries(scene.materials), [...scene.primitives, ...stepped.map(index => scene.objects[index]!.relief!)]);
   const value: ReliefScene = {
     format: "strata-scene", version: 1, extent: scene.extent, ...(scene.outset ? { outset: scene.outset } : {}), backdrop: scene.backdrop,
     light: { azimuth: scene.light.azimuth, elevation: scene.light.elevation }, bevel: scene.bevel, shadow: { strength: scene.shadow.strength },
-    interior: scene.interior, state: scene.state, focus: scene.focus, materials: faceMaterials(Object.entries(scene.materials), [...scene.primitives, ...stepped.map(index => scene.objects[index]!.relief!)]),
-    primitives: [...scene.primitives, ...stepped.map(index => scene.objects[index]!.relief!)],
+    interior: scene.interior, state: scene.state, focus: scene.focus, materials: collapsed.materials,
+    primitives: collapsed.entries,
   };
   cache.set(key, value);
   return value;

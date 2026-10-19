@@ -45,7 +45,7 @@ import { INSTRUMENT_CUSTOM_TRIANGLES_PER_LAYER, meshGeometry, type MeshProfile }
 import {
   boundsInside, checkContainment, containmentFrontier, containmentKey, customParts, instrumentFaceScene, instrumentLayout, instrumentPartCount, instrumentStructure, meshReady, meshReferences,
   multiply, partCaster, partDrawn, partKindKey, partKinds,
-  partMatrix, profileBounds, profileGeometry, sameGeometry, similarity, INSTRUMENT_CASTERS_PER_OBJECT, INSTRUMENT_KINDS_CEILING, INSTRUMENT_KINDS_PER_LAYER, INSTRUMENT_MATERIALS, INSTRUMENT_OBJECTS, INSTRUMENT_PARTS_PER_LAYER,
+  partMatrix, profileBounds, profileGeometry, sameGeometry, similarity, INSTRUMENT_CASTERS_PER_OBJECT, INSTRUMENT_KINDS_CEILING, INSTRUMENT_KINDS_PER_LAYER, INSTRUMENT_MATERIALS, faceMaterialCount, INSTRUMENT_OBJECTS, INSTRUMENT_PARTS_PER_LAYER,
   INSTRUMENT_PARTS_PER_STAGE, STUDIO_DEFAULTS, type Containment, type ContainmentFrontier, type InstrumentCaster, type InstrumentObject,
   type InstrumentProfile, type InstrumentRecipe, type InstrumentScene, type Matrix, type PartKind, type StudioTokens,
 } from "./instrument.js";
@@ -1258,7 +1258,11 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       if (orderUnavailable) whole = all(scene, "order-unavailable", orderUnavailable);
       else if (!matrix) whole = all(scene, "transform", "the layer's matrix is not a similarity (rotation, uniform scale and translation)");
       else if (parts > INSTRUMENT_PARTS_PER_LAYER) whole = all(scene, "budget", `${parts} parts in the layer, above ${INSTRUMENT_PARTS_PER_LAYER}`);
-      else if (state.materialCount > INSTRUMENT_MATERIALS) whole = all(scene, "budget", `${state.materialCount} materials in the layer, above ${INSTRUMENT_MATERIALS}`);
+      else if (state.materialCount > INSTRUMENT_MATERIALS) {
+        // The face binds 16 too: past that its own primitives are drawn in the first 16 face materials (the layer is stepped down already).
+        const faceCount = faceMaterialCount(scene);
+        whole = all(scene, "budget", `${state.materialCount} materials in the layer, above ${INSTRUMENT_MATERIALS}${faceCount > INSTRUMENT_MATERIALS ? `; ${faceCount} face materials, above ${INSTRUMENT_MATERIALS}` : ""}`);
+      }
       else if (kinds.length > INSTRUMENT_KINDS_CEILING) whole = all(scene, "budget", `${kinds.length} part kinds in the layer, above ${INSTRUMENT_KINDS_CEILING}`);
       else if (stageParts + parts > INSTRUMENT_PARTS_PER_STAGE) whole = all(scene, "budget", `${stageParts + parts} parts on the stage, above ${INSTRUMENT_PARTS_PER_STAGE}`);
       else if (state.failed?.structure === structure) { whole = all(scene, state.failed.post ? "post" : "compile", state.failed.reason); status = "failed"; }

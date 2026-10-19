@@ -102,10 +102,12 @@ for (const dpr of [1, 2]) test(`a scene past the material cap is reported and dr
       const againstFace = controls.map(control => within(relief, firstRelief ?? relief, control, dpr));
       firstRelief ??= relief;
       const againstParts = controls.map(control => within(relief, withParts, control, dpr));
-      report[`over${count}`].pixels = { againstFace: againstFace.map(entry => entry.changed), againstParts: againstParts.map(entry => entry.changed), colours: againstFace.map(entry => entry.colours) };
+      report[`over${count}`].pixels = { againstFace: againstFace.map(entry => entry.changed), againstParts: againstParts.map(entry => entry.changed) };
       expect(againstFace.every(entry => entry.changed === 0), `${count}: the stepped-down layer draws the same Relief as at 17 (${JSON.stringify(againstFace)})`).toBe(true);
       expect(againstParts.every(entry => entry.changed > 20), `${count}: the parts are gone, replaced by Relief`).toBe(true);
-      expect(againstFace.every(entry => entry.colours > 4), `${count}: the controls are drawn, not blank`).toBe(true);
+      // Against the face only (no object drawn at all) every control differs: the Relief objects are there.
+      const againstBare = controls.map(control => within(relief, faceOnly, control, dpr));
+      expect(againstBare.every(entry => entry.changed > 20), `${count}: the controls are drawn at Relief, not absent (${JSON.stringify(againstBare.map(entry => entry.changed))})`).toBe(true);
     }
 
     // Back under the cap: ready again, the parts fresh.

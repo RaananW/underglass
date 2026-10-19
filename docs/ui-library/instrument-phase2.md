@@ -171,8 +171,13 @@ is wider: `INSTRUMENT_MATERIALS_CEILING` (64) is what validation refuses. Betwee
 budget is (decision 9): status `stepped-down`, every object `budget` with `detail` `N materials in the layer, above 16`, a `materials:` warning, GPU on, and
 `state().instrument.layers[].materials` (`{ count, cap }`) says by how much. The alternative, to draw the first 16 materials in scene order and give the parts of
 the rest a fallback material, was rejected: a part in the wrong material is worse than a layer at Relief, the cap's usual cause is a panel mixing component
-kinds (each brings its own materials), and a silent partial scene would make the same bug as the refusal did. Because the face's Relief binding also
-holds 16 materials, a scene past the cap gives the face only the materials its primitives use (a scene under it is unchanged). Before this, core refused the
+kinds (each brings its own materials), and a silent partial scene would make the same bug as the refusal did. The ceiling of 64 is a format limit (the bound of `INSTRUMENT_PROFILES` and `INSTRUMENT_PROTECTED`), not a budget. Because the face's Relief
+binding also holds 16 materials, a scene past the cap gives the face only the materials its primitives use (a scene under it is unchanged); if those
+are more than 16 (every object's own `relief.material`), the face draws the first 16 in scene order and the others' entries in the first, and the layer's
+`detail` adds `N face materials, above 16`. A Relief face in a wrong material is acceptable there because the layer is already reported as stepped down,
+unlike an Instrument part. The helper's side: every key-like object registers its body with the registry of `gpu/instrument-keys.ts`
+(`registerKeyBody`, `keyAtRelief`, the constants `INSTRUMENT_KEY_BODY_MATERIALS` and `INSTRUMENT_PUSH_MATERIALS`) so the conversion that keeps a scene within 16
+can trim it; a loop that does not register stays outside the conversion. Before this, core refused the
 scene at `setMaterial` and the Strata helper swallowed the error, so the controls vanished with no diagnostic.
 
 ## The fallback ladder

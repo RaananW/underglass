@@ -11,6 +11,8 @@
 import { test, expect } from "../helpers/current-browser.mjs";
 import { PNG } from "pngjs";
 
+const ready = page => page.waitForFunction(() => window.strataPushProbe.instrument()?.layers.length && window.strataPushProbe.instrument().layers.every(layer => layer.status === "ready"), null, { timeout: 30000 });
+const settle = page => page.evaluate(async () => { window.strataPushProbe.refresh(); await window.strataPushProbe.controller.settle(); });
 const healthy = /^Current content=drawable owning WebGPU canvas/;
 
 test("past 14 materials the plain buttons are Relief keys, reported once and in the diagnostics, GPU on and nothing blank", async ({ browser }) => {
@@ -28,7 +30,7 @@ test("past 14 materials the plain buttons are Relief keys, reported once and in 
     for (let index = 0; index < 3; index++) await page.evaluate(async () => { window.strataPushProbe.refresh(); await window.strataPushProbe.controller.settle(); });
     await page.hover("#key-3");
     await page.evaluate(async () => { window.strataPushProbe.refresh(); await window.strataPushProbe.controller.settle(); });
-    await page.waitForFunction(() => window.strataPushProbe.instrument()?.layers.length && window.strataPushProbe.instrument().layers.every(layer => layer.status === "ready"), null, { timeout: 30000 });
+    await ready(page);
     const state = await page.evaluate(() => {
       const probe = window.strataPushProbe, diagnostics = probe.diagnostics(), scene = probe.scene(), counts = probe.counts();
       const layer = probe.instrument().layers.find(entry => entry.id === "push-panel") ?? probe.instrument().layers[0];
@@ -55,19 +57,60 @@ test("past 14 materials the plain buttons are Relief keys, reported once and in 
     expect(reported, warnings.join("\n")).toHaveLength(1);
     expect(reported[0]).toContain("push-panel");
     expect(reported[0]).toContain(`${state.diagnostics.materials.count} materials`);
-    expect(reported[0]).toContain("14");
+    const rules = await page.evaluate(() => window.strataPushProbe.rules);
+    expect(reported[0]).toContain(String(rules.keyBody));
+    expect(reported[0]).toContain(String(rules.push));
     expect(warnings.filter(text => text.includes("above core's cap")), "the helper never reached core's cap here").toHaveLength(0);
-    // The Relief keys are drawn: their boxes are not blank.
-    const png = PNG.sync.read(await page.screenshot());
+    // The Relief keys are drawn: each box differs from the panel with that key hidden (a face-only reference).
+    const withKeys = PNG.sync.read(await page.screenshot());
+    await page.evaluate(ids => { for (const id of ids) document.getElementById(id).style.visibility = "hidden"; }, atRelief);
+    await settle(page);
+    const without = PNG.sync.read(await page.screenshot());
     for (const id of atRelief) {
-      const box = state.boxes[id], colours = new Set();
+      const box = state.boxes[id];
+      let changed = 0;
       for (let y = Math.ceil(box.y); y < Math.floor(box.y + box.height); y++) for (let x = Math.ceil(box.x); x < Math.floor(box.x + box.width); x++) {
-        const offset = (y * png.width + x) * 4;
-        colours.add(`${png.data[offset]},${png.data[offset + 1]},${png.data[offset + 2]}`);
+        const offset = (y * withKeys.width + x) * 4;
+        if (withKeys.data[offset] !== without.data[offset] || withKeys.data[offset + 1] !== without.data[offset + 1] || withKeys.data[offset + 2] !== without.data[offset + 2]) changed++;
       }
-      expect(colours.size, `${id} is drawn (${JSON.stringify(box)})`).toBeGreaterThan(4);
+      expect(changed, `${id} is drawn: its box differs from the face without it`).toBeGreaterThan(100);
     }
+    await page.evaluate(ids => { for (const id of ids) document.getElementById(id).style.visibility = ""; }, atRelief);
     expect(errors).toEqual([]);
+  } finally {
+    await context.close();
+  }
+});
+
+test("the once-per-panel warning re-arms when the panel fits again: overflow, fit, overflow warns twice", async ({ browser }) => {
+  test.setTimeout(180000);
+  const context = await browser.newContext({ viewport: { width: 900, height: 700 }, deviceScaleFactor: 1 });
+  const page = await context.newPage();
+  const warnings = [];
+  page.on("console", message => { if (message.type() === "warning") warnings.push(message.text()); });
+  const reported = () => warnings.filter(text => text.includes("Relief keys")).length;
+  try {
+    await page.goto("/ui-push-button.html?level=instrument&keys=18");
+    await page.waitForFunction(() => window.strataPushProbe?.controller?.state().mode === "gpu" && window.strataPushProbe.scene() !== undefined, null, { timeout: 60000 });
+    await ready(page);
+    await settle(page);
+    expect(reported(), "overflow warns").toBe(1);
+    // Fits again: no extra keys, nothing at Relief, no new warning.
+    await page.evaluate(() => window.strataPushProbe.setKeys(0));
+    await settle(page);
+    await ready(page);
+    await settle(page);
+    expect((await page.evaluate(() => window.strataPushProbe.diagnostics())).keysAtRelief).toEqual([]);
+    expect(reported(), "fitting warns nothing").toBe(1);
+    // Overflows again, with other colours: warns again.
+    await page.evaluate(() => window.strataPushProbe.setKeys(16));
+    await settle(page);
+    await ready(page);
+    await settle(page);
+    expect((await page.evaluate(() => window.strataPushProbe.diagnostics())).keysAtRelief.length).toBeGreaterThan(0);
+    expect(reported(), warnings.join("\n")).toBe(2);
+    await settle(page);
+    expect(reported(), "and still once per overflow").toBe(2);
   } finally {
     await context.close();
   }

@@ -42,8 +42,24 @@ test("past the cap the Relief face binds only the materials its primitives use, 
   assert.deepEqual(Object.keys(core.instrumentFaceScene(valid, []).materials), ["face"]);
   // At or under the cap the face keeps every material, as before.
   assert.equal(Object.keys(core.instrumentFaceScene(core.validateInstrumentScene(scene(16)), []).materials).length, 16);
-  // A scene whose primitives themselves use more than 16 is refused by the face's own rule.
+});
+
+test("a face whose own primitives use more than 16 materials is valid past the cap; the face draws the first 16 and collapses the rest", () => {
   const wide = scene(20);
-  wide.primitives = Object.keys(wide.materials).map(material => ({ face: "raised", rect: [0, 0, 40, 40], radius: 4, height: 4, material }));
-  assert.throws(() => core.validateInstrumentScene(wide), /holds more than 16 materials/);
+  wide.profiles = { pin: { type: "prism", width: 10, length: 10, radius: 1, height: 2 } };
+  const names = Object.keys(wide.materials);
+  wide.objects = names.map((material, index) => {
+    const rect = [10 + index * 18, 20, 16, 16];
+    return { id: `o${index}`, rect, bounds: { rect, radius: 0 }, t: 0, parts: [{ kind: "plate", profile: "pin", at: [rect[0] + 8, 28, 0], material, caster: null }],
+      relief: { face: "raised", rect, radius: 2, height: 2, material } };
+  });
+  const valid = core.validateInstrumentScene(wide);
+  // The scene keeps each object's own Relief material; the pass reports the face's count.
+  assert.deepEqual(valid.objects.map(object => object.relief.material), names);
+  assert.equal(core.faceMaterialCount(valid), 20);
+  const face = core.instrumentFaceScene(valid, valid.objects.map((_, index) => index));
+  assert.equal(Object.keys(face.materials).length, 16);
+  assert.deepEqual(Object.keys(face.materials), names.slice(0, 16));
+  assert.ok(face.primitives.every(entry => entry.material in face.materials));
+  assert.deepEqual(face.primitives.slice(1).map(entry => entry.material), [...names.slice(0, 16), ...Array(4).fill(names[0])]);
 });

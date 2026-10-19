@@ -597,8 +597,10 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
   than 16 part kinds per layer is reported; more than 64 steps the layer down. The format accepts up to 8,192 parts.
 - **Material cap.** A layer draws with at most 16 materials (`INSTRUMENT_MATERIALS`). A scene naming 17 to 64 is valid: the whole
   layer is drawn at the Relief level, every object stepped down with reason `budget` (`detail`: `17 materials in the layer, above 16`) and a
-  `materials:` warning, GPU on. A scene naming more than 64 (`INSTRUMENT_MATERIALS_CEILING`) is a validation error. The face's own
-  Relief binding holds 16, so past the cap it binds the materials the face's primitives use. Each layer reports `materials: { count, cap }`
+  `materials:` warning, GPU on. A scene naming more than 64 (`INSTRUMENT_MATERIALS_CEILING`) is a validation error: 64 is a format limit, the same bound as profiles
+  and protected rects, not a budget. The face's own Relief binding holds 16, so past the cap it binds the materials the face's primitives
+  use; when those are more than 16 the face draws the first 16 in scene order and the rest in the first (the layer is stepped down already,
+  and `detail` adds `N face materials, above 16`). Each layer reports `materials: { count, cap }`
   and `state().instrument.budgets.materialsPerLayer` is the cap.
 - **Diagnostics.** `state().instrument` lists each layer's `status` (`ready`, `pending`, `stepped-down`, `failed`),
   objects, parts, drawn parts, kinds, `materials` (`{ count, cap }`), `steppedDown` entries (`{ object, reason, part?, inset?, overshoot?, detail? }`,
