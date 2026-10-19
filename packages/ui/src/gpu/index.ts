@@ -57,6 +57,14 @@
  * The Scene level still draws its panels at the Objects level, so the adjust policy steps a Scene page over
  * `instrument`.
  *
+ * Material cap (issue #173): core draws an Instrument layer with at most 16 materials (`INSTRUMENT_MATERIALS`); a scene naming more is valid
+ * but its layer is drawn at Relief, reported in core's `state().instrument.layers[]` (`status` stepped-down, `reason` budget, `materials`).
+ * The helper keeps its own scenes under the cap with two rules, now named and reported: a key body of the button's own colour is added
+ * while the scene holds fewer than `INSTRUMENT_KEY_BODY_MATERIALS` (14) materials, a push button's parts while it holds fewer than
+ * `INSTRUMENT_PUSH_MATERIALS` (12) (they need up to four more); past a rule the button is a Relief key. When a rule or the cap itself
+ * triggers, `StrataGpu.diagnostics(panel)` says so (the count, the cap, the ids of the keys drawn at Relief) and the helper warns once
+ * per panel with `console.warn`.
+ *
  * A JogWheel's wheel and a PatchPoint's jack are drawn at every level (`gpu/wave3.ts`; design language section 6): the wheel a disc in a recess with a
  * finger dimple, the jack a washer with a hole and, while it is connected, a plug and a cable stub. At the Instrument level the wheel is a
  * turned cap in a bearing collar whose dimple turns on its accumulated angle (`--strata-jog-angle`, on the knob's spring), and the jack a
@@ -194,6 +202,8 @@ export interface StrataAdjustEvent {
 export interface StrataGpu {
   /** Rebuilds every panel's scene now (for example from the runtime's `onStatusChange`). */
   refresh(): void;
+  /** What the helper reports of a panel's Instrument scene: its material count against core's cap and the keys drawn at Relief; undefined for other panels. */
+  diagnostics(panel: HTMLElement): StrataGpuDiagnostics | undefined;
   /** The scene last given to a panel, for inspection and tests. */
   scene(panel: HTMLElement): StrataScene | StrataLightScene | StrataInstrumentScene | undefined;
   /** Releases every panel: cancels materials, leaves face mode and releases the enrollments. */
@@ -908,6 +918,23 @@ export interface StrataLightScene extends Omit<StrataScene, "version"> {
   feather: number;
 }
 
+/** Core's cap on the materials of an Instrument layer (`INSTRUMENT_MATERIALS`, restated: the helper never imports core). */
+export const STRATA_INSTRUMENT_MATERIAL_CAP = 16;
+/** A key body of the button's own colour is added while the scene holds fewer materials than this; past it the button is a Relief key. */
+export const INSTRUMENT_KEY_BODY_MATERIALS = 14;
+/** A push button's parts (bezel, ring, cap body and up to four more materials) are added only below this many; past it the button is a Relief key. */
+export const INSTRUMENT_PUSH_MATERIALS = 12;
+/** What the helper reports of a panel's Instrument scene (`StrataGpu.diagnostics`). */
+export interface StrataGpuDiagnostics {
+  /** The materials the scene names and core's cap; past it core draws the layer at Relief (`state().instrument`). */
+  materials: { count: number; cap: number };
+  /** Ids of the buttons drawn as Relief keys because the scene held `INSTRUMENT_KEY_BODY_MATERIALS` or `INSTRUMENT_PUSH_MATERIALS` materials. */
+  keysAtRelief: string[];
+}
+/** The report of the Instrument scene `strataScene` built last (read synchronously by the caller). */
+let instrumentReport: StrataGpuDiagnostics | undefined;
+const keyAtRelief = (element: Element) => { instrumentReport?.keysAtRelief.push(element.id || element.tagName.toLowerCase()); };
+
 /**
  * A version 4 scene for core's `instrument` material (Rendering Model part 2D), as the helper writes it: the face's
  * relief primitives, and the knobs, keys, switches, lamps and LEDs as objects of parts, with the lights of the lenses.
@@ -956,7 +983,10 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
   materialFor: (element: Element, face: SceneFace) => string; tokens: ReturnType<typeof reader>; reach: number;
 }): StrataInstrumentScene {
   const { settings, entries, tokens } = context;
+  instrumentReport = { materials: { count: 0, cap: STRATA_INSTRUMENT_MATERIAL_CAP }, keysAtRelief: [] };
   const materials: Record<string, InstrumentRecipe> = {};
+  // The keys with a body of their own colour, so the cap can turn the later colours into Relief keys (below).
+  const keyBodies: { element: HTMLElement; object: InstrumentObject; name: string; relief: ScenePrimitive }[] = [];
   for (const [name, layers] of Object.entries(settings.materials)) {
     materials[name] = { base: { roughness: layers.base?.roughness ?? 1, metallic: layers.base?.metallic ?? 0 }, coat: { ...layers.coat }, emissive: { strength: layers.emissive?.strength ?? 0 } };
   }
@@ -1147,14 +1177,15 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     const colour = hex(getComputedStyle(element).backgroundColor), name = `key ${colour}`;
     const box = rectWithin(element, panel), state = context.states(element), height = 5 * scale;
     // A body per colour (the button's own face colour, in its material's roughness), within core's 16 materials.
-    const key = materials[name] || Object.keys(materials).length < 14
+    const key = materials[name] || Object.keys(materials).length < INSTRUMENT_KEY_BODY_MATERIALS
       ? keyObject({ id: idOf(element, "key"), box, radius: radiusOf(element, box[2]), material: name, height, travel: 2.5 * scale, pressed: state.pressed,
         state: { hover: state.hover, pressed: state.pressed, disabled: state.disabled }, stage, relief: { height: raised, material: use("keyCap") } }, profile)
       : undefined;
-    if (!key) { entries.push({ face: "raised", rect: box, radius: radiusOf(element, box[2]), height: raised, material: context.materialFor(element, "raised"), state }); continue; }
+    if (!key) { keyAtRelief(element); entries.push({ face: "raised", rect: box, radius: radiusOf(element, box[2]), height: raised, material: context.materialFor(element, "raised"), state }); continue; }
     const layers = settings.materials[context.materialFor(element, "raised")];
     materials[name] ??= { base: { colour, roughness: layers?.base?.roughness ?? 0.45, metallic: layers?.base?.metallic ?? 0 }, coat: { ...layers?.coat } };
     objects.push(key);
+    keyBodies.push({ element, object: key, name, relief: { face: "raised", rect: box, radius: radiusOf(element, box[2]), height: raised, material: context.materialFor(element, "raised"), state } });
     tallest = Math.max(tallest, height + 1);
   }
   // The JogWheel's wheel and the PatchPoint's jack (`gpu/wave3.ts`): parts on the knob's spring and `spring.patch`.
@@ -1204,7 +1235,7 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     const t = Math.min(1, Math.max(0, input ? (Number.isFinite(read) ? read : input.checked ? 0.45 : 0) : disabled ? 0 : Number.isFinite(read) ? read : pushPosition({ held: root.matches(":active:not([data-strata-down='false']), [data-strata-down='true']"), latched: root.getAttribute("aria-pressed") === "true", disabled })));
     // A bank key stands on its plinth.
     const plinth = root.closest(".ug-bank__plinth"), floor = plinth ? bankPlinthHeight(scale) : 0;
-    if (!materials[name] && Object.keys(materials).length >= 12) { entries.push({ face: "raised", rect: box, radius: radiusOf(root, box[2]), height: raised, material: context.materialFor(cap, "raised"), state }); continue; }
+    if (!materials[name] && Object.keys(materials).length >= INSTRUMENT_PUSH_MATERIALS) { keyAtRelief(root); entries.push({ face: "raised", rect: box, radius: radiusOf(root, box[2]), height: raised, material: context.materialFor(cap, "raised"), state }); continue; }
     const layers = settings.materials[context.materialFor(cap, "raised")];
     materials[name] ??= { base: { colour, roughness: layers?.base?.roughness ?? 0.45, metallic: layers?.base?.metallic ?? 0 }, coat: { ...layers?.coat } };
     const pushInput = { id: idOf(input?.id ? input : root, "push"), form: info.form, box, ...(bezel ? { bezel: rectWithin(bezel, panel) } : {}), ...(ring && info.ring !== undefined ? { ring: rectWithin(ring, panel) } : {}), cap: rectWithin(cap, panel),
@@ -1218,6 +1249,13 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     tallest = Math.max(tallest, pushHeight(scale));
   }
   const elevation = (tokens.number("light.elevation", 41) * Math.PI) / 180;
+  // The lamps' and push buttons' materials come after the key bodies, so a scene can still pass core's cap (which draws the whole layer at Relief):
+  // the later colours' keys become Relief keys until it fits, and the diagnostics say which.
+  for (const name of [...new Set(keyBodies.map(entry => entry.name))].reverse()) {
+    if (Object.keys(materials).length <= STRATA_INSTRUMENT_MATERIAL_CAP) break;
+    for (const entry of keyBodies.filter(body => body.name === name)) { objects.splice(objects.indexOf(entry.object), 1); entries.push(entry.relief); keyAtRelief(entry.element); }
+    if (!objects.some(object => object.parts.some(part => part.material === name))) delete materials[name];
+  }
   const reach = Math.min(128, Math.max(context.reach, Math.ceil(tallest / Math.tan(elevation) + 1.5 * tallest + 1)));
   // The application's character names the room (`studio.*`, declared on the root only); without one the defaults stand.
   const studio = Object.fromEntries((["key", "keyRadius", "fill", "front", "strip", "floor", "ceiling"] as const)
@@ -1229,7 +1267,7 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
       vanish: [(stageBox.left + stageBox.width / 2 - outer.left) / zoom, (stageBox.top + stageBox.height / 2 - outer.top) / zoom] },
     environment: { source: "studio", strength: Math.min(3, Math.max(0, tokens.number("environment.intensity", 1))), ...(Object.keys(studio).length ? { studio } : {}) },
     light: { ...settings.light, intensity: 1.6 },
-    materials, primitives: entries, profiles, objects,
+    materials: (instrumentReport.materials.count = Object.keys(materials).length, materials), primitives: entries, profiles, objects,
     ...(context.lights ?? {}),
   };
 }
@@ -1296,7 +1334,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   const forced = matchMedia("(forced-colors: active)");
   type Motion = { start: number; duration: number; ease: (t: number) => number; from: number; to: number; kind: "enter" | "leave" };
   const panels = new Map<HTMLElement, { id: string; release: () => void; handle?: ReturnType<StrataGpuController["setMaterial"]>; kind?: StrataSceneMaterial["kind"];
-    scene?: string; structure?: string; motion?: Motion; domes: Set<Element> }>();
+    scene?: string; structure?: string; motion?: Motion; domes: Set<Element>; report?: StrataGpuDiagnostics; warned?: Set<string> }>();
   /** Shows the CSS paint of the elements a panel no longer draws as domes, and hides it on those it now does. */
   const markDomes = (entry: { domes: Set<Element> }, domes: Set<Element>) => {
     for (const element of entry.domes) if (!domes.has(element)) element.removeAttribute("data-strata-dome");
@@ -1557,6 +1595,19 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
       .catch(error => console.warn(`Strata GPU: the environment ${options.environment} did not load: ${String(error)}`));
   }
 
+  /** One `console.warn` per panel and cause: the scene is past core's material cap, or a button became a Relief key (issue #173). */
+  function warnOnce(element: HTMLElement, entry: { id: string; report?: StrataGpuDiagnostics; warned?: Set<string> }) {
+    const report = entry.report!, warned = entry.warned ??= new Set();
+    if (report.materials.count > report.materials.cap && !warned.has("cap")) {
+      warned.add("cap");
+      console.warn(`Strata GPU: panel ${element.id || entry.id} names ${report.materials.count} materials, above core's cap of ${report.materials.cap}; its Instrument layer is drawn at the Relief level (state().instrument).`);
+    }
+    if (report.keysAtRelief.length && !warned.has("keys")) {
+      warned.add("keys");
+      console.warn(`Strata GPU: panel ${element.id || entry.id} holds ${report.materials.count} materials, so ${report.keysAtRelief.length} button(s) (${report.keysAtRelief.slice(0, 4).join(", ")}) are Relief keys, not Instrument parts (key bodies stop at ${INSTRUMENT_KEY_BODY_MATERIALS} materials, push buttons at ${INSTRUMENT_PUSH_MATERIALS}).`);
+    }
+  }
+
   /** Brings a presented panel's scene and material up to date. */
   function update(element: HTMLElement, entry: NonNullable<ReturnType<typeof panels.get>>) {
     if (element.getAttribute("data-strata-mode") !== "face") element.setAttribute("data-strata-mode", "face");
@@ -1564,9 +1615,12 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     const domes = new Set<Element>();
     // A Dialog's plate and a Drawer's tray come out of the chassis with the motion's eased progress, and go back into it as it leaves.
     const progress = motion ? Math.min(1, Math.max(0, motion.ease(Math.min(1, (performance.now() - motion.start) / motion.duration)))) : 1;
+    instrumentReport = undefined;
     const scene = strataScene(element, { level: options.level, cap, stage: stageBox(), domes, environment, springs, moving, peaks, ...(options.parts ? { parts: options.parts } : {}),
       ...(motion ? { height: motion.from + (motion.to - motion.from) * motion.ease(Math.min(1, (performance.now() - motion.start) / motion.duration)), rise: motion.kind === "enter" ? progress : 1 - progress } : {}) });
     markDomes(entry, domes);
+    entry.report = isInstrumentScene(scene) ? instrumentReport : undefined;
+    if (entry.report) warnOnce(element, entry);
     // A panel drawn with the instrument material says so, so the CSS can hold the motion of the parts it draws.
     if (element.hasAttribute("data-strata-instrument") !== (scene.version === 4)) element.toggleAttribute("data-strata-instrument", scene.version === 4);
     const key = JSON.stringify(scene);
@@ -1646,6 +1700,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     refresh: () => { if (frame) cancelAnimationFrame(frame); sync(); },
     scene: panel => { const key = panels.get(panel)?.scene; return key ? JSON.parse(key) as StrataScene | StrataInstrumentScene : undefined; },
     cap: () => cap,
+    diagnostics: panel => { const report = panels.get(panel)?.report; return report ? { materials: { ...report.materials }, keysAtRelief: [...report.keysAtRelief] } : undefined; },
     detach: () => {
       if (detached) return;
       detached = true;
