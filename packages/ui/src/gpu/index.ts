@@ -42,6 +42,11 @@
  * The Scene level still draws its panels at the Objects level, so the adjust policy steps a Scene page over
  * `instrument`.
  *
+ * A JogWheel's wheel and a PatchPoint's jack are drawn at every level (`gpu/wave3.ts`; design language section 6): the wheel a disc in a recess with a
+ * finger dimple, the jack a washer with a hole and, while it is connected, a plug and a cable stub. At the Instrument level the wheel is a
+ * turned cap in a bearing collar whose dimple turns on its accumulated angle (`--strata-jog-angle`, on the knob's spring), and the jack a
+ * washer and barrel whose plug rises out of the hole on `spring.patch`; both are uniform updates, so a spin or a connect recaptures nothing.
+ *
  * Everything the scene needs comes from the page as the CSS presentation sees it: geometry from layout (followed through
  * CSS transitions frame by frame), states from
  * `:hover`, `:active`, `:focus-visible` and `:disabled`, and token values from each element's resolved `--strata-*`
@@ -61,6 +66,7 @@ import { meterBarObject, meterDialObject, meterHeight, meterMaterials } from "./
 import { advancePeak, meterFraction, meterSprings, meterZoneRoles, peakDefaults, peakIndex, segmentEmitterDefaults, segmentsLit, segmentZones, type PeakState } from "../shared/meter.ts";
 import { strataStage, type StagePresenter } from "../dom/stage.ts";
 import type { EnvironmentMap, StageScene } from "../tokens/stage.ts";
+import { resetWave3, wave3Entries, wave3Objects } from "./wave3.ts";
 import { advance, asParticle, decodeHdr, environmentFrom, launch, spring, type BurstOptions, type Confetto } from "./scene.ts";
 import { advanceSpring, depthScale, INSTRUMENT_CAMERA, keyObject, knobObject, knobSprings, premiumMaterials, profileKey, type CustomPartSource, type InstrumentObject,
   type InstrumentProfile, type InstrumentRecipe, type KnobSpring } from "./instrument.ts";
@@ -402,6 +408,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   const instrumentLayer = [panel, ...panel.querySelectorAll("[data-strata-level]")].some(element => effective(element) === "instrument");
   const objects = (element: Element) => !instrumentLayer && effective(element) !== "relief";
   const knobs = new Set<HTMLElement>(), faders = new Set<HTMLElement>(), switches = new Set<HTMLElement>(), instrumentMeters = new Set<HTMLElement>(), keys: HTMLElement[] = [];
+  resetWave3(panel);
   // Objects (design language section 6): the tokens of their proportions, and the height each surface's top stands at.
   const keyHeight = tokens.number("object.keyHeight", 8), keyTravel = tokens.number("object.keyTravel", 6), taper = tokens.number("object.taper", 3);
   const tops = new Map<Element, number>(), floors = new Map<Element, number>();
@@ -476,6 +483,13 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     // The slide's flag is invisible (opacity 0) while the switch is off, but the object draws it: hide its CSS paint all the same.
     if (instrumentLayer && element.matches(".ug-switch[data-strata-form] .ug-switch__object .ug-switch__flag") && effective(element) !== "relief") options.domes?.add(element);
     if (!faces.includes(face) || !element.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    // A JogWheel's and a PatchPoint's parts (`gpu/wave3.ts`): scene entries at Relief and Objects, the Instrument object's claims otherwise.
+    if (element.closest(".ug-jog-wheel, .ug-patch-point")) {
+      const parts = wave3Entries(element, panel, { instrument: instrumentLayer && effective(element) !== "relief", objects: objects(element), base: baseOf(element), rect: rectWithin(element, panel),
+        rectOf: part => rectWithin(part, panel), states, material: materialFor, knob: { material: material(tokens.raw("material.roles.knob") || "satin"), colour: tokens.colour("knob") },
+        well: level(element, "well"), light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, hoverHeight: tokens.number("state.hoverHeight", 1.6), domes: options.domes });
+      if (parts) { entries.push(...parts); continue; }
+    }
     // A Meter's or Gauge's segments, hub and a Gauge's bezel are drawn as its Instrument object (its window stays the well of the face).
     const meterRoot = element.closest<HTMLElement>(".ug-meter"), meter = meterRoot && meterInfos.get(meterRoot);
     if (meterRoot && meter && instrumentLayer && effective(element) !== "relief") {
@@ -879,6 +893,11 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     objects.push(key);
     tallest = Math.max(tallest, height + 1);
   }
+  // The JogWheel's wheel and the PatchPoint's jack (`gpu/wave3.ts`): parts on the knob's spring and `spring.patch`.
+  const wave3 = wave3Objects(panel, { now, instant, springs: options.springs, moving: options.moving, scale, light, raised, room: () => objects.length + entries.length < 255,
+    rectOf: part => rectWithin(part, panel), states: context.states, idOf, profile, materials });
+  objects.push(...wave3.objects);
+  tallest = Math.max(tallest, wave3.tallest);
   const elevation = (tokens.number("light.elevation", 41) * Math.PI) / 180;
   const reach = Math.min(128, Math.max(context.reach, Math.ceil(tallest / Math.tan(elevation) + 1.5 * tallest + 1)));
   return {
