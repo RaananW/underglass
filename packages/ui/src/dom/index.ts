@@ -37,3 +37,4 @@ export { showStrataToast } from "./toast.ts";
 export type { ToastHandle, ToastOptions } from "./toast.ts";
 export type { TabChange, TabsActivation } from "./tabs.ts";
 export type { PressedChange } from "./behaviour.ts";
+export { driveStrataDisplay, releaseStrataDisplay } from "./display.ts";

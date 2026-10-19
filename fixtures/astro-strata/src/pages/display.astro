@@ -1,0 +1,30 @@
+---
+/**
+ * Strata Astro Display check page (`/display/`): `[data-contract]` renders the anatomy page's markup examples (`display.md` three)
+ * with `@underglass/ui/astro`, and `main` holds live displays `tests/browser/ui-display-astro.test.mjs` drives. Server-rendered
+ * HTML; the only script is the components' `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { Display, TextField } from "@underglass/ui/astro";
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro Display check</title>
+</head>
+<body>
+  <div data-contract="display:0" hidden><TextField id="note" form="display" backlight="accent" type="text" placeholder="Type here" /></div>
+  <div data-contract="display:1" hidden><Display id="rate-contract" label="Frame rate" backlight="success">60 fps</Display></div>
+  <div data-contract="display:2" hidden><TextField id="serial-contract" aria-label="Serial" form="display" backlight="off" lit={false} readonly /></div>
+  <main>
+    <section class="ug-panel" data-strata-face="raised" aria-label="Displays" style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px">
+      <TextField id="name" label="Name" help="Shown on the glass" form="display" value="Hello" class="extra" style="margin-right: 4px" data-testid="name" size="small" />
+      <TextField id="serial" aria-label="Serial" form="display" readonly lit={false} value="UG-2026-0042" />
+      <TextField id="owner" aria-label="Owner" form="login-form" value="Plain" />
+      <Display id="rate" label="Frame rate" live="off" backlight="info" class="extra" style="margin-right: 4px" data-testid="rate">60 fps</Display>
+      <Display id="echo" label="Echo" size="large">Hello</Display>
+    </section>
+  </main>
+</body>
+</html>

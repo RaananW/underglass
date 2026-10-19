@@ -33,6 +33,7 @@ native attributes (`:hover`, `:active`, `:focus-visible`, `:checked`, `:disabled
 | `data-strata-lit` | A StatusLight | `false`: an unlit light (lit when absent) |
 | `data-strata-form` (indicator forms) | A Rating's fieldset, a Badge, a ProgressBar's wrapper (`.ug-progress-bar`) or a Spinner | `lamps` (Rating), `led` (Badge), `meter` (ProgressBar) or `ring` (Spinner): the control drawn as LED lenses, each an emitter lit by `--strata-lit`; `flush`, or none, is the look before. `data-strata-colour` is the lenses' role there too, `accent` by default for a bar and a ring ([Rating](rating.md#11-indicator-form-lamps), [Badge](badge.md#11-indicator-form-led), [ProgressBar](progress-bar.md#11-indicator-form-meter), [Spinner](spinner.md#11-indicator-form-ring)) |
 | `data-strata-blink` | A StatusLight | A tempo token, `slow`, `normal` or `fast`: a lit light blinks, off under reduced motion ([StatusLight](status-light.md)) |
+| `data-strata-backlight` | A Display's root (`data-strata-form="display"`, a TextField's `display` form or a read-only Display) | The backlight's role: `glowOn` (default, absent), `accent`, `success`, `warning`, `danger`, `info` or `off`; `data-strata-lit="false"` on it switches the light off ([Display](display.md)) |
 
 **Relief primitives.** Each is a rounded box (or a circle) taken from the element's border box and its
 `border-radius`. The GPU reads them from the markers, and the CSS presentation styles the same elements.
@@ -82,7 +83,7 @@ light and depth, reduced motion, keyboard input and reflow.
 | [ButtonGroup](button-group.md) | `<div role="group">` | Keys on one plinth |
 | [Link](link.md) | `<a href>` | None (flat text) |
 | [Field](field.md) | `<div>` with `<label>`, help and error | None (layout) |
-| [TextField](text-field.md) | `<input>` | Well with a bezel |
+| [TextField](text-field.md) | `<input>`; `form="display"`: a glass window in a bezel ([Display](display.md)) | Well with a bezel |
 | [TextArea](text-area.md) | `<textarea>` | Well with a bezel |
 | [Checkbox](checkbox.md) | `<input type="checkbox">` | Small well with a raised mark; `form="latching"`: a small latching square button whose ring lights when checked ([Latching form](checkbox.md#11-latching-form-latching)) |
 | [Radio and RadioGroup](radio.md) | `<input type="radio">` in `<fieldset>` | Round well with a knob; `form="bank"`: a preset bank, interlocking latching keys on one plinth ([Latching form](radio.md#11-latching-form-the-preset-bank-bank)) |
@@ -145,3 +146,4 @@ The [Instrument level](../instrument.md)'s components: hardware objects over nat
 | [StatusLight](status-light.md) | `<span role="img" aria-label>`, a `<span>` with its label, or a live `<output>` | A small lens with an emitter; `colour` a role, `blink` a tempo token |
 | [Meter](meter.md) | `<meter>` (role `meter`) with `min`, `max`, `low`, `high`, `optimum` | A bar of LED segments lit from the value (each an emitter, in its zone's colour), or a needle on a printed arc on `spring.meter`; a held `peak` |
 | [Gauge](gauge.md) | `<meter>` (a bounded measurement; not `<progress>`) | A round dial under glass: a needle on `spring.gauge` over a printed scale, a red zone from `high` |
+| [Display](display.md) | The TextField's `<input>` as `form="display"`, or a read-only `<output>` | A glass window in a bezel over the printed text, backlit by emitters (`backlight` a colour role); the text stays captured content |

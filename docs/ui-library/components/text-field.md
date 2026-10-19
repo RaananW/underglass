@@ -122,3 +122,32 @@ focus outline. The invalid state adds a second text signal (the message), as for
   accessibility snapshot equal in DOM and GPU modes; focus ring in decoded pixels; text and placeholder
   contrast on the lit face at `interior.max`.
 - **Parity:** Relief and CSS within the P0.6 budget at rest, hover, focus and invalid.
+
+## 11. The display form
+
+`form="display"` draws the same native `<input>` as a glass window in a bezel, backlit, with the text printed under the glass
+([Instrument, Display](../instrument.md#new-components); the whole object, its tokens and its tests are on the [Display](display.md) page).
+The input stays the control: it covers the whole display, so typing, selection, the caret, IME composition, autofill and form
+submission are exactly the browser's, the caret and the selection are drawn under the glass where the text puts them, and a press on the bezel puts
+the caret at the nearest character. Absent, the field is the well described above; any other `form` string is the native `form` attribute
+(the id of the input's form owner), as before.
+
+```tsx
+<TextField form="display" label="Name" value={name} onChange={event => setName(event.target.value)} />
+<TextField form="display" backlight="accent" placeholder="Type here" />
+<TextField form="display" readOnly lit={false} defaultValue="UG-2026-0042" aria-label="Serial" />
+```
+
+- **Props:** `backlight` (a colour role, `glowOn` amber by default, or `off`) and `lit` (`false` switches the light off); the rest are the input's.
+  The ref and every native attribute reach the `<input>`; `className`, `style`, `size`, `material` and `level` go on the display's root. An `icon` is ignored in this form.
+- **Markup:** a `<span class="ug-display ug-display--input" data-strata-form="display">` root holding the decorative object
+  (`aria-hidden`, no pointer) and `<input class="ug-display__text">`; the markup contract is [display.md section 7](display.md#7-dom-structure-and-overlay-needs).
+- **Where it differs from the well:** the input is square and transparent over the window (the well's bezel ring is the display's bezel); focus is an
+  accent outline round the bezel; invalid is a 2 px `danger` edge on the window; the backlight is off when the input is disabled or under more contrast.
+- **Read-only:** `readOnly` keeps it focusable, selectable and submitted with its form (`<input readonly>`); a value the page only shows, and never submits, is a
+  [Display](display.md) (`<output>`).
+- **GPU:** Relief draws a groove and a flat window, Objects a slab and a flat window, Instrument a polished bezel and a glass pane over the printed text, which is
+  the capture itself (0 of 30,726 px differ from the DOM's own rendering). Typing is captured once per keystroke with no hit-geometry update; the backlight is
+  emitters, held within `interior.max` over the text. The caret's blink is captured as every text field's is.
+- **Not yet:** the `segments` look (a seven-segment or dot-matrix typeface needs a font asset: a follow-up, pure CSS), and a default form per character (the premium
+  character's table names `display` for TextField; today `form` is explicit, as the Switch's is).

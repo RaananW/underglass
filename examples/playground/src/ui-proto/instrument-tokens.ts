@@ -11,10 +11,18 @@
  * 0.04), glass is the capture-refraction shader, chamfers are 2 px, the bat lever is longer with a bigger ball and a
  * wider throw, the rocker and wall paddles tip further with an accent flag, the push button travels further, and the
  * panel gains a display window.
+ *
+ * Characters (Phase I5): `character` picks the token bundle the page resolves its materials, springs, glow, pointer and
+ * room from: premium's numbers are the tables below; any other is `@underglass/ui`'s bundle (`characters/studio.json`)
+ * laid over them, read through the library's own `createStrataTheme` and `instrumentSettings`, so the page proves the
+ * bundle and not a copy of it.
  */
+import { createStrataTheme, instrumentSettings, resolve, strataTokens } from "@underglass/ui/tokens";
 
 /** The tuning values a variant is made of; every one is in the page's query string. */
 export interface TuningValues {
+  /** The character (design language section 19): its bundle sets the materials, springs, glow, pointer and room. */
+  character: CharacterName;
   /** 0–100. */
   depth: number;
   capMaterial: MaterialName;
@@ -40,7 +48,9 @@ export interface TuningValues {
   theme: "light" | "dark";
 }
 
-export const materialNames = ["brushed", "polished", "lacquer", "glass", "gold", "gunmetal"] as const;
+export const characterNames = ["premium", "studio"] as const;
+export type CharacterName = (typeof characterNames)[number];
+export const materialNames = ["brushed", "polished", "lacquer", "glass", "gold", "gunmetal", "anodised"] as const;
 export type MaterialName = (typeof materialNames)[number];
 type Rgb = readonly [number, number, number];
 
@@ -98,6 +108,11 @@ export const materials: Record<MaterialName, MaterialRecipe> = {
     ink: [52, 38, 14], css: { base: [208, 178, 118], light: [252, 236, 196], shade: [128, 100, 56], gloss: 0.45 },
     plate: { base: [202, 178, 130], ink: [26, 20, 10], muted: [48, 38, 22], grain: 0.04 },
   },
+  anodised: {
+    label: "Black anodised", colour: [42, 44, 49], metallic: 0.85, roughness: 0.5, brush: 0.6, coat: 0, coatRoughness: 0, environment: 1, direct: 1,
+    ink: [236, 237, 240], css: { base: [40, 42, 47], light: [96, 99, 106], shade: [12, 13, 15], gloss: 0.2 },
+    plate: { base: [34, 36, 41], ink: [240, 241, 244], muted: [204, 207, 214], grain: 0.05 },
+  },
   gunmetal: {
     label: "Dark gunmetal", colour: [104, 107, 114], metallic: 1, roughness: 0.36, brush: 0.9, coat: 0, coatRoughness: 0, environment: 1, direct: 1,
     ink: [236, 237, 240], css: { base: [76, 79, 86], light: [164, 168, 176], shade: [28, 30, 34], gloss: 0.3 },
@@ -105,8 +120,11 @@ export const materials: Record<MaterialName, MaterialRecipe> = {
   },
 };
 
+/** Premium's tables as shipped; a character is laid over a copy of them each time the tokens resolve. */
+const pristine = structuredClone(materials);
+
 export const defaults: TuningValues = {
-  depth: 50, capMaterial: "brushed", skirtMaterial: "polished", plateMaterial: "auto",
+  character: "premium", depth: 50, capMaterial: "brushed", skirtMaterial: "polished", plateMaterial: "auto",
   size: 64, skirt: 2.5, chamfer: 2, travel: 180, detents: 11, light: 1.6, reflections: 1, pointer: 1, theme: "light",
 };
 
@@ -115,10 +133,64 @@ export const depthScale = (depth: number) => { const d = Math.min(1, Math.max(0,
 /** Strata's `shadow.strength`: 0.14, 0.24, 0.32. */
 export const shadowStrength = (depth: number) => { const d = Math.min(1, Math.max(0, depth / 100)); return d < 0.5 ? 0.14 + 0.2 * d : 0.24 + 0.16 * (d - 0.5); };
 
+/** The spring constants the page's controls use, by name (design language section 12). */
+export type SpringSet = Record<"knob" | "detent" | "fader" | "slide" | "rocker" | "bat" | "wall" | "button", { stiffness: number; damping: number }>;
+/** What a character's bundle gives the page: see `characterLook`. */
+export interface CharacterLook {
+  name: CharacterName;
+  /** Each material role's preset, as the page's material names. */
+  roles: { knobCap: MaterialName; knobSkirt: MaterialName; plate: MaterialName };
+  springs: SpringSet;
+  /** The glow (`colour.glowOn`) and the pointer's width, px. */
+  accent: Rgb;
+  pointerWidth: number;
+  /** The room (`studio.*`) and its strength (`environment.intensity`). */
+  room: { key: number; keyRadius: number; fill: number; front: number; strip: number; floor: number; ceiling: number };
+  environment: number;
+  /** The values the page sets when this character is chosen: the roles' materials, the room's strength. */
+  choose: Partial<TuningValues>;
+}
+const roomOf = (values: Record<string, unknown>) => Object.fromEntries((["key", "keyRadius", "fill", "front", "strip", "floor", "ceiling"] as const)
+  .map(key => [key, Number(values[`studio.${key}`])])) as CharacterLook["room"];
+const presetOf: Record<MaterialName, string> = { brushed: "metal", polished: "polished", lacquer: "lacquer", glass: "glass", gold: "gold", gunmetal: "gunmetal", anodised: "anodised" };
+const hexRgb = (hex: string) => [1, 3, 5].map(index => Number.parseInt(hex.slice(index, index + 2), 16)) as unknown as Rgb;
+const scale = (colour: Rgb, ratio: Rgb): Rgb => colour.map((channel, index) => Math.min(255, Math.round(channel * ratio[index]!))) as unknown as Rgb;
+/** The page's material for a preset name (`metal` is the brushed material). */
+const materialOf = (preset: string): MaterialName => (Object.entries(presetOf).find(([, name]) => name === preset)?.[0] ?? "brushed") as MaterialName;
+
+/**
+ * A character's look, read from its bundle through the library (`createStrataTheme`, `instrumentSettings`): the materials
+ * of the tables above are replaced, in place, by the bundle's recipes (colour, roughness, metallic, brush; the CSS
+ * gradients and the faceplate are scaled by the colour's change from premium's), so every presentation that reads
+ * `materials` follows. Premium restores the tables as shipped.
+ */
+export function characterLook(name: CharacterName, theme: "light" | "dark"): CharacterLook {
+  for (const key of materialNames) Object.assign(materials[key], structuredClone(pristine[key]));
+  const source = createStrataTheme({ character: name }).source, values = resolve(source, { theme, depth: 0.5 });
+  const settings = instrumentSettings(strataTokens, { character: name, theme });
+  for (const key of materialNames) {
+    const recipe = settings.materials[presetOf[key]];
+    if (!recipe?.base?.colour || key === "glass" || name === "premium") continue;
+    const base = pristine[key], colour = hexRgb(recipe.base.colour), ratio = colour.map((channel, index) => channel / Math.max(1, base.colour[index]!)) as unknown as Rgb;
+    Object.assign(materials[key], { colour, metallic: recipe.base.metallic ?? base.metallic, roughness: recipe.base.roughness ?? base.roughness, brush: recipe.brush?.strength ?? 0,
+      css: { ...base.css, base: scale(base.css.base, ratio), light: scale(base.css.light, ratio), shade: scale(base.css.shade, ratio) } });
+    // The metal's cap carries the character's ink (a knob's pointer, a fader's grip).
+    if (key === "brushed" && values["instrument.ink.cap"]) materials.brushed.ink = hexRgb(String(values["instrument.ink.cap"]));
+  }
+  const spring = (key: string) => ({ stiffness: Number(values[`spring.${key}.stiffness`]), damping: Number(values[`spring.${key}.damping`]) });
+  const roles = { knobCap: materialOf(settings.roles.knobCap!), knobSkirt: materialOf(settings.roles.knobSkirt!), plate: materialOf(settings.roles.plate!) };
+  const environment = Number(values["environment.intensity"] ?? 1);
+  return {
+    name, roles, accent: hexRgb(String(values["colour.glowOn"])), pointerWidth: Number.parseFloat(String(values["knob.pointer.width"])),
+    springs: { knob: spring("knob"), detent: spring("detent"), fader: spring("fader"), slide: spring("slide"), rocker: spring("rocker"), bat: spring("bat"), wall: spring("wall"), button: spring("button") },
+    room: roomOf(values), environment, choose: { capMaterial: roles.knobCap, skirtMaterial: roles.knobSkirt, plateMaterial: "auto", reflections: environment },
+  };
+}
+
 /** Everything the presentations draw, resolved from the tuning values. CSS px, radians. */
 export function resolveTokens(values: TuningValues) {
-  const s = depthScale(values.depth);
-  const plateName: MaterialName = values.plateMaterial === "auto" ? (values.theme === "dark" ? "gunmetal" : "brushed") : values.plateMaterial;
+  const s = depthScale(values.depth), look = characterLook(values.character, values.theme);
+  const plateName: MaterialName = values.plateMaterial === "auto" ? look.roles.plate : values.plateMaterial;
   const knob = (size: number) => {
     const cap = Math.round(size * 0.8);
     return {
@@ -132,7 +204,7 @@ export function resolveTokens(values: TuningValues) {
       /** The skirt top's slope (a shallow cone), radians. */
       skirtSlope: (7.5 * Math.PI) / 180,
       /** Engraved pointer line, from `from` to `to` of the top's radius. */
-      pointer: { width: 2.2, from: 0.28, to: 0.86, rise: 0.08 },
+      pointer: { width: look.pointerWidth, from: 0.28, to: 0.86, rise: 0.08 },
       /** A glass cap: a short wall and a superellipse dome (a plano-convex lens over the printed hub). */
       dome: { wall: 2 * s, exponent: 2, height: 22 * s, radius: Math.round(cap * 0.45) },
       /** The printed hub ring under the cap's centre (seen through a glass cap). */
@@ -143,6 +215,7 @@ export function resolveTokens(values: TuningValues) {
   return {
     values, depthScale: s, shadow: { strength: shadowStrength(values.depth), contact: 0.22 },
     light: { azimuth: 323, elevation: 41, intensity: values.light, ambient: 0.35, environment: values.reflections },
+    character: look,
     materials: { cap: values.capMaterial, skirt: values.skirtMaterial, plate: plateName },
     knob: knob(values.size), small: knob(Math.round(values.size * 0.8)),
     detents: Math.max(2, Math.round(values.detents)),
@@ -154,13 +227,9 @@ export function resolveTokens(values: TuningValues) {
     button: { box: 64, cap: 40, height: 6 * s, taper: 0.6, chamfer: 2, travel: 4 * s, latch: 1.8 * s, bezel: [27, 22.6] as const, bezelHeight: 3.2 * s, ring: [22.6, 20.6] as const },
     /** The display window: a bezel (border, rise, chamfer) round a flat glass pane over the backlit window. */
     display: { box: [236, 58] as const, radius: 8, edge: 0.5, border: 7, rise: 2.4 * s, taper: 1.2, chamfer: 2, glass: 2.4 * s, glassTaper: 2.6, band: 0.3, horizon: 0.25 },
-    accent: [255, 146, 40] as Rgb,
+    accent: look.accent,
     /** Springs (stiffness, damping, per unit mass) and the reduced-motion form: an instant pose. */
-    springs: {
-      knob: { stiffness: 420, damping: 41 }, detent: { stiffness: 900, damping: 42 }, fader: { stiffness: 420, damping: 41 },
-      slide: { stiffness: 600, damping: 49 }, rocker: { stiffness: 1200, damping: 58 }, bat: { stiffness: 1400, damping: 45 },
-      wall: { stiffness: 1200, damping: 58 }, button: { stiffness: 1600, damping: 80 },
-    },
+    springs: look.springs,
   };
 }
 export type ResolvedTokens = ReturnType<typeof resolveTokens>;
@@ -177,6 +246,8 @@ export function parseValues(search: string): TuningValues {
   const plate = params.get("plateMaterial");
   if (plate && (plate === "auto" || (materialNames as readonly string[]).includes(plate))) values.plateMaterial = plate as TuningValues["plateMaterial"];
   if (params.get("theme") === "dark") values.theme = "dark";
+  const character = params.get("character");
+  if (character && (characterNames as readonly string[]).includes(character)) values.character = character as CharacterName;
   return values;
 }
 /** The query string for `values` (only what differs from the defaults). */

@@ -100,3 +100,6 @@ export { Carousel } from "./Carousel.tsx";
 export type { CarouselProps } from "./Carousel.tsx";
 export { Menu } from "./Menu.tsx";
 export type { MenuEntry, MenuProps } from "./Menu.tsx";
+export { Display } from "./Readout.tsx";
+export type { DisplayProps } from "./Readout.tsx";
+export type { StrataDisplayBacklight, StrataDisplayLive, StrataTextForm } from "../shared/display.ts";

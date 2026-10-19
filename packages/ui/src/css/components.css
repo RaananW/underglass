@@ -1924,6 +1924,129 @@
     }
   }
 
+  /* ---- Display: a glass window in a bezel over a native input or output (anatomy pages display.md, text-field.md section 11) ---- */
+
+  /*
+   * The native element is the control and covers the whole display, bezel included, transparent: an `<input>` (typing, selection,
+   * the caret, IME and autofill are the browser's) or a read-only `<output>`. Its text is the window's: printed under the glass,
+   * captured with the face. The object (decoration, no pointer) lies under it: a bezel set 4 px in from the box (the room for its
+   * cast shadow) and the window inside the bezel. The backlight is lit by `--strata-lit` (the Lamp's registered number), set
+   * from the display's state: 1 lit, 0 off, disabled or under more contrast. A backlit window carries a static tint of its role
+   * (part of the capture, so toggling the light changes no captured pixel) and, in the CSS presentation only, a glow; with the GPU
+   * presenting, the light is the display's emitters (face mode takes the CSS glow away).
+   */
+  :where(.ug-display) {
+    --_c: var(--strata-colour-glow-on);
+    --_tint: 10%;
+    --_room: 4px;
+    --_bz: var(--strata-display-bezel-width);
+    --_pad: calc(var(--_room) + var(--_bz) + var(--strata-space-3));
+    --_metal: var(--strata-colour-knob);
+    --_metal-light: color-mix(in srgb, var(--strata-colour-knob), white 60%);
+    --_metal-shade: color-mix(in srgb, var(--strata-colour-knob), var(--strata-colour-edge) 45%);
+    --strata-lit: 1;
+    position: relative;
+    display: inline-block;
+    box-sizing: border-box;
+    width: min(100%, 236px);
+    max-width: 100%;
+    vertical-align: middle;
+  }
+  :where(.ug-display)[data-strata-backlight="accent"] { --_c: var(--strata-colour-accent); }
+  :where(.ug-display)[data-strata-backlight="success"] { --_c: var(--strata-colour-success); }
+  :where(.ug-display)[data-strata-backlight="warning"] { --_c: var(--strata-colour-warning); }
+  :where(.ug-display)[data-strata-backlight="danger"] { --_c: var(--strata-colour-danger); }
+  :where(.ug-display)[data-strata-backlight="info"] { --_c: var(--strata-colour-info); }
+  :where(.ug-display)[data-strata-backlight="glowOn"] { --_c: var(--strata-colour-glow-on); }
+  :where(.ug-display)[data-strata-backlight="off"] { --_tint: 0%; }
+  :where(.ug-display)[data-strata-backlight="off"], :where(.ug-display)[data-strata-lit="false"], :where(.ug-display):has(> .ug-display__text:disabled) { --strata-lit: 0; }
+  :where(.ug-display__text) {
+    position: relative;
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    /* The window is the control's height, or a line and a half of the text at large sizes; the bezel and its room are added. */
+    min-height: calc(max(calc(var(--strata-control-height) + var(--strata-control-offset)), var(--strata-target-min), calc(1lh + 12px)) + 2 * (var(--_room) + var(--_bz)));
+    margin: 0;
+    /* The content box is the window's inside: the text's room, which is what the guard protects (the bezel round it is lit in full). */
+    padding: calc(var(--_room) + var(--_bz)) var(--_pad);
+    border: 0;
+    /* Square: the native element is the whole box, so a press anywhere in it, the corners included, lands on it. */
+    border-radius: 0;
+    background: transparent;
+    color: var(--strata-colour-text);
+    font-family: var(--strata-font-family-mono, ui-monospace, monospace);
+    font-size: var(--strata-control-font);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    line-height: 1.3;
+    text-overflow: clip;
+  }
+  :where(output.ug-display__text) { display: flex; align-items: center; overflow-wrap: anywhere; }
+  :where(.ug-display--input .ug-display__text) { cursor: text; }
+  :where(.ug-display--output .ug-display__text) { cursor: default; }
+  :where(.ug-display__text)::placeholder { color: var(--strata-colour-muted); opacity: 1; }
+  :where(.ug-display__text:focus-visible) { outline: none; }
+  :where(.ug-display__object) { position: absolute; inset: 0; pointer-events: none; }
+  :where(.ug-display__object) :where(*) { box-sizing: border-box; pointer-events: none; }
+  /* The bezel: a raised frame of metal set in from the box, and the window inside it. */
+  :where(.ug-display__bezel) {
+    position: absolute;
+    inset: var(--_room);
+    border: 1px solid var(--strata-colour-edge);
+    border-radius: var(--strata-display-bezel-radius);
+    background-color: var(--strata-colour-knob);
+    background-image: linear-gradient(160deg, var(--_metal-light), var(--_metal) 45%, var(--_metal-shade));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5), inset 0 -1px 0 rgb(0 0 0 / 0.25), 0 1px 2px rgb(0 0 0 / 0.3),
+      0 0 calc(var(--strata-lit) * 8px) calc(var(--strata-lit) * 1px) color-mix(in srgb, var(--_c) 45%, transparent);
+  }
+  :where(.ug-display__window) {
+    position: absolute;
+    inset: calc(var(--_bz) - 1px);
+    border: 1px solid var(--strata-colour-edge);
+    border-radius: 4px;
+    background-color: color-mix(in srgb, var(--strata-colour-field), var(--_c) var(--_tint));
+    background-image: radial-gradient(ellipse 90% 140% at 50% 50%, color-mix(in srgb, var(--_c) calc(var(--strata-lit) * 22%), transparent), transparent);
+    box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.35);
+  }
+  /* Focus: an accent outline just outside the bezel, in every presentation (inside the box: the room is 4 px). */
+  :where(.ug-display):has(> .ug-display__text:is(:focus-visible, [data-strata-preview~="focus"])) :where(.ug-display__bezel) {
+    outline: var(--strata-focus-width) solid var(--strata-colour-accent);
+    outline-offset: var(--strata-focus-offset);
+  }
+  /* Invalid: a danger edge round the window, with the message in the description. */
+  :where(.ug-display):has(> .ug-display__text[aria-invalid="true"]) :where(.ug-display__window) { border: 2px solid var(--strata-colour-danger); }
+  :where(.ug-display__text:disabled) { color: color-mix(in srgb, var(--strata-colour-text) 38%, transparent); cursor: not-allowed; }
+  :where(.ug-display):has(> .ug-display__text:disabled) :where(.ug-display__bezel) { --_metal-light: var(--_metal); background-image: none; }
+  /* With the GPU presenting the light is the display's emitters, the bezel a part at the Instrument level and the window a flat face:
+     the CSS glow, the bezel's gradient and the part's paint are taken away, so toggling the light or typing repaints only the text. */
+  :where([data-strata-mode="face"]) .ug-display__window { background-image: none; }
+  :where([data-strata-mode="face"]) .ug-display__bezel { background-image: none; }
+  :where([data-strata-mode="face"]) .ug-display__bezel[data-strata-dome] { border-color: transparent; }
+
+  /* Preferences. Reduced motion: nothing here moves. More contrast: the high-contrast themes apply through the tokens; the window is the
+     plain field with a text-coloured edge and no backlight (its emitters are off). Reduced transparency: the window is the plain capture
+     (the pane is not glass, the tint opaque). */
+  @media (prefers-contrast: more) {
+    :where(.ug-display) { --_tint: 0%; --strata-lit: 0; }
+    :where(.ug-display__window) { border-color: var(--strata-colour-text); background-image: none; }
+  }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-display) { --_tint: 0%; --strata-lit: 0; }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-display__window) { border-color: var(--strata-colour-text); background-image: none; }
+  @media (prefers-reduced-transparency: reduce) {
+    :where(.ug-display__window) { background-image: none; }
+  }
+  /* Forced colours: a CanvasText bezel and window on Canvas, FieldText text, GrayText when disabled, a Highlight focus outline. */
+  @media (forced-colors: active) {
+    :where(.ug-display__bezel, .ug-display__window) { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
+    :where(.ug-display__text) { color: CanvasText; }
+    :where(.ug-display__text:disabled) { color: GrayText; }
+    :where(.ug-display):has(> .ug-display__text:disabled) :where(.ug-display__bezel, .ug-display__window) { border-color: GrayText; }
+    :where(.ug-display):has(> .ug-display__text:is(:focus-visible, [data-strata-preview~="focus"])) :where(.ug-display__bezel) { outline-color: Highlight; }
+    :where(.ug-display):has(> .ug-display__text[aria-invalid="true"]) :where(.ug-display__window) { border: 2px solid CanvasText; }
+  }
+
   /* ---- Tabs ---- */
 
   /* A row of flat tabs over a rail (a groove); the selected tab's indicator (a mark) stands in the rail under it. */
