@@ -207,6 +207,8 @@ A grid of pads:
 - **Meaning never rides on light alone** (WCAG 1.4.1): the cap goes down, and a latching pad says `aria-pressed`.
 - **Target size** (2.5.8): the box is at least 66 px square at the small size (the cap 48); the least a pad shrinks to in a
   narrow grid is `target.min` (24).
+- **Screen readers:** the manual script for a pad grid's roving arrows and a latching pad's "pressed" is VAL-002's, in
+  [open issues](../../open-issues.md), until performed; the automated checks are the accessibility snapshot, axe and real keys.
 - **Feedback** ([design language section 20](../design-language.md#20-feedback)): where on, a pad plays `click` as it goes
   down, once per press; a pulse (8 ms) answers only the visitor's own input and stops under reduced motion. Both are off
   by default.

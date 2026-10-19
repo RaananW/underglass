@@ -171,6 +171,8 @@ A shifted keypad named with `aria-label`:
   intercept keys; a physical keyboard types into the field itself.
 - **Target size** (2.5.8): the key's box is at least 48 px square at the small size (the cap 36), 56 at medium, over the 44 px
   recommended for touch; the least a key shrinks to in a narrow container is `target.min` (24).
+- **Screen readers:** the manual script for a keypad's roving arrows and its legends' names is VAL-002's, in
+  [open issues](../../open-issues.md), until performed; the automated checks are the accessibility snapshot, axe and real keys.
 - **Feedback** (design language section 20): where on, a key plays `click` as it goes down, once per press; a pulse (8 ms)
   answers only the visitor's own input and stops under reduced motion. Both are off by default.
 

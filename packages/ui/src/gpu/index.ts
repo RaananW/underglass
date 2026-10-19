@@ -26,6 +26,11 @@
  * `--strata-lit` and the `emitter.*` tokens, read each frame, so a blink or a toggle is a uniform update), the `protected`
  * rects of its text and a `feather`, so core's face pool lights the page around the lens within the contrast guard.
  *
+ * A Pad's rim of light is an emitter at every level (`gpu/pad-keypad.ts`, `gpu/pad-forms.ts`, `gpu/instrument-pad.ts`; design language section 3, `emitter.pad.*`),
+ * lit by the `--strata-lit` the stylesheet gives it while held or latched, its whole cap among the protected rects; its cap travels on the CSS throw
+ * (`--strata-push-t`). A Keypad has no light: Relief and Objects draw its caps and its plinth as raised faces or keys and a slab, and the Instrument level a
+ * polished plinth object and a body with a captured cap per key.
+ *
  * The indicator forms' lenses (a Rating's lamps, a Badge's LED, a ProgressBar's segments, a Spinner's ring; `gpu/indicator-forms.ts`) are the same lenses, one
  * emitter each, lit by the `--strata-lit` the stylesheet gives them (a hover preview, a value, a chase), drawn at every level as a Meter's segments are.
  *
