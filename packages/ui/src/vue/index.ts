@@ -61,3 +61,5 @@ export { Table } from "./table.ts";
 export type { SortDirection, TableColumn, TableRow, TableSort } from "../shared/table.ts";
 export { useStrataGpu } from "./gpu.ts";
 export type { FieldControl } from "./shared.ts";
+export { Display } from "./readout.ts";
+export type { StrataDisplayBacklight, StrataDisplayLive, StrataTextForm } from "../shared/display.ts";

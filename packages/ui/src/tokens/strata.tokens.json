@@ -494,6 +494,61 @@
       }
     }
   },
+  "display": {
+    "$description": "Display layout (section 14, Instrument controls): the glass window's bezel and its finish zone.",
+    "bezel": {
+      "width": {
+        "$type": "dimension",
+        "$value": "7px",
+        "$description": "The bezel's width round the window.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 3,
+            "max": 16
+          }
+        }
+      },
+      "radius": {
+        "$type": "dimension",
+        "$value": "8px",
+        "$description": "The bezel's corner radius.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 24
+          }
+        }
+      }
+    },
+    "finish": {
+      "band": {
+        "$type": "number",
+        "$value": 0.3,
+        "$description": "The window's finish band (Instrument level).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 1
+          }
+        }
+      },
+      "horizon": {
+        "$type": "number",
+        "$value": 0.25,
+        "$description": "The window's dark horizon line (Instrument level).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    }
+  },
   "material": {
     "$description": "Open, layered materials: presets, roles, and any custom materials an application adds (design-language.md section 4).",
     "presets": {
@@ -2603,6 +2658,44 @@
         "$type": "number",
         "$value": 520,
         "$description": "Intensity I at the reference lens.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 32000
+          }
+        }
+      }
+    },
+    "display": {
+      "radius": {
+        "$type": "number",
+        "$value": 2.5,
+        "$description": "Reach R of a display's backlight, in window heights.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 1,
+            "max": 20
+          }
+        }
+      },
+      "height": {
+        "$type": "number",
+        "$value": 0.5,
+        "$description": "Height of the backlight over the face, in window heights.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.1,
+            "max": 2
+          }
+        }
+      },
+      "strength": {
+        "$type": "number",
+        "$value": 2200,
+        "$description": "Intensity I at the reference window (36 px high), shared between the emitters along its length.",
         "$extensions": {
           "dev.underglass.strata": {
             "scope": true,

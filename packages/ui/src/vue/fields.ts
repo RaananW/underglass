@@ -9,6 +9,7 @@ import { attachStrataKnobs } from "../dom/knob.ts";
 import type { FaderMark } from "../shared/fader.ts";
 import type { KnobMark } from "../shared/knob.ts";
 import { sliderForm, sliderFormModel, sliderNumber, sliderOwner } from "../shared/slider-forms.ts";
+import { displayAttributes, displayClasses, displayMarkup, isTextForm, type StrataDisplayBacklight } from "../shared/display.ts";
 import { classes, fieldKey, strataAttributes, strataProps, useFieldControl, type FieldControl } from "./shared.ts";
 
 export const Field = defineComponent({
@@ -49,6 +50,13 @@ export const Field = defineComponent({
   },
 });
 
+/** The decorative object of a display: a bezel with the window in it, under the native element. */
+export const displayObject = () => h("span", { class: "ug-display__object", "aria-hidden": "true" }, [
+  h("span", { class: displayMarkup.bezel.className, "data-strata-face": displayMarkup.bezel.face }, [
+    h("span", { class: displayMarkup.window.className, "data-strata-face": displayMarkup.window.face }),
+  ]),
+]);
+
 /** `v-model` support: a controlled value when `modelValue` is set, the native value otherwise. */
 const model = <T>(props: { modelValue?: T }, emit: (event: "update:modelValue", value: T) => void, read: (target: HTMLInputElement) => T) => ({
   ...(props.modelValue !== undefined ? { value: props.modelValue } : {}),
@@ -61,6 +69,12 @@ export const TextField = defineComponent({
   props: {
     modelValue: { type: String, default: undefined },
     invalid: { type: Boolean, default: false },
+    /** `display`: a glass window in a bezel, backlit. Any other string is the native `form` attribute. */
+    form: { type: String, default: undefined },
+    /** A display's backlight: a colour role (`glowOn` by default) or `off`. */
+    backlight: { type: String as PropType<StrataDisplayBacklight>, default: undefined },
+    /** A display's backlight is lit by default; `false` switches it off. */
+    lit: { type: Boolean, default: undefined },
     ...strataProps,
   },
   emits: ["update:modelValue"],
@@ -70,8 +84,15 @@ export const TextField = defineComponent({
     expose({ input });
     return () => {
       // Own props merged with the fallthrough attributes: listeners chain, and the caller's other attributes win.
-      const { class: className, ...rest } = attrs;
-      const native = mergeProps({ ...field?.value, ...(props.invalid ? { "aria-invalid": "true" } : {}), ...model(props, emit, target => target.value), ref: input }, rest);
+      const { class: className, style, ...rest } = attrs;
+      const display = isTextForm(props.form);
+      const native = mergeProps({ ...field?.value, ...(props.invalid ? { "aria-invalid": "true" } : {}), ...(props.form !== undefined && !display ? { form: props.form } : {}), ...(display ? {} : { style }),
+        ...model(props, emit, target => target.value), ref: input }, rest);
+      if (display) {
+        return h("span", { class: classes(...displayClasses(false), className as string), style, ...strataAttributes(props), ...displayAttributes({ backlight: props.backlight, lit: props.lit }) }, [
+          displayObject(), h("input", { ...native, class: "ug-display__text" }),
+        ]);
+      }
       if (!slots.icon) return h("input", { "data-strata-face": "well", ...strataAttributes(props), ...native, class: classes("ug-text-field", className as string) });
       return h("span", { class: "ug-text-field__wrap", "data-strata-face": "well", ...strataAttributes(props) }, [
         h("span", { class: "ug-text-field__icon", "aria-hidden": "true" }, slots.icon()),
