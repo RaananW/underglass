@@ -1,7 +1,7 @@
 /**
  * Browser suite for the showcase's Instrument gallery and showpiece (`#/instrument`, `examples/showcase/src/instrument.tsx`), DPR 1 and 2.
  * The showcase is served by a Vite dev server this suite starts (and closes) on a free port, under the `/underglass/` base.
- * - **Every component at every level:** each tab (the synthesiser, wave 1, wave 2, wave 3, the everyday forms, the notes) at the CSS,
+ * - **Every component at every level:** each tab (the synthesiser, wave 1, wave 2, wave 3, the everyday forms, the input forms, the notes) at the CSS,
  *   Relief, Objects and Instrument levels with GPU on throughout; at the Instrument level every layer is built from parts with nothing
  *   stepped down, and the parts and emitters of each panel are inside the plan's budgets (2,048 parts and 64 emitters per layer, 16
  *   materials). The totals are printed and must equal the numbers the page's notes state.
@@ -23,7 +23,7 @@ import { createServer } from "vite";
 import { evidenceDirectory } from "../helpers/evidence.mjs";
 
 const evidence = evidenceDirectory("showcase-instrument");
-const tabs = ["showpiece", "wave1", "wave2", "wave3", "everyday", "notes"];
+const tabs = ["showpiece", "wave1", "wave2", "wave3", "everyday", "inputs", "notes"];
 const levels = ["css", "relief", "objects", "instrument"];
 let server, base;
 
@@ -73,6 +73,7 @@ for (const dpr of [1, 2]) {
     test.setTimeout(600000);
     const { context, page, errors } = await open(browser, { dpr });
     const totals = {};
+    const stated = await page.evaluate(() => window.instrumentGallery.materials);
     for (const tab of tabs) for (const level of levels) {
       await select(page, tab, level);
       const state = await stateOf(page);
@@ -91,6 +92,15 @@ for (const dpr of [1, 2]) {
           expect(layer.emitters + 1, `${tab}: ${id} emitters per layer, with the pointer light`).toBeLessThanOrEqual(64);
           expect(layer.materials, `${tab}: ${id} materials per layer`).toBeLessThanOrEqual(16);
         }
+        // The helper's own account of each panel (#178): the materials it counts, under the cap, with no key body trimmed to Relief to fit.
+        const reports = await page.evaluate(ids => ids.map(id => { const report = window.instrumentGallery.diagnostics(document.getElementById(id)); return { id, count: report?.materials.count, cap: report?.materials.cap, keysAtRelief: report?.keysAtRelief }; }), panels);
+        for (const report of reports) {
+          const layer = state.instrument.layers.find(candidate => candidate.id === report.id);
+          expect(report.count, `${tab}: ${report.id} diagnostics count the scene's materials`).toBe(layer.materials);
+          expect(report.count, `${tab}: ${report.id} is under the cap`).toBeLessThanOrEqual(report.cap);
+          expect(report.keysAtRelief, `${tab}: ${report.id} no key trimmed to Relief`).toEqual([]);
+          expect(stated?.[report.id]?.[1], `${tab}: ${report.id} the notes' material count is the measured one`).toBe(report.count);
+        }
         totals[tab] = panels.map(id => { const layer = state.instrument.layers.find(candidate => candidate.id === id); return { id, parts: layer.parts, emitters: layer.emitters, materials: layer.materials }; });
       } else expect(state.instrument?.layers.length ?? 0, `${tab} at ${level}: no Instrument layers`).toBe(0);
       // Every enrolled content panel is a layer of the compositor.
@@ -99,10 +109,10 @@ for (const dpr of [1, 2]) {
     }
     // The notes state the totals measured here (parts and emitters of the panels of each tab, summed).
     console.log(`DPR ${dpr} budgets`, JSON.stringify(totals));
-    const stated = await page.evaluate(() => window.instrumentGallery.budgets);
+    const budgets = await page.evaluate(() => window.instrumentGallery.budgets);
     for (const tab of tabs.filter(name => name !== "notes")) {
       const sum = key => totals[tab].reduce((total, panel) => total + panel[key], 0);
-      expect(stated[tab], `${tab}: the notes' numbers are the measured ones`).toEqual({ parts: sum("parts"), emitters: sum("emitters") });
+      expect(budgets[tab], `${tab}: the notes' numbers are the measured ones`).toEqual({ parts: sum("parts"), emitters: sum("emitters") });
     }
     expect(errors).toEqual([]);
     await context.close();
@@ -117,8 +127,10 @@ for (const dpr of [1, 2]) {
       const result = await page.evaluate(() => {
         const misses = []; let total = 0;
         for (const control of document.querySelectorAll(".ig-content :is(input:not([type=hidden]), select, button, meter, output)")) {
+          if (!control.checkVisibility()) continue;
+          control.scrollIntoView({ block: "center" });
           const box = control.getBoundingClientRect();
-          if (!control.checkVisibility() || box.width < 2 || box.height < 2) continue;
+          if (box.width < 2 || box.height < 2) continue;
           for (const [fx, fy] of [[0.5, 0.5], [0.2, 0.2], [0.8, 0.2], [0.2, 0.8], [0.8, 0.8]]) {
             const x = box.left + box.width * fx, y = box.top + box.height * fy;
             if (y < 0 || y > innerHeight) continue;
@@ -134,7 +146,7 @@ for (const dpr of [1, 2]) {
       checked += result.total;
       expect(result.misses, `${tab}: hit mismatches`).toEqual([]);
     }
-    expect(checked).toBeGreaterThan(40);
+    expect(checked).toBeGreaterThan(300);
     console.log(`DPR ${dpr} hit samples`, checked);
     await context.close();
   });
@@ -251,6 +263,113 @@ for (const dpr of [1, 2]) {
     await context.close();
   });
 }
+
+test("the four characters (premium, studio, hifi, playful) keep GPU and the built layers on every group", async ({ browser }) => {
+  test.setTimeout(600000);
+  const { context, page, errors } = await open(browser, { dpr: 1 });
+  for (const [character, label] of [["studio", "Studio"], ["hifi", "Hi-fi"], ["playful", "Playful"], ["premium", "Premium"]]) {
+    await page.getByRole("button", { name: label, exact: true }).click();
+    await expect(page.getByRole("button", { name: label, exact: true })).toHaveAttribute("aria-pressed", "true");
+    for (const tab of tabs.filter(name => name !== "notes")) {
+      await select(page, tab, "instrument");
+      expect(await page.evaluate(() => document.documentElement.getAttribute("data-strata-character")), `${character}: the scope`).toBe(character === "premium" ? null : character);
+      const state = await stateOf(page);
+      expect(state.mode, `${character} ${tab}: ${state.reason}`).toBe("gpu");
+      for (const layer of state.instrument.layers) { expect(layer.status, `${character} ${tab}: ${layer.id}`).toBe("ready"); expect(layer.steppedDown, `${character} ${tab}: ${layer.id}`).toEqual([]); expect(layer.drawn).toBe(layer.parts); expect(layer.materials).toBeLessThanOrEqual(16); }
+    }
+  }
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+test("the dialog plate and the drawer tray open from the everyday forms with GPU on, and close again", async ({ browser }) => {
+  test.setTimeout(300000);
+  const { context, page, errors } = await open(browser, { dpr: 1 });
+  await select(page, "everyday", "instrument");
+  for (const [button, panel] of [["#ig-open-dialog", "#ig-dialog"], ["#ig-open-drawer", "#ig-drawer"]]) {
+    await page.locator(button).evaluate(node => node.scrollIntoView({ block: "center" }));
+    const box = await page.locator(button).boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.locator(panel)).toBeVisible();
+    await page.waitForFunction(id => window.showcase.state().instrument?.layers.some(layer => layer.id === id && layer.status === "ready"), panel.slice(1), { timeout: 60000 });
+    await settle(page);
+    const state = await stateOf(page);
+    expect(state.mode, `${panel} open: ${state.reason}`).toBe("gpu");
+    const layer = state.instrument.layers.find(candidate => candidate.id === panel.slice(1));
+    expect(layer, `${panel} is an Instrument layer`).toBeTruthy();
+    expect(layer.steppedDown, `${panel}: nothing stepped down`).toEqual([]);
+    expect(layer.materials).toBeLessThanOrEqual(16);
+    for (const candidate of state.instrument.layers) expect(candidate.status, `${panel} open: ${candidate.id}`).toBe("ready");
+    await page.keyboard.press("Escape");
+    await expect(page.locator(panel)).toBeHidden();
+    await settle(page);
+    expect((await stateOf(page)).mode, `${panel} closed`).toBe("gpu");
+  }
+  expect(errors).toEqual([]);
+  await context.close();
+});
+
+test("the new forms work through real input with GPU on: pads, keypad, checkbox, radio bank, segmented control, select forms, the tabs rail and the synthesiser's pads and keypad", async ({ browser }) => {
+  test.setTimeout(300000);
+  const { context, page, errors } = await open(browser, { dpr: 1 });
+  const click = async selector => { await page.locator(selector).evaluate(node => node.scrollIntoView({ block: "center" })); const box = await page.locator(selector).boundingBox(); await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2); await settle(page); };
+  const keep = async label => { const state = await stateOf(page); expect(state.mode, `${label}: ${state.reason}`).toBe("gpu"); for (const layer of state.instrument.layers) { expect(layer.status, `${label}: ${layer.id}`).toBe("ready"); expect(layer.steppedDown, `${label}: ${layer.id}`).toEqual([]); } };
+  await select(page, "wave3", "instrument");
+  await click("#ig-pad-hat");
+  await expect(page.locator("#ig-pad-hat")).toHaveAttribute("aria-pressed", "true");
+  await click("#ig-pad-clap");
+  await expect(page.locator("#ig-pad-clap")).toHaveAttribute("aria-pressed", "false");
+  await page.locator("#ig-pad-kick").focus();
+  await page.keyboard.press("ArrowRight");
+  expect(await page.evaluate(() => document.activeElement.id), "the arrow keys move between pads").toBe("ig-pad-snare");
+  await click("#ig-key-5");
+  await keep("pads and keypad");
+  await select(page, "inputs", "instrument");
+  await click("#ig-check-2");
+  await expect(page.locator("#ig-check-2")).toBeChecked();
+  await click("label:has(#ig-check-1)");
+  await expect(page.locator("#ig-check-1")).not.toBeChecked();
+  await click("#ig-bank label:has(input[value=c])");
+  await expect(page.locator("#ig-bank input[value=c]")).toBeChecked();
+  await expect(page.locator("#ig-bank input[value=b]")).not.toBeChecked();
+  await click("#ig-segmented label:has(input[value=grid])");
+  await expect(page.locator("#ig-segmented input[value=grid]")).toBeChecked();
+  await page.locator("#ig-select-selector").focus();
+  await page.keyboard.press("ArrowDown");
+  expect(await page.locator("#ig-select-selector").inputValue()).toBe("square");
+  await page.locator("#ig-select-display").focus();
+  await page.keyboard.press("ArrowDown");
+  expect(await page.locator("#ig-select-display").inputValue()).toBe("us");
+  await click("#ig-rail-tab-two");
+  await expect(page.locator("#ig-rail-tab-two")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#ig-rail-panel-two")).toBeVisible();
+  await keep("input forms");
+  // The synthesiser: a held pad opens the gate at its note, the keypad types a patch number and # loads it.
+  await select(page, "showpiece", "instrument");
+  await page.locator("#syn-hold").click();
+  await settle(page);
+  const meter = () => page.locator("#syn-meter").evaluate(node => node.value);
+  expect(await meter(), "no gate, no output").toBe(0);
+  await page.locator("#syn-pad-4").evaluate(node => node.scrollIntoView({ block: "center" }));
+  const pad = await page.locator("#syn-pad-4").boundingBox();
+  await page.mouse.move(pad.x + pad.width / 2, pad.y + pad.height / 2);
+  await page.mouse.down();
+  await expect.poll(meter).toBeGreaterThan(0);
+  expect(await text(page, "#syn-display"), "the display prints the held note's pitch").toMatch(/Hz$/);
+  await page.mouse.up();
+  await expect.poll(meter).toBe(0);
+  await click("#syn-key-1");
+  await click("#syn-key-2");
+  expect(await text(page, "#syn-display")).toMatch(/^P12 ENTRY/);
+  await click("#syn-key-enter");
+  expect(await text(page, "#syn-display")).toMatch(/^P12 /);
+  await click("#syn-key-3");
+  await click("#syn-key-clear");
+  expect(await text(page, "#syn-display")).toMatch(/^P12 /);
+  await keep("synthesiser pads and keypad");
+  expect(errors).toEqual([]);
+  await context.close();
+});
 
 test("the character, the theme and the pointer light keep GPU and the built layers; the light writes only emitters", async ({ browser }) => {
   test.setTimeout(300000);

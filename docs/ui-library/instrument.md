@@ -588,15 +588,17 @@ One concern per PR, each based on `main`:
 
 The showcase's `#/instrument` page shows every Instrument component on main in its premium form, by the catalogue's groups (wave 1, wave 2, wave 3, the everyday
 forms), each with its name, a line, the native control it is, its anatomy page and a live instance, behind a level switch (CSS, Relief, Objects, Instrument), a
-theme switch, a character switch (premium, studio) and the pointer light. The latching everyday forms, Pad and Keypad join it when they merge.
+theme switch, a character switch (premium, studio, hifi, playful) and the pointer light. It is complete as of 2026-10-19: wave 3 has the Pad grid and the Keypad beside the JogWheel and the PatchBay, the
+everyday forms are two tabs (the structural and indicator forms; the input forms: the latching Checkbox, Radio bank and SegmentedControl, the Select's `selector` and `display`, the Tabs `rail`), and every panel is
+under the 16 materials (`StrataGpu.diagnostics`).
 
 **The showpiece is a synthesiser, not a smart-home wall.** Main supports the hardware a voice is made of (knobs, faders, switches, lamps, a meter, a gauge, a display, a
-jog wheel, a patch bay, push buttons, rotary selectors) and they wire to each other the way a panel does; a wall wants Pad, Keypad, a thermostat dial and latching
-switches, which are still in review.
+jog wheel, a patch bay, push buttons, rotary selectors) and they wire to each other the way a panel does; a wall wants a thermostat dial, which does not exist. The voice has since gained a fifth module of
+scale pads (a held pad plays the voice at its note) and a keypad (digits type a patch number into the display, `#` loads it, `*` clears).
 
-**It is four module panels, not one.** A scene holds at most 16 materials (`INSTRUMENT_MATERIALS`) and every component brings its own: a knob four, a fader three, the
+**It is five module panels, not one.** A scene holds at most 16 materials (`INSTRUMENT_MATERIALS`) and every component brings its own: a knob four, a fader three, the
 four switch forms eight, a meter its glass and a lens per zone colour, a lens colour each. The voice measured 29 on one panel, and core refuses such a scene whole.
-So the voice is a rack (master, sound, output, modulation), each module a plate under 16 (13, 12, 13 and 9 materials at premium; studio adds `anodised`), wired
+So the voice is a rack (master, sound, output, pads and keys, modulation), each module a plate under 16 (13, 12, 13, 6 and 9 materials at premium; studio adds `anodised`), wired
 through shared state. A push button is also drawn as a Relief key, with no diagnostic, when the scene already holds 12 materials, so the master panel keeps its
 push buttons ahead of everything else. Parts and emitters per panel are in the page's notes and pinned by `tests/browser/showcase-instrument.test.mjs`.
 
