@@ -37,8 +37,9 @@
  * become the premium knob's parts, whose pointer turns on a spring as their value changes (uniform updates, no
  * recapture), its faders the premium fader's carriage (`gpu/instrument-fader.ts`), sliding its slot on `spring.fader`
  * while the slot stays a groove and the scale printed on the face, its Switch forms their moving parts and bezels
- * (`gpu/instrument-switch.ts`), posed by the CSS throw, and its buttons keys with captured caps; every
- * other component stays a Relief primitive on the face.
+ * (`gpu/instrument-switch.ts`), posed by the CSS throw, its rotary selectors the knob's parts turned to the selected option
+ * on `spring.detent`, its push buttons (`gpu/instrument-push.ts`) a polished bezel, a glass ring that is an emitter and a captured
+ * cap on the CSS throw, and its other buttons keys with captured caps; every other component stays a Relief primitive on the face.
  * The Scene level still draws its panels at the Objects level, so the adjust policy steps a Scene page over
  * `instrument`.
  *
@@ -53,6 +54,11 @@ import { isSceneObject, type SceneEntry, type SceneFace, type SceneMaterial, typ
 import { panelMotion, type PanelMover } from "../dom/motion.ts";
 import { liveStrataMeter } from "../dom/meter.ts";
 import { switchFormEntries } from "./switch-forms.ts";
+import { pushFormEntries } from "./push-forms.ts";
+import { pushHeight, pushMaterialsOf, pushObject } from "./instrument-push.ts";
+import { followSpring } from "./instrument-rotary.ts";
+import { pushEmitterDefaults, pushPosition, ringEmitter, type PushEmitterTokens } from "../shared/push-button.ts";
+import { rotaryFraction } from "../shared/rotary-selector.ts";
 import { lampFormEntries } from "./lamp-forms.ts";
 import { lampHeight, lampMaterialsOf, lampObject, lensMaterial, type LampKind } from "./instrument-lamp.ts";
 import { emitterDefaults, lensEmitter, type EmitterTokens, type LampEmitter } from "../shared/lamp.ts";
@@ -188,6 +194,9 @@ const interactive = "input, button, select, textarea, a[href], [tabindex]";
 /** Material roles by face, for elements that name no material (design language section 4). */
 function roleOf(face: SceneFace, element: Element, panel: Element): string {
   if (element === panel || element.matches(".ug-card")) return "panel";
+  // A push button's bezel, and a rotary selector's skirt and cap, are the knob's metal; a push button's cap takes the button's variant.
+  if (element.matches(".ug-push__bezel, .ug-rotary__skirt, .ug-rotary__cap")) return "knob";
+  if (element.matches(".ug-push__cap")) return element.closest(".ug-button--accent, .ug-button--primary") ? "buttonPrimary" : "control";
   // A knob's skirt and cap, and a fader's carriage, are raised faces in the knob's material (a fader's slot is a
   // groove, a rail).
   if (element.matches(".ug-knob__skirt, .ug-knob__cap, .ug-fader__carriage, .ug-lamp__bezel")) return "knob";
@@ -300,6 +309,18 @@ function protectedRects(panel: HTMLElement, grow = 2): [number, number, number, 
   return rects.length > MAX_PROTECTED ? "extent" : rects;
 }
 
+/** A visible push button now: what its parts need of its ring and LED (`--strata-lit`, `--strata-led` are read for their emitters). */
+interface PushInfo {
+  form: "momentary" | "latching";
+  /** The role colour, `#rrggbb`. */
+  role: string;
+  /** The ring's place in the scene's `emitters`, and the LED's (latching). */
+  ring: number;
+  led?: number;
+}
+/** What a scene's faces loop found for the push buttons and rotary selectors of a panel, for its Instrument scene. */
+const found = new WeakMap<HTMLElement, { pushes: Map<HTMLElement, PushInfo>; instrumentPushes: Set<HTMLElement>; rotaries: Set<HTMLElement> }>();
+
 /** A presentation level (design language section 16). */
 export type StrataLevel = "relief" | "objects" | "instrument" | "scene";
 
@@ -381,7 +402,10 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     // A lamp's bezel and lens are its input's object too (hover and disabled; a lamp does not sink when it is pressed).
     const lampRow = element.closest(".ug-lamp");
     const lamp = lampRow?.matches(".ug-lamp--momentary") ? lampRow : lampRow?.querySelector(":scope > .ug-lamp__input");
-    const owner = knob ?? fader ?? lamp;
+    // A rotary selector's skirt and cap are its select's object, as a knob's are its input's; a push button's bezel and cap are its button's.
+    const rotary = element.closest(".ug-rotary__dial")?.querySelector(".ug-rotary__select");
+    const push = element.closest("button.ug-push");
+    const owner = knob ?? fader ?? lamp ?? rotary ?? push;
     const control = element.matches(interactive) ? element : owner ?? element.closest("label")?.querySelector("input, select, textarea") ?? element;
     const target = control.closest("label") ?? control;
     const preview = `${element.getAttribute("data-strata-preview") ?? ""} ${control.getAttribute("data-strata-preview") ?? ""}`.split(/\s+/);
@@ -391,7 +415,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       hover: (isControl && target.matches(":hover")) || preview.includes("hover"),
       // A toggle that is on, the current page of a Pagination, or a SegmentedControl's selected key holds its key down (design language section 6: it
       // latches at its travel).
-      pressed: !fader && !lamp && (isControl && control.matches(":active, [aria-pressed='true'], [aria-current]:not([aria-current='false']), .ug-segmented__input:checked")) || preview.includes("active"),
+      pressed: !fader && !lamp && (isControl && control.matches(":active:not([data-strata-down='false']), [aria-pressed='true'], [data-strata-down='true'], [aria-current]:not([aria-current='false']), .ug-segmented__input:checked")) || preview.includes("active"),
       focus: !owner && (control.matches(":focus-visible") || preview.includes("focus")),
       disabled: control.matches(":disabled, [aria-disabled='true']"),
     };
@@ -418,6 +442,32 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   // never depend on the state. How lit it is, `--strata-lit`, is read from the lamp now (a toggle, a held button, a blink).
   const lamps = new Map<HTMLElement, LampInfo>(), emitters: LampEmitter[] = [], instrumentLamps = new Set<HTMLElement>();
   const moreContrast = typeof matchMedia === "function" && matchMedia("(prefers-contrast: more)").matches;
+  // Push buttons (design language section 3): the lit ring is an emitter, and a latching button's LED another, lit by `--strata-lit` and
+  // `--strata-led` now (held or latched, latched), so a press is a uniform write, not a capture. Each is also a `lamps` entry for its
+  // ring, so the panel takes the lights and their outset as a lamp's does.
+  const mine = { pushes: new Map<HTMLElement, PushInfo>(), instrumentPushes: new Set<HTMLElement>(), rotaries: new Set<HTMLElement>() };
+  found.set(panel, mine);
+  for (const root of panel.querySelectorAll<HTMLElement>("button.ug-push")) {
+    const cap = root.querySelector<HTMLElement>(".ug-push__cap"), led = root.querySelector<HTMLElement>(".ug-push__led");
+    if (!cap || emitters.length >= MAX_EMITTERS - 1 || !root.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    const capBox = rectWithin(cap, panel);
+    if (capBox[2] <= 0 || capBox[3] <= 0) continue;
+    const style = getComputedStyle(root), pushTokens = reader(root);
+    const number = (name: string) => { const read = Number.parseFloat(style.getPropertyValue(name)); return Number.isFinite(read) ? Math.min(1, Math.max(0, read)) : 0; };
+    const role = hex(style.getPropertyValue("--_c").trim() || "#ff9228");
+    const own: PushEmitterTokens = { radius: pushTokens.number("emitter.pushButton.radius", pushEmitterDefaults.radius), height: pushTokens.number("emitter.pushButton.height", pushEmitterDefaults.height),
+      strength: pushTokens.number("emitter.pushButton.strength", pushEmitterDefaults.strength) };
+    const info: PushInfo = { form: root.getAttribute("data-strata-form") === "latching" ? "latching" : "momentary", role, ring: emitters.length };
+    lamps.set(root, { kind: "lamp", role, lit: number("--strata-lit"), lens: capBox[3], index: emitters.length, box: rectWithin(root, panel), control: root, feather: pushTokens.number("emitter.guardFeather", emitterDefaults.guardFeather) });
+    emitters.push(ringEmitter([capBox[0] + capBox[2] / 2, capBox[1] + capBox[3] / 2], capBox[3], moreContrast ? 0 : number("--strata-lit"), role, own));
+    if (info.form === "latching" && led) {
+      const ledBox = rectWithin(led, panel);
+      info.led = emitters.length;
+      const ledTokens: EmitterTokens = { radius: pushTokens.number("emitter.led.radius", emitterDefaults.led.radius), height: pushTokens.number("emitter.led.height", emitterDefaults.led.height), strength: pushTokens.number("emitter.led.strength", emitterDefaults.led.strength) };
+      emitters.push(lensEmitter("led", [ledBox[0] + ledBox[2] / 2, ledBox[1] + ledBox[3] / 2], ledBox[2], moreContrast ? 0 : number("--strata-led"), role, ledTokens));
+    }
+    mine.pushes.set(root, info);
+  }
   for (const lens of panel.querySelectorAll<HTMLElement>(".ug-lamp__lens, .ug-status-light__lens")) {
     const lampRoot = lens.closest<HTMLElement>(".ug-lamp, .ug-status-light");
     if (!lampRoot || emitters.length >= MAX_EMITTERS || !lens.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
@@ -487,6 +537,11 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       // groove on the face); a button as a key with a captured cap.
       const knob = element.matches(".ug-knob__skirt, .ug-knob__cap") ? element.closest<HTMLElement>(".ug-knob") : null;
       if (knob) { knobs.add(knob); continue; }
+      // A rotary selector's skirt and cap are the knob's parts (its printed labels stay on the face); a push button's bezel and cap are its object's.
+      const rotary = element.matches(".ug-rotary__skirt, .ug-rotary__cap") ? element.closest<HTMLElement>(".ug-rotary") : null;
+      if (rotary) { mine.rotaries.add(rotary); continue; }
+      const push = element.matches(".ug-push__bezel, .ug-push__cap") ? element.closest<HTMLElement>("button.ug-push") : null;
+      if (push && mine.pushes.has(push)) { mine.instrumentPushes.add(push); continue; }
       const fader = element.matches(".ug-fader__carriage") ? element.closest<HTMLElement>(".ug-fader") : null;
       if (fader) { faders.add(fader); continue; }
       // A Switch form's parts, the slot apart (a groove on the face), are drawn as its Instrument object; the CSS paint of
@@ -507,6 +562,13 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       knob: { material: material(tokens.raw("material.roles.knob") || "satin"), colour: tokens.colour("knob") }, hoverHeight: tokens.number("state.hoverHeight", 1.6),
       light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, domes: options.domes });
     if (form) { entries.push(...form); continue; }
+    // A push button's bezel and cap (`push-forms.ts`): inside the button's box, shadows included.
+    const pushRoot = element.matches(".ug-push__bezel, .ug-push__cap") ? element.closest<HTMLElement>("button.ug-push") : null;
+    if (pushRoot) {
+      const parts = pushFormEntries(element, { rect, state, objects: objects(element), base: baseOf(element), box: rectWithin(pushRoot, panel), bezel: rectWithin(pushRoot.querySelector(".ug-push__bezel") ?? pushRoot, panel),
+        material: materialFor, light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, hoverHeight: tokens.number("state.hoverHeight", 1.6), keyTravel });
+      if (parts) { entries.push(...parts); continue; }
+    }
     // A Lamp's or StatusLight's bezel and lens (`lamp-forms.ts`): inside the control's box, shadows included.
     const lampRoot = element.matches(".ug-lamp__bezel, .ug-lamp__lens, .ug-status-light__lens") ? element.closest<HTMLElement>(".ug-lamp, .ug-status-light") : null;
     const lamp = lampRoot && lamps.get(lampRoot);
@@ -878,6 +940,45 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     materials[name] ??= { base: { colour, roughness: layers?.base?.roughness ?? 0.45, metallic: layers?.base?.metallic ?? 0 }, coat: { ...layers?.coat } };
     objects.push(key);
     tallest = Math.max(tallest, height + 1);
+  }
+  // Rotary selectors and push buttons (`gpu/instrument-rotary.ts`, `gpu/instrument-push.ts`). A rotary selector: the knob's parts, the pointer turned to the
+  // selected option on `spring.detent` (one detent per option). A push button: a polished bezel, a glass ring with its emitter, the cap on the
+  // CSS throw (`--strata-push-t`), and a latching button's LED.
+  const mine = found.get(panel);
+  for (const root of mine?.rotaries ?? []) {
+    const select = root.querySelector<HTMLSelectElement>(".ug-rotary__select"), skirt = root.querySelector(".ug-rotary__skirt"), cap = root.querySelector(".ug-rotary__cap");
+    if (!select || !skirt || !cap || objects.length + entries.length >= 255) continue;
+    const box = rectWithin(select, panel);
+    if (box[2] <= 0 || box[3] <= 0) continue;
+    const t = followSpring(options.springs, options.moving, select, rotaryFraction(Math.max(0, select.selectedIndex), select.options.length), knobSprings.detent, now, instant);
+    const state = context.states(skirt);
+    objects.push(knobObject({ id: idOf(select, "rotary"), box, skirt: rectWithin(skirt, panel)[2], cap: rectWithin(cap, panel)[2], t, sweep: reader(root).number("knob.sweep", 270), scale,
+      state: { hover: state.hover, disabled: state.disabled }, relief: { height: raised, material: use("knobCap") } }, profile));
+    for (const name of ["knobSkirt", "knobChamfer", "knobInk"]) use(name);
+    options.domes?.add(skirt); options.domes?.add(cap);
+    tallest = Math.max(tallest, (2.5 + 16 + 1.2) * scale);
+  }
+  for (const root of mine?.instrumentPushes ?? []) {
+    const info = mine!.pushes.get(root), bezel = root.querySelector<HTMLElement>(".ug-push__bezel"), ring = root.querySelector<HTMLElement>(".ug-push__ring"), cap = root.querySelector<HTMLElement>(".ug-push__cap");
+    const led = root.querySelector<HTMLElement>(".ug-push__led");
+    if (!info || !bezel || !ring || !cap || objects.length + entries.length >= 255) continue;
+    const box = rectWithin(root, panel), state = context.states(cap);
+    if (box[2] <= 0 || box[3] <= 0) continue;
+    const style = getComputedStyle(root), colour = hex(getComputedStyle(cap).backgroundColor), name = `key ${colour}`;
+    const disabled = root.matches(":disabled, [aria-disabled='true']");
+    // The throw's position as the CSS transition has it this frame, the same number the Relief and Objects levels follow.
+    const read = Number.parseFloat(style.getPropertyValue("--strata-push-t"));
+    const t = Math.min(1, Math.max(0, disabled ? 0 : Number.isFinite(read) ? read : pushPosition({ held: root.matches(":active:not([data-strata-down='false']), [data-strata-down='true']"), latched: root.getAttribute("aria-pressed") === "true", disabled })));
+    if (!materials[name] && Object.keys(materials).length >= 12) { entries.push({ face: "raised", rect: box, radius: radiusOf(root, box[2]), height: raised, material: context.materialFor(cap, "raised"), state }); continue; }
+    const layers = settings.materials[context.materialFor(cap, "raised")];
+    materials[name] ??= { base: { colour, roughness: layers?.base?.roughness ?? 0.45, metallic: layers?.base?.metallic ?? 0 }, coat: { ...layers?.coat } };
+    const input = { id: idOf(root, "push"), form: info.form, box, bezel: rectWithin(bezel, panel), ring: rectWithin(ring, panel), cap: rectWithin(cap, panel), ...(led && info.led !== undefined ? { led: rectWithin(led, panel) } : {}),
+      scale, role: info.role, emitters: { ring: info.ring, ...(info.led !== undefined ? { led: info.led } : {}) }, t, material: name, opaque,
+      state: { hover: state.hover, pressed: state.pressed, disabled: state.disabled }, light, relief: { height: raised, material: use("keyCap") } };
+    objects.push(pushObject(input, profile) as unknown as InstrumentObject);
+    Object.assign(materials, pushMaterialsOf(input));
+    for (const part of [root, bezel, ring, led]) if (part) options.domes?.add(part);
+    tallest = Math.max(tallest, pushHeight(scale));
   }
   const elevation = (tokens.number("light.elevation", 41) * Math.PI) / 180;
   const reach = Math.min(128, Math.max(context.reach, Math.ceil(tallest / Math.tan(elevation) + 1.5 * tallest + 1)));

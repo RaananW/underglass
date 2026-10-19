@@ -66,6 +66,8 @@ function blended(token: Token): string {
 function sizes(tokens: Token[]): [string, string[]][] {
   const parts: Record<string, string> = { indicator: "indicator", switchWidth: "switch-width", control: "control-offset", font: "control-font", knob: "knob-size", fader: "fader-travel", lamp: "lamp-size", statusLight: "status-light-size", meter: "meter-size", gauge: "gauge-size" };
   const bySize = new Map<string, string[]>();
+  // The PushButton's cap and the RotarySelector's skirt: `--strata-push-size` and `--strata-rotary-size`.
+  Object.assign(parts, { push: "push-size", rotary: "rotary-size" });
   for (const token of tokens.filter(token => token.path.startsWith("size."))) {
     const [, part, size] = token.path.split(".") as [string, string, string];
     if (!parts[part]) continue;
