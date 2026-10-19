@@ -61,7 +61,8 @@ test("past 14 materials the plain buttons are Relief keys, reported once and in 
     expect(reported[0]).toContain(String(rules.keyBody));
     expect(reported[0]).toContain(String(rules.push));
     expect(warnings.filter(text => text.includes("above core's cap")), "the helper never reached core's cap here").toHaveLength(0);
-    // The Relief keys are drawn: each box differs from the panel with that key hidden (a face-only reference).
+    // The Relief keys are drawn: each box differs from the panel with that key hidden (a face-only reference). Limit: the probe cannot drop a key's Relief entry
+    // with the DOM unchanged (the scene is built from the DOM), so the difference also includes the hidden DOM content (the key's label and its own paint).
     const withKeys = PNG.sync.read(await page.screenshot());
     await page.evaluate(ids => { for (const id of ids) document.getElementById(id).style.visibility = "hidden"; }, atRelief);
     await settle(page);

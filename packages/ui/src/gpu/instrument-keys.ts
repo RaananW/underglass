@@ -69,7 +69,8 @@ export function createKeyRegistry(): KeyRegistry {
       for (const name of [...new Set(bodies.map(body => body.name))].reverse()) {
         if (Object.keys(materials).length <= STRATA_INSTRUMENT_MATERIAL_CAP) break;
         for (const body of bodies.filter(entry => entry.name === name)) {
-          objects.splice(objects.indexOf(body.object), 1);
+          const at = objects.indexOf(body.object);
+          if (at >= 0) objects.splice(at, 1);
           entries.push(body.relief);
           keyAtRelief(body.element);
           bodies.splice(bodies.indexOf(body), 1);

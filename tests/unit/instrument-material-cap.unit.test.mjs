@@ -63,3 +63,18 @@ test("a face whose own primitives use more than 16 materials is valid past the c
   assert.ok(face.primitives.every(entry => entry.material in face.materials));
   assert.deepEqual(face.primitives.slice(1).map(entry => entry.material), [...names.slice(0, 16), ...Array(4).fill(names[0])]);
 });
+
+test("an entry naming a material the scene does not hold is refused with the same message at 20 materials as at 16", () => {
+  const message = count => {
+    const bad = scene(count);
+    bad.primitives = [bad.primitives[0], { ...bad.primitives[0], material: "typo" }];
+    try { core.validateInstrumentScene(bad); } catch (error) { return error.message; }
+    return undefined;
+  };
+  assert.match(message(16), /material requires one of the scene's materials/);
+  assert.equal(message(20), message(16));
+  // The face's count ignores unknown names.
+  const valid = core.validateInstrumentScene(scene(20));
+  valid.primitives = [{ ...valid.primitives[0], material: "typo" }];
+  assert.equal(core.faceMaterialCount(valid), 0);
+});

@@ -600,7 +600,8 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
   `materials:` warning, GPU on. A scene naming more than 64 (`INSTRUMENT_MATERIALS_CEILING`) is a validation error: 64 is a format limit, the same bound as profiles
   and protected rects, not a budget. The face's own Relief binding holds 16, so past the cap it binds the materials the face's primitives
   use; when those are more than 16 the face draws the first 16 in scene order and the rest in the first (the layer is stepped down already,
-  and `detail` adds `N face materials, above 16`). Each layer reports `materials: { count, cap }`
+  and `detail` adds `N face materials, above 16`, with a `materials:` warning of its own). An entry naming a material the scene does not hold is refused as at 16 or fewer.
+  `@underglass/ui/gpu` exports `createKeyRegistry`, `KeyBody` and `KeyRegistry` (public: loops that draw key-like objects register their bodies so the helper can trim them to fit; see `gpu/instrument-keys.ts`), with `INSTRUMENT_KEY_BODY_MATERIALS`, `INSTRUMENT_PUSH_MATERIALS`, `STRATA_INSTRUMENT_MATERIAL_CAP`, `StrataGpuDiagnostics` and `StrataGpu.diagnostics(panel)`. Each layer reports `materials: { count, cap }`
   and `state().instrument.budgets.materialsPerLayer` is the cap.
 - **Diagnostics.** `state().instrument` lists each layer's `status` (`ready`, `pending`, `stepped-down`, `failed`),
   objects, parts, drawn parts, kinds, `materials` (`{ count, cap }`), `steppedDown` entries (`{ object, reason, part?, inset?, overshoot?, detail? }`,

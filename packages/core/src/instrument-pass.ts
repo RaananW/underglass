@@ -1245,6 +1245,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       const kindMap = state.kindMap, kinds = [...kindMap.values()], parts = kinds.reduce((sum, kind) => sum + kind.instances.length, 0);
       Object.assign(state, { parts: instrumentPartCount(scene), kinds: kinds.length, objects: scene.objects.length, warnings: [] as string[], materialCount: Object.keys(scene.materials).length });
       if (state.materialCount > INSTRUMENT_MATERIALS) state.warnings.push(`materials: ${state.materialCount} materials, above the ${INSTRUMENT_MATERIALS} a layer draws with; the layer is drawn at the Relief level`);
+      if (state.materialCount > INSTRUMENT_MATERIALS && faceMaterialCount(scene) > INSTRUMENT_MATERIALS) state.warnings.push(`materials: ${faceMaterialCount(scene)} face materials, above ${INSTRUMENT_MATERIALS}; the face draws the first ${INSTRUMENT_MATERIALS} and the rest in the first`);
       if (kinds.length > INSTRUMENT_KINDS_PER_LAYER) state.warnings.push(`kinds: ${kinds.length} part kinds (draw calls), above about ${INSTRUMENT_KINDS_PER_LAYER}`);
       // The chain's flags, its map and the map's window on this stage, and which kinds have lenses, are structure too
       // (`postStructure`): a stage that outgrows the window rebuilds the scene.

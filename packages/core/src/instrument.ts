@@ -916,13 +916,14 @@ function collapseFace(all: (readonly [string, InstrumentRecipe])[], entries: rea
   const used = new Set(entries.map(entry => entry.material));
   // The face binds 16: the first 16 used, in scene order; the rest of the face's entries are drawn in the first (the layer is stepped down, `budget`).
   const kept = all.filter(([name]) => used.has(name)).slice(0, INSTRUMENT_MATERIALS);
-  const keep = new Set(kept.map(([name]) => name));
+  const keep = new Set(kept.map(([name]) => name)), known = new Set(all.map(([name]) => name));
   return { materials: Object.fromEntries(kept.map(([name, recipe]) => [name, faceMaterial(recipe)])),
-    entries: entries.map(entry => (keep.has(entry.material) || !kept.length ? entry : { ...entry, material: kept[0]![0] })) };
+    // Only an entry naming a known material outside the first 16 is remapped; an unknown or missing name stays, so the face's validation refuses it as at 16.
+    entries: entries.map(entry => (keep.has(entry.material) || !kept.length || !known.has(entry.material) ? entry : { ...entry, material: kept[0]![0] })) };
 }
 /** The materials the face's own entries (the primitives and every object's Relief primitive) use; the face binds 16 (`budget` above). */
 export function faceMaterialCount(scene: InstrumentScene): number {
-  return new Set([...scene.primitives, ...scene.objects.map(object => object.relief!)].map(entry => entry.material)).size;
+  return new Set([...scene.primitives, ...scene.objects.map(object => object.relief!)].map(entry => entry.material).filter(name => name in scene.materials)).size;
 }
 
 /**
