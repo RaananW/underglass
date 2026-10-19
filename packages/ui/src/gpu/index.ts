@@ -1097,7 +1097,7 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
       const read = reader(root);
       objects.push(wheelObject({ id: idOf(input, "wheel"), box, slot: slotBox, t, scale, light, sweep: read.number("wheel.sweep", 150), ridges: read.number("wheel.ridges", 12),
         state: { hover: state.hover, disabled: state.disabled }, relief: { rect: rectWithin(carriage, panel), height: raised, material: use("faderCap") } }, profile));
-      use("faderChamfer"); use("faderInk");
+      use("knobSkirt"); use("knobInk");
       options.domes?.add(carriage);
       tallest = Math.max(tallest, wheelHeight(scale));
       continue;
@@ -1280,7 +1280,7 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     const index = select ? Math.max(0, select.selectedIndex) : Math.max(0, radios.findIndex(radio => radio.checked)), count = select ? select.options.length : radios.length;
     const t = followSpring(options.springs, options.moving, host, rotaryFraction(index, count), knobSprings.detent, now, instant);
     const state = context.states(skirt);
-    objects.push(knobObject({ id: idOf(host, "rotary"), box, skirt: rectWithin(skirt, panel)[2], cap: rectWithin(cap, panel)[2], t, sweep: reader(root).number("knob.sweep", 270), scale,
+    objects.push(knobObject({ id: idOf(select ?? root.closest("fieldset") ?? host, "rotary"), box, skirt: rectWithin(skirt, panel)[2], cap: rectWithin(cap, panel)[2], t, sweep: reader(root).number("knob.sweep", 270), scale,
       state: { hover: state.hover, disabled: state.disabled || (!select && !!root.closest("fieldset:disabled")) }, relief: { height: raised, material: use("knobCap") } }, profile));
     for (const name of ["knobSkirt", "knobChamfer", "knobInk"]) use(name);
     options.domes?.add(skirt); options.domes?.add(cap);

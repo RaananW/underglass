@@ -162,11 +162,11 @@ function sceneOf(objects, profiles) {
     primitives: [{ face: "raised", rect: [0, 0, 400, 320], radius: 12, height: 8, material: "matte" }], profiles, objects };
 }
 
-test("the wheel is a ridged roller and its index tooth, one pose about the roller's axis, from -sweep/2 to +sweep/2, on materials the fader already has", () => {
+test("the wheel is a ridged roller and its index tooth, one pose about the roller's axis, from -sweep/2 to +sweep/2, on the knob's materials", () => {
   const { profiles, profile } = registry();
   const object = wheelAt(profile, { t: 0.4 });
   assert.equal(object.t, 0.4);
-  assert.deepEqual(object.parts.map(part => `${part.kind}:${part.material}`), ["carriage:faderChamfer", "grip:faderInk"]);
+  assert.deepEqual(object.parts.map(part => `${part.kind}:${part.material}`), ["carriage:knobSkirt", "grip:knobInk"]);
   assert.deepEqual(object.parts[0].pose, { from: { tilt: -75, axis: 90, pivot: [0, 0, 8] }, to: { tilt: 75, axis: 90, pivot: [0, 0, 8] } });
   assert.deepEqual(object.parts[1].pose, object.parts[0].pose);
   assert.deepEqual(object.parts[0].at, [80, 43, 0]);

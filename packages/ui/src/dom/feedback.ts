@@ -119,6 +119,8 @@ function stateOf(doc: Document): FeedbackState {
     // An arrow key on a radio selects its neighbour: the keys of a bank or a segmented control share the visitor's gesture.
     const radio = control.matches(".ug-latch") ? control.querySelector<HTMLInputElement>(":scope > input[type=radio]") : null;
     if (radio?.name) for (const other of doc.querySelectorAll<HTMLInputElement>(".ug-latch > input[type=radio]")) if (other.name === radio.name && other.form === radio.form && other.parentElement) created.gesture.set(other.parentElement, at);
+    // The same for a selector's radios: an arrow key moves the check, and the focus, to the next radio of the group.
+    if (control.matches(".ug-rotary__radio")) { const name = (control as HTMLInputElement).name; if (name) for (const other of doc.querySelectorAll<HTMLInputElement>(".ug-rotary__radio")) if (other.name === name && other.form === (control as HTMLInputElement).form) created.gesture.set(other, at); }
     if (!soundOn(created, control)) return;
     try {
       const Context = (globalThis as { AudioContext?: typeof AudioContext }).AudioContext;

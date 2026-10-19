@@ -9,6 +9,7 @@
  * - the Display's `segments` look (`display.md` section 11): `#clock` and `#readout` (outputs), `#freq` (a TextField display), `#plainout` (a display without the look).
  * - `?dom` starts in the CSS presentation; `?level=objects` and `?level=instrument` present the page at those levels.
  * - `?plain` puts the panel in the page's flow with no Underglass at all (the mobile and preference checks).
+ * - `?nobank` leaves `#route` out (the Instrument scene's material budget, see below).
  * - `?flush` renders the wheels, the selectors and the segments displays in their flush markup, the look they had before the forms.
  */
 import "@underglass/ui/css";
@@ -19,6 +20,8 @@ import { attachStrataGpu, type StrataGpu } from "@underglass/ui/gpu";
 const params = new URLSearchParams(location.search);
 const host = (id: string) => document.getElementById(id)!;
 const flush = params.has("flush");
+/** `?nobank` leaves the nine-radio group out: a bank takes materials from the Instrument scene (12 of core's 16 here), and the part checks compare the scene with its parts hidden. */
+const nobank = params.has("nobank");
 
 const fraction = (value: number, min = 0, max = 100) => Math.round(((value - min) / (max - min)) * 10000) / 10000;
 const field = (id: string, label: string, control: string) => `<div class="ug-field" id="${id}-field"><label class="ug-field__label" for="${id}">${label}</label>${control}</div>`;
@@ -77,7 +80,7 @@ const markup = `
   </div>
   <div class="row" id="def-row-3">
     ${radios({ id: "mode", legend: "Mode", form: "selector", options: mode, value: "solo" })}
-    ${radios({ id: "route", legend: "Route", form: "selector", options: route, value: "r3" })}
+    ${nobank ? "" : radios({ id: "route", legend: "Route", form: "selector", options: route, value: "r3" })}
   </div>
   <div class="row" id="def-row-4">
     ${radios({ id: "flatradio", legend: "Flat", options: flat, value: "b" })}

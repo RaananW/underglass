@@ -201,12 +201,12 @@ roller rolling in a slot (below).
   frame while the value turns, and a brushed finish is the same on every turn; so at the Instrument level the ridges are an `extrude` of a ridged
   circle (valley and peak per ridge, flat facets that catch the light one after the other) turned about its own axis by a pose (`tilt` about the y axis, pivot
   on the axis, from −sweep/2 to +sweep/2: a pose never passes 90° either side, so the token's maximum is 180°). The roller is **polished metal**
-  (`faderChamfer`, the carriage's chamfer metal: a brush would hide the facets), the index tooth a hair proud of a roller tooth in ink (`faderInk`), both
-  on materials the fader already has, so a wheel adds no material to the scene's 16. The axis stands one radius (`8 × depth scale`) above the face, so the
+  (`knobSkirt`, the knob's polished skirt metal: a brush would hide the facets), the index tooth a hair proud of a roller tooth in ink (`knobInk`, the knob's
+  pointer), both materials a knob or a rotary selector on the page already has, so a wheel beside them adds no material to the scene's 16. The axis stands one radius (`8 × depth scale`) above the face, so the
   roller lies **on** the face and no vertex is below it: a roller sunk through the slot would draw its lower half over the face, since the parts have a
   target of their own. Rolling about the axis keeps every vertex on its circle, so containment holds over the whole turn by construction (core's
   `checkContainment` in the unit test, at five values, every depth and the stage's corners, closest vertex 2.4 px inside the box). **Rubber** is not a
-  separate form: a character that gives `faderChamfer` a rubber recipe makes the roller rubber.
+  separate form: a character that gives `knobSkirt` a rubber recipe (which a knob's skirt then takes too) makes the roller rubber.
 - **Presentations.** CSS: the roller is a raised, round-cornered face, its ridges a printed pattern (`repeating-linear-gradient`) shifted by the value
   (radius times the angle: the surface moving) and its index ridge a printed bar. Relief and Objects: the slot a groove, the roller a raised face or a slab
   (its print is captured, so a change of value is a capture of the box, as the Fader's carriage never was). Instrument: the two parts above, the print

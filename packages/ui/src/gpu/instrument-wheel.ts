@@ -9,8 +9,8 @@
  * - **roller:** an `extrude` (an `[x, z]` outline swept across the track) of a ridged circle, `wheel.ridges` teeth (12) of 1.3 px depth, radius
  *   `7 × depth scale` and its axis at that height above the face, so the whole roller lies on the face (no vertex is lower than the face: a
  *   roller sunk through the slot would draw its lower half over it, since the parts have a target of their own); its lowest point is a peak a third of a px above it.
- *   Polished metal (`faderChamfer`, the carriage's chamfer metal: a brush would hide the facets, and the facets are what show the ridges), 26 across the travel;
- * - **index:** one tooth in ink (`faderInk`) a hair proud of a roller tooth, the value's mark, turning with it.
+ *   Polished metal (`knobSkirt`, the knob's skirt metal: a brush would hide the facets, and the facets are what show the ridges), 26 across the travel;
+ * - **index:** one tooth in ink (`knobInk`, the knob's pointer) a hair proud of a roller tooth, the value's mark, turning with it.
  * Both parts have one pose: a rotation about the roller's own axis (`tilt` about the y axis, pivot on the axis) from `-sweep / 2` at the minimum to
  * `+sweep / 2` at the maximum, `wheel.sweep` (150, at most 180: a pose never passes 90 degrees either side). Rotation about the axis keeps every
  * vertex on the circle of its radius, so the footprint never leaves `[-R, R]` across the travel and `[-13, 13]` across it: containment holds over
@@ -112,8 +112,8 @@ export function wheelObject(input: WheelInput, profile: (name: string, shape: In
   return {
     id: input.id, rect: input.box, bounds: { rect: input.box, radius: 0 }, t,
     parts: [
-      { kind: "carriage", profile: profile("wheel-roller", { type: "extrude", outline: wheelOutline(r, ridges, depth), width: across }), at, pose, material: "faderChamfer", ...caster, state },
-      { kind: "grip", profile: profile("wheel-index", { type: "extrude", outline: wheelIndexOutline(r, ridges, depth), width: across - 6 }), at, pose, material: "faderInk", caster: null, state },
+      { kind: "carriage", profile: profile("wheel-roller", { type: "extrude", outline: wheelOutline(r, ridges, depth), width: across }), at, pose, material: "knobSkirt", ...caster, state },
+      { kind: "grip", profile: profile("wheel-index", { type: "extrude", outline: wheelIndexOutline(r, ridges, depth), width: across - 6 }), at, pose, material: "knobInk", caster: null, state },
     ],
     relief: { face: "raised", rect: input.relief.rect, radius: 3, height: input.relief.height, material: input.relief.material },
   };
