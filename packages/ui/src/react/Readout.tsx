@@ -7,7 +7,7 @@
  * root. A value that changes at frame rate goes through `driveStrataDisplay` from `@underglass/ui/dom`.
  */
 import { forwardRef, type CSSProperties, type OutputHTMLAttributes, type ReactNode } from "react";
-import { displayAttributes, displayClasses, type StrataDisplayBacklight, type StrataDisplayLive } from "../shared/display.ts";
+import { displayAttributes, displayClasses, type StrataDisplayBacklight, type StrataDisplayLive, type StrataDisplaySegments } from "../shared/display.ts";
 import { useFieldControl } from "./Field.tsx";
 import { DisplayObject } from "./TextField.tsx";
 import { classes, strataAttributes, type StrataProps } from "./shared.ts";
@@ -23,6 +23,8 @@ export interface DisplayProps extends Omit<OutputHTMLAttributes<HTMLOutputElemen
   backlight?: StrataDisplayBacklight;
   /** The backlight is lit by default; `false` switches it off. */
   lit?: boolean;
+  /** The segments look (anatomy page `display.md`, section 11): the text in a seven-segment face with the unlit segments faintly printed behind it. */
+  segments?: StrataDisplaySegments;
   /** Class names for the display's root. */
   className?: string;
   /** Styles for the display's root. */
@@ -30,11 +32,11 @@ export interface DisplayProps extends Omit<OutputHTMLAttributes<HTMLOutputElemen
 }
 
 export const Display = forwardRef<HTMLOutputElement, DisplayProps>(function Display(
-  { children, label, live, backlight, lit, size, material, level, className, style, ...rest }, ref,
+  { children, label, live, backlight, lit, segments, size, material, level, className, style, ...rest }, ref,
 ) {
   const field = useFieldControl();
   return (
-    <span className={classes(...displayClasses(true), className)} style={style} {...strataAttributes({ size, material, level })} {...displayAttributes({ backlight, lit })}>
+    <span className={classes(...displayClasses(true), className)} style={style} {...strataAttributes({ size, material, level })} {...displayAttributes({ backlight, lit, segments })}>
       <DisplayObject />
       <output ref={ref} className="ug-display__text" {...(field?.id ? { id: field.id } : {})} {...(field?.["aria-describedby"] ? { "aria-describedby": field["aria-describedby"] } : {})}
         {...(label !== undefined ? { "aria-label": label } : {})} {...(live === "off" || live === "assertive" ? { "aria-live": live } : {})} {...rest}>{children}</output>

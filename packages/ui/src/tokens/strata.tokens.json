@@ -622,6 +622,21 @@
           }
         }
       }
+    },
+    "segments": {
+      "$description": "The Display's `segments` look (a seven-segment face with its unlit segments faintly printed).",
+      "ghost": {
+        "$type": "number",
+        "$value": 0.14,
+        "$description": "How strongly the unlit segments show, as a share of the text colour.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 0.5
+          }
+        }
+      }
     }
   },
   "material": {
@@ -1613,6 +1628,20 @@
           }
         }
       }
+    },
+    "segments": {
+      "$type": "fontFamily",
+      "$value": [
+        "Strata Segments",
+        "ui-monospace",
+        "monospace"
+      ],
+      "$description": "The Display's seven-segment face (`segments`): the one Strata draws itself, then the code face for the characters it has no segments for.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true
+        }
+      }
     }
   },
   "space": {
@@ -2430,6 +2459,33 @@
           "scope": true,
           "min": 0,
           "max": 6
+        }
+      }
+    }
+  },
+  "wheel": {
+    "$description": "Thumbwheel interaction and look (section 14, Instrument controls): the Slider's `wheel` form, a ridged roller whose angle follows the value.",
+    "sweep": {
+      "$type": "number",
+      "$value": 150,
+      "$description": "The roller's turn from the minimum to the maximum, degrees (at most 180: a pose never passes 90 degrees either side).",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 30,
+          "max": 180
+        }
+      }
+    },
+    "ridges": {
+      "$type": "number",
+      "$value": 12,
+      "$description": "The ridges round the roller (a whole number): its tooth pitch is 360 over this.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "scope": true,
+          "min": 6,
+          "max": 24
         }
       }
     }

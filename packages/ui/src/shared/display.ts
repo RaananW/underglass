@@ -48,9 +48,18 @@ export const displayMarkup: { bezel: DisplayPart; window: DisplayPart } = {
   window: { className: "ug-display__window", face: "flat" },
 };
 
-/** The attributes a display's root carries from its props: the form, the backlight role and whether the backlight is lit. */
-export function displayAttributes({ backlight, lit }: { backlight?: StrataDisplayBacklight; lit?: boolean }): Record<string, string> {
+/**
+ * The `segments` look of a display (`display.md`, section 11): the text under the glass in a seven-segment face with the unlit segments printed
+ * faintly behind it. `true` and `"seven"` are the same look; `false`, absent and any other value are the display of before.
+ */
+export type StrataDisplaySegments = boolean | "seven";
+/** Whether `value` asks for the segments look. */
+export const isDisplaySegments = (value: unknown): boolean => value === true || value === "seven";
+
+/** The attributes a display's root carries from its props: the form, the backlight role, whether the backlight is lit and the segments look. */
+export function displayAttributes({ backlight, lit, segments }: { backlight?: StrataDisplayBacklight; lit?: boolean; segments?: StrataDisplaySegments }): Record<string, string> {
   const attributes: Record<string, string> = { "data-strata-form": "display" };
+  if (isDisplaySegments(segments)) attributes["data-strata-segments"] = "seven";
   if (backlight !== undefined && isDisplayBacklight(backlight)) attributes["data-strata-backlight"] = backlight;
   if (lit === false) attributes["data-strata-lit"] = "false";
   return attributes;

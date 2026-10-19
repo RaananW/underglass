@@ -20,12 +20,44 @@
  * framework bindings see native events. On every `input`, the cap's angle (`--strata-rotary-value` on the root) and the
  * selected print follow the option, and a changed option plays `tick` through `strataFeedback` (sound and haptics, both off
  * unless the page or scope turns them on).
+ *
+ * A RadioGroup's `selector` form (`radio.md`, section 11) is the same dial over native radios (`.ug-rotary--group`): the radios are the
+ * control (a click on a printed position is a click on its radio, the arrows are the group's) and sit at their marks, so the dial itself has
+ * only the gestures the radios do not cover, all ending in a radio's own `click()` (a native check, `input` and `change`):
+ * - a click on the ring that is not on a printed label checks the radio nearest the pressed angle; a click on the skirt or cap steps to the
+ *   next enabled radio on its upper half and the previous one on its lower half (the single-pointer alternative);
+ * - the wheel over the dial steps one radio, with the page not scrolling;
+ * - on every `change` the cap's angle (`--strata-rotary-value`) follows the checked radio and a changed radio plays `tick`.
+ * A group has no checked radio until one is checked: its cap rests at the first position.
  */
 import { rotaryDefaults, rotaryDrag, rotaryFraction, rotaryIndexAtAngle, rotaryNearest, rotaryStep, type RotaryOption, type RotaryTokens } from "../shared/rotary-selector.ts";
 import { knobRegion } from "../shared/knob.ts";
 import { listenForStrataFeedback, strataFeedback } from "./feedback.ts";
 
 const selects = ".ug-rotary__select";
+const radios = ".ug-rotary__radio";
+
+/** A radio selector's radios as the maths sees them (the radios' values and whether each is disabled), and the checked one's index (-1 when none). */
+const radiosOf = (root: Element) => [...root.querySelectorAll<HTMLInputElement>(radios)];
+const radioOptions = (all: readonly HTMLInputElement[]): RotaryOption[] => all.map(radio => ({ value: radio.value, label: radio.value, disabled: radio.disabled }));
+
+/** Brings a radio selector's cap up to date with its checked radio (`--strata-rotary-value` on the `.ug-rotary` root). Call it after checking a radio from script without an event. */
+export function syncStrataRadioSelector(radio: HTMLInputElement): void {
+  const root = radio.closest<HTMLElement>(".ug-rotary--group");
+  if (!root) return;
+  const all = radiosOf(root), index = Math.max(0, all.findIndex(item => item.checked));
+  const fraction = String(Math.round(rotaryFraction(index, all.length) * 10000) / 10000);
+  if (root.style.getPropertyValue("--strata-rotary-value") !== fraction) root.style.setProperty("--strata-rotary-value", fraction);
+}
+
+/** Checks radio `index` of a group as a click does (native: `input` and `change` fire); false when it changes nothing. */
+function check(all: readonly HTMLInputElement[], index: number): boolean {
+  const radio = all[index];
+  if (!radio || radio.disabled || radio.checked) return false;
+  radio.focus({ preventScroll: true });
+  radio.click();
+  return true;
+}
 
 /** The select's options as the maths sees them. */
 const optionsOf = (select: HTMLSelectElement): RotaryOption[] => [...select.options].map(option => ({ value: option.value, label: option.text, disabled: option.disabled }));
@@ -124,11 +156,26 @@ export function attachStrataRotarySelectors(doc: Document = document): void {
   doc.addEventListener("pointercancel", event => end(event, true));
 
   // The wheel: notches up step to the next option. Fine-grained wheels (touchpads) add up to a notch before stepping.
-  let wheelSelect: HTMLSelectElement | undefined, wheelSum = 0, wheelTime = 0;
+  let wheelSelect: HTMLSelectElement | undefined, wheelGroup: Element | undefined, wheelSum = 0, wheelTime = 0;
   doc.addEventListener("wheel", event => {
     if (event.ctrlKey) return;
     const under = doc.elementFromPoint(event.clientX, event.clientY);
+    const group = under?.closest(".ug-rotary--group");
     const select = selectOf(under?.closest(".ug-rotary__dial")?.querySelector(selects) ?? null);
+    if (!select && group && !group.closest("fieldset:disabled")) {
+      if (!under?.closest(".ug-rotary__dial")) return;
+      event.preventDefault();
+      const scale = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 40 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? 800 : 1;
+      if (group !== wheelGroup || event.timeStamp - wheelTime > 400) wheelSum = 0;
+      wheelGroup = group; wheelTime = event.timeStamp;
+      wheelSum += (event.deltaY || event.deltaX) * scale;
+      if (Math.abs(wheelSum) < 50) return;
+      const direction = wheelSum < 0 ? 1 : -1;
+      wheelSum = 0;
+      const all = radiosOf(group);
+      check(all, rotaryStep(all.findIndex(item => item.checked), direction, radioOptions(all)));
+      return;
+    }
     if (!select) return;
     event.preventDefault();
     const scale = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 40 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? 800 : 1;
@@ -154,7 +201,26 @@ export function attachStrataRotarySelectors(doc: Document = document): void {
     syncStrataRotarySelector(select);
   }, true);
   doc.addEventListener("change", event => {
-    const select = (event.target as Element | null)?.closest?.(selects);
+    const target = event.target as Element | null, select = target?.closest?.(selects);
     if (select instanceof HTMLSelectElement) syncStrataRotarySelector(select);
+    const radio = target?.closest?.(radios);
+    if (radio instanceof HTMLInputElement && radio.checked) {
+      // The cap's last place, read before it follows, against the checked radio: a changed position ticks.
+      const root = radio.closest<HTMLElement>(".ug-rotary--group"), before = Number.parseFloat(root?.style.getPropertyValue("--strata-rotary-value") ?? ""), all = root ? radiosOf(root) : [];
+      if (Number.isFinite(before) && all.length > 1 && Math.round(before * (all.length - 1)) !== all.indexOf(radio)) strataFeedback(radio, "tick");
+      syncStrataRadioSelector(radio);
+    }
   }, true);
+
+  // A radio selector's dial: a click on the ring that no printed label (no radio) took checks the radio at the pressed angle; on the skirt or the cap it steps.
+  doc.addEventListener("click", event => {
+    const target = event.target as Element | null, dial = target?.closest<HTMLElement>(".ug-rotary--group .ug-rotary__dial");
+    if (!dial || target?.closest(radios) || event.defaultPrevented || event.button !== 0) return;
+    const root = dial.closest<HTMLElement>(".ug-rotary--group")!;
+    if (root.closest("fieldset:disabled")) return;
+    const all = radiosOf(root), options = radioOptions(all), box = dial.getBoundingClientRect(), skirt = root.querySelector(".ug-rotary__skirt")?.getBoundingClientRect();
+    const where = knobRegion(event.clientX - (box.left + box.width / 2), event.clientY - (box.top + box.height / 2), skirt && skirt.width > 0 ? skirt.width / 2 : 32);
+    const current = all.findIndex(item => item.checked);
+    check(all, where.cap ? rotaryStep(current, where.upper ? 1 : -1, options) : rotaryIndexAtAngle(where.theta, options, tokensOf(root).sweep));
+  });
 }

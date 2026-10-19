@@ -1,10 +1,10 @@
 ---
 /**
  * Slider (anatomy page `slider.md`): a native `<input type="range">`; keys, pointer and touch are native. `form="knob"` or
- * `form="fader"` draws the same input as the Knob's or the Fader's object (the Fader's horizontal), with the round or the
- * track behaviour of `attachStrata`, which it loads; `class` and `style` then reach the drawn root and every other attribute
- * the input. `flush` and no form are the groove slider, `wheel` is reserved, and any other string is the native `form`
- * attribute (the id of a form owner), as before.
+ * `form="fader"` draws the same input as the Knob's or the Fader's object (the Fader's horizontal), and `form="wheel"` as a
+ * thumbwheel (a ridged roller rolling in a slot on the Fader's track), with the round or the track behaviour of `attachStrata`,
+ * which it loads; `class` and `style` then reach the drawn root and every other attribute the input. `flush` and no form are the
+ * groove slider, and any other string is the native `form` attribute (the id of a form owner), as before.
  */
 import Behaviour from "./Behaviour.astro";
 import Field from "./Field.astro";
@@ -19,15 +19,15 @@ interface Props {
   label?: string;
   help?: string;
   disabled?: boolean;
-  /** `knob` or `fader` to draw the Knob's or the Fader's object over this input; `flush` or none for the groove slider. */
-  form?: StrataSliderForm | "flush" | "wheel" | (string & {});
+  /** `knob`, `fader` or `wheel` to draw the Knob's, the Fader's or a thumbwheel's object over this input; `flush` or none for the groove slider. */
+  form?: StrataSliderForm | "flush" | (string & {});
   /** A form's printed scale: a count of evenly spaced marks, or the marks' values (with labels). */
   marks?: number | readonly (number | KnobMark | FaderMark)[];
   /** A form's stepped positions, each a detent. */
   detents?: number;
-  /** A knob's turn from minimum to maximum in degrees; the `knob.sweep` token (270) by default. */
+  /** A knob's turn from minimum to maximum in degrees (the `knob.sweep` token, 270); a wheel's roll over the range (`wheel.sweep`, 150, at most 180). */
   sweep?: number;
-  /** A fader's carriage travel in CSS px; the size's `size.fader` by default. */
+  /** A fader's carriage travel in CSS px (`size.fader` by default); a wheel's drag travel (0.4 of that by default). */
   travel?: number;
   /** A form's unit for `aria-valuetext`, appended as written (" dB", "%"). */
   unit?: string;
@@ -65,7 +65,9 @@ const inputId = field.id || undefined;
         <div class="ug-fader__track">
           <span class="ug-fader__scale" aria-hidden="true">{model.marks.map(mark => <span class="ug-fader__mark" data-strata-value={String(mark.value)} style={mark.style}>{mark.text}</span>)}</span>
           <span class="ug-fader__slot" data-strata-face="groove" aria-hidden="true"></span>
-          <span class="ug-fader__carriage" data-strata-face="raised" aria-hidden="true"><span class="ug-fader__grip"></span></span>
+          {formed === "wheel"
+            ? <span class="ug-fader__carriage ug-fader__wheel" data-strata-face="raised" aria-hidden="true"><span class="ug-fader__ridges"></span></span>
+            : <span class="ug-fader__carriage" data-strata-face="raised" aria-hidden="true"><span class="ug-fader__grip"></span></span>}
           <input class="ug-fader__input" type="range" min={model.min} max={model.max} step={model.step} value={String(start)} data-strata-default={String(resetValue ?? start)} data-strata-unit={unit}
             aria-valuetext={model.valueText} {...field.attrs} {...inputAttributes} />
         </div>

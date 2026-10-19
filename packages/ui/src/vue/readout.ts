@@ -7,7 +7,7 @@
  * goes through `driveStrataDisplay` from `@underglass/ui/dom`.
  */
 import { defineComponent, h, ref, type PropType } from "vue";
-import { displayAttributes, displayClasses, type StrataDisplayBacklight, type StrataDisplayLive } from "../shared/display.ts";
+import { displayAttributes, displayClasses, type StrataDisplayBacklight, type StrataDisplayLive, type StrataDisplaySegments } from "../shared/display.ts";
 import { displayObject } from "./fields.ts";
 import { classes, strataAttributes, strataProps, useFieldControl } from "./shared.ts";
 
@@ -23,6 +23,8 @@ export const Display = defineComponent({
     backlight: { type: String as PropType<StrataDisplayBacklight>, default: undefined },
     /** The backlight is lit by default; `false` switches it off. */
     lit: { type: Boolean, default: undefined },
+    /** The segments look (anatomy page `display.md`, section 11): the text in a seven-segment face with the unlit segments faintly printed behind it. */
+    segments: { type: [Boolean, String] as PropType<StrataDisplaySegments>, default: undefined },
     ...strataProps,
   },
   setup(props, { attrs, slots, expose }) {
@@ -31,7 +33,7 @@ export const Display = defineComponent({
     expose({ output });
     return () => {
       const { class: className, style, ...rest } = attrs;
-      return h("span", { class: classes(...displayClasses(true), className as string), style, ...strataAttributes(props), ...displayAttributes({ backlight: props.backlight, lit: props.lit }) }, [
+      return h("span", { class: classes(...displayClasses(true), className as string), style, ...strataAttributes(props), ...displayAttributes({ backlight: props.backlight, lit: props.lit, segments: props.segments }) }, [
         displayObject(),
         h("output", { ref: output, class: "ug-display__text", ...(field?.value.id ? { id: field.value.id } : {}), ...(field?.value["aria-describedby"] ? { "aria-describedby": field.value["aria-describedby"] } : {}),
           ...(props.label !== undefined ? { "aria-label": props.label } : {}), ...(props.live === "off" || props.live === "assertive" ? { "aria-live": props.live } : {}), ...rest }, slots.default?.()),

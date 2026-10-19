@@ -1748,6 +1748,44 @@
   :where(.ug-fader:has(.ug-fader__input:disabled)) :where(.ug-fader__carriage, .ug-fader__slot) { --_h: 0px; --_gain: 0; }
   :where(.ug-fader__input:disabled) { cursor: not-allowed; }
 
+  /*
+   * Wheel (anatomy page slider.md, section 11): the Slider's `wheel` form is this Fader's track and behaviour (the drag along the slot, click-to-set,
+   * the wheel and the keys are the fader's) with a ridged roller in place of the carriage. The roller does not slide: it stays where it is in the
+   * slot and rolls under the value, its ridges moving past, one index ridge in ink marking the turn. It is a cylinder lying on the face, axis across
+   * the travel, `16` px across the track (its footprint is 16 by 26), `wheel.ridges` ridges round it and `wheel.sweep` degrees from the minimum to
+   * the maximum. In the CSS presentation the ridges are a printed pattern shifted by the value (the roller's surface moving: radius times the angle);
+   * at the Instrument level they are the part's own geometry and the print is hidden. The slot is shorter than a fader's (0.4 of `size.fader`).
+   */
+  :where(.ug-fader--wheel) {
+    --_travel: calc(var(--strata-wheel-travel, calc(var(--strata-fader-travel) * 0.4)) + max(0px, 15em - 180px));
+    --_across: 26px;
+    --_along: 16px;
+    --_roll: calc(var(--strata-wheel-sweep) * 0.017453 * var(--_along) / 2);
+    --_pitch: calc(3.14159 * var(--_along) / var(--strata-wheel-ridges));
+  }
+  :where(.ug-fader__wheel) {
+    --_finish: linear-gradient(90deg, rgb(0 0 0 / calc(0.32 * min(1, var(--_gain)))), rgb(255 255 255 / calc(0.5 * min(1, var(--_gain)))) 34%, rgb(0 0 0 / 0) 62%, rgb(0 0 0 / calc(0.3 * min(1, var(--_gain)))));
+    left: calc(50% - var(--_along) / 2);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  :where(.ug-fader__ridges) {
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-linear-gradient(90deg, rgb(0 0 0 / 0.34) 0 1px, rgb(255 255 255 / 0.22) 1px 1.6px, transparent 1.6px var(--_pitch)) calc((var(--strata-fader-value, 0.5) - 0.5) * var(--_roll) * -1) 0 / auto 100%;
+  }
+  /* The index ridge: one ridge in ink, whose turn is the value (a fixed ridge of the print, moving with it). */
+  :where(.ug-fader__ridges)::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: calc(50% + (var(--strata-fader-value, 0.5) - 0.5) * var(--_along) * 0.8 - 0.8px);
+    width: 1.6px;
+    background: var(--_ink);
+  }
+
   /* ---- Slider: a groove rail with a knob ---- */
 
   :where(.ug-slider) {
@@ -2306,12 +2344,51 @@
   :where([data-strata-mode="face"]) .ug-display__bezel { background-image: none; }
   :where([data-strata-mode="face"]) .ug-display__bezel[data-strata-dome] { border-color: transparent; }
 
+  /*
+   * Segments (anatomy page display.md, section 11): the text under the glass in a seven-segment face, with the unlit segments faintly printed
+   * behind it. The text is still the native element's own (exact, selectable, announced as the text it is); only the typeface changes, and the
+   * face is Strata's own (`shared/segments.ts`, embedded by the build as `Strata Segments`, token `font.segments`). Every glyph is a 600-unit cell
+   * of seven lit-or-unlit segments, so the ghost is one tile of all seven, tiled behind the text in the window's content box (a mask in the
+   * text colour at `display.segments.ghost`: captured with the face, static, so nothing about it changes when the text does). A character the
+   * face has no segments for falls to the code face. The line box is centred on the digit (ascent 0.85, descent 0.15), so the ghost and the
+   * text share a centre line at any line height.
+   */
+  :where(.ug-display[data-strata-segments]) {
+    --_seg: calc(var(--strata-control-font) * 1.25);
+    --_seg-space: 0.08em;
+    /* The tile of all seven segments (an SVG mask); the build writes it in (`shared/segments.ts`). */
+    --_ghost: __SEGMENTS_GHOST__;
+  }
+  :where(.ug-display[data-strata-segments] .ug-display__text) {
+    font-family: var(--strata-font-segments);
+    font-size: var(--_seg);
+    font-variant-numeric: normal;
+    letter-spacing: var(--_seg-space);
+    line-height: 1.2;
+  }
+  :where(.ug-display[data-strata-segments] .ug-display__window)::before {
+    content: "";
+    position: absolute;
+    left: var(--strata-space-3);
+    right: var(--strata-space-3);
+    top: 50%;
+    height: calc(var(--_seg) * 0.7);
+    translate: 0 -50%;
+    background: var(--strata-colour-text);
+    opacity: var(--strata-display-segments-ghost);
+    -webkit-mask: var(--_ghost) 0 0 / calc(var(--_seg) * 0.68) 100% repeat-x;
+    mask: var(--_ghost) 0 0 / calc(var(--_seg) * 0.68) 100% repeat-x;
+    pointer-events: none;
+  }
+  :where(.ug-display[data-strata-segments]:has(> .ug-display__text:disabled)) .ug-display__window::before { opacity: calc(var(--strata-display-segments-ghost) * 0.5); }
+
   /* Preferences. Reduced motion: nothing here moves. More contrast: the high-contrast themes apply through the tokens; the window is the
      plain field with a text-coloured edge and no backlight (its emitters are off). Reduced transparency: the window is the plain capture
      (the pane is not glass, the tint opaque). */
   @media (prefers-contrast: more) {
     :where(.ug-display) { --_tint: 0%; --strata-lit: 0; }
     :where(.ug-display__window) { border-color: var(--strata-colour-text); background-image: none; }
+    :where(.ug-display[data-strata-segments] .ug-display__window)::before { opacity: 0.18; }
   }
   :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-display) { --_tint: 0%; --strata-lit: 0; }
   :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-display__window) { border-color: var(--strata-colour-text); background-image: none; }
@@ -2405,6 +2482,48 @@
    */
   /* A selector in a Field that shrinks to its content (a flex row) must not collapse: the root is a size container, so it has no content width of its own. It keeps room for the whole dial and its labels where the viewport has it, and for the dial and its numbers where it has not. */
   :where(.ug-rotary[data-strata-form="selector"]) { min-inline-size: min(calc(var(--_size) + 24px + 10em), max(calc(var(--_size) + 24px + 4em), calc(100vw - 120px))); }
+  /*
+   * A RadioGroup's `selector` form (anatomy page radio.md, section 11) is the same dial over native radios: `.ug-rotary--group` on the root, each
+   * radio's mark a `<label>` (the printed position, with its tick) whose text holds the radio itself, an invisible overlay at least 24 px square
+   * centred on the print, so a press on a printed position is a press on its radio and the arrows, Tab and Space are the group's. The dial
+   * (skirt, cap, pointer) is decoration; the cap's angle is `--strata-rotary-value` on the root (the behaviour follows the checked radio). The
+   * checked radio's print is the text colour, as the selected option's is, and the focused one's print takes the focus ring.
+   */
+  :where(.ug-rotary--group) { min-inline-size: min(calc(var(--_size) + 24px + 10em), max(calc(var(--_size) + 24px + 4em), calc(100vw - 120px))); align-self: center; }
+  :where(.ug-rotary__radio) {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    box-sizing: border-box;
+    width: max(calc(100% + 8px), 24px);
+    height: max(calc(100% + 8px), 24px);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    appearance: none;
+    background: transparent;
+    opacity: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: manipulation;
+  }
+  :where(.ug-rotary__mark:has(.ug-rotary__radio:checked)) :where(.ug-rotary__text) { color: var(--strata-colour-text); }
+  :where(.ug-rotary__mark:has(.ug-rotary__radio:is(:focus-visible, [data-strata-preview~="focus"]))) :where(.ug-rotary__text) {
+    outline: var(--strata-focus-width) solid var(--strata-colour-accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+  :where(.ug-rotary__mark:has(.ug-rotary__radio:disabled)) :where(.ug-rotary__text) { opacity: 0.45; }
+  :where(.ug-rotary__radio:disabled) { cursor: not-allowed; }
+  :where(fieldset:disabled .ug-rotary--group) :where(.ug-rotary__dial) { opacity: 0.38; }
+  :where(fieldset:disabled .ug-rotary--group) :where(.ug-rotary__skirt, .ug-rotary__cap) { --_h: 0px; --_gain: 0; }
+  @media (forced-colors: active) {
+    .ug-rotary__mark:has(.ug-rotary__radio:focus-visible) .ug-rotary__text { outline-color: Highlight; }
+    fieldset:disabled .ug-rotary--group :is(.ug-rotary__skirt, .ug-rotary__cap) { border-color: GrayText; }
+    fieldset:disabled .ug-rotary--group .ug-rotary__pointer::after, fieldset:disabled .ug-rotary--group .ug-rotary__tick { background: GrayText; }
+    fieldset:disabled .ug-rotary--group .ug-rotary__dial { opacity: 1; }
+  }
   :where(.ug-select-display) {
     display: flex;
     align-items: center;
@@ -4471,7 +4590,7 @@
   /* When the GPU draws a fader's carriage as parts (the Instrument level), its CSS paint is hidden, so a value change
      repaints nothing (the slot, the scale and the focus ring stay). */
   :where([data-strata-mode="face"]) .ug-fader__carriage[data-strata-dome] { border-color: transparent; }
-  :where([data-strata-mode="face"]) .ug-fader__carriage[data-strata-dome] .ug-fader__grip { display: none; }
+  :where([data-strata-mode="face"]) .ug-fader__carriage[data-strata-dome] :is(.ug-fader__grip, .ug-fader__ridges) { display: none; }
   /*
    * At the Objects level the GPU draws knobs, dots and slider pucks as domes in their own colour: their CSS paint is
    * hidden while it does (`data-strata-dome`, set by the GPU helper). A knob keeps its edge ring, for 3:1 on its track.
@@ -4556,7 +4675,8 @@
        Highlight focus ring, GrayText when disabled. */
     :where(.ug-fader__slot) { forced-color-adjust: none; background: CanvasText; }
     :where(.ug-fader__carriage) { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; }
-    :where(.ug-fader__grip), :where(.ug-fader__mark)::before { forced-color-adjust: none; background: CanvasText; }
+    :where(.ug-fader__grip), :where(.ug-fader__mark)::before, :where(.ug-fader__ridges)::after { forced-color-adjust: none; background: CanvasText; }
+    :where(.ug-fader__ridges) { forced-color-adjust: none; background: repeating-linear-gradient(90deg, CanvasText 0 1px, transparent 1px var(--_pitch)); }
     :where(.ug-fader__mark) { color: CanvasText; }
     :where(.ug-fader__input:focus-visible) { outline-color: Highlight; }
     :where(.ug-fader:has(.ug-fader__input:disabled)) :where(.ug-fader__carriage) { border-color: GrayText; }

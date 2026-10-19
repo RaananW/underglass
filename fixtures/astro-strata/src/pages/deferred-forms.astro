@@ -1,0 +1,41 @@
+---
+/**
+ * Strata Astro deferred forms check page (`/deferred-forms/`): `[data-contract]` renders the anatomy pages' form examples (`slider.md` the wheel, `radio.md` the
+ * selector, `display.md` the segments, each section 11) with `@underglass/ui/astro`, and `main` holds live controls `tests/browser/ui-deferred-forms-astro.test.mjs`
+ * drives. Server-rendered HTML; the only script is the components' own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { Display, RadioGroup, Slider, TextField } from "@underglass/ui/astro";
+const modes = ["Mix", "Solo", "Mute", "Bypass"].map(label => ({ value: label.toLowerCase(), label }));
+const routes = Array.from({ length: 9 }, (_, index) => ({ value: `r${index + 1}`, label: `Out ${index + 1}` }));
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro deferred forms check</title>
+</head>
+<body>
+  <div data-contract="slider.md#wheel" hidden><Slider form="wheel" id="gain-example" name="gain" aria-label="Gain" value={40} marks={[0, 50, 100]} /></div>
+  <div data-contract="radio.md#selector" hidden><RadioGroup form="selector" legend="Mode" name="mode-example" options={modes} /></div>
+  <div data-contract="display.md#segments" hidden><Display segments id="clock-example" label="Clock">12:34</Display></div>
+  <main>
+    <form class="ug-panel" data-strata-face="raised" aria-label="Deferred forms" id="deferred" style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+      <Slider form="wheel" id="gain" name="gain" label="Gain" value={40} marks={[0, 50, 100]} unit=" dB" class="extra" style="margin-right: 4px" data-testid="gain" />
+      <Slider form="wheel" id="pan" name="pan" label="Pan" value={75} marks={[0, 25, 50, 75, 100]} travel={80} sweep={120} />
+      <Slider form="flush" id="flat" name="flat" label="Flat" value={60} />
+      <Slider form="wheel" id="locked" name="locked" label="Locked" value={30} disabled />
+      <RadioGroup form="selector" id="mode" legend="Mode" name="mode" options={modes} value="solo" class="extra" style="margin-right: 4px" data-testid="mode" />
+      <RadioGroup form="selector" id="route" legend="Route" name="route" options={routes} value="r3" />
+      <RadioGroup form="selector" id="locked-group" legend="Locked" name="locked-group" options={modes} value="mute" disabled />
+      <RadioGroup form="flush" id="flat-group" legend="Flat" name="flat-group" options={[{ value: "mix", label: "Mix" }, { value: "solo", label: "Solo" }]} value="mix" />
+      <RadioGroup form="owner-form" id="owned" legend="Owned" name="owned" options={[{ value: "mix", label: "Mix" }, { value: "solo", label: "Solo" }]} value="mix" />
+      <Display segments id="clock" label="Clock">12:34</Display>
+      <Display segments backlight="warning" id="readout" label="Level" live="off">-18.5 dB</Display>
+      <TextField form="display" segments id="freq" label="Frequency" value="440.0" />
+      <Display id="plainout" label="Plain">12:34 Hz</Display>
+    </form>
+    <form id="owner-form"></form>
+  </main>
+</body>
+</html>

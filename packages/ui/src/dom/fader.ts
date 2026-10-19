@@ -107,7 +107,8 @@ export function attachStrataFaders(doc: Document = document): void {
     presses.delete(event.pointerId);
     const root = press?.input.closest(".ug-fader");
     if (!press || !root || Math.hypot(event.clientX - press.x, event.clientY - press.y) >= faderGeometry.tapSlop) return;
-    const carriage = root.querySelector(".ug-fader__carriage")?.getBoundingClientRect();
+    // A wheel's roller does not stand where the value is, so a tap on it sets the value like a tap on the slot.
+    const carriage = root.matches(".ug-fader--wheel") ? undefined : root.querySelector(".ug-fader__carriage")?.getBoundingClientRect();
     if (carriage && press.x >= carriage.left && press.x <= carriage.right && press.y >= carriage.top && press.y <= carriage.bottom) return;
     const vertical = !root.matches(".ug-fader--horizontal"), box = press.input.getBoundingClientRect();
     // The slot runs 3 px past each end of the carriage centre's travel.

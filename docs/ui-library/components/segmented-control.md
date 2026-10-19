@@ -110,7 +110,7 @@ key is `Highlight`.
 ## 11. Latching form: `latching`
 
 Instrument, everyday forms ([plan](../instrument.md#everyday-components-at-the-instrument-level)). `form="latching"` draws the same native radios as
-**interlocking latching buttons on one plinth**: the [RadioGroup's preset bank](radio.md#11-latching-form-the-preset-bank-bank) with a segmented
+**interlocking latching buttons on one plinth**: the [RadioGroup's preset bank](radio.md#11-hardware-forms-the-preset-bank-bank-and-the-rotary-selector-selector) with a segmented
 control's short options, the selected segment down with its LED lit. The plinth is a single part, and the keys are the bank's, one construction with the [Tabs' rail](tabs.md#11-rail-form-rail) (`gpu/instrument-bank.ts`). `flush`, or no `form`, is the control above, in the
 markup and the look it had before, pixel for pixel; any other `form` string is the native `form` attribute of the fieldset, as before. `colour` names the
 LEDs' role (`glowOn` by default). As with the Switch's hardware forms, the premium character's default form is reached by naming it: with no `form` the control is its flush look, so a page that does not opt in is unchanged.
@@ -122,7 +122,7 @@ LEDs' role (`glowOn` by default). As with the Switch's hardware forms, the premi
 | LED | A 6 px lens on the plinth above the cap | Lit while selected |
 
 - Everything the bank does (the native radio group, Tab, the arrow keys, one `change` per real selection, the lights, the emitters, the GPU at every level,
-  the preferences, reflow, feedback) is the [RadioGroup bank's](radio.md#11-latching-form-the-preset-bank-bank); only the markup differs, as the
+  the preferences, reflow, feedback) is the [RadioGroup bank's](radio.md#11-hardware-forms-the-preset-bank-bank-and-the-rotary-selector-selector); only the markup differs, as the
   keys sit directly on the existing `ug-segmented__plinth` and carry the `ug-segmented__key` class on their caps.
 - The selected segment's flush look (an accent underline and tint) is replaced by the key's travel and its LED; there is no ring.
 

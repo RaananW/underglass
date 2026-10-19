@@ -664,8 +664,22 @@ Instrument level a Checkbox is the push button's object (a polished bezel, a gla
 a plinth object and, for each key, a body, a captured cap and an LED lens standing on it (`gpu/instrument-push.ts`). Every part and shadow
 is inside the native input's box (a bank's plinth inside its fieldset's). Feedback plays the opt-in `click` once per real `change` (an arrow key's
 included, a script's assignment never). Anatomy: [Checkbox](../../docs/ui-library/components/checkbox.md#11-latching-form-latching),
-[RadioGroup](../../docs/ui-library/components/radio.md#11-latching-form-the-preset-bank-bank),
+[RadioGroup](../../docs/ui-library/components/radio.md#11-hardware-forms-the-preset-bank-bank-and-the-rotary-selector-selector),
 [SegmentedControl](../../docs/ui-library/components/segmented-control.md#11-latching-form-latching).
+
+A **RadioGroup** also takes `form="selector"`: the RotarySelector's dial over the same native radios, one detent per radio, each label printed round it at its position and the radio an invisible overlay on the print
+(a click on a position is a click on that radio; the arrows are the group's; the dial is `aria-hidden`). Up to 8 radios of at most 12 characters; any other group asked as a selector is drawn as a `bank`, and
+`data-strata-form` says which. `sweep` sets the dial's turn. React and Vue read the `Radio` children, Astro `options`. A **Slider** takes `form="wheel"`: the Fader's track and behaviour with a ridged roller that rolls
+in place under the value (`wheel.sweep`, `wheel.ridges`; `travel` and `sweep` props), its ridges real geometry at the Instrument level. A **Display** and a TextField's display take `segments`: the text in a seven-segment face
+(`Strata Segments`, drawn by Strata and embedded in the stylesheet, token `font.segments`) with the unlit segments faintly printed (`display.segments.ghost`); characters the face has no segments for fall to the code face.
+
+```tsx
+<Slider form="wheel" aria-label="Gain" defaultValue={40} marks={[0, 50, 100]} />
+<RadioGroup form="selector" legend="Mode" value={mode} onChange={setMode}><Radio value="mix">Mix</Radio><Radio value="solo">Solo</Radio><Radio value="mute">Mute</Radio></RadioGroup>
+<Display segments label="Clock">12:34</Display>
+```
+
+Anatomy: [Slider](../../docs/ui-library/components/slider.md#11-hardware-forms-knob-fader-and-wheel), [RadioGroup](../../docs/ui-library/components/radio.md#the-rotary-selector-selector), [Display](../../docs/ui-library/components/display.md#11-the-segments-look-a-seven-segment-face).
 
 ## Knob
 
@@ -803,7 +817,7 @@ vertex is at least 0.5 px inside its box over the whole rise: the closest is 1.9
 outside the element's box changes). A Dialog's and a Drawer's motion drive the rise as one scene number (a uniform update), and the Drawer's layer slides through core's panel
 transition (`x`, `y`). The first build of an Instrument layer shows its parts about 0.1 s after it is enrolled. A value change on a Slider form is the Knob's and Fader's: 4 captures
 for 8 native changes, none in the frames the springs turn, 0 hit-geometry updates. A moving layer's boxes carry float noise, so the plate's mesh, the knob's diameters and the
-keys' bodies are quantised (a quarter or half px) and the layer is not rebuilt as it moves. Anatomy: [Slider](../../docs/ui-library/components/slider.md#11-hardware-forms-knob-and-fader),
+keys' bodies are quantised (a quarter or half px) and the layer is not rebuilt as it moves. Anatomy: [Slider](../../docs/ui-library/components/slider.md#11-hardware-forms-knob-fader-and-wheel),
 [Card](../../docs/ui-library/components/card.md#11-plate-and-tray-forms), [Panel](../../docs/ui-library/components/panel.md#11-plate-and-tray-forms),
 [Dialog](../../docs/ui-library/components/dialog.md#11-plate-form), [Drawer](../../docs/ui-library/components/drawer.md#11-tray-form).
 

@@ -118,15 +118,15 @@ with a `ButtonText` outline, and focus uses `Highlight`; no shadows.
 - **Parity:** Relief and CSS within the P0.6 budget at rest, hover, pressed, and at minimum, middle and
   maximum value.
 
-## 11. Hardware forms: `knob` and `fader`
+## 11. Hardware forms: `knob`, `fader` and `wheel`
 
 The same native slider drawn as the Knob's or the Fader's object ([Instrument plan](../instrument.md#everyday-components-at-the-instrument-level),
 [design language section 6](../design-language.md#instrument-object-table)): `form` (prop) or `data-strata-form` (on the drawn root) chooses
-`knob` or `fader`. Without it, or with `flush`, the Slider is the rail and puck above, in the markup and the look it had before, at every
+`knob`, `fader` or `wheel`. Without it, or with `flush`, the Slider is the rail and puck above, in the markup and the look it had before, at every
 level; the premium character's default form, `fader`, is reached by naming it (as the Switch's `slide` is), so a page that does not opt in is
 unchanged. Sections 1, 6 and 8 hold: the native `<input type="range">` is the control, with its `name`, `min`, `max`, `step`, `value`, `id`,
-Field wiring and every native key and event, and the accessibility snapshot is the same with and without the form. `wheel` (a thumbwheel) is
-reserved and draws as the flush slider until it is built.
+Field wiring and every native key and event, and the accessibility snapshot is the same with and without the form. `wheel` is a thumbwheel: a ridged
+roller rolling in a slot (below).
 
 ```html
 <div class="ug-knob" data-strata-form="knob" style="--strata-knob-value: 0.4;">
@@ -166,16 +166,54 @@ reserved and draws as the flush slider until it is built.
   is the Knob's skirt, cap and pointer on `spring.knob`, a Slider fader is the Fader's carriage on `spring.fader`, and the value's change is a
   uniform update (no capture of its own, no hit-geometry update). A Slider fader is horizontal; for a vertical fader use the [Fader](fader.md).
   **`fader` presents the Fader's object over the Slider's native range input** (it is not deferred).
-- **Props.** `form`, and for a form `marks` (a count, or the values with labels; five by default, as the Knob's and Fader's), `detents`, `sweep`
-  (a knob), `travel` (a fader), `unit` (and `format` in React and Vue) for `aria-valuetext`, and `resetValue` (the double-click's value; the
+- **Props.** `form`, and for a form `marks` (a count, or the values with labels; five by default, as the Knob's and Fader's, three for a wheel), `detents`, `sweep`
+  (a knob's turn, or a wheel's roll), `travel` (a fader's, or a wheel's drag), `unit` (and `format` in React and Vue) for `aria-valuetext`, and `resetValue` (the double-click's value; the
   initial value by default). `class` and `style` reach the drawn root and every other attribute the input. `size`, `material` and `level` go on the
   root. React and Vue are controlled with `value` and `onChange` (`v-model`), or uncontrolled with `defaultValue`; Astro takes `value`.
-- **`form` is also the native attribute** (the id of the input's form owner). `knob`, `fader`, `flush` and `wheel` are the form names and never an
+- **`form` is also the native attribute** (the id of the input's form owner). `knob`, `fader`, `wheel` and `flush` are the form names and never an
   owner; any other string is the form owner, as before, on the flush slider's input. A drawn form has no owner prop: put the input in its `<form>`.
 - **Boxes.** A knob's box is the Knob's (the dial plus its printed scale); a fader's is its travel plus the carriage and a 16 px margin each end
   (`size.fader`, 180 + 74 at medium), shrinking to its container, and 46 + 1.5em + 12 px across. Both stay at least 24 px each way.
-- **`wheel` (not built).** A thumbwheel needs a ridged cylinder rolling under a slot (a turned part about its own horizontal axis, with printed
-  ridges), a form of its own with three renderers. It is the next structural form; its name is reserved so that a page naming it today keeps working.
+```html
+<div class="ug-fader ug-fader--horizontal ug-fader--wheel" data-strata-form="wheel" style="--strata-fader-value: 0.4;">
+  <div class="ug-fader__track">
+    <span class="ug-fader__scale" aria-hidden="true">
+      <span class="ug-fader__mark" data-strata-value="0" style="--strata-fader-at: 0;">0</span>
+      <span class="ug-fader__mark" data-strata-value="50" style="--strata-fader-at: 0.5;">50</span>
+      <span class="ug-fader__mark" data-strata-value="100" style="--strata-fader-at: 1;">100</span>
+    </span>
+    <span class="ug-fader__slot" data-strata-face="groove" aria-hidden="true"></span>
+    <span class="ug-fader__carriage ug-fader__wheel" data-strata-face="raised" aria-hidden="true"><span class="ug-fader__ridges"></span></span>
+    <input class="ug-fader__input" type="range" id="gain-example" name="gain" min="0" max="100" step="1" value="40"
+           data-strata-default="40" aria-label="Gain">
+  </div>
+</div>
+```
+
+- **`wheel`: the thumbwheel.** The Fader's track and behaviour (the thumb drag along the slot, click-to-set on the slot and on the printed marks, the wheel
+  over it, the double-click reset and every native key are `attachStrataFaders`'s, unchanged: a tap on the roller sets the value like a tap on the slot) with a
+  ridged **roller** in place of the carriage. The roller does not slide: it stays at the middle of the slot and **rolls under the value**, its ridges
+  moving past, one index ridge in ink marking where the turn is. It is horizontal (a roller with its axis across the travel); the slot is shorter than a
+  fader's (0.4 of `size.fader`, 72 px at medium, or `travel`), so the whole form is 72 + 48 px across the travel and 46 + 1.5em + 12 px across it, and the
+  `hits` of the native input cover all of it. `wheel.sweep` (150°, at most 180°) is the roller's roll from the minimum to the maximum and `wheel.ridges`
+  (12) the ridges round it; the angle is the value's fraction times the sweep, from −sweep/2 to +sweep/2.
+- **Decided: the ridges are the part's geometry, not a print.** A roller that rolls needs ridges that move. A captured print of them would be a capture a
+  frame while the value turns, and a brushed finish is the same on every turn; so at the Instrument level the ridges are an `extrude` of a ridged
+  circle (valley and peak per ridge, flat facets that catch the light one after the other) turned about its own axis by a pose (`tilt` about the y axis, pivot
+  on the axis, from −sweep/2 to +sweep/2: a pose never passes 90° either side, so the token's maximum is 180°). The roller is **polished metal**
+  (`knobSkirt`, the knob's polished skirt metal: a brush would hide the facets), the index tooth a hair proud of a roller tooth in ink (`knobInk`, the knob's
+  pointer), both materials a knob or a rotary selector on the page already has, so a wheel beside them adds no material to the scene's 16. The axis stands one radius (`8 × depth scale`) above the face, so the
+  roller lies **on** the face and no vertex is below it: a roller sunk through the slot would draw its lower half over the face, since the parts have a
+  target of their own. Rolling about the axis keeps every vertex on its circle, so containment holds over the whole turn by construction (core's
+  `checkContainment` in the unit test, at five values, every depth and the stage's corners, closest vertex 2.4 px inside the box). **Rubber** is not a
+  separate form: a character that gives `knobSkirt` a rubber recipe (which a knob's skirt then takes too) makes the roller rubber.
+- **Presentations.** CSS: the roller is a raised, round-cornered face, its ridges a printed pattern (`repeating-linear-gradient`) shifted by the value
+  (radius times the angle: the surface moving) and its index ridge a printed bar. Relief and Objects: the slot a groove, the roller a raised face or a slab
+  (its print is captured, so a change of value is a capture of the box, as the Fader's carriage never was). Instrument: the two parts above, the print
+  hidden (`data-strata-dome`), the roll a pose on `t` (`spring.fader`): **a turn is a uniform update, with no capture and no hit-geometry update**. The
+  roller's shadow is the footprint at a height capped so it stays in the box (3.3 px: the box has 10 px across the track). Reduced motion: no spring, the roller
+  moves at once. Forced colours: a Canvas roller with CanvasText ridges and index. More contrast: the index and the slot take the text colour.
 
 **Tests.** `ui-structural-forms.test.mjs` (plain DOM, touch at 390 and 320 px, preferences, GPU at Relief, Objects and Instrument at DPR 1 and 2),
-`ui-structural-forms-bindings.test.mjs` (React and Vue), `ui-structural-forms-astro.test.mjs`.
+`ui-structural-forms-bindings.test.mjs` (React and Vue), `ui-structural-forms-astro.test.mjs`; the wheel in `ui-deferred-forms.test.mjs`,
+`ui-deferred-forms-bindings.test.mjs` and `ui-deferred-forms-astro.test.mjs`, and `strata-deferred-forms.unit.test.mjs` (the roller's parts, validated and contained).

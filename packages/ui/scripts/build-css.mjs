@@ -7,6 +7,7 @@
  * - `dist/css/strata.css`: both; the token stylesheet declares the layer order first.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { segmentsFontFace, segmentsGhostUrl } from "../src/shared/segments.ts";
 import { charactersToCss, layerOrder, strataTokens, tokensToCss, validateTokens } from "../src/tokens/index.ts";
 
 const issues = validateTokens(strataTokens);
@@ -20,7 +21,11 @@ const tokens = `${tokensToCss(strataTokens)}
 ${charactersToCss().replace(`${layerOrder}
 `, "")}`;
 // Every stylesheet declares the layer order first, so the layers rank the same whichever one loads first.
-const components = `${layerOrder}\n\n${await readFile(new URL("../src/css/components.css", import.meta.url), "utf8")}`;
+// The Display's `segments` face is drawn by Strata (`shared/segments.ts`) and embedded as a data URI: no font file ships and no third-party font is taken on.
+const components = `${layerOrder}
+
+${segmentsFontFace()}
+${(await readFile(new URL("../src/css/components.css", import.meta.url), "utf8")).replace("__SEGMENTS_GHOST__", segmentsGhostUrl())}`;
 await mkdir(new URL("css/", dist), { recursive: true });
 await writeFile(new URL("css/tokens.css", dist), tokens);
 await writeFile(new URL("css/components.css", dist), components);
