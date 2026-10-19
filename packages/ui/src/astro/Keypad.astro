@@ -1,0 +1,28 @@
+---
+/**
+ * Keypad (anatomy page `keypad.md`): a native `<fieldset>` of `<button>`s (`KeypadKey`s in the slot), machined square caps with a
+ * printed legend on one polished plinth. `label` is the fieldset's `<legend>` (or give `aria-label`); `columns` (3 by default) lays the
+ * keys out; `shifted` prints each key's `shift` legend large and its first legend small, below it. Held keys, opt-in feedback and the
+ * grid keys (one tab stop, the arrows, Home and End) come from `attachStrata`, which it loads. A `disabled` keypad disables every key.
+ */
+import Behaviour from "./Behaviour.astro";
+import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+import { gridStyle } from "../shared/pad.ts";
+
+interface Props {
+  label?: string;
+  columns?: number;
+  shifted?: boolean;
+  size?: StrataSize;
+  material?: string;
+  level?: StrataLevel;
+  class?: string;
+  style?: string;
+  [attribute: string]: unknown;
+}
+
+const { label, columns, shifted = false, size, material, level, class: className, style, ...rest } = Astro.props;
+const own = gridStyle("keypad", columns);
+---
+<fieldset class={classes("ug-keypad", className)} data-strata-shifted={shifted ? "true" : undefined} {...strataAttributes({ size, material, level })} style={own && style ? `${own} ${style}` : own ?? style} {...rest}>{label !== undefined && <legend class="ug-keypad__legend">{label}</legend>}<div class="ug-keypad__plinth" data-strata-face="raised"><slot /></div></fieldset>
+<Behaviour />

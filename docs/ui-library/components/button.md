@@ -126,6 +126,12 @@ control, its box the hit area, and the object is decoration inside it.
 | Socket, ring | The dark band under the ring (printed on the face) and the lit ring over it, the cap + 5.2 high; the cap leaves 2.6 px of it showing (a 2 px ring and a 0.6 px gap) | Instrument: 0.5 on the bezel | The ring is lit 0 to 1 by `--strata-lit` |
 | Cap | A pill as tall as `size.push` (32, 40 or 48), 12 px of print each side, carrying the icon and the label | Relief: 3; Instrument: 6, taper 0.6 | Down `pushButton.travel.held` (4) while held |
 
+- **Materials.** A layer holds at most 16 materials (core's cap, `INSTRUMENT_MATERIALS`), and the helper keeps its scenes under it with named rules (`gpu/index.ts`): a push
+  button's parts are added only while the scene holds fewer than `INSTRUMENT_PUSH_MATERIALS` (12) materials, and a plain Button's key body only below
+  `INSTRUMENT_KEY_BODY_MATERIALS` (14); past a rule the button is a **Relief key** (a raised face, still the native button), and the lens, bezel and
+  body materials that the push buttons add after the keys trim the later colours' keys the same way until the scene fits 16. It is reported, not silent:
+  `strata.diagnostics(panel)` gives `{ materials: { count, cap }, keysAtRelief: [ids] }` and the helper warns once per panel with `console.warn`. A scene
+  that still passes the cap is drawn at Relief by core, with `state().instrument` saying `budget`. Split a panel with many colours or many component kinds.
 - **Lit ring.** The ring is lit (`--strata-lit: 1`) while the button is held (the pointer down on it, or Enter or Space down) and unlit
   otherwise; a disabled or `aria-disabled` button is never held, never lit and never moves. The light is never the only cue: the
   cap goes down as well, and the click is the native one.

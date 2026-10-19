@@ -1,0 +1,1818 @@
+{
+  "$description": "The playful character (design language section 19): a toy or an appliance. Soft-touch rubber caps in bold colours (sky blue knobs, coral faders), glossy candy lacquers for the skirts, levers, bezels and plates (sun yellow, lime, cream, pink; a mint faceplate by day and a grape one in the dark), a bright high-key room, hot-pink lamps, bouncy underdamped springs with lively detents, a fat pointer and a bright, short, nearly noiseless sound set. A sparse validated theme layer: it sets only what differs from premium. Its values are the I5 tuning on the prototype page (look sign-off pending with the owner); `provisional` names every one of them but the role assignments.",
+  "$extensions": {
+    "dev.underglass.strata": {
+      "character": {
+        "name": "playful",
+        "version": 1,
+        "status": "draft",
+        "source": "docs/ui-library/instrument-characters.md#playful",
+        "provisional": [
+          "spring",
+          "emitter",
+          "studio",
+          "environment.intensity",
+          "pointerLight.colour",
+          "colour.glowOn",
+          "knob.pointer.width",
+          "instrument.material",
+          "instrument.ink",
+          "material.presets",
+          "feedback"
+        ],
+        "extends": "premium"
+      }
+    }
+  },
+  "instrument": {
+    "material": {
+      "rubberSky": {
+        "$description": "Soft-touch rubber in sky blue: a saturated dielectric, matte, no coat, so it takes the room as a soft sheen.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#2d93ff",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.82,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        }
+      },
+      "rubberCoral": {
+        "$description": "Soft-touch rubber in coral.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#ff6a5c",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.82,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        }
+      },
+      "candyYellow": {
+        "$description": "Candy lacquer in sun yellow: a saturated dielectric under a full, sharp coat.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#ffd12e",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.35,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The coat layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.04,
+            "$description": "The coat layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "ior": {
+            "$type": "number",
+            "$value": 1.5,
+            "$description": "The coat layer's ior.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 1,
+                "max": 3
+              }
+            }
+          }
+        }
+      },
+      "candyLime": {
+        "$description": "Candy lacquer in lime.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#8be04a",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.35,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The coat layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.04,
+            "$description": "The coat layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "ior": {
+            "$type": "number",
+            "$value": 1.5,
+            "$description": "The coat layer's ior.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 1,
+                "max": 3
+              }
+            }
+          }
+        }
+      },
+      "candyPink": {
+        "$description": "Candy lacquer in bubblegum pink.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#ff7ac0",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.35,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The coat layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.04,
+            "$description": "The coat layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "ior": {
+            "$type": "number",
+            "$value": 1.5,
+            "$description": "The coat layer's ior.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 1,
+                "max": 3
+              }
+            }
+          }
+        }
+      },
+      "candyCream": {
+        "$description": "Candy lacquer in cream: the bright bezel that lets a lamp read.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#fff2d6",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.35,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The coat layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.04,
+            "$description": "The coat layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "ior": {
+            "$type": "number",
+            "$value": 1.5,
+            "$description": "The coat layer's ior.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 1,
+                "max": 3
+              }
+            }
+          }
+        }
+      },
+      "candyMint": {
+        "$description": "Candy lacquer in mint: the faceplate by day.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#5fd6c0",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.4,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The coat layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.05,
+            "$description": "The coat layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "ior": {
+            "$type": "number",
+            "$value": 1.5,
+            "$description": "The coat layer's ior.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 1,
+                "max": 3
+              }
+            }
+          }
+        }
+      },
+      "candyGrape": {
+        "$description": "Candy lacquer in grape: the faceplate in the dark.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#3b2680",
+            "$description": "The base layer's colour."
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.4,
+            "$description": "The base layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "The base layer's metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "direct": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The base layer's direct.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "The coat layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.05,
+            "$description": "The coat layer's roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          },
+          "ior": {
+            "$type": "number",
+            "$value": 1.5,
+            "$description": "The coat layer's ior.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 1,
+                "max": 3
+              }
+            }
+          }
+        }
+      },
+      "glass": {
+        "$description": "Bright, clear candy glass: lenses with a faint pink tint and some dispersion.",
+        "glass": {
+          "tint": {
+            "$type": "color",
+            "$value": "#ffe4f0",
+            "$description": "The glass layer's tint."
+          },
+          "absorption": {
+            "$type": "number",
+            "$value": 0.03,
+            "$description": "The glass layer's absorption.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 10
+              }
+            }
+          }
+        },
+        "dispersion": {
+          "strength": {
+            "$type": "number",
+            "$value": 0.15,
+            "$description": "The dispersion layer's strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "ink": {
+      "cap": {
+        "$type": "color",
+        "$value": "#1a1240",
+        "$description": "The ink engraved in a cap: deep indigo on sky blue and coral."
+      }
+    }
+  },
+  "material": {
+    "presets": {
+      "rubberSky": {
+        "$description": "Soft-touch sky-blue rubber, by its base colour and a high roughness.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#2d93ff",
+            "$description": "Colour role.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.82,
+            "$description": "Base roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "Base metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        }
+      },
+      "rubberCoral": {
+        "$description": "Soft-touch coral rubber, by its base colour and a high roughness.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#ff6a5c",
+            "$description": "Colour role.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.82,
+            "$description": "Base roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "Base metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        }
+      },
+      "candyYellow": {
+        "$description": "Sun-yellow candy lacquer, by its base colour and a full coat.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#ffd12e",
+            "$description": "Colour role.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.35,
+            "$description": "Base roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "Base metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "Clear coat strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.04,
+            "$description": "Clear coat roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        }
+      },
+      "candyLime": {
+        "$description": "Lime candy lacquer, by its base colour and a full coat.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#8be04a",
+            "$description": "Colour role.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.35,
+            "$description": "Base roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "Base metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "Clear coat strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.04,
+            "$description": "Clear coat roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        }
+      },
+      "candyPink": {
+        "$description": "Pink candy lacquer, by its base colour and a full coat.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#ff7ac0",
+            "$description": "Colour role.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.35,
+            "$description": "Base roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "Base metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "Clear coat strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.04,
+            "$description": "Clear coat roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        }
+      },
+      "candyCream": {
+        "$description": "Cream candy lacquer, by its base colour and a full coat.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#fff2d6",
+            "$description": "Colour role.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.35,
+            "$description": "Base roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "Base metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "Clear coat strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.04,
+            "$description": "Clear coat roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        }
+      },
+      "candyMint": {
+        "$description": "Mint candy lacquer, by its base colour and a full coat.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#5fd6c0",
+            "$description": "Colour role.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.4,
+            "$description": "Base roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "Base metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "Clear coat strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.05,
+            "$description": "Clear coat roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        }
+      },
+      "candyGrape": {
+        "$description": "Grape candy lacquer, by its base colour and a full coat.",
+        "base": {
+          "colour": {
+            "$type": "color",
+            "$value": "#3b2680",
+            "$description": "Colour role.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.4,
+            "$description": "Base roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "metallic": {
+            "$type": "number",
+            "$value": 0,
+            "$description": "Base metallic.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        },
+        "coat": {
+          "strength": {
+            "$type": "number",
+            "$value": 1,
+            "$description": "Clear coat strength.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          },
+          "roughness": {
+            "$type": "number",
+            "$value": 0.05,
+            "$description": "Clear coat roughness.",
+            "$extensions": {
+              "dev.underglass.strata": {
+                "min": 0,
+                "max": 1,
+                "scope": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "roles": {
+      "knobCap": {
+        "$type": "string",
+        "$value": "rubberSky",
+        "$description": "A knob's cap; its chamfer the same metal polished."
+      },
+      "knobSkirt": {
+        "$type": "string",
+        "$value": "candyYellow",
+        "$description": "A knob's skirt."
+      },
+      "faderCap": {
+        "$type": "string",
+        "$value": "rubberCoral",
+        "$description": "A fader's carriage."
+      },
+      "lever": {
+        "$type": "string",
+        "$value": "candyLime",
+        "$description": "A bat's lever, polished as a chamfer is."
+      },
+      "rockerPlate": {
+        "$type": "string",
+        "$value": "candyPink",
+        "$description": "A rocker's paddle."
+      },
+      "plate": {
+        "$type": "string",
+        "$value": "candyMint",
+        "$description": "Wall plates: metal on light themes, gunmetal on dark.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "themes": {
+              "light": "candyMint",
+              "dark": "candyGrape",
+              "contrast": "candyMint",
+              "contrast-dark": "candyGrape"
+            }
+          }
+        }
+      },
+      "bezel": {
+        "$type": "string",
+        "$value": "candyCream",
+        "$description": "Bezels of rockers, push buttons and displays; a bat's nut and bushing."
+      },
+      "lens": {
+        "$type": "string",
+        "$value": "glass",
+        "$description": "Lenses."
+      },
+      "display": {
+        "$type": "string",
+        "$value": "glass",
+        "$description": "A display's window."
+      },
+      "glowOn": {
+        "$type": "string",
+        "$value": "emissive",
+        "$description": "Lit lenses, rings and flags."
+      },
+      "glowOff": {
+        "$type": "string",
+        "$value": "glass",
+        "$description": "Unlit lenses."
+      }
+    }
+  },
+  "environment": {
+    "intensity": {
+      "$type": "number",
+      "$value": 0.9,
+      "$description": "Environment lighting strength.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 3,
+          "scope": false
+        }
+      }
+    }
+  },
+  "studio": {
+    "key": {
+      "$type": "number",
+      "$value": 7,
+      "$description": "The key softbox.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 40,
+          "scope": false
+        }
+      }
+    },
+    "keyRadius": {
+      "$type": "number",
+      "$value": 0.45,
+      "$description": "The softbox's angular radius, radians.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0.05,
+          "max": 0.6,
+          "scope": false
+        }
+      }
+    },
+    "fill": {
+      "$type": "number",
+      "$value": 2.2,
+      "$description": "A broad fill opposite the key.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 10,
+          "scope": false
+        }
+      }
+    },
+    "front": {
+      "$type": "number",
+      "$value": 0.3,
+      "$description": "A dim panel behind the viewer.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 2,
+          "scope": false
+        }
+      }
+    },
+    "strip": {
+      "$type": "number",
+      "$value": 1.4,
+      "$description": "A ring 12–20° above the horizon.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 10,
+          "scope": false
+        }
+      }
+    },
+    "floor": {
+      "$type": "number",
+      "$value": 0.2,
+      "$description": "The room below the horizon.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 1,
+          "scope": false
+        }
+      }
+    },
+    "ceiling": {
+      "$type": "number",
+      "$value": 0.55,
+      "$description": "The room above it.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 0,
+          "max": 2,
+          "scope": false
+        }
+      }
+    }
+  },
+  "emitter": {
+    "lamp": {
+      "radius": {
+        "$type": "number",
+        "$value": 8,
+        "$description": "Reach, in lens diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 1,
+            "max": 20
+          }
+        }
+      },
+      "strength": {
+        "$type": "number",
+        "$value": 4600,
+        "$description": "Intensity I.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 32000
+          }
+        }
+      }
+    },
+    "led": {
+      "radius": {
+        "$type": "number",
+        "$value": 7,
+        "$description": "Reach, in lens diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 1,
+            "max": 20
+          }
+        }
+      },
+      "strength": {
+        "$type": "number",
+        "$value": 760,
+        "$description": "Intensity I.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 32000
+          }
+        }
+      }
+    },
+    "pushButton": {
+      "strength": {
+        "$type": "number",
+        "$value": 3400,
+        "$description": "Intensity I at the reference cap (40 px).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 32000
+          }
+        }
+      }
+    },
+    "segment": {
+      "strength": {
+        "$type": "number",
+        "$value": 380,
+        "$description": "Intensity I at the reference lens (10 px).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 32000
+          }
+        }
+      }
+    }
+  },
+  "knob": {
+    "pointer": {
+      "width": {
+        "$type": "dimension",
+        "$value": "4px",
+        "$description": "Pointer width, engraved in the cap's ink along the crown.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0.5,
+            "max": 6
+          }
+        }
+      }
+    }
+  },
+  "spring": {
+    "knob": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 340,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 22,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "detent": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 700,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 27,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "fader": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 360,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 22,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "slide": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 520,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 27,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "rocker": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 900,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 31,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "bat": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 1000,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 33,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "wall": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 900,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 33,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "button": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 1300,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 41,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "meter": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 300,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 18,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "gauge": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 140,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 12,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    },
+    "patch": {
+      "stiffness": {
+        "$type": "number",
+        "$value": 900,
+        "$description": "Spring stiffness per unit mass (design language section 12).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 50,
+            "max": 4000
+          }
+        }
+      },
+      "damping": {
+        "$type": "number",
+        "$value": 32,
+        "$description": "Spring damping per unit mass.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 5,
+            "max": 200
+          }
+        }
+      }
+    }
+  },
+  "colour": {
+    "glowOn": {
+      "$type": "color",
+      "$value": "#ff3d8b",
+      "$description": "Lit lenses, rings and flags.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "themes": {
+            "light": "#ff3d8b",
+            "dark": "#ff3d8b",
+            "contrast": "#ff3d8b",
+            "contrast-dark": "#ff3d8b"
+          }
+        }
+      }
+    }
+  },
+  "pointerLight": {
+    "colour": {
+      "$type": "color",
+      "$value": "#fff4cc",
+      "$description": "A lemon white: (1, 0.96, 0.8) as light."
+    }
+  },
+  "form": {
+    "switch": {
+      "$type": "string",
+      "$value": "wall",
+      "$description": "Switch's default form in playful: the big friendly paddle of an appliance; slide, rocker and bat are available as forms.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "options": [
+            "slide",
+            "rocker",
+            "bat",
+            "wall"
+          ]
+        }
+      }
+    }
+  },
+  "feedback": {
+    "click": {
+      "pitch": {
+        "$type": "number",
+        "$value": 3600,
+        "$description": "The click's tone, Hz.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 8000
+          }
+        }
+      },
+      "decay": {
+        "$type": "number",
+        "$value": 2.5,
+        "$description": "How fast the click dies away, ms (its envelope's time constant; the sound lasts five of them).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.5,
+            "max": 60
+          }
+        }
+      },
+      "noise": {
+        "$type": "number",
+        "$value": 0.25,
+        "$description": "How much of the click is noise rather than tone, 0–1.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    },
+    "tick": {
+      "pitch": {
+        "$type": "number",
+        "$value": 4600,
+        "$description": "The tick's tone, Hz.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 8000
+          }
+        }
+      },
+      "decay": {
+        "$type": "number",
+        "$value": 1.2,
+        "$description": "How fast the tick dies away, ms (its envelope's time constant; the sound lasts five of them).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.5,
+            "max": 60
+          }
+        }
+      },
+      "noise": {
+        "$type": "number",
+        "$value": 0.1,
+        "$description": "How much of the tick is noise rather than tone, 0–1.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    },
+    "thunk": {
+      "pitch": {
+        "$type": "number",
+        "$value": 260,
+        "$description": "The thunk's tone, Hz.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 8000
+          }
+        }
+      },
+      "decay": {
+        "$type": "number",
+        "$value": 9,
+        "$description": "How fast the thunk dies away, ms (its envelope's time constant; the sound lasts five of them).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.5,
+            "max": 60
+          }
+        }
+      },
+      "noise": {
+        "$type": "number",
+        "$value": 0.15,
+        "$description": "How much of the thunk is noise rather than tone, 0–1.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    },
+    "snap": {
+      "pitch": {
+        "$type": "number",
+        "$value": 2800,
+        "$description": "The snap's tone, Hz.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 8000
+          }
+        }
+      },
+      "decay": {
+        "$type": "number",
+        "$value": 3.5,
+        "$description": "How fast the snap dies away, ms (its envelope's time constant; the sound lasts five of them).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.5,
+            "max": 60
+          }
+        }
+      },
+      "noise": {
+        "$type": "number",
+        "$value": 0.3,
+        "$description": "How much of the snap is noise rather than tone, 0–1.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 1
+          }
+        }
+      }
+    }
+  }
+}

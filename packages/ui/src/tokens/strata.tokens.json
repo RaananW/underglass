@@ -1906,6 +1906,82 @@
         }
       }
     },
+    "pad": {
+      "small": {
+        "$type": "dimension",
+        "$value": "48px",
+        "$description": "Pad cap side at small (the pad's box is the cap plus 18 px).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 32,
+            "max": 128
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "64px",
+        "$description": "Pad cap side at medium (the premium pad: an 82 px box).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 32,
+            "max": 128
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "80px",
+        "$description": "Pad cap side at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 32,
+            "max": 128
+          }
+        }
+      }
+    },
+    "keypad": {
+      "small": {
+        "$type": "dimension",
+        "$value": "36px",
+        "$description": "Keypad key cap side at small (the key's box is the cap plus 12 px, so 48).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 24,
+            "max": 96
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "44px",
+        "$description": "Keypad key cap side at medium (the premium keypad: a 56 px key, over the 44 px touch target).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 24,
+            "max": 96
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "52px",
+        "$description": "Keypad key cap side at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 24,
+            "max": 96
+          }
+        }
+      }
+    },
     "rotary": {
       "small": {
         "$type": "dimension",
@@ -2903,6 +2979,44 @@
           "scope": true,
           "min": 0,
           "max": 16
+        }
+      }
+    },
+    "pad": {
+      "radius": {
+        "$type": "number",
+        "$value": 3,
+        "$description": "Reach R of a lit pad, in cap sides.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 1,
+            "max": 20
+          }
+        }
+      },
+      "height": {
+        "$type": "number",
+        "$value": 0.25,
+        "$description": "Height of a lit pad's light above the face, in cap sides.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.1,
+            "max": 2
+          }
+        }
+      },
+      "strength": {
+        "$type": "number",
+        "$value": 3600,
+        "$description": "Intensity I at the reference pad (64 px).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 32000
+          }
         }
       }
     },

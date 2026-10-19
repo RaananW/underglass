@@ -1,0 +1,26 @@
+---
+/**
+ * PadGrid (anatomy page `pad.md`): the `<div role="group">` the pads stand in. `label` is its accessible name and `columns` (4 by
+ * default) its columns. Inside it the pads are one tab stop and the arrow keys move between them (the grid pattern, from
+ * `attachStrata`, which it loads).
+ */
+import Behaviour from "./Behaviour.astro";
+import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+import { gridStyle } from "../shared/pad.ts";
+
+interface Props {
+  label: string;
+  columns?: number;
+  size?: StrataSize;
+  material?: string;
+  level?: StrataLevel;
+  class?: string;
+  style?: string;
+  [attribute: string]: unknown;
+}
+
+const { label, columns, size, material, level, class: className, style, ...rest } = Astro.props;
+const own = gridStyle("pad", columns);
+---
+<div class={classes("ug-pad-grid", className)} role="group" aria-label={label} {...strataAttributes({ size, material, level })} style={own && style ? `${own} ${style}` : own ?? style} {...rest}><slot /></div>
+<Behaviour />

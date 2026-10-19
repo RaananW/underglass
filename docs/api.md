@@ -553,6 +553,34 @@ With an `instrument` material, `instrumentGpuMs` samples (`layerId`, `phase: "co
 layer's mesh pass and post chain in one frame, and with emitters, `emitterGpuMs` samples the GPU time of one layer's face pool pass,
 both from Babylon Lite's per-task timings when the device has timestamp queries.
 
+### Input events and captures
+
+A native control's value is not a DOM mutation (a range thumb moves with it), so core queues a capture of the enclosing layer
+for every `input` event in a layer, as it does for `focusin` and `focusout`; DOM that a handler writes is captured by the
+mutation observer as usual. A presenter that draws a control's value itself and hides the control's native paint opts out
+**per element** with the attribute `data-underglass-gpu-value` (`GPU_VALUE_ATTRIBUTE`, exported by `@underglass/core`) on the
+element that receives the event:
+
+- An `input` event whose target carries it queues no capture. It is counted: `state().metrics.inputCapturesSkipped`, and
+  `state().metrics.perLayer[id].inputCapturesSkipped` for each layer that contains the element or is contained by it (as
+  `queueCapture` attributes), so the per-layer sum can differ from the global count.
+- Nothing else changes: attribute, text and child changes a handler makes still recapture through the mutation observer, and every
+  element without the attribute captures on `input` exactly as before.
+- **The mark is a promise, and the presenter must guarantee all of it:**
+  1. The element's own paint does not depend on its value. A hidden thumb is not enough if a visible spinner, text, caret,
+     selection, track fill or `datalist` tick still shows the value.
+  2. No CSS keyed on the element's state restyles it or anything else without a DOM write (`:valid`, `:invalid`, `:in-range`,
+     `:out-of-range`, `:placeholder-shown`, `:has(...)`, sibling selectors): such a change repaints with no mutation, and only an
+     `input` capture would have caught it.
+  3. Text, number, select and checkbox controls are never marked: their paint shows the value.
+  4. A native repaint that remains (a focus ring, hover) does not need the `input` capture: it reaches the GPU through the browser's
+     paint event (`changedElements`), the documented path for hover and focus repaints (`focusin`/`focusout` also queue one).
+  A marked control with a value-dependent paint would show stale pixels, which the contract forbids.
+- The Strata JogWheel's helper sets the mark on the wheel's input with the dimple's `data-strata-dome` (while the GPU draws the dimple;
+  its thumb is never painted) and removes it where the dome is removed, so a flick of 49 steps costs 0 captures for its input events
+  (36 to 38 before). A Knob or Fader writes its value to a custom property on its root for each `input`, which is a DOM write that
+  recaptures anyway, so they are not marked.
+
 ### Same-value mutations are ignored
 
 A write that leaves the DOM as it was costs no capture. The runtime observes the root with `attributeOldValue` and
@@ -620,8 +648,16 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
   box over its bounds).
 - **Budgets.** 2,048 parts per layer and 6,000 per stage; above either, the layer is drawn at the Relief level. More
   than 16 part kinds per layer is reported; more than 64 steps the layer down. The format accepts up to 8,192 parts.
+- **Material cap.** A layer draws with at most 16 materials (`INSTRUMENT_MATERIALS`). A scene naming 17 to 64 is valid: the whole
+  layer is drawn at the Relief level, every object stepped down with reason `budget` (`detail`: `17 materials in the layer, above 16`) and a
+  `materials:` warning, GPU on. A scene naming more than 64 (`INSTRUMENT_MATERIALS_CEILING`) is a validation error: 64 is a format limit, the same bound as profiles
+  and protected rects, not a budget. The face's own Relief binding holds 16, so past the cap it binds the materials the face's primitives
+  use; when those are more than 16 the face draws the first 16 in scene order and the rest in the first (the layer is stepped down already,
+  and `detail` adds `N face materials, above 16`, with a `materials:` warning of its own). An entry naming a material the scene does not hold is refused as at 16 or fewer.
+  `@underglass/ui/gpu` exports `createKeyRegistry`, `KeyBody` and `KeyRegistry` (public: loops that draw key-like objects register their bodies so the helper can trim them to fit; see `gpu/instrument-keys.ts`), with `INSTRUMENT_KEY_BODY_MATERIALS`, `INSTRUMENT_PUSH_MATERIALS`, `STRATA_INSTRUMENT_MATERIAL_CAP`, `StrataGpuDiagnostics` and `StrataGpu.diagnostics(panel)`. Each layer reports `materials: { count, cap }`
+  and `state().instrument.budgets.materialsPerLayer` is the cap.
 - **Diagnostics.** `state().instrument` lists each layer's `status` (`ready`, `pending`, `stepped-down`, `failed`),
-  objects, parts, drawn parts, kinds, `steppedDown` entries (`{ object, reason, part?, inset?, overshoot?, detail? }`,
+  objects, parts, drawn parts, kinds, `materials` (`{ count, cap }`), `steppedDown` entries (`{ object, reason, part?, inset?, overshoot?, detail? }`,
   reasons `containment`, `budget`, `compile`, `pending`, `transform`, `order-unavailable`, `post`), warnings and GPU time
   (`lastMs`, `p50Ms`, `p95Ms`); each layer's `probe` (`status` `on`, `off`, `budget` or `failed` with `reason`; with a probe its `size`, `bytes`, `refreshes` and the GPU time of the refreshes) and `glass` (`status` `none`, `on` or `fallback` with `error`); `state().instrument.probes` (`budget`, `live`, `builds`, `failures`, `refreshes`, `bytes`); the stage's parts; the timing status; and the compile counters (builds, failures,
   deferred successor deadlines). `state().instrument.post` lists per layer each stage's status (`on`, `off`, `idle`
