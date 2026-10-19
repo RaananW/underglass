@@ -6,6 +6,7 @@
  */
 import Behaviour from "./Behaviour.astro";
 import { nextId } from "./field.ts";
+import { dialogForm, type StrataDialogForm } from "../shared/structure-forms.ts";
 import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
 
 interface Props {
@@ -13,6 +14,8 @@ interface Props {
   titleId?: string;
   descriptionId?: string;
   description?: string;
+  /** `plate`: a machined plate that rises out of the chassis when it opens. `flush` or none: the dialog of before. */
+  form?: StrataDialogForm | "flush";
   size?: StrataSize;
   material?: string;
   level?: StrataLevel;
@@ -22,12 +25,13 @@ interface Props {
   [attribute: string]: unknown;
 }
 
-const { title, titleId, descriptionId: givenDescriptionId, description, size, material, level, closeOnScrim, class: className, ...rest } = Astro.props;
+const { title, titleId, descriptionId: givenDescriptionId, description, size, material, level, closeOnScrim, form, class: className, ...rest } = Astro.props;
 const id = titleId ?? nextId("dialog-title");
 const descriptionId = givenDescriptionId ?? nextId("dialog-description");
+const formed = dialogForm(form);
 ---
 <div class="ug-scrim" aria-hidden="true" hidden></div>
-<section class={classes("ug-panel", "ug-dialog", className)} role="dialog" aria-modal="true" aria-labelledby={id} aria-describedby={description !== undefined ? descriptionId : undefined} data-strata-face="raised" data-strata-elevation="modal" tabindex="-1" hidden {...strataAttributes({ size, material, level })} data-strata-close-on-scrim={closeOnScrim ? "" : undefined} {...rest}>
+<section class={classes("ug-panel", "ug-dialog", className)} role="dialog" aria-modal="true" aria-labelledby={id} aria-describedby={description !== undefined ? descriptionId : undefined} data-strata-face="raised" data-strata-elevation="modal" data-strata-form={formed} tabindex="-1" hidden {...strataAttributes({ size, material, level })} data-strata-close-on-scrim={closeOnScrim ? "" : undefined} {...rest}>
   <h2 class="ug-dialog__title" id={id}>{title}</h2>
   <div class="ug-dialog__body">{description !== undefined && <p class="ug-dialog__description" id={descriptionId}>{description}</p>}<slot /></div>
   {Astro.slots.has("actions") && <div class="ug-dialog__actions"><slot name="actions" /></div>}

@@ -1,6 +1,7 @@
 ---
 /** Card (anatomy page `card.md`): a raised slab inside a Panel, named by its title. Slots: the body, and `footer`. */
 import { nextId } from "./field.ts";
+import { surfaceForm, type StrataSurfaceForm } from "../shared/structure-forms.ts";
 import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
 
 interface Props {
@@ -8,6 +9,8 @@ interface Props {
   titleLevel?: 2 | 3 | 4 | 5 | 6;
   titleId?: string;
   as?: "article" | "section" | "div";
+  /** `plate`: a machined plate. `tray`: the body sits in a recessed tray. `flush` or none: the card of before. */
+  form?: StrataSurfaceForm | "flush";
   size?: StrataSize;
   material?: string;
   level?: StrataLevel;
@@ -15,12 +18,13 @@ interface Props {
   [attribute: string]: unknown;
 }
 
-const { title, titleLevel = 3, titleId, as: Element = "article", size, material, level, class: className, ...rest } = Astro.props;
+const { title, titleLevel = 3, titleId, as: Element = "article", form, size, material, level, class: className, ...rest } = Astro.props;
 const id = titleId ?? nextId("card-title");
 const Heading = `h${titleLevel}`;
+const formed = surfaceForm(form);
 ---
-<Element class={classes("ug-card", className)} data-strata-face="raised" aria-labelledby={title !== undefined ? id : undefined} {...strataAttributes({ size, material, level })} {...rest}>
+<Element class={classes("ug-card", className)} data-strata-face="raised" aria-labelledby={title !== undefined ? id : undefined} data-strata-form={formed} {...strataAttributes({ size, material, level })} {...rest}>
   {title !== undefined && <Heading id={id} class="ug-card__title">{title}</Heading>}
-  <div class="ug-card__body"><slot /></div>
+  <div class="ug-card__body" data-strata-face={formed === "tray" ? "well" : undefined}><slot /></div>
   {Astro.slots.has("footer") && <div class="ug-card__footer"><slot name="footer" /></div>}
 </Element>

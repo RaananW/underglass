@@ -1,0 +1,53 @@
+---
+/**
+ * Strata Astro structural forms check page (`/structural-forms/`): `[data-contract]` renders the anatomy pages' form examples
+ * (`slider.md`, `card.md`, `panel.md`, `dialog.md`, `drawer.md`, *Hardware forms* and *Plate and tray forms*) with `@underglass/ui/astro`, and
+ * `main` holds live controls `tests/browser/ui-structural-forms-astro.test.mjs` drives. Server-rendered HTML; the only script is the
+ * components' own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { Card, Dialog, Drawer, Panel, Slider } from "@underglass/ui/astro";
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro structural forms check</title>
+</head>
+<body>
+  <div data-contract="slider:knob" hidden><Slider form="knob" id="drive-example" name="drive" aria-label="Drive" marks={[0, 50, 100]} value={40} /></div>
+  <div data-contract="slider:fader" hidden><Slider form="fader" id="trim-example" name="trim" aria-label="Trim" min={-12} max={12} step={6} detents={5} marks={[-12, 0, 12]} value={0} unit=" dB" /></div>
+  <div data-contract="card:plate" hidden><Card form="plate" titleId="plate-card-title" title="Plate">A machined plate.</Card></div>
+  <div data-contract="card:tray" hidden><Card form="tray" titleId="tray-card-title" title="Tray">The body sits in a tray.</Card></div>
+  <div data-contract="panel:plate" hidden><Panel form="plate" titleId="plate-panel-title" title="Plate">Content</Panel></div>
+  <div data-contract="panel:tray" hidden><Panel form="tray" titleId="tray-panel-title" title="Tray">Content</Panel></div>
+  <div data-contract="dialog:plate" hidden><Dialog form="plate" title="Discard changes?" titleId="discard-title" descriptionId="discard-description" description="Your edits will be lost.">
+    <Fragment slot="actions"><button type="button" class="ug-button" data-strata-face="raised" data-strata-close><span class="ug-button__label">Keep editing</span></button></Fragment></Dialog></div>
+  <div data-contract="drawer:tray" hidden><Drawer form="tray" side="end" title="Filters" titleId="filters-title" descriptionId="filters-description" description="Narrow the list.">
+    <Fragment slot="actions"><button type="button" class="ug-button" data-strata-face="raised" data-strata-close><span class="ug-button__label">Done</span></button></Fragment></Drawer></div>
+  <main>
+    <section class="ug-panel" data-strata-face="raised" aria-label="Structural forms">
+      <form id="owner-form"></form>
+      <button type="button" id="open-dialog" class="ug-button" data-strata-face="raised" data-strata-open="the-dialog"><span class="ug-button__label">Open dialog</span></button>
+      <button type="button" id="open-drawer" class="ug-button" data-strata-face="raised" data-strata-open="the-drawer"><span class="ug-button__label">Open drawer</span></button>
+      <Slider form="knob" id="drive" name="drive" label="Drive" marks={[0, 50, 100]} value={40} unit="%" class="extra" style="margin-right: 4px" data-testid="drive" />
+      <Slider form="fader" id="trim" name="trim" label="Trim" min={-12} max={12} step={6} detents={5} value={0} unit=" dB" size="small" />
+      <Slider form="owner-form" id="owned" name="owned" label="Owned" min={0} max={10} value={5} />
+      <Slider form="flush" id="flat" label="Flat" value={60} />
+      <Slider id="plain" label="Plain" value={20} />
+      <Card form="plate" id="card-plate" title="Plate card" class="extra" style="margin-right: 4px" data-testid="card">A machined plate.<Fragment slot="footer"><button type="button" class="ug-button" data-strata-face="raised"><span class="ug-button__label">Save</span></button></Fragment></Card>
+      <Card form="tray" id="card-tray" title="Tray card">The body sits in a tray.</Card>
+      <Card form="flush" id="card-flush" title="Flush card">The card of before.</Card>
+      <Panel form="plate" id="panel-plate" title="Plate panel" class="extra" style="margin-right: 4px" data-testid="panel"><p>Content</p></Panel>
+      <Panel form="tray" id="panel-tray" title="Tray panel"><p>Content</p></Panel>
+      <Panel form="flush" id="panel-flush" title="Flush panel"><p>Content</p></Panel>
+    </section>
+    <Dialog form="plate" id="the-dialog" title="Output stage" titleId="the-dialog-title" closeOnScrim data-testid="dialog">
+      <Fragment slot="actions"><button type="button" class="ug-button" data-strata-face="raised" data-strata-close><span class="ug-button__label">Close</span></button></Fragment>
+    </Dialog>
+    <Drawer form="tray" side="end" id="the-drawer" title="Channel" titleId="the-drawer-title" closeOnScrim data-testid="drawer">
+      <Fragment slot="actions"><button type="button" class="ug-button" data-strata-face="raised" data-strata-close><span class="ug-button__label">Done</span></button></Fragment>
+    </Drawer>
+  </main>
+</body>
+</html>

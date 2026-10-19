@@ -4,6 +4,7 @@
  * the element an Underglass app enrolls.
  */
 import { forwardRef, useId, type HTMLAttributes, type ReactNode } from "react";
+import { PANEL_TRAY_CLASS, surfaceForm, type StrataSurfaceForm } from "../shared/structure-forms.ts";
 import { classes, strataAttributes, type StrataProps } from "./shared.ts";
 
 type HeadingLevel = 2 | 3 | 4 | 5 | 6;
@@ -24,13 +25,16 @@ export interface PanelProps extends Omit<HTMLAttributes<HTMLElement>, "title">, 
   titleId?: string;
   /** `floating` by default. */
   elevation?: Elevation;
+  /** `plate`: a machined plate. `tray`: the content sits in a recessed tray. `flush` or none: the panel of before. */
+  form?: StrataSurfaceForm | "flush";
 }
 
 export const Panel = forwardRef<HTMLElement, PanelProps>(function Panel(
-  { title, titleLevel = 2, titleId, elevation = "floating", size, material, level, className, children, ...rest }, ref,
+  { title, titleLevel = 2, titleId, elevation = "floating", form, size, material, level, className, children, ...rest }, ref,
 ) {
   const id = useHeadingId(titleId, "panel-title");
   const Heading = `h${titleLevel}` as const;
+  const formed = surfaceForm(form);
   return (
     <section
       ref={ref}
@@ -38,11 +42,12 @@ export const Panel = forwardRef<HTMLElement, PanelProps>(function Panel(
       data-strata-face="raised"
       data-strata-elevation={elevation}
       aria-labelledby={title !== undefined ? id : undefined}
+      {...(formed ? { "data-strata-form": formed } : {})}
       {...strataAttributes({ size, material, level })}
       {...rest}
     >
       {title !== undefined && <Heading id={id}>{title}</Heading>}
-      {children}
+      {formed === "tray" ? <div className={PANEL_TRAY_CLASS} data-strata-face="well">{children}</div> : children}
     </section>
   );
 });
@@ -57,24 +62,28 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLElement>, "title">, S
   footer?: ReactNode;
   /** `article` by default; `section` or `div` for cards that are not self-contained content. */
   as?: "article" | "section" | "div";
+  /** `plate`: a machined plate. `tray`: the body sits in a recessed tray. `flush` or none: the card of before. */
+  form?: StrataSurfaceForm | "flush";
 }
 
 export const Card = forwardRef<HTMLElement, CardProps>(function Card(
-  { title, titleLevel = 3, titleId, footer, as: Element = "article", size, material, level, className, children, ...rest }, ref,
+  { title, titleLevel = 3, titleId, footer, as: Element = "article", form, size, material, level, className, children, ...rest }, ref,
 ) {
   const id = useHeadingId(titleId, "card-title");
   const Heading = `h${titleLevel}` as const;
+  const formed = surfaceForm(form);
   return (
     <Element
       ref={ref as never}
       className={classes("ug-card", className)}
       data-strata-face="raised"
       aria-labelledby={title !== undefined ? id : undefined}
+      {...(formed ? { "data-strata-form": formed } : {})}
       {...strataAttributes({ size, material, level })}
       {...rest}
     >
       {title !== undefined && <Heading id={id} className="ug-card__title">{title}</Heading>}
-      <div className="ug-card__body">{children}</div>
+      <div className="ug-card__body" {...(formed === "tray" ? { "data-strata-face": "well" } : {})}>{children}</div>
       {footer !== undefined && <div className="ug-card__footer">{footer}</div>}
     </Element>
   );

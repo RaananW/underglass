@@ -113,3 +113,33 @@ are instant (section 12).
 - **Accessibility:** axe in light, dark and high contrast; accessibility snapshot equal in DOM and GPU
   modes; text contrast on the lit face at `interior.max`.
 - **Parity:** Relief and CSS within the P0.6 budget at rest, including the shadow extent.
+
+## 11. Plate and tray forms
+
+The Panel as hardware ([Instrument plan](../instrument.md#everyday-components-at-the-instrument-level)): `form` (prop) or `data-strata-form` (on the
+`<section>`) chooses `plate` or `tray`. Without it, or with `flush`, the Panel is the slab above, in the markup and the look it had before. A
+panel is the GPU layer unit, so its plate is the chassis plate of the layer; sections 1, 8 and 10 hold, and the accessibility snapshot is the same
+with and without the form. The forms are those of the [Card](card.md#11-plate-and-tray-forms) on the panel.
+
+```html
+<section class="ug-panel" data-strata-face="raised" data-strata-elevation="floating" aria-labelledby="plate-panel-title" data-strata-form="plate">
+  <h2 id="plate-panel-title">Plate</h2>
+  Content
+</section>
+```
+
+```html
+<section class="ug-panel" data-strata-face="raised" data-strata-elevation="floating" aria-labelledby="tray-panel-title" data-strata-form="tray">
+  <h2 id="tray-panel-title">Tray</h2>
+  <div class="ug-panel__tray" data-strata-face="well">Content</div>
+</section>
+```
+
+- **`plate`:** the panel's slab in the `plate` material, and at the Instrument level the rim of the Card's plate inside the panel's box: the panel's
+  shadow outside the box is the slab's, unchanged (against a flush panel, no pixel outside the panel's box differs, at DPR 1 and 2).
+- **`tray`:** a wrapper (`.ug-panel__tray`, a `well` face) round what follows the title, so the content sits in a recessed tray under a printed
+  title; at the Instrument level it has the Card tray's wall. The wrapper adds no role: the snapshot is the flush one.
+- A Panel is never a Dialog: [Dialog](dialog.md#11-plate-form) and [Drawer](drawer.md#11-tray-form) are panels that move.
+
+**Tests.** `ui-structural-forms.test.mjs` (a plate panel against a flush one), `ui-structural-forms-bindings.test.mjs`,
+`ui-structural-forms-astro.test.mjs`.
