@@ -640,6 +640,33 @@ forms work natively. The selected key is held down.
 
 Vue uses `v-model`; Astro takes `value` and `name`. `hideLabel` hides the legend visually. [Anatomy](../../docs/ui-library/components/segmented-control.md).
 
+## Latching forms: Checkbox, RadioGroup and SegmentedControl
+
+The first of the Instrument level's everyday forms. `form="latching"` on a **Checkbox** draws the native checkbox as a small latching square key
+on a polished bezel with a lit ring (a check printed on the cap when checked, a dash when mixed); `form="bank"` on a **RadioGroup** draws the
+group as a **preset bank** (interlocking latching keys on one polished plinth, one down at a time, each label printed on its cap, an LED above the
+key that is down); `form="latching"` on a **SegmentedControl** draws its segments the same way. The native input stays the control: it
+covers its key as an invisible overlay, so every press, key, form value and `change` is the native one, and the key's lights and travel follow
+`:checked`, `:indeterminate`, being held (`data-strata-down`, from `attachStrataPushButtons`, which the components attach) and `:disabled`. `flush`, or no
+`form`, is the markup and the look they had before, pixel for pixel; any other `form` string is still the native form owner. `colour` is the
+ring's or the LEDs' role, as the Lamp's.
+
+```tsx
+<Checkbox form="latching" colour="info" checked={phantom} onChange={event => setPhantom(event.target.checked)}>Phantom power</Checkbox>
+<RadioGroup form="bank" legend="Preset" value={preset} onChange={setPreset}><Radio value="piano">Piano</Radio><Radio value="organ">Organ</Radio></RadioGroup>
+<SegmentedControl form="latching" label="Range" options={ranges} value={range} onChange={setRange} />
+```
+
+Vue uses `v-model`; Astro takes `checked`, `value` and `options`. On the GPU the ring and each bank key's LED are emitters at every level (a Checkbox's
+2,400 at the 40 px reference cap scaled by the square of its cap, so 600 at 20 px; a key's LED 187), lit by `--strata-lit` and `--strata-led`, so
+checking or selecting is a uniform write. Relief draws the bezel, the plinth and the caps as raised faces, Objects as slabs and keys; at the
+Instrument level a Checkbox is the push button's object (a polished bezel, a glass ring, a body and a captured cap travelling 4 px), a bank
+a plinth object and, for each key, a body, a captured cap and an LED lens standing on it (`gpu/instrument-push.ts`). Every part and shadow
+is inside the native input's box (a bank's plinth inside its fieldset's). Feedback plays the opt-in `click` once per real `change` (an arrow key's
+included, a script's assignment never). Anatomy: [Checkbox](../../docs/ui-library/components/checkbox.md#11-latching-form-latching),
+[RadioGroup](../../docs/ui-library/components/radio.md#11-latching-form-the-preset-bank-bank),
+[SegmentedControl](../../docs/ui-library/components/segmented-control.md#11-latching-form-latching).
+
 ## Knob
 
 A number picked by turning, as on audio and control hardware: a native `<input type="range">` over a printed dial, the

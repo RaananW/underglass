@@ -19,10 +19,11 @@ import { WebcamPond } from "./pond";
 import { FluentBoard } from "./fluent";
 import { Compare } from "./compare";
 import { StrataGallery } from "./strata";
+import { InstrumentGallery } from "./instrument";
 import "../../playground/src/apps/todo/todo.css";
 
 // Which backdrop scenery each example gets (see `Backdrop` in `shared.tsx`).
-const themes: Record<ExampleId, BackdropTheme> = { layers: "postcard", motion: "deck", effects: "lab", presence: "notices", tasks: "tasks", pond: "pond", fluent: "fluent", compare: "compare", strata: "strata" };
+const themes: Record<ExampleId, BackdropTheme> = { layers: "postcard", motion: "deck", effects: "lab", presence: "notices", tasks: "tasks", pond: "pond", fluent: "fluent", compare: "compare", strata: "strata", instrument: "strata" };
 
 /**
  * One React root for every example. Switching examples swaps the enrolled
@@ -37,7 +38,8 @@ export function Demo({ id, onReady }: { id: ExampleId; onReady(change: (id: Exam
   // Paint order is DOM order: the backdrop first, then the persistent art layer, then the example's
   // own layers. The `key` on each example makes React reset its local state when you switch.
   return <SceneProvider>
-    <Backdrop theme={themes[selected]} />
+    {/* The Instrument gallery has a wall of its own and a fluid stage: the fixed-size backdrop is not rendered. */}
+    {selected !== "instrument" && <Backdrop theme={themes[selected]} />}
     <SceneArt />
     {selected === "layers" ? <PostcardStudio key="layers" />
       : selected === "motion" ? <CardDeck key="motion" />
@@ -47,6 +49,7 @@ export function Demo({ id, onReady }: { id: ExampleId; onReady(change: (id: Exam
               : selected === "fluent" ? <FluentBoard key="fluent" />
                 : selected === "compare" ? <Compare key="compare" />
                   : selected === "strata" ? <StrataGallery key="strata" />
+                    : selected === "instrument" ? <InstrumentGallery key="instrument" />
                   : <Tasks key="tasks" />}
   </SceneProvider>;
 }

@@ -643,3 +643,71 @@ footer { display: flex; justify-content: space-between; align-items: center; gap
 /* The Structure tab: the rail and the tree side by side. */
 .strata-columns > .strata-structure { flex-direction: row; align-items: flex-start; }
 .strata-structure > .ug-tree { flex: 1; }
+
+/* ---------- 10 Instrument gallery ---------- */
+.accent-instrument .card-art { background: linear-gradient(160deg, #eceff3, #c3cad5 70%, #9aa3b2); }
+.art-instrument i { background: radial-gradient(circle at 36% 30%, #ffffff, #d5dae3 62%, #aab2c0); border-radius: 50%; box-shadow: 0 1px 0 #ffffff inset, 0 8px 12px #2b344a55; }
+.art-instrument i:nth-child(1) { left: 10%; top: 24px; width: 44px; height: 44px; }
+.art-instrument i:nth-child(2) { left: 40%; top: 30px; width: 32px; height: 32px; }
+.art-instrument i:nth-child(3) { left: 66%; top: 24px; width: 44px; height: 44px; }
+.art-instrument i:nth-child(4) { left: 14%; top: 78px; width: 72%; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #36c37a 0 60%, #f2b233 60% 80%, #ec5b4a 80%); box-shadow: 0 1px 2px #2b344a66 inset; }
+/* The stage of this example is fluid: the panels flow on a wall the width of the screen, so the page reflows down to 320 px. Its height
+   is explicit, set by the page from what the panels hold (`--ig-stage-height`): with GPU on, the content lives in the canvas, which is as
+   tall as the stage and cannot take its height from the content. */
+.stage.stage-fluid { width: 100%; height: var(--ig-stage-height, 640px); container: igstage / inline-size; }
+.stage-fluid .app-container { padding: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 16px; align-items: start; }
+.stage-fluid .ig-wall { position: absolute; inset: 0; background: var(--strata-colour-stage); }
+.stage-fluid .ig-bar, .stage-fluid .ig-content { position: relative; margin: 0; min-width: 0; }
+.stage-fluid .ig-bar, .stage-fluid .ig-wide { grid-column: 1 / -1; }
+/* Page rules that would reach into the panels (headings, code) keep Strata's look. */
+.stage .ug-panel h2 { font-size: var(--strata-font-size-title, 18px); line-height: 1.25; letter-spacing: normal; margin: 0 0 var(--strata-gap-control, 8px); }
+.stage .ug-panel h3 { margin: 0; font-size: var(--strata-font-size-subtitle, 16px); }
+.stage .ug-panel code { background: none; padding: 0; color: inherit; }
+.ig-lede { margin: 0 0 var(--strata-gap-group, 16px); max-width: 70ch; color: var(--strata-colour-muted); font-size: var(--strata-font-size-small, 13px); line-height: 1.5; }
+.ig-switches { display: flex; flex-wrap: wrap; gap: var(--strata-gap-control, 8px) var(--strata-gap-group, 16px); align-items: center; margin-bottom: var(--strata-gap-group, 16px); }
+.ig-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: var(--strata-gap-group, 20px) 28px; align-items: start; }
+.ig-entry { display: flex; flex-direction: column; gap: var(--strata-gap-control, 8px); min-width: 0; padding-top: var(--strata-gap-control, 8px); border-top: 1px solid var(--strata-colour-edge); }
+.ig-summary, .ig-native { margin: 0; color: var(--strata-colour-muted); font-size: var(--strata-font-size-small, 13px); line-height: 1.5; }
+.ig-native { overflow-wrap: anywhere; }
+.ig-live { display: flex; flex-direction: column; gap: var(--strata-gap-group, 16px); align-items: flex-start; min-width: 0; padding-top: var(--strata-gap-control, 8px); }
+.ig-row { display: flex; flex-wrap: wrap; gap: var(--strata-gap-group, 16px) 20px; align-items: flex-end; }
+.ig-col { display: flex; flex-direction: column; gap: var(--strata-gap-group, 16px); align-items: flex-start; }
+.ig-pending .ig-summary { font-style: italic; }
+.ig-notes { display: flex; flex-direction: column; gap: var(--strata-gap-group, 20px); max-width: 78ch; }
+.ig-notes p { margin: var(--strata-gap-control, 8px) 0 0; line-height: 1.55; }
+/* The synthesiser voice: one panel. The container decides the columns, not the viewport. */
+.syn { container-type: inline-size; display: flex; flex-direction: column; gap: var(--strata-gap-group, 20px); min-width: 0; }
+.syn-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--strata-gap-group, 20px); align-items: center; }
+.syn-screen { display: flex; flex-direction: column; gap: var(--strata-gap-control, 8px); min-width: 0; }
+.syn-caption, .syn-readout { margin: 0; color: var(--strata-colour-muted); font-size: var(--strata-font-size-small, 13px); }
+.syn-power { display: flex; flex-direction: column; gap: var(--strata-gap-control, 8px); align-items: flex-start; }
+.syn-body { display: flex; flex-wrap: wrap; gap: var(--strata-gap-group, 20px) 36px; align-items: flex-start; min-width: 0; }
+.syn-row { display: flex; flex-wrap: wrap; gap: var(--strata-gap-group, 16px) 24px; align-items: center; }
+.syn-legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.syn-group { display: flex; flex-direction: column; gap: var(--strata-gap-control, 10px); align-items: flex-start; min-width: 0; max-width: 100%; padding-top: var(--strata-gap-control, 8px); border-top: 1px solid var(--strata-colour-edge); }
+.syn-group h3 { font-size: var(--strata-font-size-caption, 12px); letter-spacing: .08em; text-transform: uppercase; color: var(--strata-colour-muted); }
+.syn-faders { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; }
+.syn-out { align-items: flex-start; }
+.syn-foot { display: flex; flex-wrap: wrap; gap: var(--strata-gap-group, 20px); align-items: center; border-top: 1px solid var(--strata-colour-edge); padding-top: var(--strata-gap-group, 16px); }
+.syn-foot .syn-readout { flex: 1 1 12ch; }
+@container (max-width: 420px) { .syn-head { grid-template-columns: minmax(0, 1fr); } }
+/* A wide stage lays the voice out as a rack: the master across the top, then the sound beside the output and the modulation. */
+@container igstage (min-width: 1000px) {
+  .stage-fluid .app-container { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: dense; }
+  .stage-fluid .ig-syn-master { grid-column: 1 / -1; }
+  .stage-fluid .ig-syn-sound { grid-column: 2; grid-row: span 2; }
+  .stage-fluid .ig-syn-output, .stage-fluid .ig-syn-patch { grid-column: 1; }
+}
+/* A phone: the page chrome gives the stage nearly all the width, and the panels give their content nearly all of the stage's. */
+@media (max-width: 600px) {
+  main { padding-inline: 8px; }
+  .studio-actions { max-width: 100%; min-width: 0; width: 100%; }
+  .example-switch { width: 100%; }
+  .example-switch select { flex: 1; min-width: 0; max-width: none; }
+  .studio:has(.stage-fluid) { padding: 10px; border-radius: 18px; }
+  .stage-frame:has(.stage-fluid) { padding: 4px; border-radius: 16px; }
+  .stage-frame:has(.stage-fluid) .stage-chrome { padding: 2px 8px 6px; }
+  .stage-frame:has(.stage-fluid) .stage-scroll { border-radius: 12px; }
+  .stage-fluid .app-container { padding: 8px; gap: 12px; }
+  .stage-fluid .ug-panel { padding: 12px; }
+}

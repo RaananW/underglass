@@ -7,7 +7,9 @@
  * - **bezel:** a raised face (Relief) or a slab (Objects) the shape of the bezel, a stadium, in the `knob` metal;
  * - **cap:** a raised face (Relief) or a key standing on the bezel's top (Objects) the shape of the cap, a pill, in the button's
  *   own material, with the brushed finish. A held or latched button is pressed: Relief sinks the face, Objects travels the key.
- * Parts never take focus: the focus ring is the CSS outline round the bezel, captured content.
+ * - **bank plinth** (the latching forms of the RadioGroup and the SegmentedControl, `.ug-bank__plinth`): a raised face or a slab in the `knob`
+ *   metal, fitted to the native group's box; a bank key has no bezel, so its cap stands on the plinth's top.
+ * Parts never take focus: the focus ring is the CSS outline round the bezel (the cap, in a bank), captured content.
  */
 import type { SceneEntry, SceneFace, SceneState } from "../tokens/scene.ts";
 import { fittedRoundHeight } from "../shared/push-button.ts";
@@ -25,8 +27,10 @@ export interface PushFormContext {
   base: number;
   /** The native button's box: every part, its shadow included, stays inside it. */
   box: Box;
-  /** The bezel's box (the cap stands on the bezel's top at the Objects level). */
-  bezel: Box;
+  /** The bezel's box (the cap stands on the bezel's top at the Objects level); a bank key has none. */
+  bezel?: Box;
+  /** The part's corner radius as laid out; a stadium (half the shorter side) where it is larger or absent. */
+  radius?: number;
   /** The material name for an element's face (its role's, or the one it names). */
   material(element: Element, face: SceneFace): string;
   light: { azimuth: number; elevation: number };
@@ -37,7 +41,7 @@ export interface PushFormContext {
 }
 
 /** The heights the parts would like at Relief and Objects, px, before their shadows are fitted to the box. */
-export const pushReliefHeights = { bezel: 2, cap: 4, key: 8 } as const;
+export const pushReliefHeights = { bezel: 2, cap: 4, key: 8, plinth: 2 } as const;
 
 const round = (value: number) => Math.round(value * 100) / 100;
 
@@ -46,8 +50,8 @@ const round = (value: number) => Math.round(value * 100) / 100;
  * it as usual). A part whose box is empty gives no entries.
  */
 export function pushFormEntries(element: Element, context: PushFormContext): SceneEntry[] | undefined {
-  const isBezel = element.matches(".ug-push__bezel"), isCap = element.matches(".ug-push__cap");
-  if (!isBezel && !isCap) return undefined;
+  const isBezel = element.matches(".ug-push__bezel"), isCap = element.matches(".ug-push__cap"), isPlinth = element.matches(".ug-bank__plinth");
+  if (!isBezel && !isCap && !isPlinth) return undefined;
   const [x, y, width, height] = context.rect, box = context.box;
   if (width <= 0.25 || height <= 0.25) return [];
   const state: SceneState = { hover: !!context.state.hover, pressed: !!context.state.pressed, disabled: !!context.state.disabled };
@@ -55,9 +59,9 @@ export function pushFormEntries(element: Element, context: PushFormContext): Sce
   // Hover lifts a primitive by `hoverHeight` and an object's cap by a quarter: a hovered part's shadow is fitted at that height.
   const lift = !state.hover ? 1 : context.objects ? 1.25 : Math.max(1, context.hoverHeight);
   const fit = (wanted: number) => round(fittedRoundHeight(wanted * lift, margins, context.light) / lift);
-  const radius = Math.min(width, height) / 2;
-  if (isBezel) {
-    const rise = fit(pushReliefHeights.bezel), material = context.material(element, "raised");
+  const stadium = Math.min(width, height) / 2, radius = Math.min(stadium, context.radius ?? stadium);
+  if (isBezel || isPlinth) {
+    const rise = fit(isPlinth ? pushReliefHeights.plinth : pushReliefHeights.bezel), material = context.material(element, "raised");
     return [context.objects
       ? { object: "slab", rect: context.rect, radius, height: Math.max(0.25, rise), base: context.base, taper: round(Math.min(Math.max(0.25, rise), 3)), material, state: { hover: state.hover, disabled: state.disabled } }
       : { face: "raised", rect: context.rect, radius, height: rise, material, state: { hover: state.hover, disabled: state.disabled } }];
@@ -66,6 +70,10 @@ export function pushFormEntries(element: Element, context: PushFormContext): Sce
   if (!context.objects) return [{ face: "raised", rect: context.rect, radius, height: fit(pushReliefHeights.cap), material, finish, state }];
   const rise = Math.max(0.25, fit(pushReliefHeights.key)), travel = round(Math.min(context.keyTravel, rise * 0.75));
   // The key stands on the bezel's top, the surface the bezel's slab makes under it (its own fitted height, at rest).
-  const [bx, by, bw, bh] = context.bezel, under = Math.max(0.25, round(fittedRoundHeight(pushReliefHeights.bezel, { left: bx - box[0], top: by - box[1], right: box[0] + box[2] - bx - bw, bottom: box[1] + box[3] - by - bh }, context.light)));
+  let under = 0;
+  if (context.bezel) {
+    const [bx, by, bw, bh] = context.bezel;
+    under = Math.max(0.25, round(fittedRoundHeight(pushReliefHeights.bezel, { left: bx - box[0], top: by - box[1], right: box[0] + box[2] - bx - bw, bottom: box[1] + box[3] - by - bh }, context.light)));
+  }
   return [{ object: "key", rect: context.rect, radius, height: rise, base: round(context.base + under), taper: round(Math.min(rise, 3)), travel, material, finish, state }];
 }

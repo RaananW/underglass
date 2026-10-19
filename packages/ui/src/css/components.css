@@ -311,6 +311,8 @@
     --strata-led: 0;
     --strata-push-t: 0;
     --_cap: var(--strata-push-size);
+    /* The room for the bloom round the bezel: 5 px for a push button, less for the latching forms' smaller keys. */
+    --_halo: 5px;
     --_c: var(--strata-colour-glow-on);
     --_on: color-mix(in srgb, var(--_c), white 18%);
     --_off: color-mix(in srgb, var(--_c) 16%, #15171b);
@@ -322,12 +324,12 @@
     position: relative;
     isolation: isolate;
     box-sizing: border-box;
-    min-width: calc(var(--_cap) + 24px);
-    min-height: calc(var(--_cap) + 24px);
+    min-width: calc(var(--_cap) + 2 * (var(--_halo) + 7px));
+    min-height: calc(var(--_cap) + 2 * (var(--_halo) + 7px));
     max-width: 100%;
-    padding: 12px;
+    padding: calc(var(--_halo) + 7px);
     border: 0;
-    border-radius: calc(var(--_cap) / 2 + 12px);
+    border-radius: calc(var(--_cap) / 2 + var(--_halo) + 7px);
     background: transparent;
     background-image: none;
     transition: --strata-lit var(--strata-motion-fast) linear, --strata-led var(--strata-motion-fast) linear, --strata-push-t 380ms linear(0, 0.2396 5.26%, 0.5196 10.53%, 0.7152 15.79%, 0.8355 21.05%, 0.906 26.32%, 0.9466 31.58%, 0.9697 36.84%, 0.9828 42.11%, 0.9903 47.37%, 0.9945 52.63%, 0.9969 57.89%, 0.9982 63.16%, 0.999 68.42%, 0.9994 73.68%, 0.9997 78.95%, 0.9998 84.21%, 0.9999 89.47%, 0.9999 94.74%, 1);
@@ -348,21 +350,21 @@
   :where(.ug-push__bezel) {
     --_h: 3px;
     --_bevel: 3px;
-    inset: 5px;
+    inset: var(--_halo);
     border-radius: 999px;
     background: linear-gradient(160deg, var(--_metal-light), var(--_metal) 45%, var(--_metal-shade));
   }
-  :where(.ug-push__socket, .ug-push__ring) { inset: 9.4px; border-radius: 999px; }
+  :where(.ug-push__socket, .ug-push__ring) { inset: calc(var(--_halo) + 4.4px); border-radius: 999px; }
   :where(.ug-push__socket) { background: var(--_off); }
   :where(.ug-push__ring) { background: var(--_glass); }
   /* In CSS the ring glows; with the GPU presenting its light is an emitter instead. */
   :where(:not([data-strata-mode="face"]) .ug-push__ring) { box-shadow: 0 0 calc(var(--strata-lit) * 16px) calc(var(--strata-lit) * 2px) color-mix(in srgb, var(--_on) 55%, transparent); }
   /* The LED: a 6 px lens on the bezel's top edge, 8 px socket under it. */
-  :where(.ug-push__led-socket, .ug-push__led) { left: calc(50% - 4px); top: 3.2px; width: 8px; height: 8px; border-radius: 50%; }
+  :where(.ug-push__led-socket, .ug-push__led) { left: calc(50% - 4px); top: calc(var(--_halo) - 1.8px); width: 8px; height: 8px; border-radius: 50%; }
   :where(.ug-push__led-socket) { background: var(--_off); }
   :where(.ug-push__led) {
     left: calc(50% - 3px);
-    top: 4.2px;
+    top: calc(var(--_halo) - 0.8px);
     width: 6px;
     height: 6px;
     background: radial-gradient(circle at 36% 30%, color-mix(in srgb, var(--_led-glass), white 55%) 0, var(--_led-glass) 45%, color-mix(in srgb, var(--_led-glass), black 35%) 100%);
@@ -3017,6 +3019,141 @@
   :where(.ug-segmented__input:disabled + .ug-segmented__key) {
     --_h: 0;
     color: color-mix(in srgb, var(--_text) 38%, transparent);
+  }
+
+  /* ---- Latching forms: Checkbox, RadioGroup (a preset bank) and SegmentedControl ---- */
+
+  /*
+   * `form="latching"` on a Checkbox or a SegmentedControl, `form="bank"` on a RadioGroup (anatomy pages `checkbox.md`, `radio.md`,
+   * `segmented-control.md`, *Latching forms*): the native input is an invisible overlay on its key's whole box, inside a host that
+   * is a push button's (`.ug-push`, so the lit ring, the LED, the cap's travel and the GPU's parts are the PushButton's). The host
+   * takes its lights and travel from the input: `--strata-lit` the ring, `--strata-led` the LED and `--strata-push-t` the cap, set
+   * from `:checked`, `:indeterminate`, being held and `:disabled`. A Checkbox's key is a small square with a bezel and a ring; a bank
+   * key is a cap on a plinth shared by the group, with an LED on the plinth above it. `flush` (and no `form`) is the markup and the
+   * look of the controls before these forms existed: none of these rules reach it.
+   */
+  :where(.ug-latch) {
+    --_text: var(--strata-colour-text);
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    vertical-align: middle;
+    cursor: pointer;
+  }
+  /* The native input covers the key (an invisible overlay, square so that its hit area is the key's whole box): every press and every key lands on it. */
+  .ug-latch > :is(.ug-checkbox__input, .ug-radio__input, .ug-segmented__input) {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    appearance: none;
+    opacity: 0;
+    cursor: inherit;
+  }
+  /* The Checkbox's key: the cap is the indicator size (16, 20, 24 px), the box that plus 22 px. */
+  :where(.ug-latch--key) {
+    --_cap: var(--strata-indicator);
+    --_halo: 4px;
+    --_r: var(--strata-radius-small);
+  }
+  :where(.ug-latch--key .ug-push__bezel) { border-radius: calc(var(--_r) + 7px); }
+  :where(.ug-latch--key :is(.ug-push__socket, .ug-push__ring)) { border-radius: calc(var(--_r) + 2.6px); }
+  :where(.ug-latch--key .ug-push__cap) { padding: 0; border-radius: var(--_r); }
+  /* The mark is printed on the cap: a check when checked, a dash when mixed. */
+  :where(.ug-latch--key .ug-checkbox__mark) { inset: 0; width: 100%; height: 100%; translate: none; }
+  :where(.ug-latch:has(> .ug-checkbox__input:checked) .ug-checkbox__mark) { opacity: 1; }
+  :where(.ug-latch:has(> .ug-checkbox__input:indeterminate) .ug-checkbox__mark) {
+    opacity: 1;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 12h10' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  }
+  :where(.ug-latch:has(> .ug-checkbox__input:disabled) .ug-checkbox__mark) { opacity: 0.38; }
+  :where(.ug-latch:has(> .ug-checkbox__input:disabled:not(:checked, :indeterminate)) .ug-checkbox__mark) { opacity: 0; }
+  /* A bank key: a cap as tall as a control, 6 px of plinth round it and a strip above it for the LED. */
+  :where(.ug-latch--bank) {
+    --_cap: 0px;
+    padding: calc(var(--_halo) + 9px) 6px 6px;
+    border-radius: 0;
+  }
+  :where(.ug-latch--bank .ug-push__cap) {
+    min-width: max(var(--strata-target-min), var(--_cap));
+    min-height: max(calc(var(--strata-control-height) + var(--strata-control-offset)), var(--strata-target-min));
+    padding: 6px var(--strata-space-5);
+    border-radius: var(--strata-radius-control);
+    font-size: var(--strata-control-font);
+    font-weight: var(--strata-font-weight-strong);
+  }
+  /* The plinth: one raised part of polished metal the keys stand on and the LEDs sit in; the group keeps its room round it for its shadow. */
+  :where(.ug-bank__plinth) {
+    --_finish: var(--strata-finish-role-panel);
+    --_metal: var(--strata-colour-knob);
+    --_metal-light: color-mix(in srgb, var(--strata-colour-knob), white 60%);
+    --_metal-shade: color-mix(in srgb, var(--strata-colour-knob), var(--strata-colour-edge) 45%);
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    align-self: flex-start;
+    box-sizing: border-box;
+    max-width: 100%;
+    gap: 0;
+    padding: 2px;
+    border-radius: calc(var(--strata-radius-control) + 8px);
+    background: linear-gradient(160deg, var(--_metal-light), var(--_metal) 45%, var(--_metal-shade));
+  }
+  :where(.ug-radio-group[data-strata-form="bank"], .ug-segmented[data-strata-form="latching"]) { box-sizing: border-box; max-width: 100%; padding: 8px; }
+  :where(.ug-radio-group[data-strata-form="bank"] .ug-radio) { min-height: 0; gap: 0; }
+  /* The key's flush paint (its own border) gives way to the cap's. */
+  :where(.ug-segmented[data-strata-form="latching"] .ug-segmented__key) { border: 0; }
+
+  /* Lit, down, held and disabled: the numbers the ring, the LED and the cap follow (GPU and CSS alike). */
+  :where(.ug-latch:has(> input:checked)) { --strata-lit: 1; --strata-led: 1; --strata-push-t: 0.45; }
+  /* Only a checkbox is mixed: a radio is `:indeterminate` while no radio of its group is checked. */
+  :where(.ug-latch:has(> .ug-checkbox__input:indeterminate)) { --strata-lit: 0.5; --strata-led: 0.5; --strata-push-t: 0.2; }
+  :where(.ug-latch:is(:has(> input:active):not([data-strata-down="false"]), [data-strata-down="true"], [data-strata-preview~="active"]):not(:has(> input:disabled))) { --strata-lit: 1; --strata-push-t: 1; }
+  :where(.ug-latch:has(> input:disabled)) { --strata-lit: 0; --strata-led: 0; --strata-push-t: 0; }
+  :where(.ug-latch:has(> input:disabled:checked:not(.ug-checkbox__input:indeterminate))) { --strata-push-t: 0.45; }
+  /* Hover and press lift the parts as a push button's do; focus is a ring round the bezel (the cap, in a bank), in every presentation. */
+  :where(.ug-latch:is(:hover, [data-strata-preview~="hover"]):not(:has(> input:disabled))) :where(.ug-push__bezel, .ug-push__cap) {
+    --_lift: var(--strata-state-hover-height);
+    --_tone: var(--_hover-tone);
+  }
+  :where(.ug-latch:is(:has(> input:active):not([data-strata-down="false"]), [data-strata-down="true"], [data-strata-preview~="active"]):not(:has(> input:disabled))) :where(.ug-push__cap) {
+    --_lift: var(--strata-state-press-height);
+    --_tone: var(--_press-tone);
+  }
+  :where(.ug-latch--key:is(:has(> input:focus-visible), [data-strata-preview~="focus"])) :where(.ug-push__bezel),
+  :where(.ug-latch--bank:is(:has(> input:focus-visible), [data-strata-preview~="focus"])) :where(.ug-push__cap) {
+    outline: var(--strata-focus-width) solid var(--strata-colour-accent);
+    outline-offset: var(--strata-focus-offset);
+  }
+  :where(.ug-latch:has(> input:disabled)) { cursor: not-allowed; }
+  :where(.ug-latch:has(> input:disabled)) :where(.ug-push__object) { opacity: 0.38; }
+  :where(.ug-latch:has(> input:disabled)) :where(.ug-push__bezel, .ug-push__cap) { --_h: 0px; --_gain: 0; }
+  :where(.ug-latch--bank:has(> input:disabled)) :where(.ug-push__cap) { color: color-mix(in srgb, var(--_text) 38%, transparent); }
+  /* More contrast: the key that is down says so in more than light, a bar under its label; the borders and flat colours are the push button's. */
+  @media (prefers-contrast: more) {
+    :where(.ug-latch--bank:has(> input:checked)) :where(.ug-push__cap) { box-shadow: inset 0 -3px 0 var(--strata-colour-text); }
+  }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-latch--bank:has(> input:checked)) :where(.ug-push__cap) { box-shadow: inset 0 -3px 0 var(--strata-colour-text); }
+  /* Forced colours: the push button's system colours; Highlight is the lit ring, the LED and the key that is down. */
+  @media (forced-colors: active) {
+    .ug-latch.ug-push:has(> input:disabled) { color: GrayText; }
+    .ug-latch:has(> input:checked) .ug-push__ring, .ug-latch:has(> input:checked) .ug-push__led { background: Highlight; }
+    .ug-latch:has(> input:disabled) :is(.ug-push__bezel, .ug-push__ring, .ug-push__led, .ug-push__cap) { border-color: GrayText; }
+    .ug-latch:has(> input:disabled) .ug-push__object { opacity: 1; }
+    .ug-latch--bank:has(> input:checked) .ug-push__cap { background: Highlight; color: HighlightText; }
+    .ug-latch--bank:has(> input:disabled) .ug-push__cap { color: GrayText; }
+    .ug-latch--key:has(> input:focus-visible) .ug-push__bezel, .ug-latch--bank:has(> input:focus-visible) .ug-push__cap { outline-color: Highlight; }
+    .ug-bank__plinth { forced-color-adjust: none; background: Canvas; border: 1px solid ButtonText; }
   }
 
   /* ---- Rating ---- */

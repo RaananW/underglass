@@ -1,0 +1,37 @@
+---
+/**
+ * Strata Astro latching forms check page (`/latching-forms/`): `[data-contract="checkbox.md#2"]`, `[data-contract="radio.md#2"]` and
+ * `[data-contract="segmented-control.md#2"]` render the anatomy pages' latching examples with `@underglass/ui/astro`, and `main` holds
+ * live latching controls `tests/browser/ui-latching-forms-astro.test.mjs` drives with real input. Server-rendered HTML; the only script
+ * is the components' own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { Checkbox, RadioGroup, SegmentedControl } from "@underglass/ui/astro";
+
+const options = [{ value: "day", label: "Day" }, { value: "week", label: "Week" }, { value: "month", label: "Month" }];
+const presets = [{ value: "piano", label: "Piano" }, { value: "organ", label: "Organ" }, { value: "strings", label: "Strings" }];
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro latching forms check</title>
+</head>
+<body>
+  <div data-contract="checkbox.md#2" hidden><Checkbox form="latching" colour="info">Phantom power</Checkbox></div>
+  <div data-contract="radio.md#2" hidden><RadioGroup legend="Preset" name="preset" form="bank" options={presets} /></div>
+  <div data-contract="segmented-control.md#2" hidden><SegmentedControl label="View" name="view" form="latching" options={options} /></div>
+  <main>
+    <form class="ug-panel" data-strata-face="raised" aria-label="Latching forms" id="latches">
+      <Checkbox form="latching" id="monitor" name="monitor" value="1" class="extra" style="margin-right: 4px" data-testid="monitor">Monitor</Checkbox>
+      <Checkbox form="latching" id="phantom" name="phantom" value="1" checked colour="info">Phantom</Checkbox>
+      <Checkbox form="latching" id="mixed" indeterminate>Pad group</Checkbox>
+      <Checkbox form="latching" id="locked" disabled>Locked</Checkbox>
+      <Checkbox id="owned" form="settings">Owned</Checkbox>
+      <RadioGroup legend="Live preset" name="live" form="bank" colour="success" value="organ" options={[...presets, { value: "pad", label: "Pad", disabled: true }]} />
+      <SegmentedControl label="Range" name="range" form="latching" value="week" options={options} />
+      <button type="submit" class="ug-button" data-strata-face="raised" id="send"><span class="ug-button__label">Send</span></button>
+    </form>
+  </main>
+</body>
+</html>
