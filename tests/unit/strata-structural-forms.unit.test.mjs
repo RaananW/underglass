@@ -146,7 +146,7 @@ test("every plate and tray is a valid Instrument object: its parts, its material
     assert.equal(object.parts[0].caster, null, "no face caster: the element's own slab or well carries the shadow");
     assert.equal(object.t, rises ? 0.5 : 1);
     assert.deepEqual(object.bounds, { rect: [0, 0, 400, 240], radius: 12 });
-    assert.equal(object.relief.face, form === "plate" ? "raised" : "well");
+    assert.deepEqual([object.relief.face, object.relief.height], ["flat", 0], "a stepped-down plate adds nothing to the element's own slab or well");
     assert.equal(!!object.parts[0].pose, rises);
     const scene = validateInstrumentScene(sceneOf([object], profiles));
     assert.equal(scene.objects[0].parts.length, 1);
@@ -200,4 +200,16 @@ test("the plate and tray forms are styled: the edge break, the tray's well, the 
   // The slide's keyframes are named for `strataEnter` and `strataLeave`, which wait for `ug-panel-*` animations.
   assert.match(readFileSync(new URL("../../packages/ui/src/dom/motion.ts", import.meta.url), "utf8"), /startsWith\("ug-panel-"\)/);
   assert.match(css, /forced-colors: active\) \{[\s\S]*\.ug-panel__tray\) \{ border: 1px solid CanvasText; background-color: Canvas; \}/);
+});
+
+test("a layer that moves does not make a new mesh: the size's float noise and the stage's zoom (a Dialog's depth entry, a Drawer's slide) keep the same profile", () => {
+  const { profile } = registry();
+  const base = objectOf(profile, "plate", { box: [0, 0, 512, 305], stage: { width: 640, height: 760 } }).parts[0].profile;
+  // Noise of 1e-4 px on the size, and the stage scaled by the 1.5% the depth entry starts at, down to 1.
+  for (const zoom of [1, 1.001, 1.004, 1.0082, 1.0148]) for (const noise of [0, 1e-4, -1.6e-4, 4e-3]) {
+    const name = objectOf(profile, "plate", { box: [noise, 0, 512 + noise, 305 + noise], stage: { width: 640 / zoom, height: 760 / zoom } }).parts[0].profile;
+    assert.equal(name, base, `zoom ${zoom}, noise ${noise}`);
+  }
+  // A real change of size is another mesh, and the part stays inside its box whatever the stage's rounding.
+  assert.notEqual(objectOf(profile, "plate", { box: [0, 0, 480, 305], stage: { width: 640, height: 760 } }).parts[0].profile, base);
 });

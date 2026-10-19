@@ -251,7 +251,8 @@ export interface KeyInput {
  */
 export function keyObject(input: KeyInput, profile: (name: string, shape: InstrumentProfile) => string): InstrumentObject | undefined {
   const [x, y, w, h] = input.box, m = boxMargin(input.height + 1, input.stage);
-  const width = round(w - 2 * m), length = round(h - 2 * m);
+  // To a quarter px, down: a layer that moves reports the box with float noise, which must not make a new body profile (a rebuild) every frame.
+  const width = Math.floor((w - 2 * m) * 4) / 4, length = Math.floor((h - 2 * m) * 4) / 4;
   if (width < 8 || length < 8) return undefined;
   const radius = Math.max(0, input.radius - m), press = { from: { travel: 0 }, to: { travel: -input.travel } };
   const centre: Vec3 = [round(x + w / 2), round(y + h / 2), 0];

@@ -152,3 +152,47 @@ are instant too. Under `forced-colors`: `Canvas` background and a `CanvasText` b
   drop; the panel has the relief material and is centred on the stage; the scrim dims the panel beneath; a real
   click on a drawn button closes it; both layers are let go before they hide; Escape returns focus to the opener;
   and the accessibility snapshot is the same as in ordinary DOM.
+
+## 11. Plate form
+
+The Dialog as a plate that rises out of the chassis ([Instrument plan](../instrument.md#everyday-components-at-the-instrument-level),
+[design language section 12](../design-language.md#12-motion)): `form="plate"` (prop) or `data-strata-form="plate"` (on the `<section>`). Without it,
+or with `flush`, the Dialog is the panel above, in the markup, the look and the motion it had before. Everything in sections 1, 7 and 8 holds: the
+same modal contract (focus in and back, the page behind inert, Escape, the scrim, `closeOnScrim`), the same top-level panel in the same container, and
+the same accessibility snapshot. Its controls are the same Strata components at the same level, standing on the plate.
+
+```html
+<div class="ug-scrim" aria-hidden="true"></div>
+<section class="ug-panel ug-dialog" role="dialog" aria-modal="true" aria-labelledby="discard-title"
+         aria-describedby="discard-description" data-strata-face="raised" data-strata-elevation="modal"
+         data-strata-form="plate" tabindex="-1">
+  <h2 class="ug-dialog__title" id="discard-title">Discard changes?</h2>
+  <div class="ug-dialog__body">
+    <p class="ug-dialog__description" id="discard-description">Your edits will be lost.</p>
+  </div>
+  <div class="ug-dialog__actions">
+    <button type="button" class="ug-button" data-strata-face="raised" data-strata-close>
+      <span class="ug-button__label">Keep editing</span>
+    </button>
+  </div>
+</section>
+```
+
+- **At Relief and Objects** a plate dialog is the dialog in the `plate` material with a tight edge break (CSS: half the bevel, a brushed finish), entering
+  through depth as before.
+- **At Instrument the plate rises.** The panel is its own layer over the scrim, and the card's plate form on it: a rim inside its box (a mesh swept
+  along its rounded outline, 4 wide, 3 high, a chamfered outer edge, polished). The panel's motion drives it: `rise` is the motion's eased
+  progress (the `motion.slow` duration and `motion.easing.standard` the depth entry uses), a `travel` pose from `−(height − 0.3)` px (just proud of
+  the face) to 0 on entering and back on leaving, so the plate comes up out of the chassis as the layer scales in from `elevation.modal` and fades.
+  Under reduced motion the duration is 1 ms and the rise snaps. The rise is one number in the scene: **a uniform update**. It is the same
+  `t` core applies as a pose each frame, with no recapture and no hit-geometry update of its own; opening a plate dialog costs the captures, uploads
+  and hit-geometry updates a flush dialog costs (measured side by side in `ui-structural-forms.test.mjs`, the numbers in the PR).
+- **Containment over the whole rise.** Every vertex of the rim lies at least 0.5 px inside the dialog's box, at every rise and depth and at every
+  corner and edge middle of the reference stage (core's own check, `strata-structural-forms.unit.test.mjs`: the closest is 1.9 px at 50% depth), so a
+  pixel of the plate is never outside the dialog; against a flush dialog moving in step, no pixel outside the plate's box differs at any sampled frame.
+- **During the motion the dialog is inert** (the Dialog contract: the panel is inert while it moves), so nothing takes a hit until it has come to
+  rest; at rest every native hit lands on the drawn control.
+- A dialog narrower than 22 px a side stays a Relief slab; the dialog's width is never that small.
+
+**Tests.** `ui-structural-forms.test.mjs` (modal behaviour in plain DOM, the rise at DPR 1 and 2 at all three levels, a plate and a flush dialog side by side
+at the Instrument level), `ui-structural-forms-bindings.test.mjs`, `ui-structural-forms-astro.test.mjs`.

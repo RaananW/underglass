@@ -796,7 +796,7 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     const t = follow(input, root.matches(".ug-knob--detented") ? knobSprings.detent : knobSprings.knob);
     const state = context.states(skirt);
     const sweep = reader(root).number("knob.sweep", 270);
-    objects.push(knobObject({ id: idOf(input, "knob"), box: rectWithin(input, panel), skirt: rectWithin(skirt, panel)[2], cap: rectWithin(cap, panel)[2], t, sweep, scale,
+    objects.push(knobObject({ id: idOf(input, "knob"), box: rectWithin(input, panel), skirt: halfPx(rectWithin(skirt, panel)[2]), cap: halfPx(rectWithin(cap, panel)[2]), t, sweep, scale,
       state: { hover: state.hover, disabled: state.disabled }, relief: { height: raised, material: use("knobCap") },
       ...(options.parts?.knobCap ? { customCap: options.parts.knobCap } : {}) }, profile));
     for (const name of ["knobSkirt", "knobChamfer", "knobInk"]) use(name);
@@ -938,6 +938,12 @@ type Movable = HTMLElement & { [panelMotion]?: PanelMover };
 
 /** A plate or tray at the Instrument level: its element, its form, whether the panel motion lifts it and a tray's open side. */
 interface PlateInfo { element: HTMLElement; form: PlateForm; rises: boolean; open?: PlateOpen }
+
+/**
+ * A knob's diameter to half a px: the CSS sizes are even px, and a layer that moves (a Dialog entering through depth) reports them with float noise, which
+ * would make a new knob profile, and so a rebuild of the layer, every frame.
+ */
+const halfPx = (value: number) => Math.round(value * 2) / 2;
 
 /** The four corner radii of an element, clockwise from the top left, in px (a percentage is of the width). */
 function radiiOf(element: Element, width: number): [number, number, number, number] {

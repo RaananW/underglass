@@ -52,7 +52,7 @@ export interface PlateObject {
   bounds: { rect: Box; radius: number };
   t: number;
   parts: { kind: "plate" | "bezel"; profile: string; at: Vec3; pose?: { from: { travel: number }; to: { travel: number } }; material: string; caster: null; state: { hover: false; disabled: boolean } }[];
-  relief: { face: "raised" | "well"; rect: Box; radius: number; height: number; material: string };
+  relief: { face: "flat"; rect: Box; radius: number; height: number; material: string };
 }
 
 /** What a plate's or a tray's object needs from the page, in panel px. */
@@ -178,20 +178,29 @@ function hash(text: string): string {
   for (let index = 0; index < text.length; index++) { h ^= text.charCodeAt(index); h = Math.imul(h, 0x01000193); }
   return (h >>> 0).toString(16);
 }
-/** One mesh per distinct shape, held between scenes: core validates an inline mesh once per array identity. */
+/**
+ * One mesh per distinct shape, held between scenes: core validates an inline mesh once per array identity. A layer that moves reports its elements' boxes
+ * and the stage's zoom with float noise, or a real change of zoom (a Dialog's depth entry scales its layer by 1.5%), and none of it may make a new mesh,
+ * since a new mesh is a new profile and a rebuild of the layer, while its parts show as Relief. So the shape is quantised: the size down to a quarter px
+ * (the rim stays inside the box), the radii to a quarter px, and the stage up to 64 px (a larger stage only makes the margin larger, which is safe).
+ */
 function cachedMesh(input: Pick<PlateInput, "box" | "radii" | "form" | "scale" | "stage" | "open" | "tokens">): { key: string; mesh: PlateMesh } {
-  const key = JSON.stringify([input.form, input.box[2], input.box[3], input.radii, input.scale, input.open ?? null, input.stage.width, input.stage.height, input.tokens ?? null]);
+  const width = Math.floor(input.box[2] * 4) / 4, height = Math.floor(input.box[3] * 4) / 4, radii = input.radii.map(radius => Math.round(radius * 4) / 4) as PlateInput["radii"];
+  const stage = { width: Math.ceil(input.stage.width / 64) * 64, height: Math.ceil(input.stage.height / 64) * 64 };
+  const key = JSON.stringify([input.form, width, height, radii, input.scale, input.open ?? null, stage.width, stage.height, input.tokens ?? null]);
   let mesh = meshes.get(key);
   if (!mesh) {
     if (meshes.size >= 48) meshes.clear();
-    mesh = plateMesh(input, `${input.form}-${Math.round(input.box[2])}x${Math.round(input.box[3])}-${hash(key)}`);
+    mesh = plateMesh({ ...input, box: [0, 0, width, height], radii, stage }, `${input.form}-${width}x${height}-${hash(key)}`);
     meshes.set(key, mesh);
   }
   return { key, mesh };
 }
 
 /** A plate or a tray as an Instrument object; `profile` registers a shape and returns its name. */
-export function plateObject(input: PlateInput, profile: (name: string, shape: InstrumentProfile) => string): PlateObject {
+export function plateObject(given: PlateInput, profile: (name: string, shape: InstrumentProfile) => string): PlateObject {
+  // The box to a hundredth of a px: its float noise is not the layout the layer is built from (the mesh, below, is quantised further).
+  const input: PlateInput = { ...given, box: given.box.map(value => Math.round(value * 100) / 100) as Box };
   const [x, y, w, h] = input.box, parts = plateParts(input.form, input.scale, input.tokens), { mesh } = cachedMesh(input);
   const name = profile(`${input.form}-rim`, mesh);
   const material = input.form === "plate" ? (input.dark ? "plateEdgeDark" : "plateEdge") : input.dark ? "trayWallDark" : "trayWall";
@@ -202,6 +211,8 @@ export function plateObject(input: PlateInput, profile: (name: string, shape: In
     id: input.id, rect: input.box, bounds: { rect: input.box, radius }, t,
     parts: [{ kind: input.form === "plate" ? "plate" : "bezel", profile: name, at: [round(x + w / 2), round(y + h / 2), 0], ...(input.rises ? { pose: { from: { travel: sunk }, to: { travel: 0 } } } : {}),
       material, caster: null, state: { hover: false, disabled: !!input.disabled } }],
-    relief: { face: input.form === "plate" ? "raised" : "well", rect: input.box, radius, height: input.relief.height, material: input.relief.material },
+    // The fallback is a flat face of no height: the element's own slab or well is already one of the scene's primitives (what Relief draws), so a stepped-down
+    // plate adds nothing to it, and a pending one (the first build) casts no second shadow.
+    relief: { face: "flat", rect: input.box, radius, height: 0, material: input.relief.material },
   };
 }

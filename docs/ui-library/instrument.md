@@ -200,6 +200,17 @@ divider a groove) or stay flat, because they are print on the faceplate.
 | Drawer | A tray that slides out of the chassis edge | `flush` |
 | Tooltip, Menu, Popover, Toast | Unchanged: overlay-host CSS, as today | — |
 
+**Structural forms (everyday forms, third part).** The Slider, the Card and Panel, and the Dialog and Drawer take their forms through `form` at
+every presentation (`flush`, and an absent `form`, are the control of before). A Slider's `knob` and `fader` are the Knob's and the Fader's object
+over the Slider's own native input ([`slider.md` section 11](components/slider.md#11-hardware-forms-knob-and-fader)): `fader`, the premium default,
+presents the Fader's object (horizontal) rather than being deferred, and the reserved `wheel` (a thumbwheel: a ridged cylinder rolling under a slot, a
+form of its own with three renderers) is not built. A Card's or Panel's `plate` and `tray`, a Dialog's `plate` and a Drawer's `tray` are a rim or a
+wall of parts (an inline mesh swept along the element's rounded outline) standing inside the element's box, over its face, which stays captured:
+content, text and hits are untouched ([Card](components/card.md#11-plate-and-tray-forms), [Panel](components/panel.md#11-plate-and-tray-forms),
+[Dialog](components/dialog.md#11-plate-form), [Drawer](components/drawer.md#11-tray-form)). The Dialog's plate rises out of the chassis with the panel
+motion's eased progress and the Drawer's tray slides out of its edge (CSS, and core's panel transition with `x` or `y` on the GPU), the wall rising with
+it; the rise is a scene number, a uniform update.
+
 ### Interaction, in detail
 
 - **Knob:** pointer drag is vertical (the audio-plugin convention) at `knob.dragPx` per full sweep, finer with
@@ -558,6 +569,14 @@ One concern per PR, each based on `main`:
 PR 11, the Switch forms ([anatomy](components/switch.md#11-forms)): `slide`, `rocker`, `bat` and `wall` done in CSS, Relief and
 Objects and Instrument (the helper's `instrument` level), with sound and haptics as the opt-in option, and the Knob's
 detents' `tick`.
+
+Everyday forms, third part: the structural family at every presentation, in CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Instrument on the GPU.
+The Slider as a knob or a fader ([`knob`, `fader`](components/slider.md#11-hardware-forms-knob-and-fader): the Knob's and the Fader's object over the Slider's own
+input; `wheel` is reserved and follows), the Card and Panel as a [`plate`](components/card.md#11-plate-and-tray-forms) or a `tray`, the Dialog as a
+[`plate` that rises out of the chassis](components/dialog.md#11-plate-form) and the Drawer as a [`tray` that slides out of its edge](components/drawer.md#11-tray-form),
+with `flush` and an absent `form` the control of before. The plate's rim and the tray's wall are inline meshes swept along the element's rounded outline,
+inside its box, checked with core's containment over the whole rise; the Dialog's and the Drawer's motion drives the rise as one scene number (a uniform
+update), and the Drawer's layer slides through core's panel transition (`x`, `y`).
 
 PR 12, wave 2, first part: the Lamp and the StatusLight ([Lamp](components/lamp.md), [StatusLight](components/status-light.md)),
 at every presentation: CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Instrument on the GPU, with the helper's
