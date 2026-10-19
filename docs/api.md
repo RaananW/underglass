@@ -552,6 +552,26 @@ With an `instrument` material, `instrumentGpuMs` samples (`layerId`, `phase: "co
 layer's mesh pass and post chain in one frame, and with emitters, `emitterGpuMs` samples the GPU time of one layer's face pool pass,
 both from Babylon Lite's per-task timings when the device has timestamp queries.
 
+### Input events and captures
+
+A native control's value is not a DOM mutation (a range thumb moves with it), so core queues a capture of the enclosing layer
+for every `input` event in a layer, as it does for `focusin` and `focusout`; DOM that a handler writes is captured by the
+mutation observer as usual. A presenter that draws a control's value itself and hides the control's native paint opts out
+**per element** with the attribute `data-underglass-gpu-value` (`GPU_VALUE_ATTRIBUTE`, exported by `@underglass/core`) on the
+element that receives the event:
+
+- An `input` event whose target carries it queues no capture. It is counted: `state().metrics.inputCapturesSkipped`, and
+  `state().metrics.perLayer[id].inputCapturesSkipped` for each layer containing the element.
+- Nothing else changes: attribute, text and child changes a handler makes still recapture through the mutation observer, the
+  browser's own paint event still uploads any native repaint, and every element without the attribute (text fields, selects,
+  checkboxes, a range whose thumb is painted) captures on `input` exactly as before.
+- The attribute is a promise: **the element's native paint does not depend on its value.** Set it only where the value is drawn
+  elsewhere (a uniform, a part) and the native thumb, track fill or text is not painted, and remove it when that stops being
+  true. A marked control with a visible thumb would show stale pixels, which the contract forbids. The Strata JogWheel's helper
+  sets it on the wheel's input while the GPU draws the dimple (its thumb is never painted); a flick of 49 steps costs 0
+  captures for its input events (36 to 38 before). A Knob or Fader writes its value to a custom property on its root for each
+  `input`, which is a DOM write that recaptures anyway, so they are not marked.
+
 ### The instrument material
 
 `setMaterial(id, { kind: "instrument", scene, bounds: "layer", interaction: "material", media: "identity", fallback:

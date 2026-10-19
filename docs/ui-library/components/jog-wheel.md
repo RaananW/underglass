@@ -39,9 +39,11 @@ under it, on the face, never on the wheel.
   is hidden (`data-strata-dome`). While a wheel the GPU draws turns (a drag, coasting) the behaviour writes nothing to the DOM: the
   accumulated angle is kept in script (`liveStrataJog`) and wakes the helper with a bubbling `strata-jog-live` event (an event is no
   mutation), the value text (`aria-valuetext`) waits for the wheel to rest, and the input's thumb is not drawn (a thumb that moves with
-  the value is paint); a custom property or an attribute written inside a layer recaptures it, as measured. The only captures left are
-  core's own, one queued for each native `input` event (as for every native change, a Knob's included): a flick of 49 steps over 300
-  frames costs 37 captures, none in a turning frame between the events, and no hit-geometry update. At rest the angle
+  the value is paint); a custom property or an attribute written inside a layer recaptures it, as measured. The wheel's input carries
+  `data-underglass-gpu-value` while the GPU draws the dimple (core's opt-out, `api.md#input-events-and-captures`: the thumb is never
+  painted, so an `input` event changes no pixel), so core queues no capture for its `input` events: a flick of 49 steps over 300
+  frames costs 2 captures (the helper marking the input the first time the wheel moves, and the write at rest), none for the 49 events
+  (36 to 38 before), none in a turning frame, and no hit-geometry update. At rest the angle
   (`--strata-jog-angle`) and the value text are written once. In the CSS presentation the dimple turns by
   `rotate: calc(var(--strata-jog-angle) * 1deg)`, with its inner light turned back by the same angle so the dish stays lit from the
   light's side. At Relief and Objects the helper places the dimple from the angle (on the knob's spring), not from the layout.
@@ -219,8 +221,8 @@ wheel never exceeds its container (`max-width: 100%` on the root), so a 320 px v
 - **GPU** (DPR 1 and 2, Relief, Objects and Instrument): GPU stays on; the scene is the documented one (a version 4 `instrument`
   scene with a `collar`, `cap`, `chamfer` and `grip` per wheel); the parts draw inside the dials only (0 px outside) through a whole
   turn, native hits on those pixels find the input and a grid over every dial has 0 mismatches; a turn changes pixels inside the dial
-  only; 300 frames of a flick add no hit-geometry update and no capture beyond core's one for each `input` event (none in the turning
-  frames between them), with the dimple moving on most frames and the native value stepping with the angle; reduced motion has no inertia and puts the
+  only; 300 frames of a flick add no hit-geometry update and no capture for the `input` events (core skips them and counts `inputCapturesSkipped`), none in the turning
+  frames between them, with the dimple moving on most frames and the native value stepping with the angle; reduced motion has no inertia and puts the
   dimple at its step at once; the accessibility snapshot is the same in DOM and GPU modes and axe passes on the GPU page.
 - **Feedback** (`ui-jog-wheel.test.mjs`): off by default; a detented wheel ticks once per step crossed, a wheel without detents never.
 - **Bindings and Astro** (`ui-jog-wheel-bindings.test.mjs`, `ui-jog-wheel-astro.test.mjs`): the two examples above rendered exactly;

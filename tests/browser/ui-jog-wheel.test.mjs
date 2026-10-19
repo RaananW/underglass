@@ -727,9 +727,9 @@ for (const dpr of [1, 2]) for (const level of levels) test(`300 frames of a flic
     // While it turns: none in a calm frame; when it comes to rest the DOM gets its angle and its value text and `change` fires, one capture.
     const extra = rows.filter(([, index]) => index < lastInput).reduce((sum, [captures]) => sum + captures, 0), atRest = rows.filter(([, index]) => index >= lastInput).reduce((sum, [captures]) => sum + captures, 0);
     const end = probe.counts();
-    return { atRest, first, firstAngle, last: Number(input.value), angle: probe.angle("shuttle"), inputs, steps, moving, extra, captures: end.captures - start.captures, uploads: end.uploads - start.uploads, geometryUpdates: end.geometryUpdates - start.geometryUpdates, mode: end.mode };
+    return { skipped: end.inputCapturesSkipped - start.inputCapturesSkipped, atRest, first, firstAngle, last: Number(input.value), angle: probe.angle("shuttle"), inputs, steps, moving, extra, captures: end.captures - start.captures, uploads: end.uploads - start.uploads, geometryUpdates: end.geometryUpdates - start.geometryUpdates, mode: end.mode };
   });
-  console.log(`DPR ${dpr} ${level}: 300 frames of a flick: ${run.inputs} steps (${run.first} → ${run.last}, angle ${run.firstAngle}° → ${run.angle.toFixed(1)}°), the dimple moved on ${run.moving} frames, ${run.captures} captures (${run.extra} in turning frames with no input event of their own, ${run.atRest} when it came to rest), ${run.uploads} uploads, ${run.geometryUpdates} hit-geometry updates`);
+  console.log(`DPR ${dpr} ${level}: 300 frames of a flick: ${run.skipped} input captures skipped, ${run.inputs} steps (${run.first} → ${run.last}, angle ${run.firstAngle}° → ${run.angle.toFixed(1)}°), the dimple moved on ${run.moving} frames, ${run.captures} captures (${run.extra} in turning frames with no input event of their own, ${run.atRest} when it came to rest), ${run.uploads} uploads, ${run.geometryUpdates} hit-geometry updates`);
   expect(run.mode).toBe("gpu");
   expect(run.geometryUpdates, "no hit-geometry update").toBe(0);
   expect(run.moving, "the dimple turns on most of the frames the wheel coasts").toBeGreaterThan(50);
@@ -738,7 +738,10 @@ for (const dpr of [1, 2]) for (const level of levels) test(`300 frames of a flic
   expect(run.last).toBe(((Math.round(run.angle / 15) % 100) + 100) % 100);
   expect(run.extra, "the turning frames between the events add no capture").toBe(0);
   expect(run.atRest, "the angle, the value text and `change` at rest are one capture").toBeLessThanOrEqual(2);
-  expect(run.captures, "only the input events recapture").toBeLessThanOrEqual(run.inputs + 2);
+  // The wheel's input is marked `data-underglass-gpu-value` (the GPU draws the dimple, the thumb is never painted): its input events capture nothing (#167).
+  expect(run.skipped, "every input event of the flick was skipped by core").toBe(run.inputs);
+  // The one capture besides the rest is the helper marking the input the first time the wheel moves (an attribute write); it was 36 to 38 before (#167).
+  expect(run.captures, "the input events recapture nothing: only the mark and the write at rest remain").toBeLessThanOrEqual(run.atRest + 1);
   expect(run.uploads).toBeLessThanOrEqual(run.captures + 1);
   await healthy(page, "after the flick", level);
   await context.close();

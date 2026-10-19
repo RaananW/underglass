@@ -76,6 +76,10 @@ different from currently failing supported code.
   split to fit. A diagnostic from the helper, or a larger limit, is core work.
 - **A push button silently falls back to a Relief key** when the scene already holds 12 materials (`gpu/index.ts`, the `key` material test).
 - **The pointer light is not in the helper yet.** The gallery's `pointer-light.ts` does what the plan says the helper will.
+- **Input events captured (#167): narrowed, resolved for the JogWheel.** An `input` event captures its layer unless its target carries
+  `data-underglass-gpu-value` (`api.md#input-events-and-captures`); the JogWheel's helper marks its input while the GPU draws the dimple, so a
+  flick costs no capture per step. Not marked, by design: a Knob and a Fader (their value is a custom-property write that recaptures anyway,
+  #165: attribute and custom-property writes recapture the layer and are not in scope here), and every control whose native paint shows the value.
 - **A GPU stage cannot take its height from its content** (the content lives in the canvas): the gallery sets `--ig-stage-height` from its panels.
 
 ## Unsupported or untargeted scope
