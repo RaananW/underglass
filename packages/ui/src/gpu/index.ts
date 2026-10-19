@@ -70,6 +70,11 @@
  * triggers, `StrataGpu.diagnostics(panel)` says so (the count, the cap, the ids of the keys drawn at Relief) and the helper warns once
  * per panel with `console.warn`. Every key-like object must register its body so the cap conversion can trim it: a loop that makes keys takes the
  * registry (`createKeyRegistry`, `gpu/instrument-keys.ts`) and calls `registerKeyBody` and `keyAtRelief` (see that file's header).
+ * A Select's `selector` form is the RotarySelector's object over the Select's own select, and its `display` form a Display over it (the select's
+ * text is the window's) between two push buttons, so both are drawn by the paths above. A rail Tabs (`gpu/tabs-forms.ts`, `gpu/instrument-tabs.ts`;
+ * anatomy page `tabs.md`, section 11) is a plinth (the tablist), a key on it for each tab's cap and an LED lens above it that is an emitter, lit while
+ * its tab is selected: a raised face, a key and a ring or dome at Relief and Objects, and at the Instrument level one polished plinth part and, per
+ * tab, a body with a captured cap travelling on the CSS throw and a glass LED.
  *
  * A JogWheel's wheel and a PatchPoint's jack are drawn at every level (`gpu/wave3.ts`; design language section 6): the wheel a disc in a recess with a
  * finger dimple, the jack a washer with a hole and, while it is connected, a plug and a cable stub. At the Instrument level the wheel is a
@@ -115,6 +120,8 @@ import type { StrataSwitchForm } from "../shared/switch-forms.ts";
 import { displayFormEntries } from "./display-forms.ts";
 import { bezelCaster, displayHeight, displayMaterials, displayObject } from "./instrument-display.ts";
 import { displayEmitterDefaults, displayEmitters, finishAllowed, type DisplayEmitterTokens } from "../shared/display.ts";
+import { tabFormEntries, tabState } from "./tabs-forms.ts";
+import { railHeight, railKeyMaterials, railKeyObject, railMaterials, railPlinthObject } from "./instrument-tabs.ts";
 
 export type { CustomPartInput, CustomPartSource, InstrumentMeshProfile, InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentRecipe, KnobSpring } from "./instrument.ts";
 export { customPart } from "./instrument.ts";
@@ -241,6 +248,8 @@ const interactive = "input, button, select, textarea, a[href], [tabindex]";
 /** Material roles by face, for elements that name no material (design language section 4). */
 function roleOf(face: SceneFace, element: Element, panel: Element): string {
   if (element === panel || element.matches(".ug-card")) return "panel";
+  // A rail Tabs' plinth (its tablist) is polished metal, the knob's.
+  if (element.matches(".ug-tabs[data-strata-form='rail'] > .ug-tabs__list")) return "knob";
   // A push button's bezel, and a rotary selector's skirt and cap, are the knob's metal; a push button's cap takes the button's variant.
   if (element.matches(".ug-push__bezel, .ug-bank__plinth, .ug-rotary__skirt, .ug-rotary__cap")) return "knob";
   if (element.matches(".ug-push__cap")) return element.closest(".ug-button--accent, .ug-button--primary") ? "buttonPrimary" : "control";
@@ -338,6 +347,9 @@ interface DisplayInfo {
 /** What a scene's faces loop found for the displays of a panel, for its Instrument scene. */
 const foundDisplays = new WeakMap<HTMLElement, { infos: Map<HTMLElement, DisplayInfo>; instrument: Set<HTMLElement> }>();
 
+/** What a scene's faces loop found for the rail Tabs of a panel, for its Instrument scene: each tablist (the plinth) and each tab (a key with its LED). */
+const foundTabs = new WeakMap<HTMLElement, { lists: Set<HTMLElement>; keys: Set<HTMLElement> }>();
+
 /** A visible Meter or Gauge now: its form, its native meter and the meter's box in the panel. */
 interface MeterInfo {
   form: "bar" | "needle" | "dial";
@@ -369,7 +381,7 @@ function protectedRects(panel: HTMLElement, grow = 2): [number, number, number, 
     range.selectNodeContents(node);
     for (const box of range.getClientRects()) if (!inCap(box)) add(box);
   }
-  for (const field of panel.querySelectorAll("input:not([type='checkbox'], [type='radio'], [type='range'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='file'], [type='hidden'], [type='color'], .ug-display__text), textarea, select")) {
+  for (const field of panel.querySelectorAll("input:not([type='checkbox'], [type='radio'], [type='range'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='file'], [type='hidden'], [type='color'], .ug-display__text), textarea, select:not(.ug-display__text)")) {
     if (field.checkVisibility({ visibilityProperty: true })) add(field.getBoundingClientRect());
   }
   // A display's native element covers the whole display, bezel included: only its content box (the text's room, the window's inside) is
@@ -635,6 +647,8 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   // off, disabled), so a toggle is a uniform write. Each is also a `lamps` entry, so the panel takes the lights and their outset as a lamp's does.
   const mineDisplays = { infos: new Map<HTMLElement, DisplayInfo>(), instrument: new Set<HTMLElement>() };
   foundDisplays.set(panel, mineDisplays);
+  const mineTabs = { lists: new Set<HTMLElement>(), keys: new Set<HTMLElement>() };
+  foundTabs.set(panel, mineTabs);
   for (const root of panel.querySelectorAll<HTMLElement>(".ug-display")) {
     const native = root.querySelector<HTMLElement>(".ug-display__text"), pane = root.querySelector<HTMLElement>(".ug-display__window");
     if (!native || !pane || !root.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
@@ -650,7 +664,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     emitters.push(...lights);
     // The finish zone is for a window no text can reach: an input's text can be anywhere in its content box, an output's is its first run.
     let textTop = 0;
-    if (!(native instanceof HTMLInputElement)) {
+    if (!(native instanceof HTMLInputElement || native instanceof HTMLSelectElement)) {
       const range = document.createRange();
       range.selectNodeContents(native);
       const [run] = range.getClientRects(), scale = panel.getBoundingClientRect().width / Math.max(panel.offsetWidth, 1) || 1;
@@ -692,6 +706,14 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     if (displayRoot && mineDisplays.infos.has(displayRoot) && instrumentLayer && effective(element) !== "relief") {
       mineDisplays.instrument.add(displayRoot);
       if (element.matches(".ug-display__bezel")) { options.domes?.add(element); continue; }
+    }
+    // A rail Tabs (`tabs-forms.ts`, `instrument-tabs.ts`): the tablist is a plinth, each tab's cap a key on it and its LED a lens on it. At the Instrument
+    // level they are the rail's objects (the cap's CSS paint stays: the capture of it is the key's cap); below it the cap is drawn just after.
+    const railTab = element.closest<HTMLElement>(".ug-tabs[data-strata-form='rail'] .ug-tab");
+    if (instrumentLayer && effective(element) !== "relief") {
+      if (element.matches(".ug-tabs[data-strata-form='rail'] > .ug-tabs__list")) { mineTabs.lists.add(element); options.domes?.add(element); continue; }
+      if (railTab && element.matches(".ug-tab__cap")) { mineTabs.keys.add(railTab); options.domes?.add(railTab); continue; }
+      if (railTab && element.matches(".ug-tab__led") && segmentInfos.has(element)) { mineTabs.keys.add(railTab); options.domes?.add(element); continue; }
     }
     // A Meter's or Gauge's segments, hub and a Gauge's bezel are drawn as its Instrument object (its window stays the well of the face).
     const meterRoot = element.closest<HTMLElement>(".ug-meter"), meter = meterRoot && meterInfos.get(meterRoot);
@@ -798,6 +820,12 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       const slab = meterParts[0];
       if (slab && isSceneObject(slab) && slab.object === "slab") tops.set(element, (slab.base ?? 0) + slab.height);
       continue;
+    }
+    // A rail tab's cap (`tabs-forms.ts`): a raised face or a key on the plinth, inside the tab's box, its shadow included.
+    if (railTab && element.matches(".ug-tab__cap")) {
+      const parts = tabFormEntries(element, { rect, radius, tab: railTab, box: rectWithin(railTab, panel), objects: objects(element), base: baseOf(element), material: materialFor,
+        light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, hoverHeight: tokens.number("state.hoverHeight", 1.6), keyTravel });
+      if (parts) { entries.push(...parts); continue; }
     }
     // A Display's bezel and window (`display-forms.ts`): inside the native element's box, shadows included.
     const display = displayRoot && mineDisplays.infos.get(displayRoot);
@@ -1186,6 +1214,39 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
       relief: { height: raised, material: "displayBezel" } }, profile) as unknown as InstrumentObject);
     for (const name of ["displayBezel", "displayGlass"] as const) materials[name] ??= displayMaterials[name];
     tallest = Math.max(tallest, displayHeight(scale));
+  }
+  // A rail Tabs: the plinth (the tablist, one polished part), then each tab's key standing on it with its LED lens (its emitter lit by `--strata-lit`).
+  const rails = foundTabs.get(panel);
+  for (const list of rails?.lists ?? []) {
+    const box = rectWithin(list, panel);
+    if (box[2] <= 0 || box[3] <= 0 || objects.length + entries.length >= 255) continue;
+    materials.tabPlinth ??= railMaterials.tabPlinth;
+    objects.push(railPlinthObject({ id: idOf(list, "rail"), box, radius: radiusOf(list, box[2]), scale, stage, state: { hover: false, pressed: false, disabled: false }, light,
+      relief: { height: raised, material: "tabPlinth" } }, profile) as unknown as InstrumentObject);
+    tallest = Math.max(tallest, railHeight(scale));
+  }
+  for (const tab of rails?.keys ?? []) {
+    const cap = tab.querySelector<HTMLElement>(".ug-tab__cap"), led = tab.querySelector<HTMLElement>(".ug-tab__led");
+    if (!cap || objects.length + entries.length >= 255) continue;
+    const box = rectWithin(tab, panel), capBox = rectWithin(cap, panel);
+    if (box[2] <= 0 || box[3] <= 0 || capBox[2] <= 0 || capBox[3] <= 0) continue;
+    const info = led ? context.segmentInfos.get(led) : undefined, state = tabState(tab);
+    const colour = hex(getComputedStyle(cap).backgroundColor), name = `key ${colour}`;
+    // The throw's position as the CSS transition has it this frame (`--strata-push-t`: 0.45 selected, 1 held), the number the other levels follow.
+    const read = Number.parseFloat(getComputedStyle(tab).getPropertyValue("--strata-push-t"));
+    const t = Math.min(1, Math.max(0, state.disabled && !state.pressed ? 0 : Number.isFinite(read) ? read : state.pressed ? 0.45 : 0));
+    const relief = { face: "raised" as const, rect: capBox, radius: radiusOf(cap, capBox[2]), height: raised, material: context.materialFor(cap, "raised"), state };
+    if (!materials[name] && Object.keys(materials).length >= INSTRUMENT_PUSH_MATERIALS) { keyCaps.keyAtRelief(tab); entries.push(relief); continue; }
+    const layers = settings.materials[context.materialFor(cap, "raised")];
+    materials[name] ??= { base: { colour, roughness: layers?.base?.roughness ?? 0.45, metallic: layers?.base?.metallic ?? 0 }, coat: { ...layers?.coat } };
+    const keyInput = { id: idOf(tab, "tab"), box, cap: capBox, capRadius: radiusOf(cap, capBox[2]), ...(led && info ? { led: rectWithin(led, panel), emitter: info.index } : {}),
+      scale, role: info?.role ?? "#ff9228", t, material: name, opaque, state: { hover: !!state.hover, pressed: !!state.pressed, disabled: !!state.disabled }, light, relief: { height: raised, material: use("keyCap") } };
+    const railKey = railKeyObject(keyInput, profile) as unknown as InstrumentObject;
+    objects.push(railKey);
+    keyCaps.registerKeyBody({ element: tab, object: railKey, name, height: railHeight(scale) + 1, relief });
+    Object.assign(materials, railKeyMaterials(keyInput));
+    materials.tabPlinth ??= railMaterials.tabPlinth;
+    tallest = Math.max(tallest, railHeight(scale));
   }
   // Pads and keypads (`gpu/instrument-pad.ts`): a pad's glass rim with its emitter, body and captured cap; a keypad's plinth and, per key, a body and a captured cap.
   const padded = padKeypadObjects(panel, { scale, light, raised, opaque, profile, materials, layers: settings.materials, materialFor: context.materialFor, use, idOf, room: () => objects.length + entries.length < 255,

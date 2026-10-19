@@ -807,6 +807,30 @@ keys' bodies are quantised (a quarter or half px) and the layer is not rebuilt a
 [Card](../../docs/ui-library/components/card.md#11-plate-and-tray-forms), [Panel](../../docs/ui-library/components/panel.md#11-plate-and-tray-forms),
 [Dialog](../../docs/ui-library/components/dialog.md#11-plate-form), [Drawer](../../docs/ui-library/components/drawer.md#11-tray-form).
 
+## Select and Tabs forms
+
+The fourth of the Instrument level's everyday forms. `form="selector"` on a **Select** draws its own native `<select>` as a RotarySelector's dial (the same markup, behaviour and GPU parts, without the legend title:
+the Field's label names it), `form="display"` as a Display window showing the chosen option's label under the glass between two momentary push buttons that step it, and `form="rail"` on **Tabs** makes the tabs
+latching keys on one polished plinth (the tablist) with an LED above each that lights while its tab is selected, the panel the faceplate under the rail. `flush`, or no `form`, is the control of before, in markup and
+pixels (the React and Vue flush pages are compared pixel for pixel with the contract markup of before); on a Select any other `form` string is still the native form owner. A `selector` of more than 8 options, of
+labels over 12 characters, with an optgroup, or whose options a binding cannot read, is drawn as a `display` (`data-strata-form` says which); a `multiple` select is always flush.
+
+```tsx
+<Field label="Wave"><Select form="selector" value={wave} onChange={event => setWave(event.target.value)}><option value="sine">Sine</option>…</Select></Field>
+<Field label="Preset"><Select form="display" defaultValue="warm-pad">…</Select></Field>
+<Tabs form="rail" value={tab} onChange={setTab}>…</Tabs>
+```
+
+Vue takes the same props (`v-model`); Astro takes `options` or slot `<option>`s on the Select, and `form` on `Tabs`. The native controls stay the controls (the same accessibility snapshot, tab order and form data with and
+without a form); the step buttons are `aria-hidden` with `tabindex="-1"`, and a rail's parts are decoration inside its native `<button role="tab">`s. On the GPU a selector and a display are the RotarySelector's and the
+Display's objects and the buttons the PushButton's, and a rail is a raised face and keys at Relief, a slab and keys on it at Objects and, at the Instrument level, one polished plinth part and, per tab, a body with a captured
+cap travelling on the CSS throw and a glass LED lens with its emitter (`gpu/instrument-tabs.ts`). Measured on Canary 158.0.8110.0 (RTX 3080), DPR 1 and 2, headless and headful: a Select's parts change 30,832 px (Relief),
+32,060 (Objects) and 28,682 (Instrument) at DPR 1, all inside their native boxes and none outside; a rail's keys and LEDs 31,419, 31,224 and 27,920 inside the tabs' boxes (plinths 27,966 at the Instrument level, inside the
+tablist) and none outside; native hits are the DOM's (8,216 and 12,671 grid points, 0 differ); a backlight or an LED changes pixels only within the emitters' reach and the labels stay within the guard (0 levels); a
+selection or a step is a pose and an emitter: at the Instrument level 1 capture for a selector snap, a text change or a tab selection, none in the 38 to 66 frames the pointer or the key then moves, and 40 held frames of a
+step button or a key are 0 captures, 0 uploads and 0 hit-geometry updates (Relief and Objects capture the CSS transitions: 8 captures for a selector's snap, 23 for a tab selection). Anatomy:
+[Select](../../docs/ui-library/components/select.md#11-hardware-forms-selector-and-display), [Tabs](../../docs/ui-library/components/tabs.md#11-rail-form-rail).
+
 ## Lamp and StatusLight
 
 Hardware lights, the second wave of the Instrument level. A **Lamp** is a lens on a bezel over a native

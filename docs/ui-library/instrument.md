@@ -187,10 +187,10 @@ divider a groove) or stay flat, because they are print on the faceplate.
 | Switch | `slide` | `rocker`, `bat`, `wall` |
 | Checkbox | A small latching square button whose cap lights when checked ([`latching`, done](components/checkbox.md#11-latching-form-latching)) | `flush` |
 | Radio, RadioGroup | A **preset bank**: interlocking latching buttons, one down at a time (where the name comes from) ([`bank`, done](components/radio.md#11-latching-form-the-preset-bank-bank)) | `selector` (a RotarySelector over the group; later), `flush` |
-| Select | `selector` (RotarySelector) | `display` (a display with step buttons), `flush` |
+| Select | `selector` (RotarySelector) ([done](components/select.md#11-hardware-forms-selector-and-display)) | `display` (a display with step buttons; done), `flush` |
 | Slider | `fader` | `knob`, `wheel` |
 | TextField, TextArea | `display` (a glass window in a bezel) | `flush` (a well, as Objects) |
-| Tabs | Latching buttons on a rail; the panel is the faceplate under them | `flush` |
+| Tabs | Latching buttons on a rail; the panel is the faceplate under them ([`rail`, done](components/tabs.md#11-rail-form-rail)) | `flush` |
 | SegmentedControl | Interlocking latching buttons on one plinth ([`latching`, done](components/segmented-control.md#11-latching-form-latching)) | `flush` |
 | ProgressBar, Spinner | Segment meter, ring of LEDs | `flush` |
 | Badge | An LED pill (a StatusLight with text) | `flush` |
@@ -219,6 +219,13 @@ content, text and hits are untouched ([Card](components/card.md#11-plate-and-tra
 [Dialog](components/dialog.md#11-plate-form), [Drawer](components/drawer.md#11-tray-form)). The Dialog's plate rises out of the chassis with the panel
 motion's eased progress and the Drawer's tray slides out of its edge (CSS, and core's panel transition with `x` or `y` on the GPU), the wall rising with
 it; the rise is a scene number, a uniform update.
+
+**Select and Tabs forms (everyday forms, fourth part).** A Select takes `form="selector"` (the RotarySelector's dial over the Select's own native select) or `form="display"` (a Display window
+showing the chosen label under the glass, between two momentary push buttons that step the select), and Tabs takes `form="rail"` (each tab a latching key on one polished plinth, the tablist, with an LED
+that lights while it is selected, the panel the faceplate under them); `flush`, and an absent `form`, are the controls of before. Decided here: a selector prints at most 8 options of at most 12 characters and
+no optgroup (a dial's labels sit on a 270° arc), and any other list asked as a selector is drawn as a display, which keeps the hardware face and scales to any list, with `data-strata-form` saying which;
+the step buttons are `aria-hidden` with `tabindex="-1"` (the select is the control, they duplicate its arrow keys); a rail's tablist is its plinth (no groove, no indicator) and its LED is the indicator lens
+of the Rating and the Badge, so selecting is a pose and an emitter, not a rebuild. [Select](components/select.md#11-hardware-forms-selector-and-display), [Tabs](components/tabs.md#11-rail-form-rail).
 
 ### Interaction, in detail
 
@@ -604,6 +611,12 @@ input; `wheel` is reserved and follows), the Card and Panel as a [`plate`](compo
 with `flush` and an absent `form` the control of before. The plate's rim and the tray's wall are inline meshes swept along the element's rounded outline,
 inside its box, checked with core's containment over the whole rise; the Dialog's and the Drawer's motion drives the rise as one scene number (a uniform
 update), and the Drawer's layer slides through core's panel transition (`x`, `y`).
+
+Everyday forms, fourth part: the Select and the Tabs at every presentation, in CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Instrument on the GPU. A Select as a
+[`selector`](components/select.md#11-hardware-forms-selector-and-display) (the RotarySelector over its own select, for lists up to 8 short options, otherwise drawn as a `display`) or a
+`display` (a Display window with two momentary step buttons, `aria-hidden`), and Tabs as a [`rail`](components/tabs.md#11-rail-form-rail) (a plinth of latching keys with an LED each, the panel the
+faceplate under it), with `flush` and an absent `form` the control of before. They reuse the RotarySelector, the Display, the PushButton's parts and the indicator lens, so the Instrument level adds only a
+plinth and a key object for the rail (`gpu/instrument-tabs.ts`); a selection or a step is a pose and an emitter, and a held step button is 0 captures.
 
 PR 12, wave 2, first part: the Lamp and the StatusLight ([Lamp](components/lamp.md), [StatusLight](components/status-light.md)),
 at every presentation: CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Instrument on the GPU, with the helper's

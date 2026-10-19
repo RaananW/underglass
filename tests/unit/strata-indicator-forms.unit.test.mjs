@@ -163,7 +163,7 @@ test("syncStrataProgress keeps the drawn value: the fraction on the wrapper, rem
 });
 
 test("which element is a lens, and where its light and its box come from", () => {
-  assert.equal(INDICATOR_LENS, ".ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment");
+  assert.equal(INDICATOR_LENS, ".ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment, .ug-tab__led");
   const make = (classes, parents = {}) => ({ matches: selector => selector.split(",").some(part => classes.includes(part.trim().slice(1))), closest: selector => parents[selector] ?? null, querySelector: selector => parents[`>${selector}`] ?? null });
   const input = { name: "input" }, item = make(["ug-rating__item"], { ">.ug-rating__input": input }), rating = make(["ug-rating"]);
   assert.deepEqual(indicatorOf(make(["ug-rating__lens"], { ".ug-rating": rating, ".ug-rating__item": item })), { kind: "rating", root: rating, control: input, box: input, emitter: "lamp" });

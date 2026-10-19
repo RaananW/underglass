@@ -55,7 +55,7 @@ test("the sizes are tokens, the CSS takes them, and every part of both component
   assert.deepEqual(padSpring, { stiffness: 1600, damping: 80 });
   assert.equal(padSpring, pushSpring);
   const curve = switchSpringCurve(padSpring), transition = `--strata-push-t ${curve.duration}ms ${curve.easing}`;
-  assert.equal(css.split(transition).length - 1, 3, "the PushButton's, the Pad's and the Keypad's key carry the spring's duration and easing");
+  assert.equal(css.split(transition).length - 1, 4, "the PushButton's, the Pad's, the Keypad's key and the rail Tabs' key carry the spring's duration and easing");
 });
 
 test("the geometry in the premium character is the shared numbers", () => {

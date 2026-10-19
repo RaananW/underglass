@@ -6,6 +6,7 @@
  */
 import Behaviour from "./Behaviour.astro";
 import { nextId } from "./field.ts";
+import { tabsForm, type StrataTabsForm } from "../shared/tabs-forms.ts";
 import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
 
 interface TabItem { value: string; label: string; disabled?: boolean }
@@ -19,6 +20,8 @@ interface Props {
   value?: string;
   orientation?: "horizontal" | "vertical";
   activation?: "automatic" | "manual";
+  /** `rail`: the tabs as latching keys on one rail with an LED each (anatomy page `tabs.md`, section 11); `flush` or none for the flat tabs. */
+  form?: StrataTabsForm | "flush" | (string & {});
   size?: StrataSize;
   material?: string;
   level?: StrataLevel;
@@ -26,15 +29,16 @@ interface Props {
   [attribute: string]: unknown;
 }
 
-const { label, tabs, id = nextId("tabs"), value, orientation = "horizontal", activation = "automatic", size, material, level, class: className, ...rest } = Astro.props;
+const { label, tabs, id = nextId("tabs"), value, orientation = "horizontal", activation = "automatic", form, size, material, level, class: className, ...rest } = Astro.props;
+const rail = tabsForm(form);
 const selected = value ?? tabs.find(tab => !tab.disabled)?.value;
 const panels = await Promise.all(tabs.map(tab => (Astro.slots.has(tab.value) ? Astro.slots.render(tab.value) : "")));
 ---
-<div class={classes("ug-tabs", orientation === "vertical" && "ug-tabs--vertical", className)} {...strataAttributes({ size, material, level })} {...rest}>
-  <div class="ug-tabs__list" role="tablist" aria-label={label} aria-orientation={orientation === "vertical" ? "vertical" : undefined} data-strata-activation={activation === "manual" ? "manual" : undefined}>
-    <span class="ug-tabs__rail" data-strata-face="groove" aria-hidden="true"></span>
+<div class={classes("ug-tabs", orientation === "vertical" && "ug-tabs--vertical", className)} data-strata-form={rail} {...strataAttributes({ size, material, level })} {...rest}>
+  <div class="ug-tabs__list" role="tablist" aria-label={label} aria-orientation={orientation === "vertical" ? "vertical" : undefined} data-strata-activation={activation === "manual" ? "manual" : undefined} data-strata-face={rail ? "raised" : undefined}>
+    {!rail && <span class="ug-tabs__rail" data-strata-face="groove" aria-hidden="true"></span>}
     {tabs.map(tab => (
-      <button class="ug-tab" type="button" role="tab" id={`${id}-tab-${tab.value}`} aria-selected={tab.value === selected ? "true" : "false"} aria-controls={`${id}-panel-${tab.value}`} tabindex={tab.value === selected ? undefined : "-1"} disabled={tab.disabled}><span class="ug-tab__label">{tab.label}</span><span class="ug-tab__indicator" data-strata-face="mark" aria-hidden="true"></span></button>
+      <button class="ug-tab" type="button" role="tab" id={`${id}-tab-${tab.value}`} aria-selected={tab.value === selected ? "true" : "false"} aria-controls={`${id}-panel-${tab.value}`} tabindex={tab.value === selected ? undefined : "-1"} disabled={tab.disabled}>{rail ? <><span class="ug-tab__led" data-strata-face="knob" aria-hidden="true"></span><span class="ug-tab__cap" data-strata-face="raised"><span class="ug-tab__label">{tab.label}</span></span></> : <><span class="ug-tab__label">{tab.label}</span><span class="ug-tab__indicator" data-strata-face="mark" aria-hidden="true"></span></>}</button>
     ))}
   </div>
   {tabs.map((tab, index) => (

@@ -54,7 +54,7 @@ test("the Strata specimen passes axe in every theme and under forced colours", a
     expect(summary(face.violations), `axe in the ${theme} theme, face mode`).toEqual([]);
     // Selects draw their chevron with background gradients, and a knob's or a fader's numerals lie under its transparent
     // native input (one control covers the dial or the track), so their contrast is measured on decoded pixels.
-    const undecided = face.incomplete.filter(result => result.id === "color-contrast").map(result => ({ ...result, nodes: result.nodes.filter(node => !/ug-select|ug-combobox|ug-date-picker|ug-knob__mark|ug-fader__mark|ug-meter__mark|ug-rotary__text|ug-rotary__legend|#spec-rot-|#set-|#spec-size|#spec-fruit|#spec-due|ug-display__text/.test(node.html + node.target.join(" "))) })).filter(result => result.nodes.length);
+    const undecided = face.incomplete.filter(result => result.id === "color-contrast").map(result => ({ ...result, nodes: result.nodes.filter(node => !/ug-select|ug-combobox|ug-date-picker|ug-knob__mark|ug-fader__mark|ug-meter__mark|ug-rotary__text|ug-rotary__legend|#spec-sel-|#spec-rot-|#set-|#spec-size|#spec-fruit|#spec-due|ug-display__text/.test(node.html + node.target.join(" "))) })).filter(result => result.nodes.length);
     expect(summary(undecided), `undecided contrast in the ${theme} theme`).toEqual([]);
     await page.evaluate(() => { delete document.documentElement.dataset.strataMode; });
   }
