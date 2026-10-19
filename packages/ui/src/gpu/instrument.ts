@@ -179,12 +179,14 @@ export interface KnobInput {
    * towards the top of the screen (-y, the file's -z) at the middle of the sweep. Without it the knob is unchanged.
    */
   customCap?: CustomPartSource;
+  /** The pointer's width, px (`knob.pointer.width`; 2.2 where a character names none). */
+  pointerWidth?: number;
 }
 
 /** A knob as an Instrument object; `profile` registers a shape and returns its name. */
 export function knobObject(input: KnobInput, profile: (name: string, shape: InstrumentProfile) => string): InstrumentObject {
   const [x, y, w, h] = input.box, cx = x + w / 2, cy = y + h / 2;
-  const { skirt, cap, pointer } = knobParts(input.skirt, input.cap, input.scale);
+  const { skirt, cap, pointer: given } = knobParts(input.skirt, input.cap, input.scale), pointer = { ...given, width: input.pointerWidth ?? given.width };
   const rs = skirt.radius, rc = cap.radius, eb = skirt.edgeBreak, k = Math.tan((skirt.slope * Math.PI) / 180);
   const cone = [Math.sin((skirt.slope * Math.PI) / 180), Math.cos((skirt.slope * Math.PI) / 180)] as const;
   const diagonal = Math.SQRT1_2;

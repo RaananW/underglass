@@ -26,6 +26,9 @@
  * `--strata-lit` and the `emitter.*` tokens, read each frame, so a blink or a toggle is a uniform update), the `protected`
  * rects of its text and a `feather`, so core's face pool lights the page around the lens within the contrast guard.
  *
+ * The indicator forms' lenses (a Rating's lamps, a Badge's LED, a ProgressBar's segments, a Spinner's ring; `gpu/indicator-forms.ts`) are the same lenses, one
+ * emitter each, lit by the `--strata-lit` the stylesheet gives them (a hover preview, a value, a chase), drawn at every level as a Meter's segments are.
+ *
  * A Meter's or Gauge's segments are the same LED lenses (`gpu/meter-forms.ts`, `gpu/instrument-meter.ts`; design language section 6): one
  * emitter each, in the colour of its zone, lit from the native meter's value (or the live value `driveStrataMeter` gave it) and its held
  * peak, so a value change is a uniform update at every level. A needle meter's and a gauge's window and bezel are Relief and Objects
@@ -42,8 +45,9 @@
  * become the premium knob's parts, whose pointer turns on a spring as their value changes (uniform updates, no
  * recapture), its faders the premium fader's carriage (`gpu/instrument-fader.ts`), sliding its slot on `spring.fader`
  * while the slot stays a groove and the scale printed on the face, its Switch forms their moving parts and bezels
- * (`gpu/instrument-switch.ts`), posed by the CSS throw, and its buttons keys with captured caps; every
- * other component stays a Relief primitive on the face.
+ * (`gpu/instrument-switch.ts`), posed by the CSS throw, its rotary selectors the knob's parts turned to the selected option
+ * on `spring.detent`, its push buttons (`gpu/instrument-push.ts`) a polished bezel, a glass ring that is an emitter and a captured
+ * cap on the CSS throw, and its other buttons keys with captured caps; every other component stays a Relief primitive on the face.
  * The Scene level still draws its panels at the Objects level, so the adjust policy steps a Scene page over
  * `instrument`.
  *
@@ -58,17 +62,25 @@ import { isSceneObject, type SceneEntry, type SceneFace, type SceneMaterial, typ
 import { panelMotion, type PanelMover } from "../dom/motion.ts";
 import { liveStrataMeter } from "../dom/meter.ts";
 import { switchFormEntries } from "./switch-forms.ts";
+import { pushFormEntries } from "./push-forms.ts";
+import { pushHeight, pushMaterialsOf, pushObject } from "./instrument-push.ts";
+import { followSpring } from "./instrument-rotary.ts";
+import { pushEmitterDefaults, pushPosition, ringEmitter, type PushEmitterTokens } from "../shared/push-button.ts";
+import { rotaryFraction } from "../shared/rotary-selector.ts";
 import { lampFormEntries } from "./lamp-forms.ts";
 import { lampHeight, lampMaterialsOf, lampObject, lensMaterial, type LampKind } from "./instrument-lamp.ts";
 import { emitterDefaults, lensEmitter, type EmitterTokens, type LampEmitter } from "../shared/lamp.ts";
 import { meterFormEntries } from "./meter-forms.ts";
 import { meterBarObject, meterDialObject, meterHeight, meterMaterials } from "./instrument-meter.ts";
 import { advancePeak, meterFraction, meterSprings, meterZoneRoles, peakDefaults, peakIndex, segmentEmitterDefaults, segmentsLit, segmentZones, type PeakState } from "../shared/meter.ts";
+import { DISABLED_LIGHT, INDICATOR_LENS, indicatorOf, roomAround } from "./indicator-forms.ts";
 import { strataStage, type StagePresenter } from "../dom/stage.ts";
 import type { EnvironmentMap, StageScene } from "../tokens/stage.ts";
+import type { StudioTokens } from "../tokens/instrument.ts";
 import { advance, asParticle, decodeHdr, environmentFrom, launch, spring, type BurstOptions, type Confetto } from "./scene.ts";
 import { advanceSpring, depthScale, INSTRUMENT_CAMERA, keyObject, knobObject, knobSprings, premiumMaterials, profileKey, type CustomPartSource, type InstrumentObject,
   type InstrumentProfile, type InstrumentRecipe, type KnobSpring } from "./instrument.ts";
+import { characterMaterials } from "./instrument-character.ts";
 import { faderMaterials, faderObject, faderParts, faderSpring } from "./instrument-fader.ts";
 import { switchHeight, switchMaterials, switchObject } from "./instrument-switch.ts";
 import { plateMargin, plateMaterials, plateObject, plateParts, plateTokenDefaults, type PlateForm, type PlateOpen } from "./instrument-plate.ts";
@@ -194,6 +206,9 @@ const interactive = "input, button, select, textarea, a[href], [tabindex]";
 /** Material roles by face, for elements that name no material (design language section 4). */
 function roleOf(face: SceneFace, element: Element, panel: Element): string {
   if (element === panel || element.matches(".ug-card")) return "panel";
+  // A push button's bezel, and a rotary selector's skirt and cap, are the knob's metal; a push button's cap takes the button's variant.
+  if (element.matches(".ug-push__bezel, .ug-rotary__skirt, .ug-rotary__cap")) return "knob";
+  if (element.matches(".ug-push__cap")) return element.closest(".ug-button--accent, .ug-button--primary") ? "buttonPrimary" : "control";
   // A knob's skirt and cap, and a fader's carriage, are raised faces in the knob's material (a fader's slot is a
   // groove, a rail).
   if (element.matches(".ug-knob__skirt, .ug-knob__cap, .ug-fader__carriage, .ug-lamp__bezel")) return "knob";
@@ -306,6 +321,18 @@ function protectedRects(panel: HTMLElement, grow = 2): [number, number, number, 
   return rects.length > MAX_PROTECTED ? "extent" : rects;
 }
 
+/** A visible push button now: what its parts need of its ring and LED (`--strata-lit`, `--strata-led` are read for their emitters). */
+interface PushInfo {
+  form: "momentary" | "latching";
+  /** The role colour, `#rrggbb`. */
+  role: string;
+  /** The ring's place in the scene's `emitters`, and the LED's (latching). */
+  ring: number;
+  led?: number;
+}
+/** What a scene's faces loop found for the push buttons and rotary selectors of a panel, for its Instrument scene. */
+const found = new WeakMap<HTMLElement, { pushes: Map<HTMLElement, PushInfo>; instrumentPushes: Set<HTMLElement>; rotaries: Set<HTMLElement> }>();
+
 /** A presentation level (design language section 16). */
 export type StrataLevel = "relief" | "objects" | "instrument" | "scene";
 
@@ -391,7 +418,10 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     // A lamp's bezel and lens are its input's object too (hover and disabled; a lamp does not sink when it is pressed).
     const lampRow = element.closest(".ug-lamp");
     const lamp = lampRow?.matches(".ug-lamp--momentary") ? lampRow : lampRow?.querySelector(":scope > .ug-lamp__input");
-    const owner = knob ?? fader ?? lamp;
+    // A rotary selector's skirt and cap are its select's object, as a knob's are its input's; a push button's bezel and cap are its button's.
+    const rotary = element.closest(".ug-rotary__dial")?.querySelector(".ug-rotary__select");
+    const push = element.closest("button.ug-push");
+    const owner = knob ?? fader ?? lamp ?? rotary ?? push;
     const control = element.matches(interactive) ? element : owner ?? element.closest("label")?.querySelector("input, select, textarea") ?? element;
     const target = control.closest("label") ?? control;
     const preview = `${element.getAttribute("data-strata-preview") ?? ""} ${control.getAttribute("data-strata-preview") ?? ""}`.split(/\s+/);
@@ -401,7 +431,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       hover: (isControl && target.matches(":hover")) || preview.includes("hover"),
       // A toggle that is on, the current page of a Pagination, or a SegmentedControl's selected key holds its key down (design language section 6: it
       // latches at its travel).
-      pressed: !fader && !lamp && (isControl && control.matches(":active, [aria-pressed='true'], [aria-current]:not([aria-current='false']), .ug-segmented__input:checked")) || preview.includes("active"),
+      pressed: !fader && !lamp && (isControl && control.matches(":active:not([data-strata-down='false']), [aria-pressed='true'], [data-strata-down='true'], [aria-current]:not([aria-current='false']), .ug-segmented__input:checked")) || preview.includes("active"),
       focus: !owner && (control.matches(":focus-visible") || preview.includes("focus")),
       disabled: control.matches(":disabled, [aria-disabled='true']"),
     };
@@ -430,6 +460,32 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   // never depend on the state. How lit it is, `--strata-lit`, is read from the lamp now (a toggle, a held button, a blink).
   const lamps = new Map<HTMLElement, LampInfo>(), emitters: LampEmitter[] = [], instrumentLamps = new Set<HTMLElement>();
   const moreContrast = typeof matchMedia === "function" && matchMedia("(prefers-contrast: more)").matches;
+  // Push buttons (design language section 3): the lit ring is an emitter, and a latching button's LED another, lit by `--strata-lit` and
+  // `--strata-led` now (held or latched, latched), so a press is a uniform write, not a capture. Each is also a `lamps` entry for its
+  // ring, so the panel takes the lights and their outset as a lamp's does.
+  const mine = { pushes: new Map<HTMLElement, PushInfo>(), instrumentPushes: new Set<HTMLElement>(), rotaries: new Set<HTMLElement>() };
+  found.set(panel, mine);
+  for (const root of panel.querySelectorAll<HTMLElement>("button.ug-push")) {
+    const cap = root.querySelector<HTMLElement>(".ug-push__cap"), led = root.querySelector<HTMLElement>(".ug-push__led");
+    if (!cap || emitters.length >= MAX_EMITTERS - 1 || !root.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    const capBox = rectWithin(cap, panel);
+    if (capBox[2] <= 0 || capBox[3] <= 0) continue;
+    const style = getComputedStyle(root), pushTokens = reader(root);
+    const number = (name: string) => { const read = Number.parseFloat(style.getPropertyValue(name)); return Number.isFinite(read) ? Math.min(1, Math.max(0, read)) : 0; };
+    const role = hex(style.getPropertyValue("--_c").trim() || "#ff9228");
+    const own: PushEmitterTokens = { radius: pushTokens.number("emitter.pushButton.radius", pushEmitterDefaults.radius), height: pushTokens.number("emitter.pushButton.height", pushEmitterDefaults.height),
+      strength: pushTokens.number("emitter.pushButton.strength", pushEmitterDefaults.strength) };
+    const info: PushInfo = { form: root.getAttribute("data-strata-form") === "latching" ? "latching" : "momentary", role, ring: emitters.length };
+    lamps.set(root, { kind: "lamp", role, lit: number("--strata-lit"), lens: capBox[3], index: emitters.length, box: rectWithin(root, panel), control: root, feather: pushTokens.number("emitter.guardFeather", emitterDefaults.guardFeather) });
+    emitters.push(ringEmitter([capBox[0] + capBox[2] / 2, capBox[1] + capBox[3] / 2], capBox[3], moreContrast ? 0 : number("--strata-lit"), role, own));
+    if (info.form === "latching" && led) {
+      const ledBox = rectWithin(led, panel);
+      info.led = emitters.length;
+      const ledTokens: EmitterTokens = { radius: pushTokens.number("emitter.led.radius", emitterDefaults.led.radius), height: pushTokens.number("emitter.led.height", emitterDefaults.led.height), strength: pushTokens.number("emitter.led.strength", emitterDefaults.led.strength) };
+      emitters.push(lensEmitter("led", [ledBox[0] + ledBox[2] / 2, ledBox[1] + ledBox[3] / 2], ledBox[2], moreContrast ? 0 : number("--strata-led"), role, ledTokens));
+    }
+    mine.pushes.set(root, info);
+  }
   for (const lens of panel.querySelectorAll<HTMLElement>(".ug-lamp__lens, .ug-status-light__lens")) {
     const lampRoot = lens.closest<HTMLElement>(".ug-lamp, .ug-status-light");
     if (!lampRoot || emitters.length >= MAX_EMITTERS || !lens.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
@@ -449,6 +505,24 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   // Meters and Gauges (design language section 6): a bar's segments are LEDs, each an emitter in its zone's colour, lit from the
   // native meter's value (and its held peak) read here, so a live level is a uniform update. The needle and the scale are not lights.
   const meterInfos = new Map<HTMLElement, MeterInfo>(), segmentInfos = new Map<HTMLElement, LampInfo>(), now = options.now ?? performance.now();
+  // The indicator forms' lenses (a Rating's lamps, a Badge's LED, a ProgressBar's segments, a Spinner's ring; `gpu/indicator-forms.ts`) are the
+  // same LED lenses, each an emitter, lit by the `--strata-lit` the stylesheet gives it now (a hover preview, a value, a chase), so they join
+  // the segments' infos and are drawn as those are; at the Instrument level the ones drawn as objects are collected as they are met.
+  const instrumentIndicators = new Set<HTMLElement>();
+  for (const lens of panel.querySelectorAll<HTMLElement>(INDICATOR_LENS)) {
+    const place = indicatorOf(lens), rect = rectWithin(lens, panel);
+    if (!place || emitters.length >= MAX_EMITTERS || rect[2] <= 0 || rect[3] <= 0 || !lens.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    const whole = rectWithin(place.box, panel), box = place.tight ? roomAround(rect, whole) : whole;
+    if (box[2] <= 0 || box[3] <= 0) continue;
+    const style = getComputedStyle(lens), lensTokens = reader(lens), read = Number.parseFloat(style.getPropertyValue("--strata-lit"));
+    const lit = Number.isFinite(read) ? Math.min(1, Math.max(0, read)) : 0, role = hex(style.getPropertyValue("--_c").trim() || "#ff9228");
+    const given: EmitterTokens = place.emitter === "segment" ? segmentEmitterDefaults : emitterDefaults[place.emitter];
+    const own: EmitterTokens = { radius: lensTokens.number(`emitter.${place.emitter}.radius`, given.radius), height: lensTokens.number(`emitter.${place.emitter}.height`, given.height), strength: lensTokens.number(`emitter.${place.emitter}.strength`, given.strength) };
+    // A disabled control keeps its lit lenses, dimmed, so what it is set to is still said; more contrast turns the light off.
+    const dim = place.control.matches(":disabled") ? DISABLED_LIGHT : 1;
+    segmentInfos.set(lens, { kind: "led", role, lit, lens: rect[2], index: emitters.length, box, control: place.control, feather: lensTokens.number("emitter.guardFeather", emitterDefaults.guardFeather) });
+    emitters.push(lensEmitter(place.emitter === "lamp" ? "lamp" : "led", [rect[0] + rect[2] / 2, rect[1] + rect[3] / 2], rect[2], moreContrast ? 0 : lit * dim, role, own));
+  }
   for (const root of panel.querySelectorAll<HTMLElement>(".ug-meter")) {
     const native = root.querySelector<HTMLMeterElement>("meter.ug-meter__native");
     if (!native || !root.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
@@ -510,6 +584,11 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       // groove on the face); a button as a key with a captured cap.
       const knob = element.matches(".ug-knob__skirt, .ug-knob__cap") ? element.closest<HTMLElement>(".ug-knob") : null;
       if (knob) { knobs.add(knob); continue; }
+      // A rotary selector's skirt and cap are the knob's parts (its printed labels stay on the face); a push button's bezel and cap are its object's.
+      const rotary = element.matches(".ug-rotary__skirt, .ug-rotary__cap") ? element.closest<HTMLElement>(".ug-rotary") : null;
+      if (rotary) { mine.rotaries.add(rotary); continue; }
+      const push = element.matches(".ug-push__bezel, .ug-push__cap") ? element.closest<HTMLElement>("button.ug-push") : null;
+      if (push && mine.pushes.has(push)) { mine.instrumentPushes.add(push); continue; }
       const fader = element.matches(".ug-fader__carriage") ? element.closest<HTMLElement>(".ug-fader") : null;
       if (fader) { faders.add(fader); continue; }
       // A Switch form's parts, the slot apart (a groove on the face), are drawn as its Instrument object; the CSS paint of
@@ -519,6 +598,8 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       // A lamp's or LED's bezel and lens are drawn as its Instrument object (the socket under the lens stays printed on the face).
       const lampRoot = element.matches(".ug-lamp__bezel, .ug-lamp__lens, .ug-status-light__lens") ? element.closest<HTMLElement>(".ug-lamp, .ug-status-light") : null;
       if (lampRoot && lamps.has(lampRoot)) { instrumentLamps.add(lampRoot); options.domes?.add(element); continue; }
+      // An indicator form's lens (a Rating's lamp, a Badge's LED, a bar's segment, a ring's LED) is an LED object of its own.
+      if (element.matches(INDICATOR_LENS) && segmentInfos.has(element)) { instrumentIndicators.add(element); options.domes?.add(element); continue; }
       if (face === "raised" && element.matches("button")) { keys.push(element); continue; }
     }
     let rect = rectWithin(element, panel);
@@ -530,6 +611,13 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       knob: { material: material(tokens.raw("material.roles.knob") || "satin"), colour: tokens.colour("knob") }, hoverHeight: tokens.number("state.hoverHeight", 1.6),
       light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, domes: options.domes });
     if (form) { entries.push(...form); continue; }
+    // A push button's bezel and cap (`push-forms.ts`): inside the button's box, shadows included.
+    const pushRoot = element.matches(".ug-push__bezel, .ug-push__cap") ? element.closest<HTMLElement>("button.ug-push") : null;
+    if (pushRoot) {
+      const parts = pushFormEntries(element, { rect, state, objects: objects(element), base: baseOf(element), box: rectWithin(pushRoot, panel), bezel: rectWithin(pushRoot.querySelector(".ug-push__bezel") ?? pushRoot, panel),
+        material: materialFor, light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, hoverHeight: tokens.number("state.hoverHeight", 1.6), keyTravel });
+      if (parts) { entries.push(...parts); continue; }
+    }
     // A Lamp's or StatusLight's bezel and lens (`lamp-forms.ts`): inside the control's box, shadows included.
     const lampRoot = element.matches(".ug-lamp__bezel, .ug-lamp__lens, .ug-status-light__lens") ? element.closest<HTMLElement>(".ug-lamp, .ug-status-light") : null;
     const lamp = lampRoot && lamps.get(lampRoot);
@@ -549,7 +637,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     if (segment) {
       // The segments are drawn from the native meter's value at every level, so a live value needs no write to the DOM (`driveStrataMeter`).
       if (meterRoot) options.domes?.add(meterRoot);
-      const floor = baseOf(element) - (objects(element) ? Math.max(1, level(element.closest(".ug-meter__window") ?? element, "well")) : 0);
+      const floor = baseOf(element) - (objects(element) && meterRoot ? Math.max(1, level(element.closest(".ug-meter__window") ?? element, "well")) : 0);
       const parts = lampFormEntries(element, { rect, state, objects: objects(element), base: floor, box: segment.box, role: segment.role, lit: segment.lit, domes: options.domes,
         material: (part, role, partFace) => {
           const named = part.closest("[data-strata-material]");
@@ -676,7 +764,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   };
   // The lights of the panel's lenses, with the text they must not wash out (the guard, design language section 3).
   const lights = emitters.length ? { emitters, protected: protectedRects(panel), feather: Math.max(...[...lamps.values(), ...segmentInfos.values()].map(info => info.feather)) } : undefined;
-  if (instrumentLayer) return instrumentScene(panel, options, { settings, entries: entries as ScenePrimitive[], knobs, faders, switches, keys, plates, states, materialFor, tokens, reach, lamps, instrumentLamps, lights, instrumentMeters, meterInfos, segmentInfos });
+  if (instrumentLayer) return instrumentScene(panel, options, { settings, entries: entries as ScenePrimitive[], knobs, faders, switches, keys, plates, states, materialFor, tokens, reach, lamps, instrumentLamps, lights, instrumentMeters, meterInfos, segmentInfos, instrumentIndicators });
   if (!entries.some(isSceneObject)) return lights ? { format: "strata-scene", version: 4, ...settings, primitives: entries as ScenePrimitive[], ...lights } : { format: "strata-scene", version: 1, ...settings, primitives: entries };
   // The camera (design language section 2): centred on the stage, at D = max(camera.distance, r · h / taper + h),
   // with r the stage's half-diagonal, so every solid keeps the taper rule wherever its panel sits.
@@ -712,7 +800,7 @@ export interface StrataInstrumentScene extends Omit<StrataScene, "version" | "pr
   version: 4;
   kind: "instrument";
   camera: { distance: number; vanish: [number, number] };
-  environment: { source: "studio"; strength: number };
+  environment: { source: "studio"; strength: number; studio?: Partial<StudioTokens> };
   light: { azimuth: number; elevation: number; intensity: number };
   materials: Record<string, InstrumentRecipe>;
   primitives: ScenePrimitive[];
@@ -746,6 +834,8 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
   instrumentLamps: Set<HTMLElement>; lamps: Map<HTMLElement, LampInfo>; lights?: { emitters: LampEmitter[]; protected: [number, number, number, number][] | "extent"; feather: number };
   /** The Meters and Gauges at the Instrument level, every visible meter's info and every visible segment's. */
   instrumentMeters: Set<HTMLElement>; meterInfos: Map<HTMLElement, MeterInfo>; segmentInfos: Map<HTMLElement, LampInfo>;
+  /** The indicator forms' lenses drawn as objects (their infos are in `segmentInfos`). */
+  instrumentIndicators: Set<HTMLElement>;
   states: (element: Element) => { hover: boolean; pressed: boolean; focus: boolean; disabled: boolean };
   materialFor: (element: Element, face: SceneFace) => string; tokens: ReturnType<typeof reader>; reach: number;
 }): StrataInstrumentScene {
@@ -760,7 +850,11 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     profiles[key] ??= shape;
     return key;
   };
-  const use = (name: string) => { materials[name] ??= premiumMaterials[name] ?? faderMaterials[name as keyof typeof faderMaterials] ?? switchMaterials[name as keyof typeof switchMaterials] ?? meterMaterials[name as keyof typeof meterMaterials] ?? plateMaterials[name as keyof typeof plateMaterials]; return name; };
+  // A character on the page (`data-strata-character`) names the part materials; without one the premium tables stand.
+  const character = characterMaterials(path => tokens.raw(path), tokens.colour("glowOn"));
+  const springOf = (name: string, fallback: { stiffness: number; damping: number }) =>
+    ({ stiffness: tokens.number(`spring.${name}.stiffness`, fallback.stiffness), damping: tokens.number(`spring.${name}.damping`, fallback.damping) });
+  const use = (name: string) => { materials[name] ??= character?.[name] ?? premiumMaterials[name] ?? faderMaterials[name as keyof typeof faderMaterials] ?? switchMaterials[name as keyof typeof switchMaterials] ?? meterMaterials[name as keyof typeof meterMaterials] ?? plateMaterials[name as keyof typeof plateMaterials]; return name; };
   const scale = depthScale(tokens.number("depth", 0.5)), raised = tokens.number("elevation.raised", 3);
   const outer = panel.getBoundingClientRect(), stageBox = (options.stage ?? panel.parentElement ?? panel).getBoundingClientRect();
   const zoom = outer.width / Math.max(panel.offsetWidth, 1) || 1;
@@ -793,11 +887,12 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     const input = root.querySelector<HTMLInputElement>(".ug-knob__input"), skirt = root.querySelector(".ug-knob__skirt"), cap = root.querySelector(".ug-knob__cap");
     if (!input || !skirt || !cap || objects.length + entries.length >= 255) continue;
     // The pointer follows the value on its spring.
-    const t = follow(input, root.matches(".ug-knob--detented") ? knobSprings.detent : knobSprings.knob);
+    const t = follow(input, root.matches(".ug-knob--detented") ? springOf("detent", knobSprings.detent) : springOf("knob", knobSprings.knob));
     const state = context.states(skirt);
     const sweep = reader(root).number("knob.sweep", 270);
     objects.push(knobObject({ id: idOf(input, "knob"), box: rectWithin(input, panel), skirt: halfPx(rectWithin(skirt, panel)[2]), cap: halfPx(rectWithin(cap, panel)[2]), t, sweep, scale,
       state: { hover: state.hover, disabled: state.disabled }, relief: { height: raised, material: use("knobCap") },
+      ...(tokens.raw("knob.pointer.width") ? { pointerWidth: tokens.number("knob.pointer.width", 2.2) } : {}),
       ...(options.parts?.knobCap ? { customCap: options.parts.knobCap } : {}) }, profile));
     for (const name of ["knobSkirt", "knobChamfer", "knobInk"]) use(name);
     options.domes?.add(skirt); options.domes?.add(cap);
@@ -808,7 +903,7 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     const input = root.querySelector<HTMLInputElement>(".ug-fader__input"), slot = root.querySelector(".ug-fader__slot"), carriage = root.querySelector(".ug-fader__carriage");
     if (!input || !slot || !carriage || objects.length + entries.length >= 255) continue;
     // The carriage slides with the value on `spring.fader`; the slot stays a groove and the scale captured on the face.
-    const t = follow(input, faderSpring);
+    const t = follow(input, springOf("fader", faderSpring));
     const state = context.states(carriage), box = rectWithin(input, panel), slotBox = rectWithin(slot, panel);
     if (box[2] <= 0 || box[3] <= 0 || slotBox[2] <= 0 || slotBox[3] <= 0) continue;
     const vertical = !root.matches(".ug-fader--horizontal");
@@ -848,6 +943,18 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     objects.push(lampObject(input, profile) as unknown as InstrumentObject);
     Object.assign(materials, lampMaterialsOf(input));
     tallest = Math.max(tallest, lampHeight(info.kind, info.lens, scale));
+  }
+  // The indicator forms' lenses: a glass LED lens each, its emitter (index `info.index`) lit by the `--strata-lit` read this frame, so a chase, a
+  // hover preview or a value changes the emitter alone: no rebuild, no capture.
+  for (const lens of context.instrumentIndicators) {
+    const info = context.segmentInfos.get(lens);
+    if (!info || objects.length + entries.length >= 255 || info.box[2] <= 0 || info.box[3] <= 0) continue;
+    const state = context.states(lens), place = rectWithin(lens, panel);
+    const input = { id: idOf(info.control.id ? info.control : lens, "led"), kind: "led" as const, box: info.box, lens: info.lens, centre: [place[0] + place[2] / 2, place[1] + place[3] / 2] as [number, number], scale, role: info.role, emitter: info.index, opaque,
+      state: { hover: state.hover, disabled: state.disabled }, light, relief: { rect: place, height: raised } };
+    objects.push(lampObject(input, profile) as unknown as InstrumentObject);
+    Object.assign(materials, lampMaterialsOf(input));
+    tallest = Math.max(tallest, lampHeight("led", info.lens, scale));
   }
   // Meters and Gauges: a bar is a glass window and an LED lens per segment (lit by its emitter, so the parts never depend on the
   // value); a needle meter or gauge is a window, a needle turned by its value's place on its spring, and its hub (a gauge: a bezel).
@@ -920,14 +1027,56 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     objects.push(key);
     tallest = Math.max(tallest, height + 1);
   }
+  // Rotary selectors and push buttons (`gpu/instrument-rotary.ts`, `gpu/instrument-push.ts`). A rotary selector: the knob's parts, the pointer turned to the
+  // selected option on `spring.detent` (one detent per option). A push button: a polished bezel, a glass ring with its emitter, the cap on the
+  // CSS throw (`--strata-push-t`), and a latching button's LED.
+  const mine = found.get(panel);
+  for (const root of mine?.rotaries ?? []) {
+    const select = root.querySelector<HTMLSelectElement>(".ug-rotary__select"), skirt = root.querySelector(".ug-rotary__skirt"), cap = root.querySelector(".ug-rotary__cap");
+    if (!select || !skirt || !cap || objects.length + entries.length >= 255) continue;
+    const box = rectWithin(select, panel);
+    if (box[2] <= 0 || box[3] <= 0) continue;
+    const t = followSpring(options.springs, options.moving, select, rotaryFraction(Math.max(0, select.selectedIndex), select.options.length), knobSprings.detent, now, instant);
+    const state = context.states(skirt);
+    objects.push(knobObject({ id: idOf(select, "rotary"), box, skirt: rectWithin(skirt, panel)[2], cap: rectWithin(cap, panel)[2], t, sweep: reader(root).number("knob.sweep", 270), scale,
+      state: { hover: state.hover, disabled: state.disabled }, relief: { height: raised, material: use("knobCap") } }, profile));
+    for (const name of ["knobSkirt", "knobChamfer", "knobInk"]) use(name);
+    options.domes?.add(skirt); options.domes?.add(cap);
+    tallest = Math.max(tallest, (2.5 + 16 + 1.2) * scale);
+  }
+  for (const root of mine?.instrumentPushes ?? []) {
+    const info = mine!.pushes.get(root), bezel = root.querySelector<HTMLElement>(".ug-push__bezel"), ring = root.querySelector<HTMLElement>(".ug-push__ring"), cap = root.querySelector<HTMLElement>(".ug-push__cap");
+    const led = root.querySelector<HTMLElement>(".ug-push__led");
+    if (!info || !bezel || !ring || !cap || objects.length + entries.length >= 255) continue;
+    const box = rectWithin(root, panel), state = context.states(cap);
+    if (box[2] <= 0 || box[3] <= 0) continue;
+    const style = getComputedStyle(root), colour = hex(getComputedStyle(cap).backgroundColor), name = `key ${colour}`;
+    const disabled = root.matches(":disabled, [aria-disabled='true']");
+    // The throw's position as the CSS transition has it this frame, the same number the Relief and Objects levels follow.
+    const read = Number.parseFloat(style.getPropertyValue("--strata-push-t"));
+    const t = Math.min(1, Math.max(0, disabled ? 0 : Number.isFinite(read) ? read : pushPosition({ held: root.matches(":active:not([data-strata-down='false']), [data-strata-down='true']"), latched: root.getAttribute("aria-pressed") === "true", disabled })));
+    if (!materials[name] && Object.keys(materials).length >= 12) { entries.push({ face: "raised", rect: box, radius: radiusOf(root, box[2]), height: raised, material: context.materialFor(cap, "raised"), state }); continue; }
+    const layers = settings.materials[context.materialFor(cap, "raised")];
+    materials[name] ??= { base: { colour, roughness: layers?.base?.roughness ?? 0.45, metallic: layers?.base?.metallic ?? 0 }, coat: { ...layers?.coat } };
+    const input = { id: idOf(root, "push"), form: info.form, box, bezel: rectWithin(bezel, panel), ring: rectWithin(ring, panel), cap: rectWithin(cap, panel), ...(led && info.led !== undefined ? { led: rectWithin(led, panel) } : {}),
+      scale, role: info.role, emitters: { ring: info.ring, ...(info.led !== undefined ? { led: info.led } : {}) }, t, material: name, opaque,
+      state: { hover: state.hover, pressed: state.pressed, disabled: state.disabled }, light, relief: { height: raised, material: use("keyCap") } };
+    objects.push(pushObject(input, profile) as unknown as InstrumentObject);
+    Object.assign(materials, pushMaterialsOf(input));
+    for (const part of [root, bezel, ring, led]) if (part) options.domes?.add(part);
+    tallest = Math.max(tallest, pushHeight(scale));
+  }
   const elevation = (tokens.number("light.elevation", 41) * Math.PI) / 180;
   const reach = Math.min(128, Math.max(context.reach, Math.ceil(tallest / Math.tan(elevation) + 1.5 * tallest + 1)));
+  // The application's character names the room (`studio.*`, declared on the root only); without one the defaults stand.
+  const studio = Object.fromEntries((["key", "keyRadius", "fill", "front", "strip", "floor", "ceiling"] as const)
+    .flatMap(key => (tokens.raw(`studio.${key}`) ? [[key, tokens.number(`studio.${key}`)] as const] : []))) as Partial<StudioTokens>;
   return {
     ...settings, format: "strata-scene", version: 4, kind: "instrument",
     outset: { top: reach, right: reach, bottom: reach, left: reach },
     camera: { distance: Math.max(INSTRUMENT_CAMERA, tokens.number("camera.distance", 1600)),
       vanish: [(stageBox.left + stageBox.width / 2 - outer.left) / zoom, (stageBox.top + stageBox.height / 2 - outer.top) / zoom] },
-    environment: { source: "studio", strength: Math.min(3, Math.max(0, tokens.number("environment.intensity", 1))) },
+    environment: { source: "studio", strength: Math.min(3, Math.max(0, tokens.number("environment.intensity", 1))), ...(Object.keys(studio).length ? { studio } : {}) },
     light: { ...settings.light, intensity: 1.6 },
     materials, primitives: entries, profiles, objects,
     ...(context.lights ?? {}),
@@ -1161,8 +1310,8 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     if (sceneLevel()) presentBackdrop(); else { withdrawBackdrop(); endParticles(); }
     // A CSS transition (a knob sliding, a face settling) moves geometry with no event per frame: follow it until it
     // ends. Endless CSS animations (the spinner) stay in the captured content and need no new scene.
-    // A StatusLight's blink is a CSS animation of `--strata-lit`, which the scene reads: it needs a scene each frame while it runs.
-    if (gpu && (root.getAnimations({ subtree: true }).some(animation => (animation instanceof CSSTransition || (animation instanceof CSSAnimation && animation.animationName === "ug-blink")) && animation.playState === "running")
+    // A StatusLight's blink and a chase (a Spinner ring, an indeterminate bar) are CSS animations of `--strata-lit`, which the scene reads: they need a scene each frame while they run.
+    if (gpu && (root.getAnimations({ subtree: true }).some(animation => (animation instanceof CSSTransition || (animation instanceof CSSAnimation && /^ug-(blink|chase)/.test(animation.animationName))) && animation.playState === "running")
       || [...panels.values()].some(entry => entry.motion) || moving.size)) schedule();
   }
 
@@ -1334,7 +1483,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   for (const type of events) root.addEventListener(type, schedule, true);
   const mutation = new MutationObserver(schedule);
   mutation.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "disabled", "checked", "aria-checked",
-    "aria-current", "aria-disabled", "aria-pressed", "data-strata-lit", "data-strata-blink", "data-strata-colour", "aria-selected", "data-strata-closing", "data-strata-face", "data-strata-material", "data-strata-elevation", "data-strata-level", "data-strata-depth", "data-strata-theme", "data-strata-scope", "data-strata-preview", "hidden", "open", "value", "min", "max", "low", "high", "optimum"] });
+    "aria-current", "aria-disabled", "aria-pressed", "data-strata-lit", "data-strata-blink", "data-strata-colour", "aria-selected", "data-strata-closing", "data-strata-face", "data-strata-material", "data-strata-elevation", "data-strata-level", "data-strata-depth", "data-strata-theme", "data-strata-character", "data-strata-scope", "data-strata-preview", "hidden", "open", "value", "min", "max", "low", "high", "optimum"] });
   resize.observe(root);
   const poll = setInterval(schedule, options.poll ?? 500);
   forced.addEventListener("change", schedule);

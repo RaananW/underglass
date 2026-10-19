@@ -638,12 +638,16 @@ keep their Objects object, drawn as meshes of the same shapes. Lit parts give th
 | Switch `rocker` | `bezel`, 2 high | `paddle`: a two-facet plate (facets 12 / 4) on a `pivot`, with an accent flag on its On end | Tilt ±17.7° | Box 54 × 70 (the bezel stays 38 × 62: the tipped paddle's raised corners stand about 29 px at full depth and drift up to 12 px at the stage's edge, so a 38 × 62 box leaves them 6.7 px outside it). Paddle 28 × 50. Flag 18 × 9, 1.0 / 0.12. The paddle's shadow moves to its raised end |
 | Switch `bat` | `nut` Ø24, 3 high; `bushing` Ø14, 7 high | `lever` with its `ball`, on a `pivot` | Tilt ±40° | Box 48 × 92. Lever 40 long (it scales with depth, at most × 1.15), pivot 5 up, base r 3.4, neck r 2.7, ball r 5.6: about 28 px head-on, with its shadow |
 | Switch `wall` | `plate`, 3 high, radius 6 | `paddle`, with a lit dot near its On end | Tilt ±9° | Box 66 × 92, the plate 58 × 84 inside it (4 px for its edge and shadow). Paddle 30 × 54, 7 high, taper 0.6, chamfer 2, its top crowned 1.6 along its length (the reflection band moves as it tips). Dot 12 × 4, 1.0 / 0.12 |
-| PushButton `momentary` | `bezel` (r 27 → 22.6, 3.2 high); the lit ring, a `lens` (r 22.6 → 20.6), 1.0 / 0.22, in the bloom | `cap`, carrying its captured label | Travel 4, while held; a contact gap darkens round the cap as it goes in | Box 64 (room for the halo). Cap Ø40, 6 high, taper 0.6, chamfer 2 |
-| PushButton `latching` | As momentary, with an LED | `cap` | Travel 4 held, 1.8 latched | As momentary |
+| PushButton `momentary` | `bezel` (r 27 → 22.6, 3.2 high); the lit ring, a `lens` (r 22.6 → 20.6), 1.0 / 0.22, in the bloom | `cap`, carrying its captured label | Travel 4, while held; a contact gap darkens round the cap as it goes in | Box 64 (room for the halo). Cap Ø40, 6 high, taper 0.6, chamfer 2. As built for any label width: the cap a stadium `size.push` high (40) and as wide as its label, the box the cap + 24 (64 at medium), the bezel a stadium inset 5 and 4.4 wide, the ring a glass plate 0.5 on it of which the cap leaves 2.6 showing, the cap a body 5 high with the captured cap 1 on it. [Anatomy](components/button.md#11-push-button-form-momentary) |
+| PushButton `latching` | As momentary, with an LED | `cap` | Travel 4 held, 1.8 latched | As momentary, and the LED a Ø6 glass lens (an 8 px socket) on the bezel's top edge, centred, its own emitter. [Anatomy](components/toggle-button.md#11-push-button-form-latching) |
 | Lamp | `bezel`; `lens`, an emitter | None | The emitter turns on | Lens 28† ([I0.3](instrument-phase0.md#i03-emitters-and-the-pointer-light)); the box is the lens + 28 (56), 10 px each side of the bezel for the bloom halo. Bezel Ø lens + 8, 3 high, polished; the lens a glass plano-convex lens 0.4 of its diameter high over a socket printed on the face. [Anatomy](components/lamp.md) |
 | StatusLight | `lens`, an emitter | None | `blink`, at most 3 flashes a second | Lens 10† (I0.3); the box is the lens + 16 (26); a glass lens 0.35 of its diameter high over a printed socket, no bezel. `blink.slow`, `normal` and `fast` are 1,600, 1,000 and 400 ms a cycle (never under 334 ms). [Anatomy](components/status-light.md) |
 | Meter `bar` | `window` over the printed scale; `segment`s | Each segment an LED lens whose emitter is lit or dark | — | 16 `segments`† (I0.1). Box 286 × 58 (16 segments × 15 + 2 × `max(10 px, 1.6em)` + 8); segment lens Ø `size.meter` 10, 0.35 of its diameter high; window 2.4 high, a 2.2 px bevel. **The glass covers the scale, not the LEDs:** core's glass parts write no depth, and a window's exact pixels cover them where the capture is opaque. [Anatomy](components/meter.md) |
 | Meter `needle`, Gauge | `bezel` (a Gauge's ring), `window`, `dial` (printed) | `needle` on a `pivot` | Turn through `meter.sweep` (100°) or `gauge.sweep` (240°), with a damped spring (`spring.meter`, `spring.gauge`) | Needle meter box 264 × 152, gauge `size.gauge` (160) + 24 square. Needle 2.2 wide from a 12 px tail, standing 2.4 over the glass; hub Ø 12, 4 high; window 2.4 high, a 2.2 px bevel; a gauge's bezel 3 high, polished. [Meter](components/meter.md), [Gauge](components/gauge.md) |
+| Rating `lamps` | `socket` per lens, printed | `lens` per star's place, an emitter each: a glass LED lens 0.35 of its diameter high | — | Lens Ø `size.rating` 16† (12, 16, 20); the item is the lens + 16, at least 24 (32), the radio's box; no bezel. The emitter is the lamp's (`emitter.lamp.*`, 1,045 at 16). [Anatomy](components/rating.md#11-indicator-form-lamps) |
+| Badge `led` | The pill plate, captured; `socket` | `lens`, an emitter: the StatusLight's | — | Lens Ø `size.statusLight` 10; the pill is the lens + 16 tall (26), the lens 7 px in from its end. The object's box is the lens's own room (lens + 8 each side), so the bloom never reaches the text. [Anatomy](components/badge.md#11-indicator-form-led) |
+| ProgressBar `meter` | `window` (a groove); `socket` per segment | `segment`s, each an LED lens with an emitter | — | 20 `segments`† (4 to 32); lens Ø `size.meter` 10; the bar is the lens + 16 tall (26), segments 8 px in from each end; the `<progress>` is the box. Emitter `emitter.segment.*`. Indeterminate: a head with a quarter-lap trail at `chase.bar` 1,600 ms. [Anatomy](components/progress-bar.md#11-indicator-form-meter) |
+| Spinner `ring` | `socket` per lens | Eight `lens`es on a ring `size.spinner` 36† (24, 36, 52), each with an emitter | A head chasing clockwise at `chase.spinner` 900 ms, never over 3 flashes a second per lens | Lens Ø max(5, ring × 0.2) (7.2); the ring box is the ring + 16 (52). Emitter `emitter.led.*`. A CSS animation of `--strata-lit`, read each frame: no capture. [Anatomy](components/spinner.md#11-indicator-form-ring) |
 | RotarySelector | `collar`; the ring of positions, printed | As Knob | Turn to the selected option, one detent per option | As Knob |
 | Display | `bezel`, `window`; the text, a native `<output>` printed under the window | None | The backlight, an emitter† | Box 236 × 58 on the prototype. Bezel 7 wide, radius 8, 2.4 high, chamfer 2, polished, standing 0.5 px inside the box ([I0.4](instrument-phase0.md#i04-materials-over-the-capture)); window 2.4 high with a 2.6 bevel; finish band 0.3, horizon 0.25; the rest in Phase I4 |
 | Pad | `plinth` | `cap`: soft (`subsurface`), lit from below | Travel | Phase I5 |
@@ -1260,6 +1264,37 @@ on, lights the face at 0.3 of its strength; the numbers are those of the
 `@underglass/ui`'s token layer `characters/premium.json`, which lists its provisional values (the daggers) inside it;
 `createStrataTheme({ character: "premium" })` applies it, reports anything a character may not set, and returns the
 provisional tokens it set in `theme.character.provisional`.
+
+**Studio.** Recording-studio hardware: matte black anodised skirts and plates, densely brushed aluminium caps with
+near-black ink, a duller room, firmer springs, small exact indicators in amber, a dry sound set. It ships as
+`characters/studio.json`, a sparse layer that extends premium (`character.extends`) and sets only what differs;
+`data-strata-character="studio"` on the root or a scope selects it from the shipped stylesheet (`charactersToCss`:
+scope tokens on the scope, `studio.*` and `environment.intensity` on the root only). Values are provisional (†) until the
+owner's look sign-off; the decisions and what was judged are in [instrument-characters.md](instrument-characters.md).
+
+| Token | Premium | Studio† | Why |
+| --- | --- | --- | --- |
+| `material.roles.knobSkirt`, `rockerPlate`, `plate` | polished, metal / gunmetal | `anodised` (every theme) | Black anodised flanges and plates are the genre's look; the cap stays aluminium and so reads |
+| `material.roles.bezel` | polished | `gunmetal` | Dull rings, not mirror ones |
+| `instrument.material.metal` (caps) | #eff0f1, rough 0.3, brush 0.9, grain 0.15 | #d8dadd, rough 0.34, brush 1, grain 0.3 | Duller anodised silver, denser knurl and brush |
+| `instrument.material.anodised` | none | #2a2c31, metallic 0.85, rough 0.5, brush 0.6, grain 0.12 | Matte black that still takes the room |
+| `instrument.material.gunmetal` | #686b72, 0.36, grain 0.15 | #50535a, 0.42, brush 1, grain 0.2 | Darker, rougher |
+| `instrument.material.glass` | tint #d6ede6, absorption 0.03, dispersion 0.2 | tint #c4cacf, 0.07, 0.1 | Smoked lenses, less rainbow |
+| `instrument.ink.cap` | #26282c | #0e0f11 | Pointer and grips near black on aluminium |
+| `colour.glowOn`, `pointerLight.colour` | #ff9228, #fff2e0 | #ffb020, #ffdfb8 | Amber lamps; a warmer pointer light |
+| `studio.key / keyRadius / fill / front / strip / floor / ceiling` | 12 / 0.24 / 1.2 / 0.12 / 2.5 / 0.03 / 0.25 | 9 / 0.18 / 0.8 / 0.09 / 1.6 / 0.03 / 0.18 | A duller room with a tighter softbox |
+| `environment.intensity` | 1 | 0.85 | Duller environment |
+| `emitter.lamp.radius / strength`, `emitter.led.radius / strength` | 6 / 3200, 6 / 520 | 5 / 3000, 5 / 640 | Small exact indicators; LEDs brighter on dark |
+| `knob.pointer.width` | 2.2 px | 1.6 px | A fine engraved line |
+| `spring.knob / fader` | 420 / 41 | 560 / 47 | Firmer, critically damped |
+| `spring.detent` | 900 / 42 | 1400 / 56 | Deeper, crisper detents |
+| `spring.slide / rocker / bat / wall / button` | 600/49, 1200/58, 1400/45, 1200/58, 1600/80 | 800/57, 1600/68, 1800/55, 1600/68, 2000/89 | Firmer throws |
+| `spring.meter / gauge` | 360/28, 160/20 | 480/38, 220/28 | Less overshoot |
+| `feedback.click / tick / thunk / snap` (pitch Hz, decay ms, noise) | 2400/4/0.6, 3200/2/0.3, 140/18/0.25, 1800/6/0.75 | 2800/3/0.5, 3600/1.6/0.2, 120/12/0.35, 2000/4.5/0.8 | Dry, tight, mechanical |
+| `form.switch` | `slide` | `rocker` | Console rockers; recorded, not yet read by the components |
+
+A character may not set `light.*`, so studio's lower, warmer key is the application's choice
+(`createStrataTheme({ character: "studio", light: { elevation: 33 } })`), not the character's.
 
 ## 20. Feedback
 

@@ -17,9 +17,12 @@
  * - Faders: `attachStrataFaders` gives every `.ug-fader` its carriage, wheel, mark and reset behaviour (anatomy page `fader.md`);
  * - Carousels: `attachStrataCarousels` runs every `.ug-carousel`'s buttons and reports `strata-slide`;
  * - Menus: `attachStrataMenus` runs the Menu Button pattern's keys, and reports `strata-select` from a chosen item;
+ * - Push buttons: `attachStrataPushButtons` holds a `form="momentary"` or `"latching"` button down (`data-strata-down`) while it is pressed and plays opt-in feedback (anatomy pages `button.md`, `toggle-button.md`);
+ * - Rotary selectors: `attachStrataRotarySelectors` gives every `.ug-rotary` its detented pointer, wheel and tap behaviour (anatomy page `rotary-selector.md`);
  * - Knobs: `attachStrataKnobs` gives every `.ug-knob` its round pointer, wheel and reset behaviour (anatomy page `knob.md`);
  * - Lamps: `attachStrataLamps` lights a momentary `.ug-lamp` while it is pressed and plays opt-in feedback (anatomy page `lamp.md`);
  * - Meters and Gauges: `attachStrataMeters` keeps every `.ug-meter`'s drawn value, zones, `aria-valuetext` and held peak in step with its native `<meter>` (anatomy pages `meter.md`, `gauge.md`);
+ * - Progress bars: `attachStrataProgress` keeps every segment-meter `.ug-progress-bar`'s drawn value in step with its native `<progress>` (anatomy page `progress-bar.md`);
  * - Toolbars: the first time focus enters one, its controls get a roving tabindex (one tab stop), and the arrow keys,
  *   Home and End move between them;
  * - Tabs: a click on a tab selects it, and the arrow keys, Home and End move between tabs and select them (only move,
@@ -34,11 +37,14 @@ import { attachStrataSwitches } from "./switch.ts";
 import { attachStrataPopovers } from "./popover.ts";
 import { attachStrataTrees } from "./tree.ts";
 import { attachStrataFaders } from "./fader.ts";
+import { attachStrataPushButtons } from "./push-button.ts";
+import { attachStrataRotarySelectors } from "./rotary-selector.ts";
 import { attachStrataCarousels } from "./carousel.ts";
 import { attachStrataMenus } from "./menu.ts";
 import { attachStrataKnobs } from "./knob.ts";
 import { attachStrataLamps } from "./lamp.ts";
 import { attachStrataMeters } from "./meter.ts";
+import { attachStrataProgress } from "./progress.ts";
 
 const attached = new WeakMap<Document | HTMLElement, () => void>();
 
@@ -70,6 +76,8 @@ export function attachStrata(root: Document | HTMLElement = document): () => voi
   applyIndeterminate(root);
   attachStrataTooltips(root instanceof Document ? root : root.ownerDocument);
   attachStrataSwitches(root instanceof Document ? root : root.ownerDocument);
+  attachStrataPushButtons(root instanceof Document ? root : root.ownerDocument);
+  attachStrataRotarySelectors(root instanceof Document ? root : root.ownerDocument);
   attachStrataPopovers(root instanceof Document ? root : root.ownerDocument);
   attachStrataTrees(root instanceof Document ? root : root.ownerDocument);
   attachStrataFaders(root instanceof Document ? root : root.ownerDocument);
@@ -78,6 +86,7 @@ export function attachStrata(root: Document | HTMLElement = document): () => voi
   attachStrataKnobs(root instanceof Document ? root : root.ownerDocument);
   attachStrataLamps(root instanceof Document ? root : root.ownerDocument);
   attachStrataMeters(root instanceof Document ? root : root.ownerDocument);
+  attachStrataProgress(root instanceof Document ? root : root.ownerDocument);
   const existing = attached.get(root);
   if (existing) return existing;
   const block = (event: Event) => {

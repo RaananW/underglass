@@ -2,13 +2,15 @@
  * Characters (design language section 19): a character is a bundle of Instrument tokens that gives the hardware its
  * proportions, finish and feel. It is a validated theme layer over the defaults, so an application's theme still
  * overrides any of its tokens. The first is `premium` (`characters/premium.json`, W3C Design Tokens), whose provisional
- * values are listed inside the file so the runtime can report them in development.
+ * values are listed inside the file so the runtime can report them in development; `studio` (`characters/studio.json`) is
+ * a sparse layer that sets only what differs from it.
  *
- * A character may set its own part, spring, emitter and material tokens, the `glowOn` and `glowOff` colours, and (only
+ * A character may set its own part, spring, emitter and material tokens, its sound set (`feedback.<sound>.*`), the `glowOn` and `glowOff` colours, and (only
  * as the application's character) the studio and the environment. It may not set the light, the elevation order, any
  * other colour role, focus, target size, the guard or any invariant: such values are reported and not applied.
  */
 import premium from "./characters/premium.json" with { type: "json" };
+import studio from "./characters/studio.json" with { type: "json" };
 import { flatten, namespace, numeric, valueOf, type ResolveOptions, type Token, type TokenGroup, type TokenNode } from "./model.ts";
 import { sceneSettings } from "./scene.ts";
 import type { InstrumentRecipe, InstrumentScene, StudioTokens } from "./instrument.ts";
@@ -22,6 +24,8 @@ export interface CharacterInfo {
   source?: string;
   /** Token paths, or path prefixes, whose values are still provisional (`instrument-spec-notes.md`). */
   provisional: string[];
+  /** The built-in character this one is laid over (`studio` over `premium`): it sets only what differs. */
+  extends?: string;
 }
 /** A character: its metadata and its token layer. */
 export interface StrataCharacter extends CharacterInfo {
@@ -29,8 +33,8 @@ export interface StrataCharacter extends CharacterInfo {
 }
 
 /** The built-in characters by name. */
-const builtIn: Record<string, TokenGroup> = { premium: premium as TokenGroup };
-/** The names of the built-in characters; `premium` is the default. */
+const builtIn: Record<string, TokenGroup> = { premium: premium as TokenGroup, studio: studio as TokenGroup };
+/** The names of the built-in characters (`premium`, `studio`); `premium` is the default. */
 export const characterNames = Object.keys(builtIn);
 export const defaultCharacter = "premium";
 
@@ -40,7 +44,7 @@ export function characterOf(input: string | TokenGroup): StrataCharacter | Issue
   if (!tokens) return { path: "character", message: `${String(input)} is not a Strata character (${characterNames.join(", ")})` };
   const info = (tokens.$extensions?.[namespace] as { character?: Partial<CharacterInfo> } | undefined)?.character;
   if (!info || typeof info.name !== "string") return { path: "character", message: "has no character metadata ($extensions.dev.underglass.strata.character.name)" };
-  return { name: info.name, version: info.version ?? 1, status: info.status ?? "draft", ...(info.source ? { source: info.source } : {}),
+  return { name: info.name, version: info.version ?? 1, status: info.status ?? "draft", ...(info.source ? { source: info.source } : {}), ...(info.extends ? { extends: info.extends } : {}),
     provisional: Array.isArray(info.provisional) ? info.provisional.map(String) : [], tokens };
 }
 const isIssue = (value: StrataCharacter | Issue): value is Issue => "message" in value;
@@ -53,7 +57,8 @@ function forbidden(path: string, base: Token | undefined, scoped: boolean): stri
   if (/^elevation\./.test(path)) return "is part of the elevation order: a character may not set it";
   if (/^colour\./.test(path) && !characterColours.includes(path.slice(7))) return "is a colour role: a character sets only glowOn and glowOff";
   if (/^(focus|target|interior|outline)\./.test(path)) return "keeps an invariant (focus, target size, the guard): a character may not set it";
-  if (/^(post|feedback|motion)\./.test(path)) return "is not a character's to set (the post chain, feedback, reduced motion)";
+  // A character's sound set is its own (section 20); whether feedback is on (`feedback.sound`, `feedback.haptics`) never is.
+  if (/^(post|feedback|motion)\./.test(path) && !/^feedback\.(click|tick|thunk|snap)\./.test(path)) return "is not a character's to set (the post chain, whether feedback is on, reduced motion)";
   if (base?.meta.invariant) return "is an invariant: a character may not set it";
   if (scoped && /^(environment|studio)\./.test(path)) return "is application only: a scoped character's value is reported and not applied";
   return undefined;
@@ -89,10 +94,16 @@ export interface AppliedCharacter {
  * subtree, whose studio and environment are reported too.
  */
 export function applyCharacter(source: TokenGroup, input: string | TokenGroup, { scoped = false }: { scoped?: boolean } = {}): AppliedCharacter {
-  const result = structuredClone(source), issues: Issue[] = [], applied: string[] = [];
+  let result = structuredClone(source);
+  const issues: Issue[] = [], applied: string[] = [];
   const character = characterOf(input);
   if (isIssue(character)) return { source: result, issues: [character], applied };
-  const base = new Map(flatten(source).map(token => [token.path, token]));
+  // A character that extends another is laid over it: the parent first, then only what it sets.
+  if (character.extends) {
+    const parent = applyCharacter(source, character.extends, { scoped });
+    result = parent.source; issues.push(...parent.issues); applied.push(...parent.applied);
+  }
+  const base = new Map(flatten(result).map(token => [token.path, token]));
   for (const token of flatten(character.tokens)) {
     const existing = base.get(token.path), reason = forbidden(token.path, existing, scoped);
     if (reason) { issues.push({ path: token.path, message: `${reason} (character ${character.name})` }); continue; }
@@ -113,7 +124,7 @@ export function applyCharacter(source: TokenGroup, input: string | TokenGroup, {
         issues.push({ path: token.path, message: `${value} is outside the token's range ${kept.min ?? "−∞"}–${kept.max ?? "∞"} (character ${character.name})` });
       }
     } else slot.parent[slot.key] = structuredClone({ ...node, ...(Object.keys(meta).length ? { $extensions: { [namespace]: meta } } : {}) });
-    applied.push(token.path);
+    if (!applied.includes(token.path)) applied.push(token.path);
   }
   return { source: result, character, issues, applied };
 }
