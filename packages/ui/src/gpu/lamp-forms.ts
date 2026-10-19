@@ -15,6 +15,7 @@
 import type { SceneEntry, SceneFace, SceneState } from "../tokens/scene.ts";
 import { fittedHeight } from "../shared/switch-forms.ts";
 import { LAMP_BEZEL, lensColours, mixHex } from "../shared/lamp.ts";
+import { INDICATOR_LENS } from "./indicator-forms.ts";
 
 type Box = [number, number, number, number];
 
@@ -57,7 +58,7 @@ export function lensColourAt(role: string, lit: number): string {
  * handles it as usual). A part whose box is empty gives no entries.
  */
 export function lampFormEntries(element: Element, context: LampFormContext): SceneEntry[] | undefined {
-  const isBezel = element.matches(".ug-lamp__bezel"), isLens = element.matches(".ug-lamp__lens, .ug-status-light__lens, .ug-meter__segment");
+  const isBezel = element.matches(".ug-lamp__bezel"), isLens = element.matches(`.ug-lamp__lens, .ug-status-light__lens, .ug-meter__segment, ${INDICATOR_LENS}`);
   if (!isBezel && !isLens) return undefined;
   const [x, y, width, height] = context.rect, box = context.box;
   if (width <= 0.25 || height <= 0.25) return [];

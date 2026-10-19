@@ -1,0 +1,25 @@
+---
+/**
+ * Strata Astro RotarySelector check page (`/rotary-selector/`): `[data-contract="rotary-selector.md"]` renders the anatomy page's markup
+ * example with `@underglass/ui/astro`, and `main` holds live selectors `tests/browser/ui-rotary-selector-astro.test.mjs` drives with real
+ * input. Server-rendered HTML; the only script is the components' own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { RotarySelector } from "@underglass/ui/astro";
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro RotarySelector check</title>
+</head>
+<body>
+  <div data-contract="rotary-selector.md" hidden><RotarySelector label="Filter" id="filter" name="filter" options={[{ value: "lp", label: "LP" }, { value: "hp", label: "HP" }, { value: "bp", label: "BP", disabled: true }]} value="hp" /></div>
+  <main>
+    <form class="ug-panel" data-strata-face="raised" aria-label="Selectors" id="selectors" style="display: flex; flex-wrap: wrap; gap: 20px">
+      <RotarySelector label="Mode" id="mode" name="mode" options={[{ value: "off", label: "Off" }, { value: "low", label: "Low" }, { value: "mid", label: "Mid" }, { value: "high", label: "High" }]} value="low" class="extra" style="margin-right: 4px" data-testid="mode" />
+      <RotarySelector label="Tone" id="tone" name="tone" options={[{ value: "warm", label: "Warm" }, { value: "flat", label: "Flat" }, { value: "bright", label: "Bright" }]} value="flat" />
+    </form>
+  </main>
+</body>
+</html>

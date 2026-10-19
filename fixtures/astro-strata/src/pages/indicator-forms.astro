@@ -1,0 +1,42 @@
+---
+/**
+ * Strata Astro indicator forms check page (`/indicator-forms/`): `[data-contract]` renders the anatomy pages' indicator examples
+ * (`rating.md`, `badge.md`, `progress-bar.md`, `spinner.md`, *Indicator form*) with `@underglass/ui/astro`, and `main` holds live
+ * controls `tests/browser/ui-indicator-forms-astro.test.mjs` drives. Server-rendered HTML; the only script is the components' own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { Badge, ProgressBar, Rating, Spinner } from "@underglass/ui/astro";
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro indicator forms check</title>
+</head>
+<body>
+  <div data-contract="rating:lamps" hidden><Rating form="lamps" label="Your rating" name="score" max={3} value={2} /></div>
+  <div data-contract="badge:led" hidden><Badge form="led" variant="success">Active</Badge></div>
+  <div data-contract="progress:meter" hidden><label for="upload">Upload</label><ProgressBar form="meter" segments={4} id="upload" value={40} max={100} /></div>
+  <div data-contract="spinner:ring" hidden><Spinner form="ring" label="Loading" /></div>
+  <main>
+    <section class="ug-panel" data-strata-face="raised" aria-label="Indicator forms">
+      <form id="owner-form"></form>
+      <Rating form="lamps" id="rate" label="Quality" name="quality" value={3} class="extra" style="margin-right: 4px" data-testid="rate" size="small" />
+      <Rating form="lamps" colour="success" id="rate-free" label="Free" name="free" value={2} />
+      <Rating form="lamps" id="rate-off" label="Off" name="off" value={4} disabled />
+      <Rating form="owner-form" id="rate-owned" label="Owned" name="owned" />
+      <Rating id="rate-plain" label="Plain" name="plain" />
+      <Badge id="b-count" form="led" count={7} />
+      <Badge id="b-ok" form="led" variant="success" class="extra" style="margin-right: 4px" data-testid="badge">Active</Badge>
+      <Badge id="b-big" form="led" variant="danger" count={120} />
+      <Badge id="b-flush" form="flush" variant="info">Plain</Badge>
+      <ProgressBar id="p-live" form="meter" segments={10} colour="info" aria-label="Upload" value={40} class="extra" style="margin-right: 4px" data-testid="bar" />
+      <ProgressBar id="p-wait" form="meter" aria-label="Waiting" />
+      <ProgressBar id="p-plain" aria-label="Plain" value={20} />
+      <Spinner id="s-ring" form="ring" label="Loading results" showLabel colour="warning" class="extra" style="margin-right: 4px" data-testid="ring" />
+      <Spinner id="s-small" form="ring" label="Saving" size="small" />
+      <Spinner id="s-flush" form="flush" label="Plain" />
+    </section>
+  </main>
+</body>
+</html>

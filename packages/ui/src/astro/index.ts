@@ -45,6 +45,7 @@ export { default as Pagination } from "./Pagination.astro";
 export { default as Panel } from "./Panel.astro";
 export { default as ProgressBar } from "./ProgressBar.astro";
 export { default as RadioGroup } from "./RadioGroup.astro";
+export { default as RotarySelector } from "./RotarySelector.astro";
 export { default as Select } from "./Select.astro";
 export { default as Skeleton } from "./Skeleton.astro";
 export { default as Slider } from "./Slider.astro";

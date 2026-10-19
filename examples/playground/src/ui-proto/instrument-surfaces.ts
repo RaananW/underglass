@@ -80,8 +80,8 @@ const glassVertex = /* wgsl */ `struct VertexOutput { @builtin(position) positio
   out.normal = (world * vec4<f32>(input.normal, 0.0)).xyz;
   return out;
 }`;
-const s = studioTokens;
-const glassFragment = /* wgsl */ `struct VertexOutput { @builtin(position) position: vec4<f32>, @location(0) worldPos: vec3<f32>, @location(1) normal: vec3<f32> };
+// The room is the character's (`studio.*`): the shader is written when a layer's surfaces are built, not when the module loads.
+const glassFragmentFor = (s = studioTokens) => /* wgsl */ `struct VertexOutput { @builtin(position) position: vec4<f32>, @location(0) worldPos: vec3<f32>, @location(1) normal: vec3<f32> };
 fn srgbToLinear(c: vec3<f32>) -> vec3<f32> { return select(pow((c + 0.055) / 1.055, vec3<f32>(2.4)), c / 12.92, c <= vec3<f32>(0.04045)); }
 fn linearToSrgb(c: vec3<f32>) -> vec3<f32> { let x = clamp(c, vec3<f32>(0.0), vec3<f32>(1.0)); return select(1.055 * pow(x, vec3<f32>(1.0 / 2.4)) - 0.055, x * 12.92, x <= vec3<f32>(0.0031308)); }
 fn ramp(e0: f32, e1: f32, x: f32) -> f32 { let k = clamp((x - e0) / (e1 - e0), 0.0, 1.0); return k * k * (3.0 - 2.0 * k); }
@@ -233,7 +233,7 @@ let cubemapReady: Promise<void> | undefined;
 /** I0.4's studio `.hdr`, generated once per key light. */
 const studioFiles = new Map<string, Uint8Array>();
 async function loadStudio(scene: InstrumentLayer["scene"], light: KeyLight) {
-  const key = `${light.azimuth},${light.elevation}`;
+  const key = `${light.azimuth},${light.elevation},${JSON.stringify(studioTokens)}`;
   if (!studioFiles.has(key)) studioFiles.set(key, studioHdr(light));
   const url = URL.createObjectURL(new Blob([studioFiles.get(key)! as BlobPart], { type: "image/vnd.radiance" }));
   try { return await loadHdrEnvironment(scene, url, { faceSize: 256, skipSkybox: true, skipGround: true }); } finally { URL.revokeObjectURL(url); }
@@ -290,7 +290,7 @@ export async function createSurfaces(layer: InstrumentLayer, options: { light: K
   const [, ly] = towardsLight(options.light);
   const glass: LayerSurfaces["glass"] = (name, glassOptions) => {
     const skirt = glassOptions.skirt, at = skirt ? layer.world(skirt.x, skirt.y) : [0, 0];
-    const material = createShaderMaterial({ name, vertexSource: glassVertex, fragmentSource: glassFragment, attributes: ["position", "normal"],
+    const material = createShaderMaterial({ name, vertexSource: glassVertex, fragmentSource: glassFragmentFor(), attributes: ["position", "normal"],
       uniforms: ["world", "view", "projection",
         { name: "origin", type: "vec4<f32>", defaultValue: [0, 0, 0, 0] },
         { name: "stage", type: "vec4<f32>", defaultValue: [options.stage.width / 2, options.stage.height / 2, dpr, 0] },

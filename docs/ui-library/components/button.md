@@ -109,3 +109,57 @@ below `target.min` (24) in either dimension. A flex row never squeezes a button 
   snapshot equal in DOM and GPU modes; focus ring visible in decoded pixels; contrast of the label on the lit
   top at `interior.max`.
 - **Parity:** Relief and CSS within the P0.6 budget at rest, hover and pressed.
+
+## 11. Push-button form: `momentary`
+
+Instrument, wave 2 ([plan](../instrument.md#new-components)). `form="momentary"` draws the same native button as a **push
+button**: a machined cap on a polished bezel, a lit ring between them that lights while the button is held, and the label on
+the cap. Without `form` the button is the key above; any other `form` string is the native `form` attribute (the id of the
+button's form owner), as before. `colour` names the ring's role (`glowOn` amber by default, or `accent`, `success`,
+`warning`, `danger`, `info`); `variant` still picks the cap's colour (`accent` and `danger` caps). The native `<button>` is the
+control, its box the hit area, and the object is decoration inside it.
+
+| Part | Shape | Height at 50% | Moves |
+| --- | --- | --- | --- |
+| Box (the native button) | The cap plus 24 px each way (64 at `size.push` 40), wider with the label | 0 | No |
+| Bezel | A stadium inset 5 px for the bloom's halo, the cap + 14 high, 4.4 px of polished metal round the ring | Relief: 3; Instrument: 3.2 | No |
+| Socket, ring | The dark band under the ring (printed on the face) and the lit ring over it, the cap + 5.2 high; the cap leaves 2.6 px of it showing (a 2 px ring and a 0.6 px gap) | Instrument: 0.5 on the bezel | The ring is lit 0 to 1 by `--strata-lit` |
+| Cap | A pill as tall as `size.push` (32, 40 or 48), 12 px of print each side, carrying the icon and the label | Relief: 3; Instrument: 6, taper 0.6 | Down `pushButton.travel.held` (4) while held |
+
+- **Lit ring.** The ring is lit (`--strata-lit: 1`) while the button is held (the pointer down on it, or Enter or Space down) and unlit
+  otherwise; a disabled or `aria-disabled` button is never held, never lit and never moves. The light is never the only cue: the
+  cap goes down as well, and the click is the native one.
+- **At every GPU level** the ring is an emitter (`emitter.pushButton.*`: reach 4 cap diameters, height 0.3, strength 2,400 for
+  a 40 px cap): the panel takes a version 4 scene with its `emitters`, the `protected` rects of its text and a `feather`, so core's face
+  pool lights the page round the ring within the contrast guard (the label stays within `interior.max`), and a press is a uniform write
+  with no capture. Relief draws the bezel and the cap as raised faces, Objects as slabs and a key that travels `object.keyTravel`.
+- **At the Instrument level** the button is `instrument-push.ts`'s object: a polished `bezel`, the ring a glass `lens` plate with its
+  emitter (dark glass unlit, glowing and blooming lit), and a `plinth` body in the cap's colour with the captured `cap` on it, both
+  travelling 4 px (× 0.6, 1, 1.6 with depth) along `t`, which follows the CSS throw `--strata-push-t` on `spring.button` (1,600 /
+  80, critically damped). The label is the capture itself (a captured cap), so it is exact. Bezel, ring and the CSS paint of the
+  object are hidden while the parts draw them; the cap keeps its paint, which the captured cap shows, and its CSS motion is held,
+  so a press repaints nothing. Under `prefers-reduced-transparency` the ring is opaque lacquer.
+- **Preferences.** `prefers-reduced-motion`: the ring and the cap change at once. `prefers-contrast: more`: emitters off, the ring flat
+  colour, edges in `colour.text`. `forced-colors: active`: `Canvas` bezel and ring with `ButtonText` borders, a `Highlight` ring while
+  held, a `ButtonFace` cap, a `Highlight` focus ring, `GrayText` disabled. Reflow: the cap grows with the label (it wraps at 320 px and
+  200% text); the bezel and ring follow it.
+
+```html
+<button type="button" class="ug-button ug-push" data-strata-form="momentary" data-strata-colour="danger">
+  <span class="ug-push__object" aria-hidden="true">
+    <span class="ug-push__bezel" data-strata-face="raised"></span>
+    <span class="ug-push__socket"></span>
+    <span class="ug-push__ring"></span>
+  </span>
+  <span class="ug-push__cap" data-strata-face="raised"><span class="ug-button__label">Record</span></span>
+</button>
+```
+
+- The `<button>` is the boundary: refs, `class` and `style` reach it, and `data-strata-colour` is the ring's role. The plain-DOM
+  behaviour (`attachStrataPushButtons`, loaded by `attachStrata` and by the bindings) keeps `data-strata-down="true"` on the button from the
+  pointer or key going down to the pointer going up anywhere, the key going up, the button losing focus or the page being hidden; with no
+  script the same look comes from `:active`.
+- Keys: Enter and Space activate, as on any button; both hold the ring lit while down. Nothing about the keys changes.
+- **Feedback:** the opt-in `click` plays as the button goes down (one per press, by the visitor's own gesture for the pulse); off by default.
+- **Tests:** `ui-push-button.test.mjs` (plain DOM, accessibility, GPU at Relief, Objects and Instrument, feedback, touch and reflow),
+  `ui-push-button-bindings.test.mjs`, `ui-push-button-astro.test.mjs`, and the unit tests in `strata-rotary-push.unit.test.mjs`.

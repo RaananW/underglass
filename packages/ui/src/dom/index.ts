@@ -22,6 +22,8 @@ export { attachStrataPopovers, placeStrataPopover } from "./popover.ts";
 export { attachStrataTrees, rovingStrataTree, strataTreeAction, strataTreeTabStop, visibleStrataTreeItems } from "./tree.ts";
 export type { StrataTreeAction } from "./tree.ts";
 export { attachStrataFaders, syncStrataFader } from "./fader.ts";
+export { attachStrataPushButtons } from "./push-button.ts";
+export { attachStrataRotarySelectors, syncStrataRotarySelector } from "./rotary-selector.ts";
 export { attachStrataCarousels, showStrataSlide, strataSlideIndex, strataSlideTarget } from "./carousel.ts";
 export { attachStrataMenus, strataMenuTarget } from "./menu.ts";
 export { attachStrataKnobs, syncStrataKnob } from "./knob.ts";
@@ -30,6 +32,7 @@ export { attachStrataJogWheels, flingStrataJogWheel, liveStrataJog, syncStrataJo
 export { attachStrataPatchPoints } from "./patch-point.ts";
 export { attachStrataMeters, driveStrataMeter, liveStrataMeter, releaseStrataMeter, syncStrataMeter } from "./meter.ts";
 export { attachStrataGauges, syncStrataGauge } from "./gauge.ts";
+export { attachStrataProgress, syncStrataProgress } from "./progress.ts";
 export { setStrataStatusLight } from "./status-light.ts";
 export type { StatusLightUpdate } from "./status-light.ts";
 export { showStrataToast } from "./toast.ts";

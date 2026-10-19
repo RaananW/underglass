@@ -22,13 +22,14 @@ import "@underglass/ui/css";
 import { enableErrorDecoding, type Screenshot } from "@babylonjs/lite";
 import { attachStrataGpu, type StrataGpu } from "@underglass/ui/gpu";
 import { contrast, sceneSettings, strataTokens } from "@underglass/ui/tokens";
+import { studioTokens } from "../ui-probes/instrument-environment.ts";
 import { startInstrument } from "../ui-probes/instrument-harness.ts";
 import type { Point } from "../ui-probes/common.ts";
 import { cssVariables } from "./instrument-css.ts";
 import { attachFader, attachKnob, attachWheel } from "./instrument-behaviour.ts";
 import { displayText, initialState, panelMarkup, type ControlState, type Level } from "./instrument-markup.ts";
 import { createInstrumentMeshes } from "./instrument-mesh.ts";
-import { defaults, materialNames, materials, parseValues, queryOf, resolveTokens, type TuningValues } from "./instrument-tokens.ts";
+import { characterLook, defaults, materialNames, materials, parseValues, queryOf, resolveTokens, type CharacterName, type TuningValues } from "./instrument-tokens.ts";
 
 // `?debug`: Lite throws numeric error codes; decode them into messages.
 if (new URLSearchParams(location.search).has("debug")) enableErrorDecoding();
@@ -39,6 +40,8 @@ const form = document.getElementById("tuning") as HTMLFormElement;
 
 let values = parseValues(location.search);
 let tokens = resolveTokens(values);
+// The character's room (`studio.*`) is the probe's studio tokens: set before any layer builds its surfaces.
+Object.assign(studioTokens, tokens.character.room);
 const state: ControlState = { ...initialState };
 const settings = () => sceneSettings(strataTokens, { theme: values.theme, depth: values.depth / 100 });
 const rgbOf = (hex: string) => [1, 3, 5].map(index => Number.parseInt(hex.slice(index, index + 2), 16)) as [number, number, number];
@@ -47,6 +50,8 @@ const rgbOf = (hex: string) => [1, 3, 5].map(index => Number.parseInt(hex.slice(
 function applyStyle() {
   const root = document.documentElement;
   root.setAttribute("data-strata-theme", values.theme);
+  // Premium is the default and needs no attribute; the Objects copy follows any other from the stylesheet's blocks.
+  if (values.character === "premium") root.removeAttribute("data-strata-character"); else root.setAttribute("data-strata-character", values.character);
   root.style.setProperty("--strata-depth", String(values.depth / 100));
   const stage = rgbOf(settings().backdrop), text = values.theme === "dark" ? [232, 234, 240] as const : [28, 30, 36] as const;
   for (const [name, value] of Object.entries(cssVariables(tokens, stage, text))) root.style.setProperty(name, value);
@@ -208,6 +213,7 @@ function set(next: Partial<TuningValues>) {
   applying = applying.then(async () => {
     values = { ...values, ...next };
     tokens = resolveTokens(values);
+    Object.assign(studioTokens, tokens.character.room);
     history.replaceState(null, "", `${location.pathname}${queryOf(values)}`);
     showValues();
     applyStyle();
@@ -230,6 +236,8 @@ form.addEventListener("input", event => {
   if (!input.name) return;
   const value = input instanceof HTMLSelectElement ? input.value : input.type === "checkbox" ? (input.checked ? 1 : 0) : Number(input.value);
   if (input.name === "pointer") { values = { ...values, pointer: value as number }; history.replaceState(null, "", `${location.pathname}${queryOf(values)}`); meshes.setPointer({ enabled: value === 1 }); return; }
+  // A character brings its roles' materials and the room's strength; the bar can still tune them after.
+  if (input.name === "character") { void set({ character: value as CharacterName, ...characterLook(value as CharacterName, values.theme).choose }); return; }
   void set({ [input.name]: value } as Partial<TuningValues>);
 });
 document.getElementById("t-reset")!.addEventListener("click", () => void set({ ...defaults }));
