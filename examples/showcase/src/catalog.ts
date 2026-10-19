@@ -132,6 +132,19 @@ export const examples = [
       ],
       css: "Strata's CSS presentation is the honest baseline, and close to Relief: gradients, inset and drop shadows from the same light tokens. It is what you see without Underglass, with forced colours or with GPU off. CSS can't shade a face per pixel, draw a key that travels into a bezel with a contact shadow, or light controls from an environment.",
     } },
+  { id: "instrument", number: "10", title: "Instrument gallery", category: "Design system",
+    summary: "Every Instrument component as hardware: knobs, faders, switches, lamps, meters, a jog wheel and a patch bay, plus a synthesiser voice that is wired like the real thing.",
+    detail: "Pick a presentation level, a theme and a character, carry the pointer as a light, and browse the catalogue by group. The Synthesiser tab is a whole panel of real controls wired to each other: the knobs and faders set the meter, a patch jack opens the filter and lights its LED, the wheel loads a patch. The controls are native inputs, selects, meters and buttons.",
+    accent: "instrument", tags: ["Instrument", "Knobs", "Synthesiser"],
+    gpu: {
+      headline: "Machined parts, lit by one key light and by the lamps themselves.",
+      points: [
+        "Instrument: knobs, faders, switch levers and the jog wheel are real meshes (a chamfered cap, a carriage, a lever, a bearing collar) that turn, slide and tip on springs; the native control still takes every click and key.",
+        "Light: every lamp, LED, lit ring, display backlight and meter segment is an emitter that lights the faceplate, the parts beside it and the wall past the panel's edge, within the contrast guard. The pointer is one more, carried by the visitor.",
+        "Characters: studio is the same markup with other proportions, finishes and springs, one attribute away.",
+      ],
+      css: "The CSS presentation is the honest baseline: the same tokens draw gradients, inset and drop shadows, so a knob still reads as a knob. CSS cannot light a neighbouring face from a lamp, reflect the faceplate in a metal cap, or turn a mesh on a spring.",
+    } },
 ] as const satisfies readonly { id: string; gpu: GPUReason; [key: string]: unknown }[];
 
 /** The id of one catalog example, such as `"layers"` or `"pond"`. */
