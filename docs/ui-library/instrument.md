@@ -574,6 +574,14 @@ first use of emitters (a version 4 scene with `emitters`, `protected` rects and 
 a blink), the `blink` tempo tokens and the opt-in `click` feedback. Meter, Gauge, RotarySelector, the PushButton forms and
 Display follow.
 
+Everyday forms, second part: the indicator family at every presentation. The Rating as lamps ([`lamps`](components/rating.md#11-indicator-form-lamps)), the Badge as an LED pill
+([`led`](components/badge.md#11-indicator-form-led)), the ProgressBar as a segment meter ([`meter`](components/progress-bar.md#11-indicator-form-meter)) and the Spinner as a ring of
+LEDs ([`ring`](components/spinner.md#11-indicator-form-ring)) take their premium forms through `form` (`flush` names today's look, and an absent `form` is `flush`, so a page that does
+not opt in is unchanged). They are the Lamp's lens and the Meter's segments on the native controls: the radios, the `<span>`, the `<progress>` and the status stay the controls, and the form is
+decoration over them whose lenses are lit by one number, `--strata-lit`, each lens an emitter (a 5-star rating is 5 emitters, a 20-segment bar 20, a ring 8). A value, a score or a chase is a
+uniform write at every GPU level; a chase is a CSS animation of `--strata-lit` at a tempo token (`chase.spinner`, `chase.bar`, never under 334 ms, so never over three flashes a second per
+lens), steady under reduced motion (a comet, every other segment). `attachStrataProgress` keeps a bar's value; `driveStrataMeter` stays the Meter's.
+
 PR 13, wave 2, second part: the Meter and the Gauge ([Meter](components/meter.md), [Gauge](components/gauge.md)) at every
 presentation: CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Instrument on the GPU. A bar's segments are the
 Lamp's LED lens with an emitter each (the Lamp's wiring, so this PR is based on the Lamp's); a needle meter and a gauge are a glass

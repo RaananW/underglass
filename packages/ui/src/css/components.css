@@ -3268,6 +3268,182 @@
   }
   :where(.ug-spinner--labelled .ug-spinner__label) { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
 
+  /* ---- Indicator forms: a Rating as lamps, a Badge as an LED pill, a ProgressBar as a segment meter, a Spinner as a ring of LEDs (anatomy pages rating.md, badge.md, progress-bar.md, spinner.md) ---- */
+
+  /*
+   * The native control stays the control (the Rating's radios, the `<progress>`, the Badge's and the Spinner's `<span>`); the form is
+   * decoration over it that follows its state. Every lens is the Lamp's and the StatusLight's: one number, `--strata-lit` (0 dark, 1 lit),
+   * a registered number, lights it, so the CSS presents it as a glass dome with a glow and the GPU presentation, which reads it frame by
+   * frame, draws it as a lens with an emitter (the dome's own CSS paint, its glow and its `::after`, is hidden, `data-strata-dome`; the socket
+   * under it, its `::before`, stays printed on the face). The role is `--_c`, from `colour` (`data-strata-colour`) or, for a Badge, its variant. No `form`, or `flush`,
+   * is none of this: the markup and the look are what they were.
+   */
+  :where(.ug-rating[data-strata-form="lamps"], .ug-badge[data-strata-form="led"]) { --_c: var(--strata-colour-glow-on); }
+  :where(.ug-progress-bar[data-strata-form="meter"], .ug-spinner[data-strata-form="ring"]) { --_c: var(--strata-colour-accent); }
+  :where(.ug-badge--accent[data-strata-form="led"]) { --_c: var(--strata-colour-accent); }
+  :where(.ug-badge--success[data-strata-form="led"]) { --_c: var(--strata-colour-success); }
+  :where(.ug-badge--warning[data-strata-form="led"]) { --_c: var(--strata-colour-warning); }
+  :where(.ug-badge--danger[data-strata-form="led"]) { --_c: var(--strata-colour-danger); }
+  :where(.ug-badge--info[data-strata-form="led"]) { --_c: var(--strata-colour-info); }
+  :where(.ug-rating[data-strata-form="lamps"], .ug-badge[data-strata-form="led"], .ug-progress-bar[data-strata-form="meter"], .ug-spinner[data-strata-form="ring"])[data-strata-colour="accent"] { --_c: var(--strata-colour-accent); }
+  :where(.ug-rating[data-strata-form="lamps"], .ug-badge[data-strata-form="led"], .ug-progress-bar[data-strata-form="meter"], .ug-spinner[data-strata-form="ring"])[data-strata-colour="success"] { --_c: var(--strata-colour-success); }
+  :where(.ug-rating[data-strata-form="lamps"], .ug-badge[data-strata-form="led"], .ug-progress-bar[data-strata-form="meter"], .ug-spinner[data-strata-form="ring"])[data-strata-colour="warning"] { --_c: var(--strata-colour-warning); }
+  :where(.ug-rating[data-strata-form="lamps"], .ug-badge[data-strata-form="led"], .ug-progress-bar[data-strata-form="meter"], .ug-spinner[data-strata-form="ring"])[data-strata-colour="danger"] { --_c: var(--strata-colour-danger); }
+  :where(.ug-rating[data-strata-form="lamps"], .ug-badge[data-strata-form="led"], .ug-progress-bar[data-strata-form="meter"], .ug-spinner[data-strata-form="ring"])[data-strata-colour="info"] { --_c: var(--strata-colour-info); }
+  :where(.ug-rating[data-strata-form="lamps"], .ug-badge[data-strata-form="led"], .ug-progress-bar[data-strata-form="meter"], .ug-spinner[data-strata-form="ring"])[data-strata-colour="glowOn"] { --_c: var(--strata-colour-glow-on); }
+  :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment) {
+    --_on: color-mix(in srgb, var(--_c), white 18%);
+    --_off: color-mix(in srgb, var(--_c) 16%, #15171b);
+    --_glass: color-mix(in srgb, var(--_on) calc(var(--strata-lit) * 100%), var(--_off));
+    --strata-lit: 0;
+    position: relative;
+    display: block;
+    flex: none;
+    box-sizing: border-box;
+    width: var(--_lens);
+    height: var(--_lens);
+    border-radius: 50%;
+    pointer-events: none;
+    box-shadow: 0 0 calc(var(--strata-lit) * var(--_lens) * 0.7) calc(var(--strata-lit) * var(--_lens) * 0.12) color-mix(in srgb, var(--_on) 55%, transparent);
+  }
+  /* The socket under the lens, printed on the face at every level: the unlit glass's dark disc; and the glass over it. */
+  :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment)::before { content: ""; position: absolute; inset: -1px; border-radius: 50%; background: var(--_off); }
+  :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment)::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    border-radius: 50%;
+    background: radial-gradient(circle at 36% 30%, color-mix(in srgb, var(--_glass), white 55%) 0, var(--_glass) 45%, color-mix(in srgb, var(--_glass), black 35%) 100%);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35);
+  }
+  :where([data-strata-mode="face"]) :is(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment)[data-strata-dome]::after { background: transparent; box-shadow: none; }
+
+  /* Rating, lamps: each star's place holds a lens, lit up to the score (the radios' `:checked`, as the stars fill); a hovered star and the ones
+     before it show a lens half lit, the preview of that score, and the rest of the row goes dark, as the stars do. The item is the lens plus 16 px (at least the target). */
+  :where(.ug-rating[data-strata-form="lamps"]) { --_lens: var(--strata-rating-size); }
+  :where(.ug-rating[data-strata-form="lamps"] .ug-rating__item) { width: max(var(--strata-target-min), calc(var(--_lens) + 16px)); height: max(var(--strata-target-min), calc(var(--_lens) + 16px)); }
+  :where(.ug-rating[data-strata-form="lamps"] .ug-rating__star) { display: grid; place-items: center; }
+  :where(.ug-rating[data-strata-form="lamps"] .ug-rating__star)::before { content: none; }
+  :where(.ug-rating[data-strata-form="lamps"] .ug-rating__input:checked + .ug-rating__star > .ug-rating__lens, .ug-rating[data-strata-form="lamps"] .ug-rating__item:has(~ .ug-rating__item > .ug-rating__input:checked) > .ug-rating__star > .ug-rating__lens) { --strata-lit: 1; }
+  /* The preview is for a real hover: on a touch screen the pointer that tapped a star would leave the whole row half lit. */
+  @media (hover: hover) {
+    :where(.ug-rating[data-strata-form="lamps"] .ug-rating__stars:has(> .ug-rating__item:hover > .ug-rating__input:not(:disabled)) > .ug-rating__item > .ug-rating__star > .ug-rating__lens) { --strata-lit: 0; }
+    :where(.ug-rating[data-strata-form="lamps"] .ug-rating__stars:has(> .ug-rating__item:hover > .ug-rating__input:not(:disabled)) > :is(.ug-rating__item:hover, .ug-rating__item:has(~ .ug-rating__item:hover)) > .ug-rating__star > .ug-rating__lens) { --strata-lit: 0.55; }
+  }
+
+  /* Badge, LED: the StatusLight's lens before the text, on a dark pill plate (captured content) that keeps the text's contrast; the lens's colour is the variant's.
+     A neutral badge has no role, so its lens is dark glass; `data-strata-colour` lights it. The pill is the lens plus 16 px tall, so the halo has room. */
+  :where(.ug-badge[data-strata-form="led"]) {
+    --_lens: var(--strata-status-light-size);
+    gap: var(--strata-space-2);
+    min-height: calc(var(--_lens) + 16px);
+    padding-block: 0;
+    padding-inline: 7px var(--strata-space-3);
+    border-color: var(--strata-colour-edge);
+    background-color: color-mix(in srgb, var(--strata-colour-panel), black 12%);
+    color: var(--strata-colour-text);
+  }
+  :where(.ug-badge[data-strata-form="led"]:is(.ug-badge--accent, .ug-badge--success, .ug-badge--warning, .ug-badge--danger, .ug-badge--info, [data-strata-colour]) > .ug-badge__lens) { --strata-lit: 1; }
+
+  /* ProgressBar, segment meter: the native `<progress>` covers the object, transparent, and says the value; a groove with a row of LED segments
+     lit from the value (`--strata-progress-value`, 0–1, kept by `attachStrataProgress`), as the Meter's bar: segment i is lit when value · count − i − ½ is above 0.
+     Indeterminate: a lit head runs from end to end at `chase.bar`, a lap of 1.6 s, with a short trail. */
+  :where(.ug-progress-bar[data-strata-form="meter"]) {
+    --_lens: var(--strata-meter-size);
+    position: relative;
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    height: calc(var(--_lens) + 16px);
+  }
+  :where(.ug-progress-bar[data-strata-form="meter"] > .ug-progress) {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    background-image: none;
+    box-shadow: none;
+    opacity: 0;
+    animation: none;
+  }
+  :where(.ug-progress__object) { position: absolute; inset: 0; pointer-events: none; }
+  :where(.ug-progress__object) :where(*) { box-sizing: border-box; pointer-events: none; }
+  :where(.ug-progress__window) { position: absolute; inset: 4px 0; border-radius: 8px; background-color: var(--strata-colour-track); }
+  :where(.ug-progress__segments) {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    top: 8px;
+    height: var(--_lens);
+    display: grid;
+    grid-template-columns: repeat(var(--strata-progress-count, 20), minmax(0, 1fr));
+    align-items: center;
+    justify-items: center;
+  }
+  :where(.ug-progress__segment) { --_k: clamp(0, calc((var(--strata-progress-value, 0) * var(--strata-progress-count, 20) - var(--_i, 0) - 0.5) * 1000), 1); --strata-lit: var(--_k); }
+  :where(.ug-progress-bar[data-strata-form="meter"]:has(> .ug-progress:indeterminate) .ug-progress__segment) {
+    --strata-lit: 0;
+    animation: ug-chase-bar var(--strata-chase-bar) linear infinite;
+    animation-delay: calc((var(--_i, 0) / var(--strata-progress-count, 20) - 1) * var(--strata-chase-bar));
+  }
+
+  /* Spinner, ring: eight LEDs round a ring (`size.spinner`, the lenses' centres lie on it), a lit head chasing clockwise at `chase.spinner`, a lap of 0.9 s, with a trail.
+     The status is the label (shown under reduced motion, and then the ring is steady); the lenses are decoration. The ring is its diameter plus 16 px, room for the halo. */
+  :where(.ug-spinner[data-strata-form="ring"]) { --_ring: var(--strata-size-spinner-medium); }
+  :where(.ug-spinner--sm[data-strata-form="ring"]) { --_ring: var(--strata-size-spinner-small); }
+  :where(.ug-spinner--md[data-strata-form="ring"]) { --_ring: var(--strata-size-spinner-medium); }
+  :where(.ug-spinner--lg[data-strata-form="ring"]) { --_ring: var(--strata-size-spinner-large); }
+  :where(.ug-spinner__ring) {
+    --_lens: max(5px, calc(var(--_ring) * 0.2));
+    position: relative;
+    flex: none;
+    width: calc(var(--_ring) + 16px);
+    height: calc(var(--_ring) + 16px);
+    pointer-events: none;
+  }
+  :where(.ug-spinner__lens) {
+    --_a: calc(var(--_i, 0) * 45deg);
+    position: absolute;
+    left: calc(50% - var(--_lens) / 2);
+    top: calc(50% - var(--_lens) / 2);
+    translate: calc(sin(var(--_a)) * var(--_ring) / 2) calc(cos(var(--_a)) * var(--_ring) / -2);
+    animation: ug-chase var(--strata-chase-spinner) linear infinite;
+    animation-delay: calc((var(--_i, 0) / 8 - 1) * var(--strata-chase-spinner));
+  }
+  /* A lens lights once a lap: bright at the head, then a trail. The bar's trail is shorter. */
+  @keyframes ug-chase { 0% { --strata-lit: 1; } 12% { --strata-lit: 0.55; } 30% { --strata-lit: 0.2; } 55%, 100% { --strata-lit: 0; } }
+  @keyframes ug-chase-bar { 0% { --strata-lit: 1; } 6% { --strata-lit: 0.5; } 14% { --strata-lit: 0.15; } 25%, 100% { --strata-lit: 0; } }
+
+  /* Reduced motion: nothing chases. A spinner is a steady comet (lit 1, 0.75, 0.5, 0.25 behind lens 0), an indeterminate bar every other segment lit; a lens has no glow. */
+  @media (prefers-reduced-motion: reduce) {
+    :where(.ug-spinner__lens) { animation: none; --strata-lit: clamp(0, calc(1 - mod(8 - var(--_i, 0), 8) * 0.25), 1); }
+    :where(.ug-progress-bar[data-strata-form="meter"]:has(> .ug-progress:indeterminate) .ug-progress__segment) { animation: none; --strata-lit: calc(1 - mod(var(--_i, 0), 2)); }
+    :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment) { box-shadow: none; }
+  }
+  /* More contrast: a lens is flat colour with no glow, edged in the text colour; the socket takes that colour too (so the GPU's glass shows it, and its emitters are off). */
+  @media (prefers-contrast: more) {
+    :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment) { box-shadow: none; }
+    :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment)::after { background: var(--_glass); box-shadow: none; border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
+    :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment)::before { background: var(--_glass); }
+    :where(.ug-progress__window) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
+    :where(.ug-badge[data-strata-form="led"]) { border-color: var(--strata-colour-text); }
+  }
+  /* Forced colours: lit lenses are Highlight and unlit ones Canvas, each edged in CanvasText; the pill and the groove are Canvas with a CanvasText edge. */
+  @media (forced-colors: active) {
+    :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment) { forced-color-adjust: none; box-shadow: none; }
+    :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment)::after { forced-color-adjust: none; border: 1px solid CanvasText; background: color-mix(in srgb, Highlight calc(var(--strata-lit) * 100%), Canvas); box-shadow: none; }
+    :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment)::before { forced-color-adjust: none; background: Canvas; }
+    :where(.ug-badge[data-strata-form="led"]) { forced-color-adjust: none; border-color: CanvasText; background-color: Canvas; color: CanvasText; }
+    :where(.ug-progress__window) { forced-color-adjust: none; border: 1px solid CanvasText; background-color: Canvas; box-shadow: none; }
+  }
+
   /* ---- Overrides by attribute: after the components, so they win at equal specificity ---- */
 
   /* Elevation by attribute overrides the component's level. */

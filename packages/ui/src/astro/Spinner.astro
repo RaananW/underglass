@@ -1,20 +1,28 @@
 ---
 /**
  * Spinner (anatomy page `spinner.md`): a status whose label is the announced content. `decorative` inside a busy
- * Button: no role, hidden from assistive technology.
+ * Button: no role, hidden from assistive technology. `form="ring"` draws a ring of eight LEDs chasing at `chase.spinner` in place of the
+ * turning arc (*Indicator form*); `flush`, or no `form`, is the arc it was.
  */
 import { classes } from "../shared/markup.ts";
+import { lensStyle, spinnerForm, spinnerLensIndices } from "../shared/indicator-forms.ts";
+import type { StrataLampColour } from "../shared/lamp.ts";
 
 interface Props {
   label: string;
   size?: "small" | "medium" | "large";
   showLabel?: boolean;
   decorative?: boolean;
+  /** `ring`: a ring of LEDs; `flush` is today's arc. */
+  form?: "ring" | "flush";
+  /** The ring's colour: `accent` by default, or another status role. */
+  colour?: StrataLampColour;
   class?: string;
   [attribute: string]: unknown;
 }
 
-const { label, size = "medium", showLabel = false, decorative = false, class: className, ...rest } = Astro.props;
+const { label, size = "medium", showLabel = false, decorative = false, form, colour, class: className, ...rest } = Astro.props;
+const ring = spinnerForm(form);
 const sizes = { small: "sm", medium: "md", large: "lg" } as const;
 ---
-<span class={classes("ug-spinner", `ug-spinner--${sizes[size]}`, showLabel && "ug-spinner--labelled", className)} role={decorative ? undefined : "status"} aria-hidden={decorative ? "true" : undefined} data-strata-face="ring" {...rest}><span class="ug-spinner__arc" aria-hidden="true"></span><span class="ug-spinner__label">{label}</span></span>
+<span class={classes("ug-spinner", `ug-spinner--${sizes[size]}`, showLabel && "ug-spinner--labelled", className)} role={decorative ? undefined : "status"} aria-hidden={decorative ? "true" : undefined} data-strata-face={ring ? undefined : "ring"} data-strata-form={ring} data-strata-colour={ring ? colour : undefined} {...rest}>{ring ? <span class="ug-spinner__ring" aria-hidden="true">{spinnerLensIndices.map(index => <span class="ug-spinner__lens" data-strata-face="knob" style={lensStyle(index)}></span>)}</span> : <span class="ug-spinner__arc" aria-hidden="true"></span>}<span class="ug-spinner__label">{label}</span></span>

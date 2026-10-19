@@ -605,6 +605,30 @@ fractions included, as one image named "4.5 out of 5 stars":
 Vue uses `v-model`; Astro takes `value` and `name`. The stars are captured content on the GPU, not relief.
 [Anatomy](../../docs/ui-library/components/rating.md).
 
+## Indicator forms: Rating, Badge, ProgressBar and Spinner
+
+The second of the Instrument level's everyday forms: LED lenses on the native indicators. `form="lamps"` on a **Rating** puts a lamp lens in each star's place, lit up to the score (a
+hovered star and the ones before it half lit, where hover is real); `form="led"` on a **Badge** puts the StatusLight's lens before the text on a dark pill, in the variant's colour (a
+neutral badge's is dark glass); `form="meter"` on a **ProgressBar** draws a groove of LED segments lit from the value (`segments`, 20 by default), and, while indeterminate, a head
+running along it; `form="ring"` on a **Spinner** draws eight LEDs round a ring with a head chasing clockwise. The native control stays the control (the radios, the `<span>`, the
+`<progress>` with its role and value, the status with its label), the accessibility snapshot is the same with and without the form, and `flush`, or no `form`, is the markup and the look they
+had before, pixel for pixel; on a Rating any other `form` string is still the native form owner. `colour` is the lenses' role, as the Lamp's.
+
+```tsx
+<Rating form="lamps" label="Your rating" value={score} onChange={setScore} />
+<Badge form="led" variant="success">Active</Badge>
+<ProgressBar form="meter" aria-label="Upload" value={40} segments={20} />
+<Spinner form="ring" label="Loading" />
+```
+
+Vue takes the same props (`v-model` on the Rating); Astro takes `value`, `name` and `segments`. A bar's value reaches the drawing through `attachStrataProgress` in `@underglass/ui/dom`
+(which `attachStrata` and the components attach). On the GPU every lens is an emitter at every level (a Rating's 1,045 at 16 px, a Badge's or a ring's LED 520 at 10 px scaled by the square
+of its diameter, a segment 260), lit by `--strata-lit`, so a score, a value and a chase are uniform writes: 300 frames of a chasing ring cause 0 captures, 0 uploads and 0
+hit-geometry updates. The chase runs at `chase.spinner` (900 ms) and `chase.bar` (1,600 ms), never under 334 ms, and is a steady comet or pattern under reduced motion. Relief draws each lens as a ring
+face, Objects as a dome, the Instrument level as a glass LED lens (`gpu/indicator-forms.ts`); every part and shadow is inside the native control's box. Anatomy:
+[Rating](../../docs/ui-library/components/rating.md#11-indicator-form-lamps), [Badge](../../docs/ui-library/components/badge.md#11-indicator-form-led),
+[ProgressBar](../../docs/ui-library/components/progress-bar.md#11-indicator-form-meter), [Spinner](../../docs/ui-library/components/spinner.md#11-indicator-form-ring).
+
 ## SegmentedControl
 
 One choice from two to five short options, as keys on a plinth: native radios in a `<fieldset>`, so arrow keys and
