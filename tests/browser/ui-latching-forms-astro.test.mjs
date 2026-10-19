@@ -82,10 +82,12 @@ test("with JavaScript the Astro latching forms are held while pressed and follow
   expect(await monitor.evaluate(input => { const row = input.closest("label"); return { row: row.className, margin: row.style.marginRight, testid: input.dataset.testid, form: row.dataset.strataForm, host: input.parentElement.className, colour: input.parentElement.dataset.strataColour }; }))
     .toEqual({ row: "ug-checkbox extra", margin: "4px", testid: "monitor", form: "latching", host: "ug-push ug-latch ug-latch--key", colour: undefined });
   await expect(page.locator("#phantom").locator("xpath=..")).toHaveAttribute("data-strata-colour", "info");
+  await page.waitForFunction(() => !document.getAnimations().some(animation => animation instanceof CSSTransition && animation.playState === "running"));
   expect(await numbers(page, "monitor")).toEqual({ lit: 0, led: 0, t: 0 });
   expect(await numbers(page, "phantom")).toEqual({ lit: 1, led: 1, t: 0.45 });
   // `indeterminate` applies in the browser (the behaviour script is a module: wait for it).
   await expect(page.locator("#mixed")).toHaveJSProperty("indeterminate", true);
+  await page.waitForFunction(() => !document.getAnimations().some(animation => animation instanceof CSSTransition && animation.playState === "running"));
   expect(await numbers(page, "mixed")).toEqual({ lit: 0.5, led: 0.5, t: 0.2 });
   // The behaviour script is a module: wait until a press takes effect.
   const box = await monitor.boundingBox();
