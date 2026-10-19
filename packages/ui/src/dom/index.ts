@@ -28,6 +28,7 @@ export { attachStrataKnobs, syncStrataKnob } from "./knob.ts";
 export { attachStrataLamps } from "./lamp.ts";
 export { attachStrataMeters, driveStrataMeter, liveStrataMeter, releaseStrataMeter, syncStrataMeter } from "./meter.ts";
 export { attachStrataGauges, syncStrataGauge } from "./gauge.ts";
+export { attachStrataProgress, syncStrataProgress } from "./progress.ts";
 export { setStrataStatusLight } from "./status-light.ts";
 export type { StatusLightUpdate } from "./status-light.ts";
 export { showStrataToast } from "./toast.ts";
