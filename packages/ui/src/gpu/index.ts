@@ -71,9 +71,11 @@ import { advancePeak, meterFraction, meterSprings, meterZoneRoles, peakDefaults,
 import { DISABLED_LIGHT, INDICATOR_LENS, indicatorOf, roomAround } from "./indicator-forms.ts";
 import { strataStage, type StagePresenter } from "../dom/stage.ts";
 import type { EnvironmentMap, StageScene } from "../tokens/stage.ts";
+import type { StudioTokens } from "../tokens/instrument.ts";
 import { advance, asParticle, decodeHdr, environmentFrom, launch, spring, type BurstOptions, type Confetto } from "./scene.ts";
 import { advanceSpring, depthScale, INSTRUMENT_CAMERA, keyObject, knobObject, knobSprings, premiumMaterials, profileKey, type CustomPartSource, type InstrumentObject,
   type InstrumentProfile, type InstrumentRecipe, type KnobSpring } from "./instrument.ts";
+import { characterMaterials } from "./instrument-character.ts";
 import { faderMaterials, faderObject, faderParts, faderSpring } from "./instrument-fader.ts";
 import { switchHeight, switchMaterials, switchObject } from "./instrument-switch.ts";
 import type { StrataSwitchForm } from "../shared/switch-forms.ts";
@@ -775,7 +777,7 @@ export interface StrataInstrumentScene extends Omit<StrataScene, "version" | "pr
   version: 4;
   kind: "instrument";
   camera: { distance: number; vanish: [number, number] };
-  environment: { source: "studio"; strength: number };
+  environment: { source: "studio"; strength: number; studio?: Partial<StudioTokens> };
   light: { azimuth: number; elevation: number; intensity: number };
   materials: Record<string, InstrumentRecipe>;
   primitives: ScenePrimitive[];
@@ -825,7 +827,11 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     profiles[key] ??= shape;
     return key;
   };
-  const use = (name: string) => { materials[name] ??= premiumMaterials[name] ?? faderMaterials[name as keyof typeof faderMaterials] ?? switchMaterials[name as keyof typeof switchMaterials] ?? meterMaterials[name as keyof typeof meterMaterials]; return name; };
+  // A character on the page (`data-strata-character`) names the part materials; without one the premium tables stand.
+  const character = characterMaterials(path => tokens.raw(path), tokens.colour("glowOn"));
+  const springOf = (name: string, fallback: { stiffness: number; damping: number }) =>
+    ({ stiffness: tokens.number(`spring.${name}.stiffness`, fallback.stiffness), damping: tokens.number(`spring.${name}.damping`, fallback.damping) });
+  const use = (name: string) => { materials[name] ??= character?.[name] ?? premiumMaterials[name] ?? faderMaterials[name as keyof typeof faderMaterials] ?? switchMaterials[name as keyof typeof switchMaterials] ?? meterMaterials[name as keyof typeof meterMaterials]; return name; };
   const scale = depthScale(tokens.number("depth", 0.5)), raised = tokens.number("elevation.raised", 3);
   const outer = panel.getBoundingClientRect(), stageBox = (options.stage ?? panel.parentElement ?? panel).getBoundingClientRect();
   const zoom = outer.width / Math.max(panel.offsetWidth, 1) || 1;
@@ -858,11 +864,12 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     const input = root.querySelector<HTMLInputElement>(".ug-knob__input"), skirt = root.querySelector(".ug-knob__skirt"), cap = root.querySelector(".ug-knob__cap");
     if (!input || !skirt || !cap || objects.length + entries.length >= 255) continue;
     // The pointer follows the value on its spring.
-    const t = follow(input, root.matches(".ug-knob--detented") ? knobSprings.detent : knobSprings.knob);
+    const t = follow(input, root.matches(".ug-knob--detented") ? springOf("detent", knobSprings.detent) : springOf("knob", knobSprings.knob));
     const state = context.states(skirt);
     const sweep = reader(root).number("knob.sweep", 270);
     objects.push(knobObject({ id: idOf(input, "knob"), box: rectWithin(input, panel), skirt: rectWithin(skirt, panel)[2], cap: rectWithin(cap, panel)[2], t, sweep, scale,
       state: { hover: state.hover, disabled: state.disabled }, relief: { height: raised, material: use("knobCap") },
+      ...(tokens.raw("knob.pointer.width") ? { pointerWidth: tokens.number("knob.pointer.width", 2.2) } : {}),
       ...(options.parts?.knobCap ? { customCap: options.parts.knobCap } : {}) }, profile));
     for (const name of ["knobSkirt", "knobChamfer", "knobInk"]) use(name);
     options.domes?.add(skirt); options.domes?.add(cap);
@@ -873,7 +880,7 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     const input = root.querySelector<HTMLInputElement>(".ug-fader__input"), slot = root.querySelector(".ug-fader__slot"), carriage = root.querySelector(".ug-fader__carriage");
     if (!input || !slot || !carriage || objects.length + entries.length >= 255) continue;
     // The carriage slides with the value on `spring.fader`; the slot stays a groove and the scale captured on the face.
-    const t = follow(input, faderSpring);
+    const t = follow(input, springOf("fader", faderSpring));
     const state = context.states(carriage), box = rectWithin(input, panel), slotBox = rectWithin(slot, panel);
     if (box[2] <= 0 || box[3] <= 0 || slotBox[2] <= 0 || slotBox[3] <= 0) continue;
     const vertical = !root.matches(".ug-fader--horizontal");
@@ -1020,12 +1027,15 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
   }
   const elevation = (tokens.number("light.elevation", 41) * Math.PI) / 180;
   const reach = Math.min(128, Math.max(context.reach, Math.ceil(tallest / Math.tan(elevation) + 1.5 * tallest + 1)));
+  // The application's character names the room (`studio.*`, declared on the root only); without one the defaults stand.
+  const studio = Object.fromEntries((["key", "keyRadius", "fill", "front", "strip", "floor", "ceiling"] as const)
+    .flatMap(key => (tokens.raw(`studio.${key}`) ? [[key, tokens.number(`studio.${key}`)] as const] : []))) as Partial<StudioTokens>;
   return {
     ...settings, format: "strata-scene", version: 4, kind: "instrument",
     outset: { top: reach, right: reach, bottom: reach, left: reach },
     camera: { distance: Math.max(INSTRUMENT_CAMERA, tokens.number("camera.distance", 1600)),
       vanish: [(stageBox.left + stageBox.width / 2 - outer.left) / zoom, (stageBox.top + stageBox.height / 2 - outer.top) / zoom] },
-    environment: { source: "studio", strength: Math.min(3, Math.max(0, tokens.number("environment.intensity", 1))) },
+    environment: { source: "studio", strength: Math.min(3, Math.max(0, tokens.number("environment.intensity", 1))), ...(Object.keys(studio).length ? { studio } : {}) },
     light: { ...settings.light, intensity: 1.6 },
     materials, primitives: entries, profiles, objects,
     ...(context.lights ?? {}),
@@ -1401,7 +1411,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   for (const type of events) root.addEventListener(type, schedule, true);
   const mutation = new MutationObserver(schedule);
   mutation.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "disabled", "checked", "aria-checked",
-    "aria-current", "aria-disabled", "aria-pressed", "data-strata-lit", "data-strata-blink", "data-strata-colour", "aria-selected", "data-strata-closing", "data-strata-face", "data-strata-material", "data-strata-elevation", "data-strata-level", "data-strata-depth", "data-strata-theme", "data-strata-scope", "data-strata-preview", "hidden", "open", "value", "min", "max", "low", "high", "optimum"] });
+    "aria-current", "aria-disabled", "aria-pressed", "data-strata-lit", "data-strata-blink", "data-strata-colour", "aria-selected", "data-strata-closing", "data-strata-face", "data-strata-material", "data-strata-elevation", "data-strata-level", "data-strata-depth", "data-strata-theme", "data-strata-character", "data-strata-scope", "data-strata-preview", "hidden", "open", "value", "min", "max", "low", "high", "optimum"] });
   resize.observe(root);
   const poll = setInterval(schedule, options.poll ?? 500);
   forced.addEventListener("change", schedule);

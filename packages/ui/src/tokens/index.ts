@@ -48,5 +48,6 @@ export type {
 } from "./instrument.ts";
 export { applyVariant, buildInstrumentConformance, instrumentCases, instrumentExpectations, instrumentScales, instrumentTolerance } from "./instrument-conformance.ts";
 export type { ExactSample, InstrumentCase, InstrumentCheck, InstrumentSuite, InstrumentVariant, RatioSample, SampledSeed, ScaledColour } from "./instrument-conformance.ts";
+export { charactersToCss } from "./character-css.ts";
 export { applyCharacter, characterNames, characterOf, defaultCharacter, instrumentSettings, isProvisional } from "./character.ts";
 export type { AppliedCharacter, CharacterInfo, InstrumentSettings, StrataCharacter } from "./character.ts";

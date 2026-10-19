@@ -164,9 +164,10 @@
 <body>
   <div id="bar">
     <h1>Instrument prototypes</h1>
-    <p class="intro">Phase I1, premium character. One chassis panel of native controls, shown as <b>Instrument</b> (meshes),
+    <p class="intro">Phase I1, premium and studio characters. One chassis panel of native controls, shown as <b>Instrument</b> (meshes),
       <b>Objects</b> (Strata's analytic objects, stepped down) and <b>CSS</b>. Every control is real; the URL keeps the settings.</p>
     <form id="tuning" onsubmit="return false">
+      <label>Character <select id="t-character" name="character"><option value="premium">Premium</option><option value="studio">Studio</option></select></label>
       <label>Depth <input id="t-depth" name="depth" type="range" min="0" max="100" step="1"><output></output></label>
       <label>Knob size <input id="t-size" name="size" type="range" min="40" max="96" step="1"><output></output></label>
       <label>Skirt height <input id="t-skirt" name="skirt" type="range" min="0" max="8" step="0.1"><output></output></label>
