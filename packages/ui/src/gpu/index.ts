@@ -35,6 +35,12 @@
  * primitives (fitted so their shadows stay in the native meter's box) with the needle as captured content; at the Instrument level the
  * needle is a part turned by its spring (`spring.meter`, `spring.gauge`), over a glass window that keeps the printed scale exact.
  *
+ * A Display (`gpu/display-forms.ts`, `gpu/instrument-display.ts`; design language section 6) is a bezel and a window under its native
+ * input or output, which covers all of it: a groove and a flat face at Relief, a slab and a flat face at Objects, and at the Instrument
+ * level a polished bezel and a glass pane over the printed text. Its backlight is a few emitters along the window, lit by `--strata-lit`
+ * (read each frame, so a toggle is a uniform write); the text's own box (the content box of an input, the text runs of an output) is a
+ * protected rect, so the window's glass leaves the text exact and the backlight stays within the contrast guard over it.
+ *
  * At the Instrument level (`instrument`, between `objects` and `scene` on the ladder, set like the others) a panel with
  * any element at that level takes core's `instrument` material and a version 4 scene (`gpu/instrument.ts`): its knobs
  * become the premium knob's parts, whose pointer turns on a spring as their value changes (uniform updates, no
@@ -79,6 +85,9 @@ import { characterMaterials } from "./instrument-character.ts";
 import { faderMaterials, faderObject, faderParts, faderSpring } from "./instrument-fader.ts";
 import { switchHeight, switchMaterials, switchObject } from "./instrument-switch.ts";
 import type { StrataSwitchForm } from "../shared/switch-forms.ts";
+import { displayFormEntries } from "./display-forms.ts";
+import { bezelCaster, displayHeight, displayMaterials, displayObject } from "./instrument-display.ts";
+import { displayEmitterDefaults, displayEmitters, finishAllowed, type DisplayEmitterTokens } from "../shared/display.ts";
 
 export type { CustomPartInput, CustomPartSource, InstrumentMeshProfile, InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentRecipe, KnobSpring } from "./instrument.ts";
 export { customPart } from "./instrument.ts";
@@ -207,6 +216,9 @@ function roleOf(face: SceneFace, element: Element, panel: Element): string {
   // groove, a rail).
   if (element.matches(".ug-knob__skirt, .ug-knob__cap, .ug-fader__carriage, .ug-lamp__bezel")) return "knob";
   if (face === "raised") return element.matches(".ug-button--accent, .ug-button--primary") ? "buttonPrimary" : "control";
+  // A display's bezel is the polished metal of the knob's; its window is a flat face on the field.
+  if (element.matches(".ug-display__bezel")) return "knob";
+  if (element.matches(".ug-display__window")) return "field";
   return ({ well: "field", groove: "rail", knob: "knob", mark: "indicator", ring: "field", flat: "control" } as Record<string, string>)[face] ?? "control";
 }
 
@@ -283,6 +295,17 @@ interface LampInfo {
   feather: number;
 }
 
+/** A visible Display now: its native element and box, and the pane's, for its Instrument object. */
+interface DisplayInfo {
+  native: HTMLElement;
+  box: [number, number, number, number];
+  pane: [number, number, number, number];
+  /** Whether the finish zone may draw: no text can reach it. */
+  finish: boolean;
+}
+/** What a scene's faces loop found for the displays of a panel, for its Instrument scene. */
+const foundDisplays = new WeakMap<HTMLElement, { infos: Map<HTMLElement, DisplayInfo>; instrument: Set<HTMLElement> }>();
+
 /** A visible Meter or Gauge now: its form, its native meter and the meter's box in the panel. */
 interface MeterInfo {
   form: "bar" | "needle" | "dial";
@@ -309,8 +332,17 @@ function protectedRects(panel: HTMLElement, grow = 2): [number, number, number, 
     range.selectNodeContents(node);
     for (const box of range.getClientRects()) add(box);
   }
-  for (const field of panel.querySelectorAll("input:not([type='checkbox'], [type='radio'], [type='range'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='file'], [type='hidden'], [type='color']), textarea, select")) {
+  for (const field of panel.querySelectorAll("input:not([type='checkbox'], [type='radio'], [type='range'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='file'], [type='hidden'], [type='color'], .ug-display__text), textarea, select")) {
     if (field.checkVisibility({ visibilityProperty: true })) add(field.getBoundingClientRect());
+  }
+  // A display's native element covers the whole display, bezel included: only its content box (the text's room, the window's inside) is
+  // protected, an output's as an input's, so the window is one even colour and the bezel and the padding round it take the backlight in full.
+  for (const field of panel.querySelectorAll<HTMLElement>(".ug-display__text")) {
+    if (!field.checkVisibility({ visibilityProperty: true })) continue;
+    const box = field.getBoundingClientRect(), style = getComputedStyle(field), edge = (name: string) => (Number.parseFloat(style.getPropertyValue(name)) || 0) * scale;
+    const left = edge("border-left-width") + edge("padding-left"), right = edge("border-right-width") + edge("padding-right");
+    const top = edge("border-top-width") + edge("padding-top"), bottom = edge("border-bottom-width") + edge("padding-bottom");
+    add(new DOMRect(box.left + left, box.top + top, Math.max(0, box.width - left - right), Math.max(0, box.height - top - bottom)));
   }
   return rects.length > MAX_PROTECTED ? "extent" : rects;
 }
@@ -540,6 +572,33 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       emitters.push(lensEmitter("led", [rect[0] + rect[2] / 2, rect[1] + rect[3] / 2], rect[2], moreContrast ? 0 : on, role, own));
     });
   }
+  // Displays (design language section 3): the backlight is a few emitters along the window, lit by `--strata-lit` as the CSS has it now (on,
+  // off, disabled), so a toggle is a uniform write. Each is also a `lamps` entry, so the panel takes the lights and their outset as a lamp's does.
+  const mineDisplays = { infos: new Map<HTMLElement, DisplayInfo>(), instrument: new Set<HTMLElement>() };
+  foundDisplays.set(panel, mineDisplays);
+  for (const root of panel.querySelectorAll<HTMLElement>(".ug-display")) {
+    const native = root.querySelector<HTMLElement>(".ug-display__text"), pane = root.querySelector<HTMLElement>(".ug-display__window");
+    if (!native || !pane || !root.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    const box = rectWithin(native, panel), paneBox = rectWithin(pane, panel);
+    if (box[2] <= 0 || box[3] <= 0 || paneBox[2] <= 0 || paneBox[3] <= 0) continue;
+    const style = getComputedStyle(root), displayTokens = reader(root), read = Number.parseFloat(style.getPropertyValue("--strata-lit"));
+    const lit = Number.isFinite(read) ? Math.min(1, Math.max(0, read)) : 0, role = hex(style.getPropertyValue("--_c").trim() || "#ff9228");
+    const own: DisplayEmitterTokens = { radius: displayTokens.number("emitter.display.radius", displayEmitterDefaults.radius), height: displayTokens.number("emitter.display.height", displayEmitterDefaults.height),
+      strength: displayTokens.number("emitter.display.strength", displayEmitterDefaults.strength) };
+    const lights = displayEmitters(paneBox, moreContrast ? 0 : lit, role, own);
+    if (emitters.length + lights.length > MAX_EMITTERS) continue;
+    lamps.set(root, { kind: "led", role, lit, lens: paneBox[3], index: emitters.length, box, control: native, feather: displayTokens.number("emitter.guardFeather", emitterDefaults.guardFeather) });
+    emitters.push(...lights);
+    // The finish zone is for a window no text can reach: an input's text can be anywhere in its content box, an output's is its first run.
+    let textTop = 0;
+    if (!(native instanceof HTMLInputElement)) {
+      const range = document.createRange();
+      range.selectNodeContents(native);
+      const [run] = range.getClientRects(), scale = panel.getBoundingClientRect().width / Math.max(panel.offsetWidth, 1) || 1;
+      textTop = run ? (run.top - panel.getBoundingClientRect().top) / scale - paneBox[1] : Number.POSITIVE_INFINITY;
+    }
+    mineDisplays.infos.set(root, { native, box, pane: paneBox, finish: finishAllowed(paneBox[3], textTop) });
+  }
   if (objects(panel)) {
     entries.push({ object: "slab", rect: [0, 0, width, height], radius: radiusOf(panel, width), height: panelHeight, taper, material: materialFor(panel, "raised") });
     tops.set(panel, panelHeight);
@@ -550,6 +609,12 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     // The slide's flag is invisible (opacity 0) while the switch is off, but the object draws it: hide its CSS paint all the same.
     if (instrumentLayer && element.matches(".ug-switch[data-strata-form] .ug-switch__object .ug-switch__flag") && effective(element) !== "relief") options.domes?.add(element);
     if (!faces.includes(face) || !element.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+    // A Display's bezel is drawn as its Instrument object's polished part, with the glass pane over its window (the window stays a flat face).
+    const displayRoot = element.matches(".ug-display__bezel, .ug-display__window") ? element.closest<HTMLElement>(".ug-display") : null;
+    if (displayRoot && mineDisplays.infos.has(displayRoot) && instrumentLayer && effective(element) !== "relief") {
+      mineDisplays.instrument.add(displayRoot);
+      if (element.matches(".ug-display__bezel")) { options.domes?.add(element); continue; }
+    }
     // A Meter's or Gauge's segments, hub and a Gauge's bezel are drawn as its Instrument object (its window stays the well of the face).
     const meterRoot = element.closest<HTMLElement>(".ug-meter"), meter = meterRoot && meterInfos.get(meterRoot);
     if (meterRoot && meter && instrumentLayer && effective(element) !== "relief") {
@@ -632,6 +697,18 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       const slab = meterParts[0];
       if (slab && isSceneObject(slab) && slab.object === "slab") tops.set(element, (slab.base ?? 0) + slab.height);
       continue;
+    }
+    // A Display's bezel and window (`display-forms.ts`): inside the native element's box, shadows included.
+    const display = displayRoot && mineDisplays.infos.get(displayRoot);
+    if (display) {
+      const parts = displayFormEntries(element, { rect, radius, objects: objects(element), base: baseOf(element), box: display.box, well: level(element, "well"), raised: level(element, "raised"), taper,
+        disabled: display.native.matches(":disabled, [aria-disabled='true']"), material: materialFor, light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) } });
+      if (parts) {
+        entries.push(...parts);
+        const slab = parts[0];
+        if (slab && isSceneObject(slab) && slab.object === "slab") tops.set(element, (slab.base ?? 0) + slab.height);
+        continue;
+      }
     }
     if (objects(element) && face !== "ring" && face !== "flat") {
       const base = baseOf(element);
@@ -970,6 +1047,20 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
       options.domes?.add(needle);
       tallest = Math.max(tallest, meterHeight(info.form, 0, scale));
     }
+  }
+  // Displays: a polished bezel and a glass pane over the window (the printed text is exact under it); the backlight is the emitters, lit by
+  // `--strata-lit`, so the parts never depend on the state and a toggle is a uniform write.
+  for (const root of foundDisplays.get(panel)?.instrument ?? []) {
+    const info = foundDisplays.get(panel)!.infos.get(root), bezel = root.querySelector<HTMLElement>(".ug-display__bezel"), pane = root.querySelector<HTMLElement>(".ug-display__window");
+    if (!info || !bezel || !pane || objects.length + entries.length >= 255) continue;
+    const bezelBox = rectWithin(bezel, panel), bezelRadius = radiusOf(bezel, bezelBox[2]), paneRadius = radiusOf(pane, info.pane[2]), displayTokens = reader(root);
+    if (bezelBox[2] <= 0 || bezelBox[3] <= 0) continue;
+    const caster = bezelCaster(bezelBox, info.box, bezelRadius, scale, light);
+    objects.push(displayObject({ id: idOf(info.native.id ? info.native : root, "display"), box: info.box, bezel: bezelBox, bezelRadius, window: info.pane, windowRadius: paneRadius, scale,
+      ...(info.finish ? { finish: { band: displayTokens.number("display.finish.band", 0.3), horizon: displayTokens.number("display.finish.horizon", 0.25) } } : {}), opaque, ...(caster ? { caster } : {}),
+      relief: { height: raised, material: "displayBezel" } }, profile) as unknown as InstrumentObject);
+    for (const name of ["displayBezel", "displayGlass"] as const) materials[name] ??= displayMaterials[name];
+    tallest = Math.max(tallest, displayHeight(scale));
   }
   for (const element of context.keys) {
     if (objects.length + entries.length >= 255) break;
@@ -1411,7 +1502,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   for (const type of events) root.addEventListener(type, schedule, true);
   const mutation = new MutationObserver(schedule);
   mutation.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "disabled", "checked", "aria-checked",
-    "aria-current", "aria-disabled", "aria-pressed", "data-strata-lit", "data-strata-blink", "data-strata-colour", "aria-selected", "data-strata-closing", "data-strata-face", "data-strata-material", "data-strata-elevation", "data-strata-level", "data-strata-depth", "data-strata-theme", "data-strata-character", "data-strata-scope", "data-strata-preview", "hidden", "open", "value", "min", "max", "low", "high", "optimum"] });
+    "aria-current", "aria-disabled", "aria-pressed", "data-strata-lit", "data-strata-blink", "data-strata-colour", "aria-selected", "data-strata-closing", "data-strata-face", "data-strata-material", "data-strata-elevation", "data-strata-level", "data-strata-depth", "data-strata-theme", "data-strata-character", "data-strata-scope", "data-strata-preview", "hidden", "open", "value", "min", "max", "low", "high", "optimum", "data-strata-backlight"] });
   resize.observe(root);
   const poll = setInterval(schedule, options.poll ?? 500);
   forced.addEventListener("change", schedule);

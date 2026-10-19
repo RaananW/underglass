@@ -766,3 +766,29 @@ primitives with the needle as captured content on `spring.meter` (a gauge's on `
 Instrument level (`level: "instrument"`) the needle is a part on its spring, a gauge has a polished bezel, and a glass window keeps
 the printed scale under it exact (`gpu/instrument-meter.ts`). Anatomy: [Meter](../../docs/ui-library/components/meter.md),
 [Gauge](../../docs/ui-library/components/gauge.md).
+
+## Display
+
+The last part of the Instrument level's second wave: a **glass window in a bezel**, backlit, with the text printed under the glass. The
+editable one is the TextField's `form="display"`, a native `<input>` that covers the whole display (typing, selection, the caret, IME and
+autofill are the browser's); the read-only one is `Display`, a native `<output>` (a polite live region, `live="off"` for a fast value;
+never submitted, so a value that must submit is a read-only TextField). `backlight` is a colour role (`glowOn` amber by default,
+`accent`, `success`, `warning`, `danger`, `info` or `off`) and `lit={false}` switches the light off; it is off when the display is disabled
+or under more contrast.
+
+```tsx
+<TextField form="display" label="Name" value={name} onChange={event => setName(event.target.value)} />
+<TextField form="display" readOnly aria-label="Serial" defaultValue="UG-2026-0042" backlight="info" />
+<Display label="Frame rate" backlight="success" live="off">{fps} fps</Display>
+```
+
+Vue uses `v-model` on the TextField and a slot for `Display`'s value; Astro takes `form`, `backlight` and `lit` on `TextField` and a slot on `Display`.
+**The GPU never draws text:** the text under the glass is captured content, so a changed text is a capture (once per change; a script's
+write, a keystroke), and the backlight is an emitter, so toggling it costs only its attribute's write. For a value that changes faster than it
+can be read, `driveStrataDisplay(element, text, { interval })` from `@underglass/ui/dom` writes the latest text at most once an interval
+(100 ms by default) and skips a text already shown (`releaseStrataDisplay` writes it now); a number that must move every frame is a
+[Meter](../../docs/ui-library/components/meter.md) or a Gauge. On the GPU the bezel is a groove (Relief) or a slab (Objects) and the window a flat face;
+at the Instrument level (`level: "instrument"`) the bezel is a polished part and the window a glass pane whose flat region is the capture itself, so the text under it
+is the DOM's own pixels (`gpu/instrument-display.ts`), and the backlight is a few emitters along the window (`emitter.display.*`, `gpu/index.ts`), held within
+the contrast guard over the text, which is a protected rect (the native element's content box, an output's text runs too). Anatomy:
+[Display](../../docs/ui-library/components/display.md), [TextField, section 11](../../docs/ui-library/components/text-field.md#11-the-display-form).
