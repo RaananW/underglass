@@ -1,0 +1,37 @@
+---
+/**
+ * Strata Astro PatchPoint check page (`/patch-point/`): `[data-contract]` renders the anatomy page's markup examples (`patch-point.md`
+ * three) with `@underglass/ui/astro`, and `main` holds live jacks `tests/browser/ui-patch-point-astro.test.mjs` drives with real input.
+ * Server-rendered HTML; the only script is the components' own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { PatchBay, PatchPoint } from "@underglass/ui/astro";
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro PatchPoint check</title>
+</head>
+<body>
+  <div data-contract="patch-point:0" hidden><PatchPoint id="out1" name="out1" led>Out 1</PatchPoint></div>
+  <div data-contract="patch-point:1" hidden><PatchPoint button id="ret1" connected led="warning">Ret 1</PatchPoint></div>
+  <div data-contract="patch-bay:0" hidden>
+    <PatchBay legend="Outputs" columns={2}>
+      <PatchPoint id="bay1" name="bay1">Bay 1</PatchPoint>
+      <PatchPoint id="bay2" name="bay2" size="small">Bay 2</PatchPoint>
+    </PatchBay>
+  </div>
+  <main>
+    <form class="ug-panel" data-strata-face="raised" aria-label="Patch points" id="jacks" style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px">
+      <PatchPoint id="link" name="link" led checked class="extra" style="margin-right: 4px" data-testid="link">Link</PatchPoint>
+      <PatchPoint id="send" name="send">Send</PatchPoint>
+      <PatchPoint button id="hold" connected data-testid="hold">Hold</PatchPoint>
+      <PatchBay legend="Sends" id="sends" columns={3} data-testid="sends">
+        <PatchPoint id="send1" name="send1">Send 1</PatchPoint>
+        <PatchPoint id="send2" name="send2" disabled>Send 2</PatchPoint>
+      </PatchBay>
+    </form>
+  </main>
+</body>
+</html>

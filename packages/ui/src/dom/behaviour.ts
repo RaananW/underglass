@@ -22,6 +22,8 @@
  * - Knobs: `attachStrataKnobs` gives every `.ug-knob` its round pointer, wheel and reset behaviour (anatomy page `knob.md`);
  * - Lamps: `attachStrataLamps` lights a momentary `.ug-lamp` while it is pressed and plays opt-in feedback (anatomy page `lamp.md`);
  * - Meters and Gauges: `attachStrataMeters` keeps every `.ug-meter`'s drawn value, zones, `aria-valuetext` and held peak in step with its native `<meter>` (anatomy pages `meter.md`, `gauge.md`);
+ * - Jog wheels: `attachStrataJogWheels` gives every `.ug-jog-wheel` its circular drag, inertia, wrapping keys and accumulated angle (anatomy page `jog-wheel.md`);
+ * - Patch points: `attachStrataPatchPoints` toggles a button PatchPoint's `aria-pressed` and plays opt-in feedback (anatomy page `patch-point.md`);
  * - Progress bars: `attachStrataProgress` keeps every segment-meter `.ug-progress-bar`'s drawn value in step with its native `<progress>` (anatomy page `progress-bar.md`);
  * - Toolbars: the first time focus enters one, its controls get a roving tabindex (one tab stop), and the arrow keys,
  *   Home and End move between them;
@@ -43,6 +45,8 @@ import { attachStrataCarousels } from "./carousel.ts";
 import { attachStrataMenus } from "./menu.ts";
 import { attachStrataKnobs } from "./knob.ts";
 import { attachStrataLamps } from "./lamp.ts";
+import { attachStrataJogWheels } from "./jog-wheel.ts";
+import { attachStrataPatchPoints } from "./patch-point.ts";
 import { attachStrataMeters } from "./meter.ts";
 import { attachStrataProgress } from "./progress.ts";
 
@@ -85,6 +89,8 @@ export function attachStrata(root: Document | HTMLElement = document): () => voi
   attachStrataMenus(root instanceof Document ? root : root.ownerDocument);
   attachStrataKnobs(root instanceof Document ? root : root.ownerDocument);
   attachStrataLamps(root instanceof Document ? root : root.ownerDocument);
+  attachStrataJogWheels(root instanceof Document ? root : root.ownerDocument);
+  attachStrataPatchPoints(root instanceof Document ? root : root.ownerDocument);
   attachStrataMeters(root instanceof Document ? root : root.ownerDocument);
   attachStrataProgress(root instanceof Document ? root : root.ownerDocument);
   const existing = attached.get(root);

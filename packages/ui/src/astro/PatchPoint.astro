@@ -1,0 +1,50 @@
+---
+/**
+ * PatchPoint (anatomy page `patch-point.md`): a jack in a washer over a native `<input type="checkbox">` (connected when checked) in
+ * its label row, or, with `button`, a `<button aria-pressed>` with its jack and label inside it, connected while pressed. The slot is
+ * the printed label, which names the jack and must not contain "connected": screen readers announce the state. `led` adds a StatusLight
+ * lens that lights while the jack is connected. With no script a checkbox PatchPoint is a native checkbox that submits; a button
+ * PatchPoint's toggle and the opt-in feedback come from `attachStrata`, which it loads.
+ */
+import Behaviour from "./Behaviour.astro";
+import Field from "./Field.astro";
+import { fieldControl } from "./field.ts";
+import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+import type { StrataLampColour } from "../shared/lamp.ts";
+import { patchLedMarkup, patchPointMarkup } from "../shared/patch-point.ts";
+
+interface Props {
+  id?: string;
+  checked?: boolean;
+  /** A `<button aria-pressed>` instead of a checkbox: connected while pressed. */
+  button?: boolean;
+  /** For a button PatchPoint, whether it is connected (`aria-pressed`); not pressed by default. */
+  connected?: boolean;
+  /** An LED under the jack, lit while it is connected: `true` for the `success` colour, or a colour role. */
+  led?: boolean | StrataLampColour;
+  help?: string;
+  error?: string;
+  required?: boolean;
+  disabled?: boolean;
+  invalid?: boolean;
+  errorPrefix?: string;
+  size?: StrataSize;
+  material?: string;
+  level?: StrataLevel;
+  class?: string;
+  style?: string;
+  [attribute: string]: unknown;
+}
+
+const { id, checked, button = false, connected = false, led = false, help, error, required, disabled, invalid, errorPrefix, size, material, level, class: className, style, ...rest } = Astro.props;
+const field = fieldControl({ id, help, error, required, disabled, invalid }, "patch");
+const { required: _required, ...buttonAttrs } = field.attrs;
+const rowClass = classes("ug-patch-point", button && "ug-patch-point--button", className);
+const colour = led === true ? "success" : led || undefined;
+---
+<Field wrap={field.wrap} controlId={field.id} help={help} error={error} errorPrefix={errorPrefix}>
+  {button
+    ? <button class={rowClass} style={style} type="button" aria-pressed={connected ? "true" : "false"} {...strataAttributes({ size, material, level })} {...buttonAttrs} {...rest}><span class="ug-patch-point__object" aria-hidden="true">{patchPointMarkup.map(part => <span class={part.className} data-strata-face={part.face}></span>)}</span>{led && <span class="ug-status-light ug-patch-point__led" aria-hidden="true" data-strata-colour={colour}><span class="ug-status-light__object" aria-hidden="true">{patchLedMarkup.map(part => <span class={part.className} data-strata-face={part.face}></span>)}</span></span>}<span class="ug-patch-point__label"><slot /></span></button>
+    : <label class={rowClass} style={style} {...strataAttributes({ size, material, level })}><input class="ug-patch-point__input" type="checkbox" checked={checked} {...field.attrs} {...rest} /><span class="ug-patch-point__object" aria-hidden="true">{patchPointMarkup.map(part => <span class={part.className} data-strata-face={part.face}></span>)}</span>{led && <span class="ug-status-light ug-patch-point__led" aria-hidden="true" data-strata-colour={colour}><span class="ug-status-light__object" aria-hidden="true">{patchLedMarkup.map(part => <span class={part.className} data-strata-face={part.face}></span>)}</span></span>}<span class="ug-patch-point__label"><slot /></span></label>}
+</Field>
+<Behaviour />

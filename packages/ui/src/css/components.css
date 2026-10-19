@@ -3125,6 +3125,357 @@
   :where(.ug-carousel:dir(rtl)) :where(.ug-carousel__previous) > :where(.ug-icon-button__icon:empty)::before { rotate: -135deg; }
   :where(.ug-carousel:dir(rtl)) :where(.ug-carousel__next) > :where(.ug-icon-button__icon:empty)::before { rotate: 45deg; }
 
+  /* ---- JogWheel: a native range input over a large flat wheel with a finger dimple (anatomy page jog-wheel.md) ---- */
+
+  /*
+   * The dial is the wheel plus 16 px of room on every side (its cast shadow, and the perspective of the Instrument parts), with the
+   * bearing recess it rolls in, 4 px wider than the wheel on each side, printed on the face. The transparent input covers the whole dial
+   * and takes every press; the drawn parts take none. The dimple turns with `--strata-jog-angle`, the wheel's accumulated angle in
+   * degrees: it is not the value, and it keeps counting past a wrap, so the wheel never turns back. Every size is an even number of px, so
+   * the centre is a whole pixel.
+   */
+  :where(.ug-jog-wheel) {
+    --_size: var(--strata-jog-wheel-size);
+    --_dimple: round(nearest, calc(var(--_size) * 0.2), 2px);
+    --_at: calc(var(--_size) * 0.34);
+    --_ink: color-mix(in srgb, var(--strata-colour-edge), black 55%);
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--strata-space-1);
+    max-width: 100%;
+    color: var(--strata-colour-text);
+    font-family: var(--strata-font-family);
+  }
+  :where(.ug-jog-wheel__dial) {
+    position: relative;
+    flex: none;
+    box-sizing: border-box;
+    width: calc(var(--_size) + 32px);
+    height: calc(var(--_size) + 32px);
+  }
+  /* The recess: a well in the face, a darker disc printed under the wheel. */
+  :where(.ug-jog-wheel__well) {
+    --_bevel: 3px;
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    width: calc(var(--_size) + 8px);
+    height: calc(var(--_size) + 8px);
+    margin: auto;
+    border-radius: 50%;
+    background-color: var(--strata-colour-track);
+    pointer-events: none;
+  }
+  /* The wheel: spun metal, flat, its circular hairlines and a bow-tie highlight along the light's azimuth. */
+  :where(.ug-jog-wheel__wheel) {
+    --_h: calc(var(--strata-elevation-raised) * 1.5);
+    --_bevel: 4px;
+    --_finish:
+      repeating-radial-gradient(circle, rgb(255 255 255 / calc(0.06 * min(1, var(--_gain)))) 0 0.6px, rgb(0 0 0 / calc(0.05 * min(1, var(--_gain)))) 0.6px 1.4px),
+      conic-gradient(from calc(var(--strata-light-azimuth) * 1deg), rgb(255 255 255 / calc(0.6 * min(1, var(--_gain)))), rgb(255 255 255 / 0) 45deg, rgb(0 0 0 / calc(0.1 * min(1, var(--_gain)))) 90deg,
+        rgb(255 255 255 / 0) 135deg, rgb(255 255 255 / calc(0.45 * min(1, var(--_gain)))) 180deg, rgb(255 255 255 / 0) 225deg, rgb(0 0 0 / calc(0.1 * min(1, var(--_gain)))) 270deg,
+        rgb(255 255 255 / 0) 315deg, rgb(255 255 255 / calc(0.6 * min(1, var(--_gain)))));
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    width: var(--_size);
+    height: var(--_size);
+    margin: auto;
+    border-radius: 50%;
+    background-color: var(--strata-colour-knob);
+    pointer-events: none;
+  }
+  /* Only the dimple turns: the wheel keeps its box, so its face never changes size. */
+  :where(.ug-jog-wheel__turn) {
+    position: absolute;
+    inset: 0;
+    rotate: calc(var(--strata-jog-angle, 0) * 1deg);
+  }
+  /* A detented wheel settles on its step with a little overshoot; a continuous one follows the pointer at once. */
+  :where(.ug-jog-wheel--detented .ug-jog-wheel__turn) { transition: rotate var(--strata-motion-fast) cubic-bezier(0.3, 1.45, 0.55, 1); }
+  /* The finger dimple: a small well in the wheel's face. Its light is turned back by the wheel's angle, so the dish is lit from the light's side wherever it is. */
+  :where(.ug-jog-wheel__dimple) {
+    --_a: calc(var(--strata-jog-angle, 0) * 1deg);
+    --_jx: calc(var(--strata-light-x) / max(0.0001, hypot(var(--strata-light-x), var(--strata-light-y))));
+    --_jy: calc(var(--strata-light-y) / max(0.0001, hypot(var(--strata-light-x), var(--strata-light-y))));
+    --_lx: calc(var(--_jx) * cos(var(--_a)) + var(--_jy) * sin(var(--_a)));
+    --_ly: calc(var(--_jy) * cos(var(--_a)) - var(--_jx) * sin(var(--_a)));
+    --_bevel: 3px;
+    position: absolute;
+    left: calc(50% - var(--_dimple) / 2);
+    top: calc(50% - var(--_at) - var(--_dimple) / 2);
+    box-sizing: border-box;
+    width: var(--_dimple);
+    height: var(--_dimple);
+    border-radius: 50%;
+    background-color: color-mix(in srgb, var(--strata-colour-knob), var(--strata-colour-edge) 38%);
+  }
+  :where(.ug-jog-wheel__input) {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    appearance: none;
+    background: transparent;
+    outline: none;
+    cursor: grab;
+    touch-action: none;
+  }
+  :where(.ug-jog-wheel__input)::-webkit-slider-runnable-track { height: 100%; border: 0; background: transparent; }
+  /* The thumb is not drawn at all: one that moves with the value is paint, and a wheel turning must not recapture its layer. */
+  :where(.ug-jog-wheel__input)::-webkit-slider-thumb { display: none; }
+  :where(.ug-jog-wheel__input)::-moz-range-track { height: 100%; border: 0; background: transparent; }
+  :where(.ug-jog-wheel__input)::-moz-range-thumb { width: 0; height: 0; border: 0; background: transparent; }
+  /* The printed legend, on the faceplate under the dial. */
+  :where(.ug-jog-wheel__label) {
+    max-width: 100%;
+    font-size: var(--strata-font-size-small);
+    font-weight: var(--strata-font-weight-strong);
+    letter-spacing: 0.08em;
+    text-align: center;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+  /* Focus: an accent ring round the recess, in every presentation (it is captured content on the GPU). */
+  :where(.ug-jog-wheel__dial:has(> .ug-jog-wheel__input:is(:focus-visible, [data-strata-preview~="focus"])) .ug-jog-wheel__well) {
+    outline: var(--strata-focus-width) solid var(--strata-colour-accent);
+    outline-offset: var(--strata-focus-offset);
+  }
+  :where(.ug-jog-wheel__dial:has(> .ug-jog-wheel__input:is(:hover, [data-strata-preview~="hover"]):not(:disabled)) .ug-jog-wheel__wheel) {
+    --_lift: var(--strata-state-hover-height);
+    --_tone: var(--_hover-tone);
+  }
+  :where(.ug-jog-wheel:has(.ug-jog-wheel__input:disabled)) { color: color-mix(in srgb, var(--strata-colour-text) 38%, transparent); }
+  :where(.ug-jog-wheel:has(.ug-jog-wheel__input:disabled)) :where(.ug-jog-wheel__dial) { opacity: 0.38; }
+  :where(.ug-jog-wheel:has(.ug-jog-wheel__input:disabled)) :where(.ug-jog-wheel__wheel) { --_h: 0px; --_gain: 0; }
+  :where(.ug-jog-wheel__input:disabled) { cursor: not-allowed; }
+
+  /* ---- PatchPoint and PatchBay: a jack in a washer over a native checkbox or button, and a fieldset of jacks (anatomy page patch-point.md) ---- */
+
+  /*
+   * The native control is a transparent square box, the washer + 20 (56 at medium), over the object; a press anywhere on the box is a press on
+   * the control. The object is a washer (Ø `size.patchPoint`) with a hole in it, printed dark; connected, a plug stands out of the hole with a
+   * short cable. Under the object, in a column: the optional LED (a StatusLight lens, lit while connected) and the printed label.
+   */
+  :where(.ug-patch-point) {
+    --_washer: var(--strata-patch-point-size);
+    --_box: calc(var(--_washer) + 20px);
+    --_bore: round(nearest, calc(var(--_washer) * 0.44), 2px);
+    --_plug: round(nearest, calc(var(--_washer) * 0.34), 2px);
+    --_cable: max(3px, round(nearest, calc(var(--_washer) * 0.11), 1px));
+    --_ink: color-mix(in srgb, var(--strata-colour-edge), black 55%);
+    position: relative;
+    display: inline-grid;
+    grid-template-columns: minmax(var(--_box), auto);
+    justify-items: center;
+    align-content: start;
+    row-gap: var(--strata-space-1);
+    max-width: 100%;
+    color: var(--strata-colour-text);
+    font-family: var(--strata-font-family);
+    cursor: pointer;
+  }
+  /* The native control: a transparent box over the object, with no face. */
+  :where(.ug-patch-point__input) {
+    grid-area: 1 / 1;
+    box-sizing: border-box;
+    width: var(--_box);
+    height: var(--_box);
+    margin: 0;
+    padding: 0;
+    appearance: none;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: inherit;
+    cursor: inherit;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :where(.ug-patch-point__input:focus-visible) { outline: none; }
+  /* A button PatchPoint is the native button itself, with its object, its LED and its label inside it. */
+  :where(.ug-patch-point--button) {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    appearance: none;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    line-height: inherit;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :where(.ug-patch-point--button:focus-visible) { outline: none; }
+  :where(.ug-patch-point__object) {
+    grid-area: 1 / 1;
+    position: relative;
+    width: var(--_box);
+    height: var(--_box);
+    pointer-events: none;
+  }
+  :where(.ug-patch-point__object) :where(*) { position: absolute; box-sizing: border-box; pointer-events: none; }
+  :where(.ug-patch-point__washer) {
+    --_h: 3px;
+    --_bevel: 3px;
+    --_finish: var(--strata-finish-role-knob);
+    inset: 0;
+    width: var(--_washer);
+    height: var(--_washer);
+    margin: auto;
+    border-radius: 50%;
+    background-color: var(--strata-colour-knob);
+  }
+  /* The hole is printed dark at every level, so an unplugged jack is a recess and the GPU's well gives it its edge. */
+  :where(.ug-patch-point__jack) {
+    --_bevel: 3px;
+    inset: 0;
+    width: var(--_bore);
+    height: var(--_bore);
+    margin: auto;
+    border-radius: 50%;
+    background-color: color-mix(in srgb, var(--strata-colour-edge), black 72%);
+  }
+  /* The cable's stub runs from the plug towards the bottom of the screen, to just short of the washer's edge. */
+  :where(.ug-patch-point__stub) {
+    left: calc(50% - var(--_cable) / 2);
+    top: 50%;
+    width: var(--_cable);
+    height: calc(var(--_washer) / 2 - 2px);
+    border-radius: 0 0 calc(var(--_cable) / 2) calc(var(--_cable) / 2);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--_ink), white 22%), var(--_ink) 55%, color-mix(in srgb, var(--_ink), black 35%));
+    visibility: hidden;
+  }
+  :where(.ug-patch-point__plug) {
+    --_h: 4px;
+    --_bevel: 3px;
+    inset: 0;
+    width: var(--_plug);
+    height: var(--_plug);
+    margin: auto;
+    border-radius: 50%;
+    background: radial-gradient(circle at 36% 30%, color-mix(in srgb, var(--strata-colour-knob), white 62%) 0, var(--strata-colour-knob) 48%, color-mix(in srgb, var(--strata-colour-knob), var(--strata-colour-edge) 50%) 100%);
+    visibility: hidden;
+  }
+  /* Connected: checked, or pressed. The plug and the cable show; the state is also the control's own. */
+  :where(.ug-patch-point:has(> .ug-patch-point__input:checked), .ug-patch-point--button[aria-pressed="true"]) :where(.ug-patch-point__plug, .ug-patch-point__stub) { visibility: visible; }
+  /* The LED: a StatusLight lens, unlit until the jack is connected (and a disabled jack's is dark). */
+  :where(.ug-patch-point__led) { --strata-lit: 0; }
+  :where(.ug-patch-point:has(> .ug-patch-point__input:checked:not(:disabled)), .ug-patch-point--button[aria-pressed="true"]:not(:disabled)) :where(.ug-patch-point__led) { --strata-lit: 1; }
+  :where(.ug-patch-point__label) {
+    max-width: 100%;
+    min-width: 0;
+    font-size: var(--strata-font-size-small);
+    font-weight: var(--strata-font-weight-strong);
+    letter-spacing: 0.08em;
+    text-align: center;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+  /* Focus: an accent ring round the washer. Invalid: a danger edge. */
+  :where(.ug-patch-point:has(> .ug-patch-point__input:is(:focus-visible, [data-strata-preview~="focus"])), .ug-patch-point--button:is(:focus-visible, [data-strata-preview~="focus"])) :where(.ug-patch-point__washer) {
+    outline: var(--strata-focus-width) solid var(--strata-colour-accent);
+    outline-offset: var(--strata-focus-offset);
+  }
+  :where(.ug-patch-point:has(> .ug-patch-point__input[aria-invalid="true"])) :where(.ug-patch-point__washer) { border: 2px solid var(--strata-colour-danger); }
+  /* The washer lifts a little under the pointer, as keys do (section 11). */
+  :where(.ug-patch-point:has(> .ug-patch-point__input:is(:hover, [data-strata-preview~="hover"]):not(:disabled)), .ug-patch-point--button:is(:hover, [data-strata-preview~="hover"]):not(:disabled)) :where(.ug-patch-point__washer) {
+    --_lift: var(--strata-state-hover-height);
+    --_tone: var(--_hover-tone);
+  }
+  :where(.ug-patch-point:has(> .ug-patch-point__input:disabled), .ug-patch-point--button:disabled) { color: color-mix(in srgb, var(--strata-colour-text) 38%, transparent); cursor: not-allowed; }
+  :where(.ug-patch-point:has(> .ug-patch-point__input:disabled), .ug-patch-point--button:disabled) :where(.ug-patch-point__object) { opacity: 0.38; }
+  :where(.ug-patch-point:has(> .ug-patch-point__input:disabled), .ug-patch-point--button:disabled) :where(.ug-patch-point__washer, .ug-patch-point__plug) { --_h: 0px; --_gain: 0; }
+
+  /* PatchBay: a fieldset of jacks on one plinth, its legend and the jacks' labels printed on it. The columns are `--strata-patch-columns`, or as many as fit. */
+  :where(.ug-patch-bay) {
+    --_h: var(--strata-elevation-raised);
+    --_finish: var(--strata-finish-role-panel);
+    box-sizing: border-box;
+    min-width: 0;
+    margin: 0;
+    padding: var(--strata-space-4);
+    border-radius: var(--strata-radius-panel);
+    background-color: var(--strata-colour-secondary);
+    color: var(--strata-colour-text);
+    font-family: var(--strata-font-family);
+  }
+  /* The legend is floated into the plinth, so it prints on it instead of straddling its edge. */
+  :where(.ug-patch-bay__legend) {
+    float: left;
+    width: 100%;
+    padding: 0;
+    font-size: var(--strata-font-size-small);
+    font-weight: var(--strata-font-weight-strong);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+  :where(.ug-patch-bay__jacks) {
+    clear: both;
+    display: grid;
+    grid-template-columns: repeat(var(--strata-patch-columns, auto-fill), minmax(calc(var(--strata-patch-point-size) + 28px), 1fr));
+    gap: var(--strata-gap-control) var(--strata-space-3);
+    justify-items: center;
+    align-items: start;
+    margin-top: var(--strata-space-3);
+  }
+  :where(.ug-patch-bay:disabled) { color: color-mix(in srgb, var(--strata-colour-text) 38%, transparent); }
+
+  /*
+   * Face mode and preferences for the JogWheel and the PatchPoint. When the GPU draws the dimple (at every level) and the plug (at every
+   * level), their CSS paint is hidden (`data-strata-dome`), and at the Instrument level the wheel, the washer, the plug and the stub are
+   * parts: their paint is hidden too, so a turn or a connect repaints nothing (the recess, the printed hole and the focus ring stay).
+   */
+  :where([data-strata-mode="face"]) .ug-jog-wheel__wheel[data-strata-dome] { border-color: transparent; }
+  :where([data-strata-mode="face"]) .ug-jog-wheel__dimple[data-strata-dome] { border-color: transparent; }
+  :where([data-strata-mode="face"]) .ug-patch-point__washer[data-strata-dome] { border-color: transparent; }
+  :where([data-strata-mode="face"]) .ug-patch-point__stub[data-strata-dome] { visibility: hidden; }
+  @media (prefers-reduced-motion: reduce) {
+    :where(.ug-jog-wheel--detented .ug-jog-wheel__turn) { transition: none; }
+  }
+  @media (prefers-contrast: more) {
+    :where(.ug-jog-wheel) { --_ink: var(--strata-colour-text); }
+    :where(.ug-jog-wheel__well, .ug-jog-wheel__wheel, .ug-jog-wheel__dimple, .ug-patch-point__washer, .ug-patch-point__jack, .ug-patch-point__plug) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
+    :where(.ug-patch-point__stub) { background: var(--strata-colour-text); }
+  }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-jog-wheel__well, .ug-jog-wheel__wheel, .ug-jog-wheel__dimple, .ug-patch-point__washer, .ug-patch-point__jack, .ug-patch-point__plug) {
+    border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text);
+  }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-patch-point__stub) { background: var(--strata-colour-text); }
+  @media (forced-colors: active) {
+    /* The jog wheel: a Canvas wheel in a Canvas recess, both edged in CanvasText, a CanvasText dimple, a Highlight focus ring, GrayText when disabled. */
+    :where(.ug-jog-wheel__well, .ug-jog-wheel__wheel) { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; box-shadow: none; filter: none; }
+    :where(.ug-jog-wheel__dimple) { forced-color-adjust: none; border: 0; background: CanvasText; box-shadow: none; }
+    :where(.ug-jog-wheel__dial:has(> .ug-jog-wheel__input:focus-visible) .ug-jog-wheel__well) { outline-color: Highlight; }
+    :where(.ug-jog-wheel__dial:has(> .ug-jog-wheel__input:disabled)) { opacity: 1; }
+    :where(.ug-jog-wheel:has(.ug-jog-wheel__input:disabled)) :where(.ug-jog-wheel__well, .ug-jog-wheel__wheel) { border-color: GrayText; }
+    :where(.ug-jog-wheel:has(.ug-jog-wheel__input:disabled)) :where(.ug-jog-wheel__dimple) { background: GrayText; }
+    :where(.ug-jog-wheel__label) { color: CanvasText; }
+    /* The patch point: a Canvas washer edged in CanvasText round a CanvasText hole; connected, a Highlight plug and cable, so the state shows by fill
+       and by the control's own state; no shadows; a Highlight focus ring, GrayText when disabled. */
+    :where(.ug-patch-point__washer, .ug-patch-point__jack, .ug-patch-point__plug) { forced-color-adjust: none; border: 1px solid CanvasText; box-shadow: none; filter: none; }
+    :where(.ug-patch-point__washer) { background: Canvas; }
+    :where(.ug-patch-point__jack) { background: CanvasText; }
+    :where(.ug-patch-point__plug) { background: Highlight; }
+    :where(.ug-patch-point__stub) { forced-color-adjust: none; background: Highlight; }
+    :where(.ug-patch-point:has(> .ug-patch-point__input:focus-visible), .ug-patch-point--button:focus-visible) :where(.ug-patch-point__washer) { outline-color: Highlight; }
+    :where(.ug-patch-point:has(> .ug-patch-point__input:disabled), .ug-patch-point--button:disabled) :where(.ug-patch-point__object) { opacity: 1; }
+    :where(.ug-patch-point:has(> .ug-patch-point__input:disabled), .ug-patch-point--button:disabled) :where(.ug-patch-point__washer, .ug-patch-point__plug, .ug-patch-point__jack) { border-color: GrayText; }
+    :where(.ug-patch-point:has(> .ug-patch-point__input:disabled), .ug-patch-point--button:disabled) :where(.ug-patch-point__jack) { background: GrayText; }
+    :where(.ug-patch-point--button) { forced-color-adjust: none; color: ButtonText; }
+    :where(.ug-patch-point--button:disabled) { color: GrayText; }
+    :where(.ug-patch-bay) { border: 1px solid CanvasText; }
+  }
+
   /* ---- Combobox ---- */
 
   /* A TextField with the browser's suggestion list: a chevron printed on the face at the end. The browser's own list
