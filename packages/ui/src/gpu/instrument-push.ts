@@ -22,7 +22,7 @@
  */
 import { fittedRoundHeight, pushGeometry, pushTravel, PUSH_LED, type StrataPushForm } from "../shared/push-button.ts";
 import { lensGlass, lensMaterial, lensOpaque, lensProfile, lampMaterials } from "./instrument-lamp.ts";
-import type { InstrumentProfile, InstrumentRecipe } from "./instrument.ts";
+import { boxMargin, type InstrumentProfile, type InstrumentRecipe } from "./instrument.ts";
 
 type Vec3 = [number, number, number];
 type Box = [number, number, number, number];
@@ -86,8 +86,8 @@ export interface PushInput {
   state: { hover: boolean; pressed: boolean; disabled: boolean };
   /** The key light; given, the casters are capped so their shadows stay in `box`. */
   light?: { azimuth: number; elevation: number };
-  /** The Relief primitive drawn instead if the object cannot be drawn as parts. */
-  relief: { height: number; material: string };
+  /** The Relief primitive drawn instead if the object cannot be drawn as parts; its rect and radius are the box's unless given (the Tabs' rail gives its cap's). */
+  relief: { height: number; material: string; rect?: Box; radius?: number };
 }
 
 const centreOf = ([x, y, w, h]: Box): [number, number] => [round(x + w / 2), round(y + h / 2)];
@@ -150,7 +150,7 @@ export function pushObject(input: PushInput, profile: (name: string, shape: Inst
   const boxRadius = shaped(input.box, radii.box);
   return {
     id: input.id, rect: input.box, bounds: { rect: input.box, radius: boxRadius }, t: Math.min(1, Math.max(0, input.t)), parts,
-    relief: { face: "raised", rect: input.box, radius: boxRadius, height: input.relief.height, material: input.relief.material },
+    relief: { face: "raised", rect: input.relief.rect ?? input.box, radius: input.relief.radius ?? boxRadius, height: input.relief.height, material: input.relief.material },
   };
 }
 
@@ -166,6 +166,12 @@ export interface BankPlinthInput {
   state: { hover: boolean; pressed: boolean; disabled: boolean };
   light?: { azimuth: number; elevation: number };
   relief: { height: number; material: string };
+  /**
+   * The plinth is the native element itself, with no room round it (the Tabs' rail: the tablist): `plinth` is `box`, and the part stands the box
+   * rule's margin inside it, so perspective cannot carry it out, and casts no shadow of its own (the box leaves it no room; the keys' shadows
+   * fall on it). `stage` is the stage's size, for that margin.
+   */
+  flush?: { stage: { width: number; height: number } };
 }
 
 /** The plinth's height at 50% depth, px: the keys' and the LEDs' base. */
@@ -175,7 +181,19 @@ export const bankPlinthHeight = (scale: number) => round(BANK_PLINTH * scale);
 
 /** A bank's plinth as an Instrument object: one polished part with a 0.8 px edge break, its shadow fitted to the group's box. */
 export function bankPlinthObject(input: BankPlinthInput, profile: (name: string, shape: InstrumentProfile) => string): PushObject {
-  const height = bankPlinthHeight(input.scale), [bx, by, bw, bh] = input.box, rect = input.plinth.map(round) as Box;
+  const height = bankPlinthHeight(input.scale), [bx, by, bw, bh] = input.box;
+  if (input.flush) {
+    // Inset by the box rule's margin, to the nearest quarter px (a layer that moves reports its box with float noise, which must not make a new profile).
+    const m = boxMargin(height + 1, input.flush.stage), width = Math.round((bw - 2 * m) * 4) / 4, length = Math.round((bh - 2 * m) * 4) / 4;
+    const flat = input.box.map(round) as Box, edge = round(Math.max(0, Math.min(input.radius - m, width / 2, length / 2)));
+    return {
+      id: input.id, rect: flat, bounds: { rect: flat, radius: 0 }, t: 0,
+      parts: [{ kind: "bezel", profile: profile("bank-plinth", { type: "prism", width, length, radius: edge, height, chamfer: 0.8 }),
+        at: [round(bx + bw / 2), round(by + bh / 2), 0], material: "pushBezel", caster: null, state: input.state }],
+      relief: { face: "raised", rect: flat, radius: input.radius, height: input.relief.height, material: input.relief.material },
+    };
+  }
+  const rect = input.plinth.map(round) as Box;
   const radius = shaped(input.plinth, input.radius);
   let caster: PushPart["caster"] | undefined;
   if (input.light) {

@@ -190,7 +190,11 @@ activation, `strata-tab-change` and the reflow are exactly the Tabs'; the access
 </div>
 ```
 
-- **The construction is the bank's** (one polished plinth, each key its own object). The **tablist is the plinth** (`data-strata-face="raised"`, polished metal in the `knob`
+- **Built as the bank's keys** (one polished plinth, each key its own object): the rail and the RadioGroup's bank and the SegmentedControl's latching form are one construction
+  (`gpu/instrument-bank.ts`, `gpu/instrument-push.ts`, `gpu/push-forms.ts`), so a tab and a bank key of the same size and state are the same parts, profiles and materials, with the same registry
+  calls (`registerKeyBody`, `keyAtRelief`, `INSTRUMENT_PUSH_MATERIALS`), and the same shadow fit. The Tabs add only their mapping (`gpu/tabs-forms.ts`): the tablist is the plinth (the native element
+  itself, so it has no room round it and casts no shadow of its own), each `<button role="tab">` a key, its `.ug-tab__cap` the cap, its `.ug-tab__led` the LED, and the selected tab the one that is
+  down (`aria-selected`, `--strata-push-t` 0.45). The **tablist is the plinth** (`data-strata-face="raised"`, polished metal in the `knob`
   material; there is no `.ug-tabs__rail` groove and no `.ug-tab__indicator`). Each tab's native button holds its **cap** (`.ug-tab__cap`, a raised face: a key, the label on it) and
   its **LED** (`.ug-tab__led`, a lens on the plinth above the cap). The button covers both and the room round them, so every press lands on it.
 - **Latching.** The selected tab is the key that is down (`--strata-push-t` 0.45, the push button's latched place, `spring.button`; 1 while it is held) and its LED lit
@@ -202,9 +206,9 @@ activation, `strata-tab-change` and the reflow are exactly the Tabs'; the access
   and Space; the focus ring is the CSS outline round the cap.
 - **Reflow.** The plinth wraps its keys at a narrow width as the flat tabs do (`flex-wrap`), and a vertical rail is a column plinth; text at 200% grows the caps, not the page.
 - **Presentations.** Relief: the plinth and each cap are raised faces and each LED a ring; the selected cap is pressed. Objects: the plinth a slab, each cap a key standing on it
-  (travelling when pressed, fitted so its shadow stays in its tab's box), each LED a dome. Instrument: **one polished plinth part** (the box rule's margin inside the tablist's
-  box, no shadow of its own) and, per tab, an object of a body with the captured cap travelling on the CSS throw and a glass LED lens with its emitter, both standing on the
-  plinth; selecting a tab changes the pose and the emitters, and the capture core makes of the changed `aria-selected`.
+  (travelling when pressed, fitted so its shadow stays in its tab's box), each LED a dome. Instrument: **one polished plinth part** (the bank's, the box rule's margin inside the tablist's
+  box, no shadow of its own) and, per tab, the bank's key object (a body with the captured cap travelling on the CSS throw and a glass LED lens with its emitter, both standing on the
+  plinth); selecting a tab changes the pose and the emitters, and the capture core makes of the changed `aria-selected`.
 - **Props.** `form` on `Tabs` (React, Vue and Astro): `rail`; `flush` or none for the flat tabs; any other string is not used (a `<div>` has no native `form`). Everything else is the
   Tabs'.
 

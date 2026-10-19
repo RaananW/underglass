@@ -288,7 +288,7 @@ for (const dpr of [1, 2]) for (const level of levels) test(`the Tabs rails at ${
     const ids = scene.objects.map(object => object.id);
     expect(ids.filter(id => /^rail/.test(id)).length, "a plinth per rail").toBe(3);
     expect(ids, "a key per rail tab").toEqual(expect.arrayContaining(["acct-tab-profile", "acct-tab-alerts", "manual-tab-security", "side-tab-billing"]));
-    expect(scene.objects.filter(object => object.parts.some(part => /^bezel:tabPlinth/.test(part))).length).toBe(3);
+    expect(scene.objects.filter(object => object.parts.some(part => /^bezel:pushBezel/.test(part))).length).toBe(3);
     const key = scene.objects.find(object => object.id === "acct-tab-profile");
     expect(key.parts.map(part => part.split(":")[0]), "a body, the captured cap and the LED lens").toEqual(["plinth", "cap", "lens"]);
     expect(key.t, "the selected key is latched at 0.45").toBeCloseTo(0.45, 2);

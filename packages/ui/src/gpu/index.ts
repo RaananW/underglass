@@ -93,7 +93,8 @@ import { panelMotion, type PanelMover } from "../dom/motion.ts";
 import { liveStrataMeter } from "../dom/meter.ts";
 import { switchFormEntries } from "./switch-forms.ts";
 import { pushFormEntries } from "./push-forms.ts";
-import { bankPlinthHeight, bankPlinthObject, pushHeight, pushMaterials, pushMaterialsOf, pushObject } from "./instrument-push.ts";
+import { pushHeight, pushMaterialsOf, pushObject } from "./instrument-push.ts";
+import { addBankKey, addBankPlinth, type BankScene } from "./instrument-bank.ts";
 import { followSpring } from "./instrument-rotary.ts";
 import { pushEmitterDefaults, pushPosition, ringEmitter, type PushEmitterTokens } from "../shared/push-button.ts";
 import { rotaryFraction } from "../shared/rotary-selector.ts";
@@ -120,8 +121,7 @@ import type { StrataSwitchForm } from "../shared/switch-forms.ts";
 import { displayFormEntries } from "./display-forms.ts";
 import { bezelCaster, displayHeight, displayMaterials, displayObject } from "./instrument-display.ts";
 import { displayEmitterDefaults, displayEmitters, finishAllowed, type DisplayEmitterTokens } from "../shared/display.ts";
-import { tabFormEntries, tabState } from "./tabs-forms.ts";
-import { railHeight, railKeyMaterials, railKeyObject, railMaterials, railPlinthObject } from "./instrument-tabs.ts";
+import { RAIL_LIST, RAIL_TAB, tabPosition, tabState } from "./tabs-forms.ts";
 
 export type { CustomPartInput, CustomPartSource, InstrumentMeshProfile, InstrumentObject, InstrumentPart, InstrumentProfile, InstrumentRecipe, KnobSpring } from "./instrument.ts";
 export { customPart } from "./instrument.ts";
@@ -709,9 +709,9 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     }
     // A rail Tabs (`tabs-forms.ts`, `instrument-tabs.ts`): the tablist is a plinth, each tab's cap a key on it and its LED a lens on it. At the Instrument
     // level they are the rail's objects (the cap's CSS paint stays: the capture of it is the key's cap); below it the cap is drawn just after.
-    const railTab = element.closest<HTMLElement>(".ug-tabs[data-strata-form='rail'] .ug-tab");
+    const railTab = element.closest<HTMLElement>(RAIL_TAB);
     if (instrumentLayer && effective(element) !== "relief") {
-      if (element.matches(".ug-tabs[data-strata-form='rail'] > .ug-tabs__list")) { mineTabs.lists.add(element); options.domes?.add(element); continue; }
+      if (element.matches(RAIL_LIST)) { mineTabs.lists.add(element); options.domes?.add(element); continue; }
       if (railTab && element.matches(".ug-tab__cap")) { mineTabs.keys.add(railTab); options.domes?.add(railTab); continue; }
       if (railTab && element.matches(".ug-tab__led") && segmentInfos.has(element)) { mineTabs.keys.add(railTab); options.domes?.add(element); continue; }
     }
@@ -769,11 +769,13 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     if (form) { entries.push(...form); continue; }
     // A push button's bezel and cap (`push-forms.ts`): inside the button's box, shadows included.
     const isPlinth = element.matches(".ug-bank__plinth");
-    const pushRoot = isPlinth ? element.closest<HTMLElement>("fieldset") : element.matches(".ug-push__bezel, .ug-push__cap") ? element.closest<HTMLElement>(pushHosts) : null;
+    // A rail tab's cap is a bank key's (`tabs-forms.ts`): the native tab's box holds it, and its state is the tab's (selected is down).
+    const railCap = railTab && element.matches(".ug-tab__cap") ? railTab : null;
+    const pushRoot = railCap ?? (isPlinth ? element.closest<HTMLElement>("fieldset") : element.matches(".ug-push__bezel, .ug-push__cap") ? element.closest<HTMLElement>(pushHosts) : null);
     if (pushRoot) {
-      const bezelElement = pushRoot.querySelector(".ug-push__bezel");
-      const parts = pushFormEntries(element, { rect, state, objects: objects(element), base: baseOf(element), box: rectWithin(pushRoot, panel), ...(isPlinth || pushRoot.classList.contains("ug-latch") ? { radius } : {}),
-        bezel: bezelElement ? rectWithin(bezelElement, panel) : pushRoot.matches("button") ? rectWithin(pushRoot, panel) : undefined,
+      const bezelElement = railCap ? null : pushRoot.querySelector(".ug-push__bezel");
+      const parts = pushFormEntries(element, { rect, state: railCap ? tabState(railCap) : state, objects: objects(element), base: baseOf(element), box: rectWithin(pushRoot, panel), ...(isPlinth || railCap || pushRoot.classList.contains("ug-latch") ? { radius } : {}),
+        bezel: bezelElement ? rectWithin(bezelElement, panel) : !railCap && pushRoot.matches("button") ? rectWithin(pushRoot, panel) : undefined,
         material: materialFor, light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, hoverHeight: tokens.number("state.hoverHeight", 1.6), keyTravel });
       if (parts) {
         entries.push(...parts);
@@ -820,12 +822,6 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       const slab = meterParts[0];
       if (slab && isSceneObject(slab) && slab.object === "slab") tops.set(element, (slab.base ?? 0) + slab.height);
       continue;
-    }
-    // A rail tab's cap (`tabs-forms.ts`): a raised face or a key on the plinth, inside the tab's box, its shadow included.
-    if (railTab && element.matches(".ug-tab__cap")) {
-      const parts = tabFormEntries(element, { rect, radius, tab: railTab, box: rectWithin(railTab, panel), objects: objects(element), base: baseOf(element), material: materialFor,
-        light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, hoverHeight: tokens.number("state.hoverHeight", 1.6), keyTravel });
-      if (parts) { entries.push(...parts); continue; }
     }
     // A Display's bezel and window (`display-forms.ts`): inside the native element's box, shadows included.
     const display = displayRoot && mineDisplays.infos.get(displayRoot);
@@ -1215,38 +1211,24 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     for (const name of ["displayBezel", "displayGlass"] as const) materials[name] ??= displayMaterials[name];
     tallest = Math.max(tallest, displayHeight(scale));
   }
-  // A rail Tabs: the plinth (the tablist, one polished part), then each tab's key standing on it with its LED lens (its emitter lit by `--strata-lit`).
+  // Keys on a plinth (`gpu/instrument-bank.ts`): one construction for a RadioGroup's bank, a SegmentedControl's latching form and a rail Tabs, each component's
+  // mapping naming its plinth, its keys and their LEDs. The rail Tabs: the plinth is the tablist itself (no room round it, so flush), each tab a key with its LED.
+  const bank: BankScene = { objects, entries, materials, registry: keyCaps, layers: settings.materials, profile, light, scale, opaque, raised, use, room: () => objects.length + entries.length < 255 };
   const rails = foundTabs.get(panel);
   for (const list of rails?.lists ?? []) {
     const box = rectWithin(list, panel);
-    if (box[2] <= 0 || box[3] <= 0 || objects.length + entries.length >= 255) continue;
-    materials.tabPlinth ??= railMaterials.tabPlinth;
-    objects.push(railPlinthObject({ id: idOf(list, "rail"), box, radius: radiusOf(list, box[2]), scale, stage, state: { hover: false, pressed: false, disabled: false }, light,
-      relief: { height: raised, material: "tabPlinth" } }, profile) as unknown as InstrumentObject);
-    tallest = Math.max(tallest, railHeight(scale));
+    tallest = Math.max(tallest, addBankPlinth(bank, { id: idOf(list, "rail"), box, plinth: box, radius: radiusOf(list, box[2]), state: { hover: false, pressed: false, disabled: false }, flush: { stage } }));
   }
   for (const tab of rails?.keys ?? []) {
     const cap = tab.querySelector<HTMLElement>(".ug-tab__cap"), led = tab.querySelector<HTMLElement>(".ug-tab__led");
-    if (!cap || objects.length + entries.length >= 255) continue;
+    if (!cap) continue;
     const box = rectWithin(tab, panel), capBox = rectWithin(cap, panel);
     if (box[2] <= 0 || box[3] <= 0 || capBox[2] <= 0 || capBox[3] <= 0) continue;
-    const info = led ? context.segmentInfos.get(led) : undefined, state = tabState(tab);
-    const colour = hex(getComputedStyle(cap).backgroundColor), name = `key ${colour}`;
+    const info = led ? context.segmentInfos.get(led) : undefined, state = tabState(tab), capRadius = radiusOf(cap, capBox[2]);
     // The throw's position as the CSS transition has it this frame (`--strata-push-t`: 0.45 selected, 1 held), the number the other levels follow.
-    const read = Number.parseFloat(getComputedStyle(tab).getPropertyValue("--strata-push-t"));
-    const t = Math.min(1, Math.max(0, state.disabled && !state.pressed ? 0 : Number.isFinite(read) ? read : state.pressed ? 0.45 : 0));
-    const relief = { face: "raised" as const, rect: capBox, radius: radiusOf(cap, capBox[2]), height: raised, material: context.materialFor(cap, "raised"), state };
-    if (!materials[name] && Object.keys(materials).length >= INSTRUMENT_PUSH_MATERIALS) { keyCaps.keyAtRelief(tab); entries.push(relief); continue; }
-    const layers = settings.materials[context.materialFor(cap, "raised")];
-    materials[name] ??= { base: { colour, roughness: layers?.base?.roughness ?? 0.45, metallic: layers?.base?.metallic ?? 0 }, coat: { ...layers?.coat } };
-    const keyInput = { id: idOf(tab, "tab"), box, cap: capBox, capRadius: radiusOf(cap, capBox[2]), ...(led && info ? { led: rectWithin(led, panel), emitter: info.index } : {}),
-      scale, role: info?.role ?? "#ff9228", t, material: name, opaque, state: { hover: !!state.hover, pressed: !!state.pressed, disabled: !!state.disabled }, light, relief: { height: raised, material: use("keyCap") } };
-    const railKey = railKeyObject(keyInput, profile) as unknown as InstrumentObject;
-    objects.push(railKey);
-    keyCaps.registerKeyBody({ element: tab, object: railKey, name, height: railHeight(scale) + 1, relief });
-    Object.assign(materials, railKeyMaterials(keyInput));
-    materials.tabPlinth ??= railMaterials.tabPlinth;
-    tallest = Math.max(tallest, railHeight(scale));
+    const t = tabPosition(Number.parseFloat(getComputedStyle(tab).getPropertyValue("--strata-push-t")), state);
+    addBankKey(bank, { element: tab, id: idOf(tab, "tab"), box, cap: capBox, capRadius, boxRadius: 0, ...(led && info ? { led: rectWithin(led, panel), emitter: info.index } : {}), role: info?.role ?? "#ff9228",
+      colour: hex(getComputedStyle(cap).backgroundColor), capMaterial: context.materialFor(cap, "raised"), t, state, onPlinth: true, relief: { rect: capBox, radius: capRadius } });
   }
   // Pads and keypads (`gpu/instrument-pad.ts`): a pad's glass rim with its emitter, body and captured cap; a keypad's plinth and, per key, a body and a captured cap.
   const padded = padKeypadObjects(panel, { scale, light, raised, opaque, profile, materials, layers: settings.materials, materialFor: context.materialFor, use, idOf, room: () => objects.length + entries.length < 255,
@@ -1292,13 +1274,8 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
   }
   // A bank's plinths first, then its keys: the group's native box holds the plinth and its shadow.
   for (const plinth of mine?.banks ?? []) {
-    const group = plinth.closest<HTMLElement>("fieldset") ?? plinth, box = rectWithin(group, panel), at = rectWithin(plinth, panel);
-    if (at[2] <= 0 || at[3] <= 0 || objects.length + entries.length >= 255) continue;
-    const state = context.states(plinth);
-    materials.pushBezel ??= pushMaterials.pushBezel;
-    objects.push(bankPlinthObject({ id: idOf(group, "bank"), box, plinth: at, radius: radiusOf(plinth, at[2]), scale, state: { hover: state.hover, pressed: false, disabled: state.disabled }, light,
-      relief: { height: raised, material: use("keyCap") } }, profile) as unknown as InstrumentObject);
-    tallest = Math.max(tallest, bankPlinthHeight(scale) + 0.1);
+    const group = plinth.closest<HTMLElement>("fieldset") ?? plinth, box = rectWithin(group, panel), at = rectWithin(plinth, panel), state = context.states(plinth);
+    tallest = Math.max(tallest, addBankPlinth(bank, { id: idOf(group, "bank"), box, plinth: at, radius: radiusOf(plinth, at[2]), state: { hover: state.hover, pressed: false, disabled: state.disabled } }));
   }
   for (const root of mine?.instrumentPushes ?? []) {
     const info = mine!.pushes.get(root), bezel = root.querySelector<HTMLElement>(".ug-push__bezel"), ring = root.querySelector<HTMLElement>(".ug-push__ring"), cap = root.querySelector<HTMLElement>(".ug-push__cap");
@@ -1313,14 +1290,20 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     // latching key keeps its latched place: a selected disabled radio is still the one that is down.)
     const read = Number.parseFloat(style.getPropertyValue("--strata-push-t"));
     const t = Math.min(1, Math.max(0, input ? (Number.isFinite(read) ? read : input.checked ? 0.45 : 0) : disabled ? 0 : Number.isFinite(read) ? read : pushPosition({ held: root.matches(":active:not([data-strata-down='false']), [data-strata-down='true']"), latched: root.getAttribute("aria-pressed") === "true", disabled })));
-    // A bank key stands on its plinth.
-    const plinth = root.closest(".ug-bank__plinth"), floor = plinth ? bankPlinthHeight(scale) : 0;
+    // A bank key stands on its plinth: the keys-on-a-plinth construction (`gpu/instrument-bank.ts`), the Tabs' rail's too.
+    if (info.latch && root.closest(".ug-bank__plinth")) {
+      const capBox = rectWithin(cap, panel), boxRadius = radiusOf(root, box[2]);
+      addBankKey(bank, { element: root, id: idOf(input?.id ? input : root, "push"), box, cap: capBox, capRadius: radiusOf(cap, capBox[2]), boxRadius, ...(led && info.led !== undefined ? { led: rectWithin(led, panel), emitter: info.led } : {}),
+        role: info.role, colour, capMaterial: context.materialFor(cap, "raised"), t, state, onPlinth: true, relief: { rect: box, radius: boxRadius } });
+      for (const part of [root, led]) if (part) options.domes?.add(part);
+      continue;
+    }
     if (!materials[name] && Object.keys(materials).length >= INSTRUMENT_PUSH_MATERIALS) { keyCaps.keyAtRelief(root); entries.push({ face: "raised", rect: box, radius: radiusOf(root, box[2]), height: raised, material: context.materialFor(cap, "raised"), state }); continue; }
     const layers = settings.materials[context.materialFor(cap, "raised")];
     materials[name] ??= { base: { colour, roughness: layers?.base?.roughness ?? 0.45, metallic: layers?.base?.metallic ?? 0 }, coat: { ...layers?.coat } };
     const pushInput = { id: idOf(input?.id ? input : root, "push"), form: info.form, box, ...(bezel ? { bezel: rectWithin(bezel, panel) } : {}), ...(ring && info.ring !== undefined ? { ring: rectWithin(ring, panel) } : {}), cap: rectWithin(cap, panel),
       ...(led && info.led !== undefined ? { led: rectWithin(led, panel) } : {}),
-      ...(info.latch ? { radii: { box: radiusOf(root, box[2]), cap: radiusOf(cap, rectWithin(cap, panel)[2]), ...(bezel ? { bezel: radiusOf(bezel, rectWithin(bezel, panel)[2]) } : {}), ...(ring ? { ring: radiusOf(ring, rectWithin(ring, panel)[2]) } : {}) }, base: floor } : {}),
+      ...(info.latch ? { radii: { box: radiusOf(root, box[2]), cap: radiusOf(cap, rectWithin(cap, panel)[2]), ...(bezel ? { bezel: radiusOf(bezel, rectWithin(bezel, panel)[2]) } : {}), ...(ring ? { ring: radiusOf(ring, rectWithin(ring, panel)[2]) } : {}) } } : {}),
       scale, role: info.role, emitters: { ...(info.ring !== undefined ? { ring: info.ring } : {}), ...(info.led !== undefined ? { led: info.led } : {}) }, t, material: name, opaque,
       state: { hover: state.hover, pressed: state.pressed, disabled: state.disabled }, light, relief: { height: raised, material: use("keyCap") } };
     objects.push(pushObject(pushInput, profile) as unknown as InstrumentObject);

@@ -161,7 +161,8 @@ built yet: it is a later change, and `form="selector"` is for now the native for
 - **Emitters.** Each key's LED is an emitter at every GPU level (`emitter.led.*`), so a bank has one per key; there is no ring. At the Instrument
   level the plinth is an object of its own (one `bezel` part in the polished bezel material, its shadow fitted to the fieldset's box), and each key an
   object of a body, a captured cap and an LED lens (`pushObject` with a `base` on the plinth). Relief and Objects: the plinth a raised face or a slab, the caps
-  raised faces or keys standing on it.
+  raised faces or keys standing on it. This is the one construction for keys on a plinth (`gpu/instrument-bank.ts`): the SegmentedControl's latching form and the
+  [Tabs' rail](tabs.md#11-rail-form-rail) are built with it too, and a bank key's body is registered with the key registry, so the scene can trim it to core's material cap.
 - **Presentation.** As the Checkbox's (section 11 of its page), with the bank wrapping to rows in a narrow viewport (320 px) or at 200% text, the caps growing and
   wrapping their labels.
 

@@ -9,7 +9,9 @@
  *   own material, with the brushed finish. A held or latched button is pressed: Relief sinks the face, Objects travels the key.
  * - **bank plinth** (the latching forms of the RadioGroup and the SegmentedControl, `.ug-bank__plinth`): a raised face or a slab in the `knob`
  *   metal, fitted to the native group's box; a bank key has no bezel, so its cap stands on the plinth's top.
- * Parts never take focus: the focus ring is the CSS outline round the bezel (the cap, in a bank), captured content.
+ * - **rail tab** (the Tabs' rail form, `.ug-tab__cap`): a key of the same construction, standing on the tablist, its box the native tab's (`gpu/tabs-forms.ts`
+ *   says which element is which; the tablist's own plinth is the general path's raised face or slab, as it has no room round it for a fitted one).
+ * Parts never take focus: the focus ring is the CSS outline round the bezel (the cap, in a bank or a rail), captured content.
  */
 import type { SceneEntry, SceneFace, SceneState } from "../tokens/scene.ts";
 import { fittedRoundHeight } from "../shared/push-button.ts";
@@ -50,7 +52,7 @@ const round = (value: number) => Math.round(value * 100) / 100;
  * it as usual). A part whose box is empty gives no entries.
  */
 export function pushFormEntries(element: Element, context: PushFormContext): SceneEntry[] | undefined {
-  const isBezel = element.matches(".ug-push__bezel"), isCap = element.matches(".ug-push__cap"), isPlinth = element.matches(".ug-bank__plinth");
+  const isBezel = element.matches(".ug-push__bezel"), isCap = element.matches(".ug-push__cap, .ug-tab__cap"), isPlinth = element.matches(".ug-bank__plinth");
   if (!isBezel && !isCap && !isPlinth) return undefined;
   const [x, y, width, height] = context.rect, box = context.box;
   if (width <= 0.25 || height <= 0.25) return [];

@@ -1,9 +1,9 @@
 /**
  * The Select forms and the Tabs' rail form (anatomy pages `select.md`, `tabs.md`, section 11): the form names and the rule that decides what a Select
  * is drawn as (`shared/select-forms.ts`), the step through a list's enabled options, the options of a server-rendered `<option>` run, the rail's names and
- * markup (`shared/tabs-forms.ts`), the cap's Relief and Objects entries (`gpu/tabs-forms.ts`) and the Instrument parts of the plinth and the keys
- * (`gpu/instrument-tabs.ts`) checked with core's own validator and containment check (`packages/core/src/instrument.ts`), with the lights validated by
- * core's emitter format.
+ * markup (`shared/tabs-forms.ts`), the cap's Relief and Objects entries (the bank's key, `gpu/push-forms.ts`, the tab's state from `gpu/tabs-forms.ts`) and the
+ * Instrument parts of the plinth and the keys (the bank's construction, `gpu/instrument-bank.ts`, `gpu/instrument-push.ts`) checked with core's own validator and
+ * containment check (`packages/core/src/instrument.ts`), with the lights validated by core's emitter format; and that a rail tab and a bank key are one construction.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -11,8 +11,11 @@ import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { SELECTOR_MAX_LABEL, SELECTOR_MAX_OPTIONS, optionLabel, parseOptionsHtml, selectForm, selectFormFor, selectOwner, selectStepIndex, selectSteps, selectorModel } from "../../packages/ui/src/shared/select-forms.ts";
 import { TABS_FLUSH, TAB_LATCHED, tabCap, tabLed, tabsForm } from "../../packages/ui/src/shared/tabs-forms.ts";
-import { tabFormEntries, tabReliefHeights } from "../../packages/ui/src/gpu/tabs-forms.ts";
-import { RAIL_PLINTH, railHeight, railKeyMaterials, railKeyObject, railMaterials, railPlinthHeight, railPlinthObject } from "../../packages/ui/src/gpu/instrument-tabs.ts";
+import { tabPosition, tabState } from "../../packages/ui/src/gpu/tabs-forms.ts";
+import { pushFormEntries, pushReliefHeights } from "../../packages/ui/src/gpu/push-forms.ts";
+import { BANK_PLINTH as RAIL_PLINTH, bankPlinthHeight as railPlinthHeight, bankPlinthObject, pushMaterials, pushMaterialsOf, pushObject } from "../../packages/ui/src/gpu/instrument-push.ts";
+import { addBankKey, addBankPlinth, bankHeight } from "../../packages/ui/src/gpu/instrument-bank.ts";
+import { createKeyRegistry } from "../../packages/ui/src/gpu/instrument-keys.ts";
 import { INDICATOR_LENS, indicatorOf } from "../../packages/ui/src/gpu/indicator-forms.ts";
 import { lensEmitter } from "../../packages/ui/src/shared/lamp.ts";
 import { premiumMaterials } from "../../packages/ui/src/gpu/instrument.ts";
@@ -108,41 +111,50 @@ test("a rail LED is an indicator lens in its tab's box, drawn like every LED", (
 });
 
 /** An element for the cap's entries: it matches `.ug-tab__cap`. */
-const capElement = { matches: selector => selector === ".ug-tab__cap" };
+const capElement = { matches: selector => selector.split(",").some(part => part.trim() === ".ug-tab__cap"), getAttribute: () => null };
 const tabElement = (matches = () => false) => ({ getAttribute: () => null, matches });
-const context = (overrides = {}) => ({ rect: [10, 22, 80, 40], radius: 6, tab: tabElement(overrides.matches), box: [4, 4, 92, 64], objects: false, base: 2.4, material: () => "control", light, hoverHeight: 1.6, keyTravel: 6, ...overrides });
+const context = (overrides = {}) => { const { matches, ...rest } = overrides; return { rect: [10, 22, 80, 40], radius: 6, state: tabState(tabElement(matches)), box: [4, 4, 92, 64], objects: false, base: 2.4, material: () => "control", light, hoverHeight: 1.6, keyTravel: 6, ...rest }; };
 
-test("a rail cap is a raised face at Relief and a key on the plinth at Objects, fitted to its tab's box, pressed while selected", () => {
-  assert.equal(tabFormEntries({ matches: () => false }, context()), undefined, "an element that is not a cap is left to the helper");
-  assert.deepEqual(tabFormEntries(capElement, context({ rect: [10, 22, 0, 40] })), [], "an empty cap gives no entries");
-  const [face] = tabFormEntries(capElement, context());
+test("a rail cap is a raised face at Relief and a key on the plinth at Objects, as a bank key is, fitted to its tab's box, pressed while selected", () => {
+  assert.equal(pushFormEntries({ matches: () => false }, context()), undefined, "an element that is not a cap is left to the helper");
+  assert.deepEqual(pushFormEntries(capElement, context({ rect: [10, 22, 0, 40] })), [], "an empty cap gives no entries");
+  const [face] = pushFormEntries(capElement, context());
   assert.equal(face.face, "raised");
   assert.deepEqual(face.rect, [10, 22, 80, 40]);
-  assert.ok(face.height > 0 && face.height <= tabReliefHeights.cap, `the face stands ${face.height}`);
+  assert.ok(face.height > 0 && face.height <= pushReliefHeights.cap, `the face stands ${face.height}`);
   assert.equal(face.finish, true);
-  const [key] = tabFormEntries(capElement, context({ objects: true }));
+  const [key] = pushFormEntries(capElement, context({ objects: true }));
   assert.equal(key.object, "key");
   assert.equal(key.base, 2.4, "the key stands on the plinth's top");
-  assert.ok(key.height > 0 && key.height <= tabReliefHeights.key && key.travel > 0 && key.travel <= 0.75 * key.height);
-  assert.deepEqual(key.bounds, [4, 4, 92, 64], "bounded by the tab's own box");
+  assert.ok(key.height > 0 && key.height <= pushReliefHeights.key && key.travel > 0 && key.travel <= 0.75 * key.height);
   // Selected: pressed, at Relief and Objects. A hovered tab lifts, and its shadow is fitted at that height.
-  const selected = tabFormEntries(capElement, context({ matches: selector => selector.includes("aria-selected") }))[0];
+  const selected = pushFormEntries(capElement, context({ matches: selector => selector.includes("aria-selected") }))[0];
   assert.equal(selected.state.pressed, true);
   assert.equal(face.state.pressed, false);
-  assert.equal(tabFormEntries(capElement, context({ matches: selector => selector === ":disabled, [aria-disabled='true']" }))[0].state.disabled, true);
+  assert.equal(pushFormEntries(capElement, context({ matches: selector => selector === ":disabled, [aria-disabled='true']" }))[0].state.disabled, true);
   // The shadow stays inside the tab's box: the tallest height that fits at the margins the cap has (6 px each side here).
-  const tight = tabFormEntries(capElement, context({ objects: true, box: [10, 22, 80, 40] }))[0];
+  const tight = pushFormEntries(capElement, context({ objects: true, box: [10, 22, 80, 40] }))[0];
   assert.ok(tight.height <= 0.25 + 1e-9, "no room, no height");
 });
 
-/** A rail's plinth and keys as the helper writes them. */
+test("a tab's key rests at 0, is latched at 0.45 while selected and goes down while held; a disabled one never moves unless it is the selected one", () => {
+  const up = { hover: false, pressed: false, disabled: false };
+  assert.equal(tabPosition(Number.NaN, up), 0);
+  assert.equal(tabPosition(Number.NaN, { ...up, pressed: true }), 0.45);
+  assert.equal(tabPosition(1, { ...up, pressed: true }), 1);
+  assert.equal(tabPosition(0.3, { ...up, disabled: true }), 0);
+  assert.equal(tabPosition(0.45, { ...up, disabled: true, pressed: true }), 0.45);
+  assert.equal(tabPosition(7, up), 1);
+});
+
+/** A rail's plinth and keys as the helper writes them: the bank's plinth (flush: the tablist is the plinth) and the bank's keys. */
 function rail(profile, { scale = 1, stage = { width: 640, height: 800 }, t = 0.45 } = {}) {
   const list = [20, 20, 300, 66];
-  const plinth = railPlinthObject({ id: "rail-1", box: list, radius: 14, scale, stage, state: { hover: false, pressed: false, disabled: false }, light, relief: { height: 3, material: "tabPlinth" } }, profile);
+  const plinth = bankPlinthObject({ id: "rail-1", box: list, plinth: list, radius: 14, scale, state: { hover: false, pressed: false, disabled: false }, light, relief: { height: 3, material: "keyCap" }, flush: { stage } }, profile);
   const keys = [0, 1, 2].map(index => {
     const x = 22 + index * 96, box = [x, 22, 94, 62], cap = [x + 6, 34, 82, 44];
-    return railKeyObject({ id: `tab-${index}`, box, cap, capRadius: 8, led: [x + 94 / 2 - 3, 25, 6, 6], scale, role: "#ff9228", emitter: index, t: index === 0 ? t : 0, material: "key #eceef2",
-      state: { hover: false, pressed: index === 0, disabled: false }, light, relief: { height: 3, material: "keyCap" } }, profile);
+    return pushObject({ id: `tab-${index}`, form: "latching", box, cap, led: [x + 94 / 2 - 3, 25, 6, 6], radii: { box: 0, cap: 8 }, base: railPlinthHeight(scale), scale, role: "#ff9228", emitters: { led: index },
+      t: index === 0 ? t : 0, material: "key #eceef2", state: { hover: false, pressed: index === 0, disabled: false }, light, relief: { height: 3, material: "keyCap", rect: cap, radius: 8 } }, profile);
   });
   return { plinth, keys };
 }
@@ -151,14 +163,14 @@ function sceneOf(objects, profiles, emitters) {
   return { format: "strata-scene", version: 4, kind: "instrument", camera: { distance: 2400, vanish: [960, 540] }, environment: { source: "studio", strength: 1 },
     extent: { width: 640, height: 800 }, outset: { top: 48, right: 48, bottom: 48, left: 48 }, backdrop: "#ffffff", light: { azimuth: 323, elevation: 41, intensity: 1.6 }, bevel: { width: 6, gain: 0.55, profile: "quarter-round" },
     shadow: { strength: 0.24 }, interior: { max: 0.04 }, state: { hoverHeight: 1.6, pressHeight: 0.25, hoverLift: 0.04, pressSink: 0.06 }, focus: { colour: "#2563eb", width: 3, offset: 0.5 },
-    materials: { matte: { base: { roughness: 0.6 } }, keyCap: premiumMaterials.keyCap, "key #eceef2": { base: { colour: "#eceef2", roughness: 0.45 } }, ...railMaterials, ...railKeyMaterials({ role: "#ff9228" }) },
+    materials: { matte: { base: { roughness: 0.6 } }, keyCap: premiumMaterials.keyCap, "key #eceef2": { base: { colour: "#eceef2", roughness: 0.45 } }, ...pushMaterialsOf({ role: "#ff9228" }), pushBezel: pushMaterials.pushBezel },
     primitives: [{ face: "raised", rect: [0, 0, 640, 800], radius: 12, height: 8, material: "matte" }], profiles, objects, emitters, protected: [[30, 40, 80, 20]], feather: 4 };
 }
 
 test("a rail is one polished plinth and a body with a captured cap and a glass LED per key, standing on the plinth, validated by core", () => {
   const { profiles, profile } = registry();
   const { plinth, keys } = rail(profile);
-  assert.deepEqual(plinth.parts.map(part => `${part.kind}:${part.material}`), ["bezel:tabPlinth"]);
+  assert.deepEqual(plinth.parts.map(part => `${part.kind}:${part.material}`), ["bezel:pushBezel"], "the bank's plinth, in the bank's metal");
   assert.equal(plinth.parts[0].caster, null, "the plinth casts no shadow of its own");
   assert.equal(RAIL_PLINTH, 2.4);
   assert.equal(railPlinthHeight(1.6), 3.84);
@@ -173,15 +185,59 @@ test("a rail is one polished plinth and a body with a captured cap and a glass L
   assert.equal(keys[0].t, 0.45, "selected: latched at 0.45");
   assert.equal(keys[1].t, 0);
   assert.deepEqual(keys[0].bounds.rect, keys[0].rect);
+  assert.deepEqual(keys[0].relief.rect, [28, 34, 82, 44], "the Relief face is the cap's");
   const emitters = [0, 1, 2].map(index => lensEmitter("led", [25 + index * 96, 28], 6, index === 0 ? 1 : 0, "#ff9228"));
   const scene = validateInstrumentScene(sceneOf([plinth, ...keys], profiles, emitters));
   assert.equal(scene.objects.length, 4);
   assert.equal(scene.emitters.length, 3);
-  assert.ok(railHeight(1) > RAIL_PLINTH + 6);
+  assert.ok(bankHeight(1) > RAIL_PLINTH + 6);
   // Under reduced transparency the LED is opaque lacquer.
-  const opaque = railKeyObject({ id: "o", box: [22, 22, 94, 62], cap: [28, 34, 82, 44], capRadius: 8, led: [66, 25, 6, 6], scale: 1, role: "#ff9228", emitter: 0, t: 0, material: "key #eceef2", opaque: true, state: { hover: false, pressed: false, disabled: false }, light, relief: { height: 3, material: "keyCap" } }, registry().profile);
+  const opaque = pushObject({ id: "o", form: "latching", box: [22, 22, 94, 62], cap: [28, 34, 82, 44], led: [66, 25, 6, 6], radii: { box: 0, cap: 8 }, base: 2.4, scale: 1, role: "#ff9228", emitters: { led: 0 }, t: 0, material: "key #eceef2", opaque: true,
+    state: { hover: false, pressed: false, disabled: false }, light, relief: { height: 3, material: "keyCap" } }, registry().profile);
   assert.equal(opaque.parts[2].glass, undefined);
   assert.match(opaque.parts[2].material, /^lensOpaque/);
+});
+
+/** The scene the helper hands the construction (`BankScene`): a stub with the pieces the construction reads. */
+function bankScene({ scale = 1, materials = {} } = {}) {
+  const { profiles, profile } = registry();
+  return { profiles, objects: [], entries: [], materials: { keyCap: premiumMaterials.keyCap, ...materials }, registry: createKeyRegistry(), layers: { control: { base: { roughness: 0.4 } } }, profile,
+    light, scale, opaque: false, raised: 3, use: name => name, room: () => true, stage: { width: 640, height: 800 } };
+}
+/** One key as a component's mapping gives it: a tab (box 94 × 62, no radius of its own) or a bank's key host (the same box). */
+const keySpec = (element, id, extra = {}) => ({ element, id, box: [22, 22, 94, 62], cap: [28, 34, 82, 44], capRadius: 8, boxRadius: 0, led: [66, 25, 6, 6], role: "#ff9228", emitter: 0, colour: "#eceef2", capMaterial: "control",
+  t: 0.45, state: { hover: false, pressed: true, disabled: false }, onPlinth: true, relief: { rect: [28, 34, 82, 44], radius: 8 }, ...extra });
+
+test("a rail tab and a bank key of the same size and state are one construction: the same parts, profiles, materials and registry calls", () => {
+  const rails = bankScene(), banks = bankScene();
+  const tab = { id: "acct-tab-profile", tagName: "BUTTON" }, radio = { id: "piano", tagName: "SPAN" };
+  // The tablist is the plinth (flush: the native element itself), a bank's plinth stands in its group's room; the keys are the same.
+  addBankPlinth(rails, { id: "rail", box: [20, 20, 300, 66], plinth: [20, 20, 300, 66], radius: 14, state: { hover: false, pressed: false, disabled: false }, flush: { stage: rails.stage } });
+  addBankPlinth(banks, { id: "bank", box: [12, 12, 316, 82], plinth: [20, 20, 300, 66], radius: 14, state: { hover: false, pressed: false, disabled: false } });
+  assert.equal(addBankKey(rails, keySpec(tab, "tab")), true);
+  assert.equal(addBankKey(banks, keySpec(radio, "key")), true);
+  const names = scene => scene.objects.map(object => object.parts.map(part => `${part.kind}:${part.material}:${part.profile.split(":")[0]}`));
+  assert.deepEqual(names(rails), names(banks), "the same part kinds, materials and profile families");
+  assert.deepEqual(names(rails), [["bezel:pushBezel:bank-plinth"], ["plinth:key #eceef2:push-body", "cap:keyCap:push-cap", "lens:lens #ff9228:push-led"]]);
+  // The key's shapes are identical profile for profile, and so are the materials: the two share one scene's objects when they share a panel.
+  const keyShapes = scene => Object.keys(scene.profiles).filter(name => !name.startsWith("bank-plinth"));
+  assert.deepEqual(keyShapes(rails), keyShapes(banks));
+  assert.deepEqual(Object.keys(rails.materials), Object.keys(banks.materials));
+  assert.deepEqual(rails.objects[1].parts, banks.objects[1].parts, "parts equal, down to their places, poses and casters");
+  assert.deepEqual(rails.registry.report, banks.registry.report);
+  // Both register the body with the registry, so the scene can trim it to core's material cap; past the push rule both are Relief keys, named in the diagnostics.
+  const full = bankScene({ materials: Object.fromEntries(Array.from({ length: 12 }, (_, index) => [`m${index}`, { base: {} }])) });
+  assert.equal(addBankKey(full, keySpec(tab, "tab")), false);
+  assert.deepEqual(full.registry.report.keysAtRelief, ["acct-tab-profile"]);
+  assert.deepEqual(full.entries.map(entry => entry.face), ["raised"]);
+  assert.equal(full.objects.length, 0);
+  for (const [element, name] of [[tab, "acct-tab-profile"], [radio, "piano"]]) {
+    const trimmed = bankScene();
+    addBankKey(trimmed, keySpec(element, "key"));
+    for (let index = 0; index < 20; index++) trimmed.materials[`filler${index}`] = { base: {} };
+    trimmed.registry.trim(trimmed);
+    assert.deepEqual(trimmed.registry.report.keysAtRelief, [name], "the key's body is trimmed to core's cap, a bank's and a rail's alike");
+  }
 });
 
 test("every vertex of the plinth and of a key stays inside its box over the whole stage, at every depth and for every width of a rail", () => {

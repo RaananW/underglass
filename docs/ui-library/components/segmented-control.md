@@ -111,7 +111,7 @@ key is `Highlight`.
 
 Instrument, everyday forms ([plan](../instrument.md#everyday-components-at-the-instrument-level)). `form="latching"` draws the same native radios as
 **interlocking latching buttons on one plinth**: the [RadioGroup's preset bank](radio.md#11-latching-form-the-preset-bank-bank) with a segmented
-control's short options, the selected segment down with its LED lit. The plinth is a single part. `flush`, or no `form`, is the control above, in the
+control's short options, the selected segment down with its LED lit. The plinth is a single part, and the keys are the bank's, one construction with the [Tabs' rail](tabs.md#11-rail-form-rail) (`gpu/instrument-bank.ts`). `flush`, or no `form`, is the control above, in the
 markup and the look it had before, pixel for pixel; any other `form` string is the native `form` attribute of the fieldset, as before. `colour` names the
 LEDs' role (`glowOn` by default). As with the Switch's hardware forms, the premium character's default form is reached by naming it: with no `form` the control is its flush look, so a page that does not opt in is unchanged.
 
