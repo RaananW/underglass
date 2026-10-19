@@ -1,0 +1,45 @@
+---
+/**
+ * Strata Astro Keypad check page (`/keypad/`): `[data-contract]` renders the anatomy page's two examples (`keypad.md`) with
+ * `@underglass/ui/astro`, and `main` holds live keypads `tests/browser/ui-keypad-astro.test.mjs` drives with real input.
+ * Server-rendered HTML; the only script is the components' own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { Keypad, KeypadKey } from "@underglass/ui/astro";
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro Keypad check</title>
+</head>
+<body>
+  <div data-contract="keypad.md" hidden>
+    <Keypad label="Dial" columns={3}>
+      <KeypadKey name="digit" value="1">1</KeypadKey>
+      <KeypadKey name="digit" value="2" shift="ABC">2</KeypadKey>
+      <KeypadKey name="digit" value="3" shift="DEF" disabled>3</KeypadKey>
+    </Keypad>
+  </div>
+  <div data-contract="keypad.md#2" hidden>
+    <Keypad aria-label="Hex entry" columns={2} shifted>
+      <KeypadKey value="a" shift="10">A</KeypadKey>
+      <KeypadKey value="b" shift="11">B</KeypadKey>
+    </Keypad>
+  </div>
+  <main>
+    <form class="ug-panel" data-strata-face="raised" aria-label="Keypads" id="keypads" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+      <Keypad id="dial" label="Dial" columns={3} class="extra" style="margin-right: 4px" data-testid="dial">
+        <KeypadKey id="two" name="digit" value="2" shift="ABC" type="submit" class="extra" data-testid="two">2</KeypadKey>
+        <KeypadKey id="three" name="digit" value="3" shift="DEF">3</KeypadKey>
+        <KeypadKey id="four" name="digit" value="4" disabled>4</KeypadKey>
+        <KeypadKey id="five" name="digit" value="5" aria-label="Five">5</KeypadKey>
+      </Keypad>
+      <Keypad id="hex" aria-label="Hex" columns={2} shifted size="small">
+        <KeypadKey id="hex-a" value="a" shift="10">A</KeypadKey>
+        <KeypadKey id="hex-b" value="b" shift="11">B</KeypadKey>
+      </Keypad>
+    </form>
+  </main>
+</body>
+</html>

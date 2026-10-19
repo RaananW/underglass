@@ -836,6 +836,41 @@ face, with bloom. Past 64 emitters in a layer core draws the 64 with the most re
 opt-in `click` feedback. Anatomy: [Lamp](../../docs/ui-library/components/lamp.md),
 [StatusLight](../../docs/ui-library/components/status-light.md).
 
+## Pad and Keypad
+
+Buttons you play with a finger, the third wave of the Instrument level. A **Pad** is a native `<button>` drawn as a square soft cap
+over a rim of light, in a **PadGrid** (a `<div role="group">`, `label` its name, `columns`): momentary (lit and down while it is
+held), or with `latching` a toggle (`aria-pressed`, lit and resting at 0.45 of its travel while on; `pressed` / `onPressedChange`,
+`defaultPressed`, or `v-model:pressed`). `colour` is the rim's role, as the Lamp's. A **Keypad** is a `<fieldset>` (`label` its
+legend) of **KeypadKey** buttons: machined square caps with a printed legend, an optional smaller second one (`shift`; `shifted` prints
+it large) and `columns`, on one polished plinth. The pads of a grid and the keys of a keypad are **one tab stop** (a roving tabindex)
+and the arrow keys move in both axes by the laid-out columns, Home and End along the row, Control+Home and Control+End to the ends,
+with no wrap and disabled controls skipped; they stay `button`s. `attachStrataPads`, `attachStrataKeypads` and
+`attachStrataPadLatches` in `@underglass/ui/dom` (which `attachStrata` and the components attach; the bindings keep a pad's state
+themselves) hold a control down (`data-strata-down`), play the opt-in `click` feedback and run the grid keys.
+
+```tsx
+<PadGrid label="Drums" columns={4}>
+  <Pad colour="danger" onClick={() => play("kick")} onVelocity={velocity => setGain(velocity)}>Kick</Pad>
+  <Pad latching colour="accent" pressed={loop} onPressedChange={setLoop}>Loop</Pad>
+</PadGrid>
+<Keypad label="Dial" columns={3}>
+  <KeypadKey value="1">1</KeypadKey>
+  <KeypadKey value="2" shift="ABC">2</KeypadKey>
+</Keypad>
+```
+
+A pad's optional **velocity**, 0 to 1, is `data-strata-velocity` and a bubbling `strata-pad-velocity` event (`{ velocity, source }`) at each
+press, before the click: the pointer's pressure where the hardware reports it, else where on the cap the press lands (the middle 1,
+the edge 0.25), the keys 1; nothing depends on it. A pad is lit by `--strata-lit` and a cap moved by `--strata-push-t` (the PushButton's
+registered numbers, on `spring.button`). A lit pad is an **emitter** at every GPU level (`emitter.pad.*`; a panel with pads takes a
+version 4 scene with its `emitters`, the whole cap of each pad among the `protected` rects, and a `feather`), a keypad is not. Relief
+draws the caps as raised faces and a keypad's plinth as one; Objects as keys and a slab; at the Instrument level (`level: "instrument"`)
+a pad is a glass rim with its emitter, a lacquer body and a captured cap (`gpu/instrument-pad.ts`), a keypad a polished plinth object
+and, per key, a body with a captured cap, each travelling on the CSS throw with no capture and no hit-geometry update. Every part and
+shadow is inside its control's box. The soft cap is a satin lacquer: core's recipe has no subsurface layer yet. Anatomy:
+[Pad](../../docs/ui-library/components/pad.md), [Keypad](../../docs/ui-library/components/keypad.md).
+
 ## Meter and Gauge
 
 Read-only measurements, the second wave of the Instrument level: a **Meter** is a native `<meter>` (role `meter`, with `min`,

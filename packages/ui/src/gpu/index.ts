@@ -26,6 +26,11 @@
  * `--strata-lit` and the `emitter.*` tokens, read each frame, so a blink or a toggle is a uniform update), the `protected`
  * rects of its text and a `feather`, so core's face pool lights the page around the lens within the contrast guard.
  *
+ * A Pad's rim of light is an emitter at every level (`gpu/pad-keypad.ts`, `gpu/pad-forms.ts`, `gpu/instrument-pad.ts`; design language section 3, `emitter.pad.*`),
+ * lit by the `--strata-lit` the stylesheet gives it while held or latched, its whole cap among the protected rects; its cap travels on the CSS throw
+ * (`--strata-push-t`). A Keypad has no light: Relief and Objects draw its caps and its plinth as raised faces or keys and a slab, and the Instrument level a
+ * polished plinth object and a body with a captured cap per key.
+ *
  * The indicator forms' lenses (a Rating's lamps, a Badge's LED, a ProgressBar's segments, a Spinner's ring; `gpu/indicator-forms.ts`) are the same lenses, one
  * emitter each, lit by the `--strata-lit` the stylesheet gives them (a hover preview, a value, a chase), drawn at every level as a Meter's segments are.
  *
@@ -81,6 +86,7 @@ import { rotaryFraction } from "../shared/rotary-selector.ts";
 import { lampFormEntries } from "./lamp-forms.ts";
 import { lampHeight, lampMaterialsOf, lampObject, lensMaterial, type LampKind } from "./instrument-lamp.ts";
 import { emitterDefaults, lensEmitter, type EmitterTokens, type LampEmitter } from "../shared/lamp.ts";
+import { claimPadKeypad, collectPads, padKeypadEntries, padKeypadObjects } from "./pad-keypad.ts";
 import { meterFormEntries } from "./meter-forms.ts";
 import { meterBarObject, meterDialObject, meterHeight, meterMaterials } from "./instrument-meter.ts";
 import { advancePeak, meterFraction, meterSprings, meterZoneRoles, peakDefaults, peakIndex, segmentEmitterDefaults, segmentsLit, segmentZones, type PeakState } from "../shared/meter.ts";
@@ -327,8 +333,8 @@ interface MeterInfo {
 
 /**
  * The layer's protected rects for the contrast guard (design language section 3, Rendering Model 2D.4): the client rects
- * of every text run in `panel`, and the boxes of its text fields, grown by 2 px (`display.textGrow`). Past 4,096 the whole box is
- * protected, which core also does for more than 64 rects a layer.
+ * of every text run in `panel`, and the boxes of its text fields, grown by 2 px (`display.textGrow`), and the whole cap of each pad. Past 4,096
+ * the whole box is protected, which core also does for more than 64 rects a layer.
  */
 function protectedRects(panel: HTMLElement, grow = 2): [number, number, number, number][] | "extent" {
   const outer = panel.getBoundingClientRect(), scale = outer.width / Math.max(panel.offsetWidth, 1) || 1;
@@ -336,13 +342,18 @@ function protectedRects(panel: HTMLElement, grow = 2): [number, number, number, 
   const add = (box: DOMRect) => {
     if (box.width > 0 && box.height > 0) rects.push([(box.left - outer.left) / scale - grow, (box.top - outer.top) / scale - grow, box.width / scale + 2 * grow, box.height / scale + 2 * grow]);
   };
+  // A pad's cap is protected whole (its label is on it): the pad's own light would otherwise leave the label's box dark in a lit cap, a patch. The labels in
+  // those caps are not listed again, so a grid of pads stays far under core's 64 rects a layer.
+  const caps = [...panel.querySelectorAll<HTMLElement>(".ug-pad__cap")].filter(cap => cap.checkVisibility({ visibilityProperty: true })).map(cap => cap.getBoundingClientRect());
+  const inCap = (box: DOMRect) => caps.some(cap => box.left >= cap.left - 0.5 && box.right <= cap.right + 0.5 && box.top >= cap.top - 0.5 && box.bottom <= cap.bottom + 0.5);
+  for (const cap of caps) add(new DOMRect(cap.left + grow, cap.top + grow, Math.max(0, cap.width - 2 * grow), Math.max(0, cap.height - 2 * grow)));
   const walker = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT);
   const range = document.createRange();
   for (let node = walker.nextNode(); node && rects.length <= MAX_PROTECTED; node = walker.nextNode()) {
     const parent = node.parentElement;
     if (!node.textContent?.trim() || !parent || parent.closest("option, script, style") || !parent.checkVisibility({ visibilityProperty: true })) continue;
     range.selectNodeContents(node);
-    for (const box of range.getClientRects()) add(box);
+    for (const box of range.getClientRects()) if (!inCap(box)) add(box);
   }
   for (const field of panel.querySelectorAll("input:not([type='checkbox'], [type='radio'], [type='range'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='file'], [type='hidden'], [type='color'], .ug-display__text), textarea, select")) {
     if (field.checkVisibility({ visibilityProperty: true })) add(field.getBoundingClientRect());
@@ -604,6 +615,8 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       emitters.push(lensEmitter("led", [rect[0] + rect[2] / 2, rect[1] + rect[3] / 2], rect[2], moreContrast ? 0 : on, role, own));
     });
   }
+  // Pads (design language section 3): a lit pad is an emitter over its cap, lit by `--strata-lit` now (held or latched); the pads' and keypads' parts are `pad-keypad.ts`'s.
+  collectPads(panel, { emitters, lamps, max: MAX_EMITTERS, moreContrast, guardFeather: emitterDefaults.guardFeather, helpers: { hex, reader, rectWithin, radiusOf } });
   // Displays (design language section 3): the backlight is a few emitters along the window, lit by `--strata-lit` as the CSS has it now (on,
   // off, disabled), so a toggle is a uniform write. Each is also a `lamps` entry, so the panel takes the lights and their outset as a lamp's does.
   const mineDisplays = { infos: new Map<HTMLElement, DisplayInfo>(), instrument: new Set<HTMLElement>() };
@@ -695,12 +708,24 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
       if (lampRoot && lamps.has(lampRoot)) { instrumentLamps.add(lampRoot); options.domes?.add(element); continue; }
       // An indicator form's lens (a Rating's lamp, a Badge's LED, a bar's segment, a ring's LED) is an LED object of its own.
       if (element.matches(INDICATOR_LENS) && segmentInfos.has(element)) { instrumentIndicators.add(element); options.domes?.add(element); continue; }
+      // A pad's or a keypad key's cap and a keypad's plinth are drawn as their Instrument objects (`pad-keypad.ts`).
+      if (claimPadKeypad(element, panel, options.domes)) continue;
       if (face === "raised" && element.matches("button")) { keys.push(element); continue; }
     }
     let rect = rectWithin(element, panel);
     if (rect[2] <= 0 || rect[3] <= 0) continue;
     const state = states(element);
     const radius = radiusOf(element, rect[2]);
+    // A Pad's or a Keypad's cap, and a keypad's plinth (`pad-forms.ts`): inside the control's box, shadows included.
+    const padParts = padKeypadEntries(element, panel, { objects: objects(element), base: baseOf(element), rect, helpers: { hex, reader, rectWithin, radiusOf }, material: materialFor, knob: material(tokens.raw("material.roles.knob") || "satin"),
+      light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, hoverHeight: tokens.number("state.hoverHeight", 1.6), keyTravel });
+    if (padParts) {
+      entries.push(...padParts);
+      // A keypad's plinth is a slab the keys stand on.
+      const slab = padParts[0];
+      if (element.matches(".ug-keypad__plinth") && slab && isSceneObject(slab) && slab.object === "slab") tops.set(element, (slab.base ?? 0) + slab.height);
+      continue;
+    }
     // A Switch's hardware form (`switch-forms.ts`): its parts, inside the input's box, shadows included.
     const form = switchFormEntries(element, { rect, radius, state, objects: objects(element), base: baseOf(element), rectOf: part => rectWithin(part, panel), material: materialFor, well: level(element, "well"),
       knob: { material: material(tokens.raw("material.roles.knob") || "satin"), colour: tokens.colour("knob") }, hoverHeight: tokens.number("state.hoverHeight", 1.6),
@@ -1142,6 +1167,11 @@ function instrumentScene(panel: HTMLElement, options: StrataSceneOptions, contex
     for (const name of ["displayBezel", "displayGlass"] as const) materials[name] ??= displayMaterials[name];
     tallest = Math.max(tallest, displayHeight(scale));
   }
+  // Pads and keypads (`gpu/instrument-pad.ts`): a pad's glass rim with its emitter, body and captured cap; a keypad's plinth and, per key, a body and a captured cap.
+  const padded = padKeypadObjects(panel, { scale, light, raised, opaque, profile, materials, layers: settings.materials, materialFor: context.materialFor, use, idOf, room: () => objects.length + entries.length < 255,
+    helpers: { hex, reader, rectWithin, radiusOf }, domes: options.domes, entries });
+  objects.push(...padded.objects);
+  tallest = Math.max(tallest, padded.tallest);
   for (const element of context.keys) {
     if (objects.length + entries.length >= 255) break;
     const colour = hex(getComputedStyle(element).backgroundColor), name = `key ${colour}`;
