@@ -642,9 +642,9 @@ keep their Objects object, drawn as meshes of the same shapes. Lit parts give th
 | RotarySelector | `collar`; the ring of positions, printed | As Knob | Turn to the selected option, one detent per option | As Knob |
 | Display | `bezel`, `window`; the text, a native `<output>` printed under the window | None | The backlight, an emitter† | Box 236 × 58 on the prototype. Bezel 7 wide, radius 8, 2.4 high, chamfer 2, polished, standing 0.5 px inside the box ([I0.4](instrument-phase0.md#i04-materials-over-the-capture)); window 2.4 high with a 2.6 bevel; finish band 0.3, horizon 0.25; the rest in Phase I4 |
 | Pad | `plinth` | `cap`: soft (`subsurface`), lit from below | Travel | Phase I5 |
-| JogWheel | `collar` | A large `cap` with a finger dimple | Turn, wrapping | Phase I5 |
+| JogWheel | `collar` (a bearing ring), `cap`, `chamfer`, `grip` (the finger dimple) | The cap, flat, with its dimple | The dimple turns on an accumulated angle (the value steps, wrapping; the angle never turns back), coasting after a flick on `spring.jog` | Dial box = wheel + 32 (128 at medium); wheel Ø `size.jogWheel` (64, 96, 128) in a recess 8 wider. Cap 8 high with a 2 px polished chamfer and a flat brushed top; collar 3 wide, 1.6 high, 0.4 outside the wheel, polished; the dimple a dish Ø 0.2 of the wheel, 0.34 of its diameter from the centre, flat with a 0.5 lip and the normals of a bowl, in graphite. `t` is the angle modulo 360° over 360 (the dimple turns 0° to 360° about the wheel), so the wrap is the same pose. [Anatomy](components/jog-wheel.md) |
 | Keypad | `plinth` | Push-button `cap`s | Travel | Phase I5 |
-| PatchPoint | `plate` (a washer), `bushing` (the jack), `nut` | None; a cable end is shown when connected | — | Phase I5 |
+| PatchPoint | `plate` (a washer), `bushing` (the jack's barrel), `slot` (the hole's floor), `pivot` (the plug), `lever` (the cable) | The plug and a short cable stub, risen out of the hole when connected | The plug rises (`travel`) on `spring.patch`; unplugged it is sunk under the floor and the washer | Box = washer + 20 (56 at medium); washer Ø `size.patchPoint` (28, 36, 44), 2.2 high with a hole of 0.44 of its diameter; barrel 3.2 wide, 1.8 high, polished; plug Ø 0.34 of the washer, 11 high; cable Ø 0.11 of the washer, towards the bottom of the screen, to 2 px short of the washer's edge. The cable is contained, so the box does not grow when connected. An optional LED is a StatusLight lens. [Anatomy](components/patch-point.md) |
 
 ## 7. Elevation and shadow
 
@@ -843,6 +843,8 @@ into core keyframes: motion never recaptures ([I0.1](instrument-phase0.md#i01-me
 | --- | --- | --- | --- | --- |
 | `spring.knob` | 420† | 41† | 1.00 | A continuous knob's cap |
 | `spring.detent` | 900† | 42† | 0.70 | A detented knob or selector settling on its detent |
+| `spring.jog` | 40† | 3.2† | 0.25 | A jog wheel coasting after a flick: friction (damping) and, with detents, a soft pull to the nearest detent (stiffness); not a position spring (the wheel's angle is unbounded and has no target) |
+| `spring.patch` | 1,100† | 60† | 0.90 | A patch point's plug seating, clamped at its stops |
 | `spring.fader` | 420† | 41† | 1.00 | A fader's carriage |
 | `spring.slide` | 600† | 49† | 1.00 | A slide switch's block |
 | `spring.rocker` | 1,200† | 58† | 0.84 | A rocker's paddle |
@@ -852,7 +854,7 @@ into core keyframes: motion never recaptures ([I0.1](instrument-phase0.md#i01-me
 | `spring.meter` | 360† | 28† | 0.74 | A needle meter's needle |
 | `spring.gauge` | 160† | 20† | 0.79 | A gauge's needle |
 
-Stiffness ranges over 50–4,000† and damping over 5–200†.
+Stiffness ranges over 50–4,000† and damping over 5–200† (`spring.jog` over 0–4,000† and 0.5–200†: a wheel with no detents has no stiffness at all).
 
 - **Detents:** `detents` on a knob or selector makes it stepped. The native `step` is the source of truth (a detented
   knob's `step` is its range over `detents − 1`); the value changes only through the native input, and the detent
@@ -938,6 +940,19 @@ model was proven with real pointer and keyboard input in plain DOM and on the GP
 | `knob.tapSlop` | 4 | 1–12† | A press that moves less than this, in px, is a tap |
 | `knob.snap` | 2 | 0–5† | A ring click within this many degrees of a printed numeral sets exactly its value |
 
+The JogWheel (anatomy page [jog-wheel.md](components/jog-wheel.md)) is a native range input that takes the same round behaviour, with these tokens:
+
+| Token | Default | Range | Meaning |
+| --- | --- | --- | --- |
+| `jog.turn` | 24 | 4–120† | Steps in one turn of the wheel: a step is 360 over this many degrees |
+| `jog.dragPx` | 240 | 50–1,000† | Vertical drag for one turn (the alternative to the circular drag), px |
+| `jog.fine` | 0.1 | 0.01–1† | The drag rate while Shift is held |
+| `jog.tapSlop` | 4 | 1–12† | A press that moves less than this, in px, is a tap |
+| `jog.flick` | 180 | 0–2,000† | The release speed, degrees a second, under which the wheel stops where it was let go |
+| `jog.maxRate` | 240 | 10–1,000† | The most steps a second a coasting wheel applies, each one native step and one `input` event |
+
+`size.jogWheel` is 64, 96 and 128 and `size.patchPoint` (the washer) 28, 36 and 44.
+
 - **One native control covers the dial.** A transparent native input covers the whole dial, cap and scale ring; the
   drawn ring and cap are `aria-hidden` with `pointer-events: none`, so every click lands on the original control.
 - **Drag:** vertical (the audio-plugin convention) at `knob.dragPx` per sweep, finer with Shift. The knob cancels the
@@ -958,6 +973,7 @@ model was proven with real pointer and keyboard input in plain DOM and on the GP
   Home, End.
 - **Events:** every change goes through the input's `value`, firing `input`, then `change` at the end of a gesture, so
   forms behave as with the plain input.
+- **JogWheel:** the wheel's position is an accumulated angle (`--strata-jog-angle`, degrees clockwise from the top) that is not the value: each step adds `360 / jog.turn` degrees in the direction it was taken, from the angle's origin at `min`, so a value that wraps from `max` to `min` is one more step and the wheel never turns back; a script's jump turns it the shorter way round. The drag is circular (the pointer's angle about the centre, the shorter way round per move) or, with `data-strata-drag="vertical"`, the knob's; a tap on the upper half of the box steps up and on the lower half down (the single-pointer alternative); the wheel steps one; keys are native except that, with `data-strata-wrap`, the key that would pass an end goes round. **Inertia:** a drag released over `jog.flick` coasts on `spring.jog` (`v' = −damping · v − stiffness · (a − nearest detent)`, the pull only with detents), ends within 6°/s (and 0.2° of a detent) and fires `change` once; **the rule for the steps it applies:** a value only ever changes by one native `step` per `input` event, each as the angle passes a step, a coasting wheel applies at most `jog.maxRate` steps a second (the release speed is held to `jog.maxRate · 360 / jog.turn` degrees a second, 4 steps a frame at 60 a second), a gesture that passes more than 16 steps in one move is one jump; under reduced motion a released wheel stops where it is.
 - **Faders** are native vertical range inputs (`writing-mode: vertical-lr; direction: rtl`, with
   `aria-orientation="vertical"`). The native thumb is sized to the carriage's travel footprint, so dragging the drawn
   carriage moves the value. Track click, wheel, double-click and keys behave as on the knob.
