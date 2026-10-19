@@ -17,6 +17,8 @@ export { Lamp } from "./lamp.ts";
 export { StatusLight } from "./status-light.ts";
 export type { StrataLampColour } from "../shared/lamp.ts";
 export type { StatusLive, StrataBlink } from "../shared/status-light.ts";
+export { JogWheel } from "./jog-wheel.ts";
+export { PatchBay, PatchPoint } from "./patch-point.ts";
 export { Knob } from "./knob.ts";
 export type { KnobMark } from "../shared/knob.ts";
 export { Pad, PadGrid } from "./pad.ts";

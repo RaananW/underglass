@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata JogWheel</title>
+  <style>
+    body { margin: 24px; background: var(--strata-colour-stage, white); color: var(--strata-colour-text, black); font: 16px system-ui; }
+    [hidden] { display: none !important; }
+    h1 { margin: 0 0 8px; font-size: 20px; }
+    #frame { position: relative; width: 640px; height: 420px; }
+    #output, #ordinary { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #output { pointer-events: none; }
+    #status { white-space: pre-wrap; max-height: 8em; overflow: auto; font-size: 12px; }
+    /* ?plain: the panel in the page's flow, as a plain HTML page uses it (no Underglass). */
+    body.plain { margin: 0; }
+    body.plain main { box-sizing: border-box; max-width: 640px; padding: 16px; }
+    .wheels { display: flex; flex-wrap: wrap; gap: var(--strata-gap-group, 20px); align-items: flex-start; }
+    .read { margin: 12px 0 0; font-size: 13px; }
+    /* Room under the frame, so the wheel test can show that the page does not scroll. */
+    .spacer { height: 1200px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Strata JogWheel</h1>
+    <p>Jog wheels: native range inputs over a flat wheel with a finger dimple, endless in plain DOM and on the GPU.
+      <button id="enable" type="button">GPU</button> <button id="disable" type="button">CSS</button></p>
+    <div id="frame"><canvas id="output" hidden></canvas><div id="ordinary"></div><div id="overlay"></div></div>
+    <pre id="status" role="status"></pre>
+  </main>
+  <div class="spacer" aria-hidden="true"></div>
+  <script type="module" src="/src/ui-jog-wheel/main.ts"></script>
+</body>
+</html>

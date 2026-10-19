@@ -635,6 +635,11 @@ keep their Objects object, drawn as meshes of the same shapes. Lit parts give th
 | Knob, glass cap | As Knob, with a printed hub ring (r 7) at the centre | `skirt` and a glass `cap` (a lens) with its `pointer` | As Knob | The cap is a plano-convex lens on the skirt: radius 0.45 × the metal cap's diameter (23), a 2 px wall and an elliptical dome to 22 high; its pointer in the faceplate's ink; it casts 0.45 of `shadow.strength` |
 | Knob, detented | As Knob | As Knob | Turn in `detents` steps, 11 | 0.8 × the knob's size |
 | Fader | `slot`, printed (5 wide); the scale | `carriage` with its `grip` (an index line, 1.6 wide) | Slide along `fader.travel`, 180 | Box 46 wide and the travel plus the carriage long. Carriage 30 × 42, 12 high, taper 0.6, radius 3: a brushed body, a 2 px polished chamfer and a brushed top |
+| Slider `knob`, `fader` | As Knob and Fader | As Knob and Fader, on the Slider's own input | As Knob and Fader | The Knob's and the Fader's, with no printed legend (the Field names it); a fader is horizontal. [Anatomy](components/slider.md#11-hardware-forms-knob-and-fader) |
+| Card, Panel `plate` | None: the face is the element's own slab, captured | `plate`: a rim swept along the rounded outline, 4 wide, 3 high (× 0.6, 1, 1.6) with a 1.4 chamfer on its outer edge, polished (gunmetal on a dark faceplate); no screws | None (a Dialog's rises) | Inset by the box rule's margin (3 px at 50% depth on the reference stage; the closest vertex is 1.9 px inside). No face caster: the slab's own shadow stays. A mesh (`mesh` profile, inline), one part kind per distinct size. [Card](components/card.md#11-plate-and-tray-forms), [Panel](components/panel.md#11-plate-and-tray-forms) |
+| Card, Panel `tray` | `well` primitive: the body, captured, in the field's colour | `bezel`: the same sweep as a lip, a vertical outer face, a flat top 4 wide, an inner face running 3 down into the recess, satin | None | As `plate`; the closest vertex 1.6 px inside. Content padding `space.4` keeps the text clear of the wall |
+| Dialog `plate` | As Card `plate` | `plate`, with `rise` | The plate rises out of the chassis: a `travel` pose from −(height − 0.3) to 0, driven by the panel motion's eased progress (`motion.slow`, `motion.easing.standard`), and back on leaving | Over the whole rise, inside the dialog's box (core's containment); a uniform update, no recapture of its own. Reduced motion: instant. [Anatomy](components/dialog.md#11-plate-form) |
+| Drawer `tray` | As Card `tray`, on the drawer's box | `bezel`: the wall, open on the edge it slides from | The layer slides in from beyond its edge (core's panel transition, `x` or `y`), and the wall rises as a Dialog's plate does | The wall is inside the drawer's box and the slide does not change that. [Anatomy](components/drawer.md#11-tray-form) |
 | Switch `slide` | `slot` | `carriage` (a block), with an accent flag when on | Slide 28 | Box 64 × 28. Block 24 × 20, 6 high, taper 0.4, chamfer 2. Flag lit 1.0 when on, hidden when off |
 | Switch `rocker` | `bezel`, 2 high | `paddle`: a two-facet plate (facets 12 / 4) on a `pivot`, with an accent flag on its On end | Tilt ±17.7° | Box 54 × 70 (the bezel stays 38 × 62: the tipped paddle's raised corners stand about 29 px at full depth and drift up to 12 px at the stage's edge, so a 38 × 62 box leaves them 6.7 px outside it). Paddle 28 × 50. Flag 18 × 9, 1.0 / 0.12. The paddle's shadow moves to its raised end |
 | Switch `bat` | `nut` Ø24, 3 high; `bushing` Ø14, 7 high | `lever` with its `ball`, on a `pivot` | Tilt ±40° | Box 48 × 92. Lever 40 long (it scales with depth, at most × 1.15), pivot 5 up, base r 3.4, neck r 2.7, ball r 5.6: about 28 px head-on, with its shadow |
@@ -652,9 +657,9 @@ keep their Objects object, drawn as meshes of the same shapes. Lit parts give th
 | RotarySelector | `collar`; the ring of positions, printed | As Knob | Turn to the selected option, one detent per option | As Knob |
 | Display | `bezel`, `window`; the text, a native `<input>` or `<output>` printed under the window | None | The backlight, emitters along the window† | Box 236 × 56 at medium (the window 214 × 34, the control's height; the prototype's 236 × 58 had a 36 px window). The native element covers the whole box: the bezel stands 4 px in (the room for its shadow), 7 wide, radius 8, 2.4 high, chamfer 2, polished; the window 2.4 high with a 2.6 bevel. The finish band 0.3 and horizon 0.25 only where no text can reach the zone (an input's text can be anywhere in its content box, so never: a window 34 px high has none). The bezel is a solid under the window, whose exact pixels cover it. [Anatomy](components/display.md) |
 | Pad | `lens` (the glow: a glass plate on the face, an emitter), `plinth` (the soft cap's body), `cap` (the captured label) | The `cap`, a satin lacquer in this core (no `subsurface` layer yet) | Travel 3 (1.35, 0.45 of it, latched), while held, with the emitter lit from below | Box = cap + 18 (82 at medium); cap side `size.pad` (48, 64, 80), radius 0.22 of it. Glow a plate 0.5 high, the cap + 6 across, the lit rim 3 px round the cap; body 4 high, taper 0.6, chamfer 1.5, the captured label 1 on it; the emitter 3 cap sides of reach, 0.25 high, 3,600 at 64 (`emitter.pad.*`). Lit by `--strata-lit`, moved by `--strata-push-t`, the PushButton's numbers. [Anatomy](components/pad.md) |
-| JogWheel | `collar` | A large `cap` with a finger dimple | Turn, wrapping | Phase I5 |
+| JogWheel | `collar` (a bearing ring), `cap`, `chamfer`, `grip` (the finger dimple) | The cap, flat, with its dimple | The dimple turns on an accumulated angle (the value steps, wrapping; the angle never turns back), coasting after a flick on `spring.jog` | Dial box = wheel + 32 (128 at medium); wheel Ø `size.jogWheel` (64, 96, 128) in a recess 8 wider. Cap 8 high with a 2 px polished chamfer and a flat brushed top; collar 3 wide, 1.6 high, 0.4 outside the wheel, polished; the dimple a dish Ø 0.2 of the wheel, 0.34 of its diameter from the centre, flat with a 0.5 lip and the normals of a bowl, in graphite. `t` is the angle modulo 360° over 360 (the dimple turns 0° to 360° about the wheel), so the wrap is the same pose. [Anatomy](components/jog-wheel.md) |
 | Keypad | `bezel` (one polished plinth, an object of its own), then per key `plinth` (the body) and `cap` (captured legends) | The caps | Travel 2.5, while held | Key box = cap + 12 (56 at medium); cap side `size.keypad` (36, 44, 52), radius 0.22 of it; body 5 high, taper 0.6, chamfer 2, the captured legends 1 on it; plinth 2.4 high, 0.8 edge break, its shadow fitted to the fieldset's box (12 px of room). Each key an object of its own. No emitter. [Anatomy](components/keypad.md) |
-| PatchPoint | `plate` (a washer), `bushing` (the jack), `nut` | None; a cable end is shown when connected | — | Phase I5 |
+| PatchPoint | `plate` (a washer), `bushing` (the jack's barrel), `slot` (the hole's floor), `pivot` (the plug), `lever` (the cable) | The plug and a short cable stub, risen out of the hole when connected | The plug rises (`travel`) on `spring.patch`; unplugged it is sunk under the floor and the washer | Box = washer + 20 (56 at medium); washer Ø `size.patchPoint` (28, 36, 44), 2.2 high with a hole of 0.44 of its diameter; barrel 3.2 wide, 1.8 high, polished; plug Ø 0.34 of the washer, 11 high; cable Ø 0.11 of the washer, towards the bottom of the screen, to 2 px short of the washer's edge. The cable is contained, so the box does not grow when connected. An optional LED is a StatusLight lens. [Anatomy](components/patch-point.md) |
 
 ## 7. Elevation and shadow
 
@@ -853,6 +858,8 @@ into core keyframes: motion never recaptures ([I0.1](instrument-phase0.md#i01-me
 | --- | --- | --- | --- | --- |
 | `spring.knob` | 420† | 41† | 1.00 | A continuous knob's cap |
 | `spring.detent` | 900† | 42† | 0.70 | A detented knob or selector settling on its detent |
+| `spring.jog` | 40† | 3.2† | 0.25 | A jog wheel coasting after a flick: friction (damping) and, with detents, a soft pull to the nearest detent (stiffness); not a position spring (the wheel's angle is unbounded and has no target) |
+| `spring.patch` | 1,100† | 60† | 0.90 | A patch point's plug seating, clamped at its stops |
 | `spring.fader` | 420† | 41† | 1.00 | A fader's carriage |
 | `spring.slide` | 600† | 49† | 1.00 | A slide switch's block |
 | `spring.rocker` | 1,200† | 58† | 0.84 | A rocker's paddle |
@@ -862,7 +869,7 @@ into core keyframes: motion never recaptures ([I0.1](instrument-phase0.md#i01-me
 | `spring.meter` | 360† | 28† | 0.74 | A needle meter's needle |
 | `spring.gauge` | 160† | 20† | 0.79 | A gauge's needle |
 
-Stiffness ranges over 50–4,000† and damping over 5–200†.
+Stiffness ranges over 50–4,000† and damping over 5–200† (`spring.jog` over 0–4,000† and 0.5–200†: a wheel with no detents has no stiffness at all).
 
 - **Detents:** `detents` on a knob or selector makes it stepped. The native `step` is the source of truth (a detented
   knob's `step` is its range over `detents − 1`); the value changes only through the native input, and the detent
@@ -948,6 +955,19 @@ model was proven with real pointer and keyboard input in plain DOM and on the GP
 | `knob.tapSlop` | 4 | 1–12† | A press that moves less than this, in px, is a tap |
 | `knob.snap` | 2 | 0–5† | A ring click within this many degrees of a printed numeral sets exactly its value |
 
+The JogWheel (anatomy page [jog-wheel.md](components/jog-wheel.md)) is a native range input that takes the same round behaviour, with these tokens:
+
+| Token | Default | Range | Meaning |
+| --- | --- | --- | --- |
+| `jog.turn` | 24 | 4–120† | Steps in one turn of the wheel: a step is 360 over this many degrees |
+| `jog.dragPx` | 240 | 50–1,000† | Vertical drag for one turn (the alternative to the circular drag), px |
+| `jog.fine` | 0.1 | 0.01–1† | The drag rate while Shift is held |
+| `jog.tapSlop` | 4 | 1–12† | A press that moves less than this, in px, is a tap |
+| `jog.flick` | 180 | 0–2,000† | The release speed, degrees a second, under which the wheel stops where it was let go |
+| `jog.maxRate` | 240 | 10–1,000† | The most steps a second a coasting wheel applies, each one native step and one `input` event |
+
+`size.jogWheel` is 64, 96 and 128 and `size.patchPoint` (the washer) 28, 36 and 44.
+
 - **One native control covers the dial.** A transparent native input covers the whole dial, cap and scale ring; the
   drawn ring and cap are `aria-hidden` with `pointer-events: none`, so every click lands on the original control.
 - **Drag:** vertical (the audio-plugin convention) at `knob.dragPx` per sweep, finer with Shift. The knob cancels the
@@ -968,6 +988,7 @@ model was proven with real pointer and keyboard input in plain DOM and on the GP
   Home, End.
 - **Events:** every change goes through the input's `value`, firing `input`, then `change` at the end of a gesture, so
   forms behave as with the plain input.
+- **JogWheel:** the wheel's position is an accumulated angle (`--strata-jog-angle`, degrees clockwise from the top) that is not the value: each step adds `360 / jog.turn` degrees in the direction it was taken, from the angle's origin at `min`, so a value that wraps from `max` to `min` is one more step and the wheel never turns back; a script's jump turns it the shorter way round. The drag is circular (the pointer's angle about the centre, the shorter way round per move) or, with `data-strata-drag="vertical"`, the knob's; a tap on the upper half of the box steps up and on the lower half down (the single-pointer alternative); the wheel steps one; keys are native except that, with `data-strata-wrap`, the key that would pass an end goes round. **Inertia:** a drag released over `jog.flick` coasts on `spring.jog` (`v' = −damping · v − stiffness · (a − nearest detent)`, the pull only with detents), ends within 6°/s (and 0.2° of a detent) and fires `change` once; **the rule for the steps it applies:** a value only ever changes by one native `step` per `input` event, each as the angle passes a step, a coasting wheel applies at most `jog.maxRate` steps a second (the release speed is held to `jog.maxRate · 360 / jog.turn` degrees a second, 4 steps a frame at 60 a second), a gesture that passes more than 16 steps in one move is one jump; under reduced motion a released wheel stops where it is.
 - **Faders** are native vertical range inputs (`writing-mode: vertical-lr; direction: rtl`, with
   `aria-orientation="vertical"`). The native thumb is sized to the carriage's travel footprint, so dragging the drawn
   carriage moves the value. Track click, wheel, double-click and keys behave as on the knob.

@@ -1,0 +1,26 @@
+---
+/**
+ * Strata Astro JogWheel check page (`/jog-wheel/`): `[data-contract]` renders the anatomy page's markup examples (`jog-wheel.md`
+ * two) with `@underglass/ui/astro`, and `main` holds live wheels `tests/browser/ui-jog-wheel-astro.test.mjs` drives with real input.
+ * Server-rendered HTML; the only script is the components' own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { JogWheel } from "@underglass/ui/astro";
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro JogWheel check</title>
+</head>
+<body>
+  <div data-contract="jog-wheel:0" hidden><JogWheel label="Shuttle" id="shuttle" name="shuttle" min={0} max={99} value={12} unit=" fr" /></div>
+  <div data-contract="jog-wheel:1" hidden><JogWheel label="Tune" id="tune" min={-12} max={12} turn={12} detents wrap={false} drag="vertical" value={0} unit=" st" size="small" /></div>
+  <main>
+    <form class="ug-panel" data-strata-face="raised" aria-label="Jog wheels" id="wheels" style="display: flex; flex-wrap: wrap; gap: 20px">
+      <JogWheel label="Frame" id="frame" name="frame" min={0} max={99} value={12} unit=" fr" class="extra" style="margin-right: 4px" data-testid="frame" />
+      <JogWheel label="Mark" id="mark" name="mark" min={0} max={11} turn={12} detents value={3} resetValue={0} />
+    </form>
+  </main>
+</body>
+</html>

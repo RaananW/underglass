@@ -1,0 +1,61 @@
+---
+/**
+ * JogWheel (anatomy page `jog-wheel.md`): a native `<input type="range">` over a large flat wheel with a finger dimple, with its
+ * legend printed under it, rendered on the server. Keys work with no script; the round behaviour (circular drag, the vertical drag,
+ * tap steps, the wheel, inertia, the wrapping keys, the double-click reset) and the dimple turning on its accumulated angle come
+ * from `attachStrata`, which it loads. `class`, `style` and other attributes reach the `.ug-jog-wheel` root. `unit` keeps
+ * `aria-valuetext` in step in the browser; a `format` function would only apply on the server, so Astro takes `unit` alone.
+ */
+import Behaviour from "./Behaviour.astro";
+import { nextId } from "./field.ts";
+import { jogDefaults, jogInitialAngle, jogStyle, jogWheelModel } from "../shared/jog-wheel.ts";
+import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+
+interface Props {
+  /** The legend printed under the wheel; it names the input. */
+  label: string;
+  /** The value; `min` by default. */
+  value?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  /** Steps in one turn of the wheel; the `jog.turn` token (24) by default. */
+  turn?: number;
+  /** Soft detents: the dimple settles on each step, which ticks where feedback is on. */
+  detents?: boolean;
+  /** The value goes round at the ends (the default); `false` stops it at them. */
+  wrap?: boolean;
+  /** `circular` (the default) or `vertical` (a turn per `jog.dragPx`). */
+  drag?: "circular" | "vertical";
+  /** A unit for `aria-valuetext`, appended as written (" fr", "%"). */
+  unit?: string;
+  /** The value a double-click returns to; `value` by default. */
+  resetValue?: number;
+  /** The input's id; generated when absent. */
+  id?: string;
+  name?: string;
+  form?: string;
+  disabled?: boolean;
+  size?: StrataSize;
+  material?: string;
+  level?: StrataLevel;
+  class?: string;
+  style?: string;
+  [attribute: string]: unknown;
+}
+
+const { label, min = 0, max = 99, value = min, step = 1, turn = jogDefaults.turn, detents = false, wrap = true, drag = "circular", unit, resetValue, id, name, form, disabled, size, material, level, class: className, style, ...rest } = Astro.props;
+const model = jogWheelModel({ value, min, max, step, turn, detents, wrap, drag, unit });
+const inputId = id ?? nextId("jog");
+const start = jogStyle(jogInitialAngle(value, { min, max, step }, turn), turn);
+---
+<div class={classes("ug-jog-wheel", model.detented && "ug-jog-wheel--detented", className)} {...strataAttributes({ size, material, level })} data-strata-drag={model.vertical ? "vertical" : undefined} style={style ? `${start} ${style}` : start} {...rest}>
+  <div class="ug-jog-wheel__dial">
+    <span class="ug-jog-wheel__well" data-strata-face="well" aria-hidden="true"></span>
+    <span class="ug-jog-wheel__wheel" data-strata-face="raised" aria-hidden="true"><span class="ug-jog-wheel__turn"><span class="ug-jog-wheel__dimple" data-strata-face="well"></span></span></span>
+    <input class="ug-jog-wheel__input" type="range" id={inputId} name={name} form={form} min={model.min} max={model.max} step={model.step} value={String(value)}
+      data-strata-default={String(resetValue ?? value)} data-strata-wrap={model.wrap ? "true" : undefined} data-strata-unit={unit} aria-valuetext={model.valueText} disabled={disabled} />
+  </div>
+  <label class="ug-jog-wheel__label" for={inputId}>{label}</label>
+</div>
+<Behaviour />

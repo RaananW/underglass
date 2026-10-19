@@ -58,6 +58,9 @@ function blended(token: Token): string {
   return `calc(${number(medium)}${unit} + ${number(medium - subtle)}${unit} * min(${t}, 0) + ${number(bold - medium)}${unit} * max(${t}, 0))`;
 }
 
+/** The wave 3 parts' size variables (`size.jogWheel`, `size.patchPoint`): `--strata-jog-wheel-size`, `--strata-patch-point-size`. */
+const wave3Sizes: Record<string, string> = { jogWheel: "jog-wheel-size", patchPoint: "patch-point-size" };
+
 /**
  * The current size's values for each size in the source (`size.<part>.<size>`): `--strata-indicator`,
  * `--strata-switch-width`, `--strata-control-offset`, `--strata-control-font`, `--strata-knob-size`,
@@ -70,8 +73,9 @@ function sizes(tokens: Token[]): [string, string[]][] {
   Object.assign(parts, { push: "push-size", rotary: "rotary-size" });
   for (const token of tokens.filter(token => token.path.startsWith("size."))) {
     const [, part, size] = token.path.split(".") as [string, string, string];
-    if (!parts[part]) continue;
-    bySize.set(size, [...(bySize.get(size) ?? []), `--strata-${parts[part]}: var(${cssVariable(token.path)});`]);
+    const variable = parts[part] ?? wave3Sizes[part];
+    if (!variable) continue;
+    bySize.set(size, [...(bySize.get(size) ?? []), `--strata-${variable}: var(${cssVariable(token.path)});`]);
   }
   // The default comes first, so a size set on the root itself overrides it.
   return [...bySize.entries()].sort(([a], [b]) => Number(b === "medium") - Number(a === "medium"));

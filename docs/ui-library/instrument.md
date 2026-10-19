@@ -170,9 +170,9 @@ object is drawn around it.
 | **PushButton** forms ([Button](components/button.md#11-push-button-form-momentary), [ToggleButton](components/toggle-button.md#11-push-button-form-latching)) | The existing Button and ToggleButton, `<button>` | `momentary`: a machined cap with a lit ring. `latching` (ToggleButton): stays down with an LED on | Travel; ring lights | 2 (done) |
 | **[Display](components/display.md)** | The existing TextField, `<input>`, as `form="display"` ([TextField, section 11](components/text-field.md#11-the-display-form)); read-only displays are `<output>` | A glass window in a bezel, backlit, with the text printed under the glass | None; backlight is an emitter | 2 (done) |
 | **[Pad](components/pad.md)** | `<button>`, with `aria-pressed` for latching pads | A square soft cap in a grid, lit from below when active | Travel; emitter | 3 (done) |
-| **JogWheel** | `<input type="range">` with `wrap` (an endless encoder: the value steps, the visual position wraps) | A large flat wheel with a finger dimple | Turns | 3 |
+| **[JogWheel](components/jog-wheel.md)** | `<input type="range">` with `wrap` (an endless encoder: the value steps, the visual position wraps) | A large flat wheel in a bearing recess with a finger dimple | The dimple turns on an accumulated angle; a flick coasts on `spring.jog` | 3 (done) |
 | **[Keypad](components/keypad.md)** | A `<fieldset>` of `<button>`s, Grid pattern for arrow keys | Push buttons in a grid on one plinth | Travel | 3 (done) |
-| **PatchPoint** | `<input type="checkbox">` or a `<button>` per jack; a `PatchBay` is a `<fieldset>` | A jack in a washer; a connected jack shows a cable end | None | 3 |
+| **[PatchPoint](components/patch-point.md)** | `<input type="checkbox">` or a `<button>` per jack; a `PatchBay` is a `<fieldset>` | A jack in a washer; a connected jack shows a plug and a short cable | The plug rises out of the hole | 3 (done) |
 
 ### Everyday components at the Instrument level
 
@@ -200,6 +200,17 @@ divider a groove) or stay flat, because they are print on the faceplate.
 | Drawer | A tray that slides out of the chassis edge | `flush` |
 | Tooltip, Menu, Popover, Toast | Unchanged: overlay-host CSS, as today | — |
 
+**Structural forms (everyday forms, third part).** The Slider, the Card and Panel, and the Dialog and Drawer take their forms through `form` at
+every presentation (`flush`, and an absent `form`, are the control of before). A Slider's `knob` and `fader` are the Knob's and the Fader's object
+over the Slider's own native input ([`slider.md` section 11](components/slider.md#11-hardware-forms-knob-and-fader)): `fader`, the premium default,
+presents the Fader's object (horizontal) rather than being deferred, and the reserved `wheel` (a thumbwheel: a ridged cylinder rolling under a slot, a
+form of its own with three renderers) is not built. A Card's or Panel's `plate` and `tray`, a Dialog's `plate` and a Drawer's `tray` are a rim or a
+wall of parts (an inline mesh swept along the element's rounded outline) standing inside the element's box, over its face, which stays captured:
+content, text and hits are untouched ([Card](components/card.md#11-plate-and-tray-forms), [Panel](components/panel.md#11-plate-and-tray-forms),
+[Dialog](components/dialog.md#11-plate-form), [Drawer](components/drawer.md#11-tray-form)). The Dialog's plate rises out of the chassis with the panel
+motion's eased progress and the Drawer's tray slides out of its edge (CSS, and core's panel transition with `x` or `y` on the GPU), the wall rising with
+it; the rise is a scene number, a uniform update.
+
 ### Interaction, in detail
 
 - **Knob:** pointer drag is vertical (the audio-plugin convention) at `knob.dragPx` per full sweep, finer with
@@ -207,6 +218,7 @@ divider a groove) or stay flat, because they are print on the faceplate.
   native range input's (arrows, Page keys, Home, End). **Single-pointer alternative (WCAG 2.5.7):** a click on the
   scale ring sets the value, and a tap on the cap's upper or lower half steps it, so no drag is ever required.
 - **Fader:** native vertical range input with the same drag and click-to-set behaviour.
+- **JogWheel:** the same round behaviour, endless: the pointer's angle about the wheel's centre turns the wheel (the Knob's vertical drag and the wheel are alternatives), the value steps by `step` as the angle passes each step and, with `wrap`, goes round from `max` to `min`, while the dimple's position is an accumulated angle that never turns back. A flick coasts on `spring.jog`, one native step per `input` event at no more than `jog.maxRate` a second, and stops under reduced motion. **Single-pointer alternative:** a tap on the upper half steps up, on the lower half down. See [JogWheel](components/jog-wheel.md#8-keyboard-and-screen-reader).
 - **Detents:** `detents` on a knob or selector snaps to `step` positions with a spring; the native `step` is the
   source of truth.
 - **Levers and rockers:** a click anywhere on the control throws it; a drag past centre throws it too. The snap is
@@ -554,11 +566,19 @@ One concern per PR, each based on `main`:
 10. Fader (wave 1: [anatomy](components/fader.md); CSS, Relief, Objects and Instrument done, with the helper's
    `instrument` level, and its detents' `tick`). 11. Switch forms, with sound and haptics as the opt-in option.
 12. Wave 2 components, one or two per PR. 13. Everyday forms, a few per PR. 14. Instrument gallery and showpiece.
-15. Wave 3 components. 16. Characters: studio, hifi, playful, one per PR.
+15. Wave 3 components (first part: the JogWheel and the PatchPoint, done: [JogWheel](components/jog-wheel.md), [PatchPoint and PatchBay](components/patch-point.md)). 16. Characters: studio, hifi, playful, one per PR.
 
 PR 11, the Switch forms ([anatomy](components/switch.md#11-forms)): `slide`, `rocker`, `bat` and `wall` done in CSS, Relief and
 Objects and Instrument (the helper's `instrument` level), with sound and haptics as the opt-in option, and the Knob's
 detents' `tick`.
+
+Everyday forms, third part: the structural family at every presentation, in CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Instrument on the GPU.
+The Slider as a knob or a fader ([`knob`, `fader`](components/slider.md#11-hardware-forms-knob-and-fader): the Knob's and the Fader's object over the Slider's own
+input; `wheel` is reserved and follows), the Card and Panel as a [`plate`](components/card.md#11-plate-and-tray-forms) or a `tray`, the Dialog as a
+[`plate` that rises out of the chassis](components/dialog.md#11-plate-form) and the Drawer as a [`tray` that slides out of its edge](components/drawer.md#11-tray-form),
+with `flush` and an absent `form` the control of before. The plate's rim and the tray's wall are inline meshes swept along the element's rounded outline,
+inside its box, checked with core's containment over the whole rise; the Dialog's and the Drawer's motion drives the rise as one scene number (a uniform
+update), and the Drawer's layer slides through core's panel transition (`x`, `y`).
 
 PR 12, wave 2, first part: the Lamp and the StatusLight ([Lamp](components/lamp.md), [StatusLight](components/status-light.md)),
 at every presentation: CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Instrument on the GPU, with the helper's

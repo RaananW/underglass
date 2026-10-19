@@ -28,10 +28,13 @@ native attributes (`:hover`, `:active`, `:focus-visible`, `:checked`, `:disabled
 | `data-strata-preview` | A control | `hover`, `active` or `focus`: shows a state statically, for specimens and tests only |
 | `data-strata-form` | A Switch's row, or a Button or ToggleButton | `slide`, `rocker`, `bat` or `wall`: the switch's hardware form ([Switch, Forms](switch.md#11-forms)); `momentary` (Button) or `latching` (ToggleButton): a push button ([Button](button.md#11-push-button-form-momentary), [ToggleButton](toggle-button.md#11-push-button-form-latching)) |
 | `data-strata-down` | A push button | `true` while it is held (the pointer or a key down), `false` once released: its ring lit and its cap down; set by `attachStrataPushButtons` |
+| `data-strata-form` (structural forms) | A Slider's drawn root (`.ug-knob`, `.ug-fader`), a Card, a Panel, a Dialog or a Drawer | `knob` or `fader` (Slider), `plate` or `tray` (Card, Panel), `plate` (Dialog) or `tray` (Drawer): the control drawn as the Knob's or the Fader's object over the Slider's own input, as a machined plate or a recessed tray, a plate that rises out of the chassis or a tray that slides out of its edge; `flush`, or none, is the look before ([Slider](slider.md#11-hardware-forms-knob-and-fader), [Card](card.md#11-plate-and-tray-forms), [Panel](panel.md#11-plate-and-tray-forms), [Dialog](dialog.md#11-plate-form), [Drawer](drawer.md#11-tray-form)) |
 | `data-strata-colour` | A Lamp or StatusLight | The lens's colour role: `glowOn` (default), `accent`, `success`, `warning`, `danger` or `info` ([Lamp](lamp.md)) |
 | `data-strata-lit` | A StatusLight | `false`: an unlit light (lit when absent) |
 | `data-strata-form` (indicator forms) | A Rating's fieldset, a Badge, a ProgressBar's wrapper (`.ug-progress-bar`) or a Spinner | `lamps` (Rating), `led` (Badge), `meter` (ProgressBar) or `ring` (Spinner): the control drawn as LED lenses, each an emitter lit by `--strata-lit`; `flush`, or none, is the look before. `data-strata-colour` is the lenses' role there too, `accent` by default for a bar and a ring ([Rating](rating.md#11-indicator-form-lamps), [Badge](badge.md#11-indicator-form-led), [ProgressBar](progress-bar.md#11-indicator-form-meter), [Spinner](spinner.md#11-indicator-form-ring)) |
 | `data-strata-blink` | A StatusLight | A tempo token, `slow`, `normal` or `fast`: a lit light blinks, off under reduced motion ([StatusLight](status-light.md)) |
+| `data-strata-wrap` | A JogWheel's input | `"true"`: the value goes round at the ends, as the wheel does ([JogWheel](jog-wheel.md)) |
+| `data-strata-drag` | A JogWheel | `vertical`: a vertical drag, a turn per `jog.dragPx`, instead of the circular one |
 | `data-strata-backlight` | A Display's root (`data-strata-form="display"`, a TextField's `display` form or a read-only Display) | The backlight's role: `glowOn` (default, absent), `accent`, `success`, `warning`, `danger`, `info` or `off`; `data-strata-lit="false"` on it switches the light off ([Display](display.md)) |
 | `data-strata-colour` (pads) | A Pad | The glow's colour role, as a Lamp's ([Pad](pad.md)) |
 | `data-strata-velocity` | A Pad | The last press's velocity, 0–1 (position, pressure or key), set at each press by `attachStrataPads`; optional ([Pad](pad.md#8-keyboard-and-screen-reader)) |
@@ -91,9 +94,9 @@ light and depth, reduced motion, keyboard input and reflow.
 | [Radio and RadioGroup](radio.md) | `<input type="radio">` in `<fieldset>` | Round well with a knob |
 | [Switch](switch.md) | `<input type="checkbox" role="switch">` | Track well with a knob; hardware [forms](switch.md#11-forms): slide, rocker, bat and wall |
 | [Select](select.md) | `<select>` | Key with a chevron |
-| [Slider](slider.md) | `<input type="range">` | Rail groove with a puck |
-| [Card](card.md) | `<article>` or `<section>` | Raised slab |
-| [Panel](panel.md) | `<section>` | Raised slab, the GPU layer unit |
+| [Slider](slider.md) | `<input type="range">` | Rail groove with a puck; `form="knob"` or `"fader"`: the Knob's or the Fader's object over the same input ([Hardware forms](slider.md#11-hardware-forms-knob-and-fader)) |
+| [Card](card.md) | `<article>` or `<section>` | Raised slab; `form="plate"`: a machined plate, `"tray"`: the body a recessed tray ([Plate and tray forms](card.md#11-plate-and-tray-forms)) |
+| [Panel](panel.md) | `<section>` | Raised slab, the GPU layer unit; `form="plate"` or `"tray"` as the Card ([Plate and tray forms](panel.md#11-plate-and-tray-forms)) |
 | [Divider](divider.md) | `<hr>` | Groove |
 | [Badge](badge.md) | `<span>` | Flat pill; `form="led"`: an LED pill, the StatusLight's lens before the text ([Indicator form](badge.md#11-indicator-form-led)) |
 | [Spinner](spinner.md) | `<span role="status">` | Ring groove with an emissive arc; `form="ring"`: a ring of eight LEDs chasing at `chase.spinner` ([Indicator form](spinner.md#11-indicator-form-ring)) |
@@ -103,8 +106,8 @@ light and depth, reduced motion, keyboard input and reflow.
 
 | Component | Native element | Object |
 | --- | --- | --- |
-| [Dialog](dialog.md) | `<section role="dialog" aria-modal>` | Raised slab at `elevation.modal`, over a scrim |
-| [Drawer](drawer.md) | `<section role="dialog" aria-modal>` | Raised slab on a viewport edge |
+| [Dialog](dialog.md) | `<section role="dialog" aria-modal>` | Raised slab at `elevation.modal`, over a scrim; `form="plate"`: a plate that rises out of the chassis ([Plate form](dialog.md#11-plate-form)) |
+| [Drawer](drawer.md) | `<section role="dialog" aria-modal>` | Raised slab on a viewport edge; `form="tray"`: a tray that slides out of its edge ([Tray form](drawer.md#11-tray-form)) |
 | [Accordion](accordion.md) | `<details>` with `<summary>` | A stack of raised slabs; the header's chevron turns |
 | [AppBar](app-bar.md) | `<header>` | A raised slab across the top, with controls on it |
 | [Avatar](avatar.md) | `<span role="img">` or an `<img>` | A raised coin |
@@ -143,6 +146,8 @@ The [Instrument level](../instrument.md)'s components: hardware objects over nat
 | --- | --- | --- |
 | [Knob](knob.md) | `<input type="range">` over a printed dial | A skirt and a cap with a turning pointer, a scale printed on the face |
 | [Fader](fader.md) | `<input type="range">`, vertical (`writing-mode: vertical-lr`) or horizontal, its thumb the carriage | A slot in the faceplate with a capped carriage, a scale printed beside it |
+| [JogWheel](jog-wheel.md) | `<input type="range">` over a flat wheel; `wrap` makes the value go round | A wheel in a bearing recess with a finger dimple that turns on an accumulated angle (never back), coasting after a flick on `spring.jog` |
+| [PatchPoint, PatchBay](patch-point.md) | `<input type="checkbox">` (or a `<button aria-pressed>`) per jack; a bay is a `<fieldset>` | A jack in a washer; connected, a plug stands out of the hole with a short cable; an optional LED |
 | [RotarySelector](rotary-selector.md) | `<select>` over a printed dial, one detent per `<option>` | A knob that turns to the chosen option, the options' labels printed round it |
 | [Lamp](lamp.md) | `<input type="checkbox" role="switch">` in its label row, or a `<button aria-pressed>` when `momentary` | A lens on a bezel: dark glass off, glowing and emitting on |
 | [StatusLight](status-light.md) | `<span role="img" aria-label>`, a `<span>` with its label, or a live `<output>` | A small lens with an emitter; `colour` a role, `blink` a tempo token |

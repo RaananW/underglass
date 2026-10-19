@@ -7,6 +7,7 @@
 import { forwardRef, useLayoutEffect, useId, useRef, useState, type HTMLAttributes, type ReactNode, type Ref, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { showStrataDialog, type DialogCloseReason } from "../dom/dialog.ts";
+import { dialogForm, drawerForm, type StrataDialogForm, type StrataDrawerForm } from "../shared/structure-forms.ts";
 import { classes, mergeRefs, strataAttributes, type StrataProps } from "./shared.ts";
 
 export type { DialogCloseReason };
@@ -36,16 +37,21 @@ interface OverlayProps extends Omit<HTMLAttributes<HTMLElement>, "title" | "onCl
   closeOnScrim?: boolean;
 }
 
-export interface DialogProps extends OverlayProps {}
+export interface DialogProps extends OverlayProps {
+  /** `plate`: a machined plate that rises out of the chassis when it opens. `flush` or none: the dialog of before. */
+  form?: StrataDialogForm | "flush";
+}
 export interface DrawerProps extends OverlayProps {
+  /** `tray`: a recessed tray that slides out of the chassis edge when it opens. `flush` or none: the drawer of before. */
+  form?: StrataDrawerForm | "flush";
   /** The edge it sits on: `end` (the default), `start`, `top` or `bottom`. */
   side?: "start" | "end" | "top" | "bottom";
 }
 
 /** The shared implementation: `part` is the BEM block, `modifier` the drawer's side class. */
 function Modal(
-  { part, modifier, forwardedRef, open, onClose, title, titleId, description, descriptionId: givenDescriptionId, actions, container, initialFocus, returnFocus, closeOnScrim, size, material, level, className, children, ...rest }:
-  OverlayProps & { part: "dialog" | "drawer"; modifier?: string; forwardedRef: Ref<HTMLElement> },
+  { part, modifier, forwardedRef, form, open, onClose, title, titleId, description, descriptionId: givenDescriptionId, actions, container, initialFocus, returnFocus, closeOnScrim, size, material, level, className, children, ...rest }:
+  OverlayProps & { part: "dialog" | "drawer"; modifier?: string; forwardedRef: Ref<HTMLElement>; form?: string },
 ) {
   const generated = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const id = titleId ?? `${part}-title-${generated}`;
@@ -70,6 +76,7 @@ function Modal(
   }, [open, present]);
 
   if (!present || typeof document === "undefined") return null;
+  const formed = part === "dialog" ? dialogForm(form) : drawerForm(form);
   return createPortal(
     <>
       <div className="ug-scrim" aria-hidden="true" />
@@ -83,6 +90,7 @@ function Modal(
         data-strata-face="raised"
         data-strata-elevation="modal"
         tabIndex={-1}
+        {...(formed ? { "data-strata-form": formed } : {})}
         {...strataAttributes({ size, material, level })}
         {...rest}
       >

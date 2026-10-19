@@ -679,6 +679,50 @@ At the Instrument level (`level: "instrument"`) the carriage is a chamfered brus
 `spring.fader` (`gpu/instrument-fader.ts`), its shadow kept inside the input's box at every depth. A detented fader
 plays `tick` as it passes a detent when feedback is on (off by default). [Anatomy](../../docs/ui-library/components/fader.md).
 
+## JogWheel
+
+An endless encoder, the third wave of the Instrument level: a native `<input type="range">` over a large flat wheel with a finger
+dimple, whose value steps by its `step` and, with `wrap` (the default), goes round from `max` to `min` and back. The dimple's position
+is an **accumulated angle** (`--strata-jog-angle`, degrees, a step being `360 / turn`), not the value, so it never turns back when the
+value wraps. Keys are native (at an end, the key that would pass it goes round); a circular drag (the pointer's angle about the centre;
+`drag="vertical"` for the Knob's vertical drag), a tap on the upper or lower half of the wheel, the mouse wheel, a double-click reset and
+**inertia** (a flick coasts on `spring.jog`, one native step per `input` event at no more than `jog.maxRate` a second, and stops under
+reduced motion) come from `attachStrataJogWheels` in `@underglass/ui/dom`, which `attachStrata` and the components attach.
+`detents` makes the dimple settle on each step and play `tick` where feedback is on.
+
+```tsx
+<JogWheel label="Shuttle" min={0} max={99} value={frame} onValueChange={setFrame} unit=" fr" />
+<JogWheel label="Scrub" min={0} max={11} turn={12} detents defaultValue={3} />
+```
+
+Vue uses `v-model`; Astro takes `value` and `unit`. The ref is the `.ug-jog-wheel` root (`inputRef`, or Vue's exposed `input`, is the input);
+`flingStrataJogWheel(input, velocity)` sets a wheel coasting from a script and `syncStrataJogWheel(input)` brings its angle up to date
+after a script wrote its value. On the GPU the recess is a well and the wheel a raised disc (Relief) or a round slab (Objects), with the
+dimple a well on it placed from the angle, so a turning frame recaptures nothing (core captures each native `input` event); at the Instrument level (`level: "instrument"`) it is a polished
+collar, a brushed cap with a polished chamfer and a graphite dimple (`gpu/instrument-jog.ts`) that turns on the accumulated angle.
+[Anatomy](../../docs/ui-library/components/jog-wheel.md).
+
+## PatchPoint and PatchBay
+
+A connection shown as a jack, the third wave of the Instrument level: a **PatchPoint** is a native `<input type="checkbox">` (connected
+when checked) or, with `button`, a `<button aria-pressed>`, over a jack in a washer; connected, a plug stands out of the hole with a short
+cable, and `led` adds a StatusLight lens that lights with it. A **PatchBay** is a `<fieldset>` of PatchPoints on one plinth, named by its
+`legend`. Keyboard, labels and forms are native; a button's toggle and the opt-in feedback (`click` connecting, `thunk` disconnecting) come
+from `attachStrataPatchPoints` in `@underglass/ui/dom`, which `attachStrata` and the components attach.
+
+```tsx
+<PatchBay legend="Outputs" columns={4}>
+  <PatchPoint name="out1" led checked={out1} onChange={event => setOut1(event.target.checked)}>Out 1</PatchPoint>
+  <PatchPoint name="out2" led>Out 2</PatchPoint>
+</PatchBay>
+<PatchPoint button connected={ret} onClick={() => setRet(!ret)}>Ret 1</PatchPoint>
+```
+
+Vue uses `v-model` on a checkbox jack; Astro takes `checked` and `connected`. At Relief the washer is a raised disc, the hole a well and the
+plug a knob face; at Objects a round slab, a pit and a dome; at the Instrument level (`level: "instrument"`) a brushed washer, a polished
+barrel, a dark floor, a polished plug and a rubber cable (`gpu/instrument-patch.ts`) whose plug rises out of the hole on `spring.patch`, sunk out of sight
+while unplugged, so no state changes the parts. The cable is contained: the box (the washer + 20) does not grow when a jack is connected.
+Anatomy: [PatchPoint and PatchBay](../../docs/ui-library/components/patch-point.md).
 ## RotarySelector and the push-button forms
 
 The third part of the Instrument level's second wave. A **RotarySelector** is a native `<select>` over a printed dial: a knob with
@@ -708,6 +752,33 @@ Every part and shadow is inside the button's box. The selector plays the opt-in 
 button the opt-in `click` as it goes down. Anatomy: [RotarySelector](../../docs/ui-library/components/rotary-selector.md),
 [Button](../../docs/ui-library/components/button.md#11-push-button-form-momentary),
 [ToggleButton](../../docs/ui-library/components/toggle-button.md#11-push-button-form-latching).
+
+## Structural forms: Slider, Card, Panel, Dialog and Drawer
+
+The third of the Instrument level's everyday forms. `form="knob"` or `form="fader"` on a **Slider** draws its own native `<input type="range">` as the Knob's or the
+Fader's object (the same markup, behaviour and GPU parts, without their legend; the fader is horizontal); `form="plate"` or `form="tray"` on a **Card** or **Panel** makes
+it a machined plate or a recessed tray (a Card's body, or a wrapper round a Panel's content, is the tray); `form="plate"` on a **Dialog** is a plate that rises out of the
+chassis as it opens, and `form="tray"` on a **Drawer** a tray that slides out of its edge. `flush`, or no `form`, is the control of before, in markup, look and motion; on a
+Slider any other `form` string is still the native form owner, and `wheel` is reserved for the thumbwheel (not built yet).
+
+```tsx
+<Field label="Drive"><Slider form="knob" min={0} max={100} value={drive} onChange={event => setDrive(Number(event.target.value))} unit="%" /></Field>
+<Card form="plate" title="Output">…</Card>
+<Card form="tray" title="Notes">…</Card>
+<Dialog form="plate" open={open} onClose={close} title="Discard changes?">…</Dialog>
+<Drawer form="tray" side="end" open={filters} onClose={closeFilters} title="Filters">…</Drawer>
+```
+
+Vue takes the same props; Astro takes `value` and `unit` on the Slider. The native controls stay the controls (the same accessibility snapshot, focus order and form data with and
+without a form). On the GPU the plate and the tray take the `plate` material role and a well at Relief and Objects; at the Instrument level a plate is a rim and a tray a wall:
+an inline mesh swept along the element's rounded outline, inside its box by the box rule's margin, over a face that stays captured, so text and hits are untouched (every
+vertex is at least 0.5 px inside its box over the whole rise: the closest is 1.9 px for a plate and 1.6 for a tray, at DPR 1 and 2; against the same page without the form no pixel
+outside the element's box changes). A Dialog's and a Drawer's motion drive the rise as one scene number (a uniform update), and the Drawer's layer slides through core's panel
+transition (`x`, `y`). The first build of an Instrument layer shows its parts about 0.1 s after it is enrolled. A value change on a Slider form is the Knob's and Fader's: 4 captures
+for 8 native changes, none in the frames the springs turn, 0 hit-geometry updates. A moving layer's boxes carry float noise, so the plate's mesh, the knob's diameters and the
+keys' bodies are quantised (a quarter or half px) and the layer is not rebuilt as it moves. Anatomy: [Slider](../../docs/ui-library/components/slider.md#11-hardware-forms-knob-and-fader),
+[Card](../../docs/ui-library/components/card.md#11-plate-and-tray-forms), [Panel](../../docs/ui-library/components/panel.md#11-plate-and-tray-forms),
+[Dialog](../../docs/ui-library/components/dialog.md#11-plate-form), [Drawer](../../docs/ui-library/components/drawer.md#11-tray-form).
 
 ## Lamp and StatusLight
 
