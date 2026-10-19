@@ -109,6 +109,8 @@ export function wave3Entries(element: Element, panel: HTMLElement, context: Wave
       for (const part of jack.querySelectorAll(".ug-patch-point__washer, .ug-patch-point__plug, .ug-patch-point__stub")) context.domes?.add(part);
       return [];
     }
+    // The plug is the GPU's at every level, connected or not: a connect must not paint it in CSS for a frame.
+    for (const plug of jack.querySelectorAll(".ug-patch-point__plug")) context.domes?.add(plug);
     return patchPointFormEntries(element, { rect: context.rect, box: context.rectOf(control), state: context.states(element), objects: context.objects, base: context.base, rectOf: context.rectOf,
       knob: context.knob, well: { material: context.material(element, "well"), depth: context.well }, light: context.light, hoverHeight: context.hoverHeight, domes: context.domes });
   }
