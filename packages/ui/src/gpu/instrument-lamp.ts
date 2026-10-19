@@ -84,6 +84,8 @@ export interface LampInput {
   box: Box;
   /** The lens's diameter. */
   lens: number;
+  /** Where the lens stands, where it is not the middle of `box` (an indicator form's lens in its bar, pill or ring), in panel px. */
+  centre?: [number, number];
   /** The depth scale of heights (0.6, 1, 1.6 at depth 0, 0.5, 1). */
   scale: number;
   /** The role colour, `#rrggbb`, and the index of this lens's emitter in the scene's `emitters`. */
@@ -108,7 +110,7 @@ export const lensMaterial = ({ role, opaque }: Pick<LampInput, "role" | "opaque"
 
 /** A lamp or LED as an Instrument object; `profile` registers a shape and returns its name. */
 export function lampObject(input: LampInput, profile: (name: string, shape: InstrumentProfile) => string): LampObject {
-  const [bx, by, bw, bh] = input.box, cx = round(bx + bw / 2), cy = round(by + bh / 2), s = input.scale, r = input.lens / 2;
+  const [bx, by, bw, bh] = input.box, cx = round(input.centre?.[0] ?? bx + bw / 2), cy = round(input.centre?.[1] ?? by + bh / 2), s = input.scale, r = input.lens / 2;
   const state = { hover: input.state.hover, disabled: input.state.disabled };
   const parts: LampPart[] = [];
   const g = lampGeometry[input.kind];

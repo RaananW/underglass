@@ -1,12 +1,22 @@
 ---
-/** Button (anatomy page `button.md`): a native `<button>` key. Slots: the label, and an optional `icon`. */
+/**
+ * Button (anatomy page `button.md`): a native `<button>` key. Slots: the label, and an optional `icon`. `form="momentary"` draws
+ * it as a push button (*Push-button forms*): a machined cap with a lit ring that lights while it is held, held down by
+ * `attachStrata`, which it loads; any other `form` string is the native form owner's id, as before. `colour` is the ring's role.
+ */
 import Behaviour from "./Behaviour.astro";
 import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+import { buttonPushForm, pushMarkup } from "../shared/push-button.ts";
+import type { StrataLampColour } from "../shared/lamp.ts";
 
 interface Props {
   variant?: "secondary" | "accent" | "danger";
   type?: "button" | "submit" | "reset";
   busy?: boolean;
+  /** The push-button form; any other string is the native `form` attribute. */
+  form?: "momentary" | (string & {});
+  /** The lit ring's colour of a push button. */
+  colour?: StrataLampColour;
   size?: StrataSize;
   material?: string;
   level?: StrataLevel;
@@ -14,7 +24,11 @@ interface Props {
   [attribute: string]: unknown;
 }
 
-const { variant = "secondary", type = "button", busy = false, size, material, level, class: className, ...rest } = Astro.props;
+const { variant = "secondary", type = "button", busy = false, form, colour, size, material, level, class: className, ...rest } = Astro.props;
+const push = buttonPushForm(form);
+const parts = push ? pushMarkup(push) : [];
 ---
-<button type={type} class={classes("ug-button", variant !== "secondary" && `ug-button--${variant}`, className)} data-strata-face="raised" aria-busy={busy ? "true" : undefined} {...strataAttributes({ size, material, level })} {...rest}>{Astro.slots.has("icon") && <span class="ug-button__icon" aria-hidden="true"><slot name="icon" /></span>}<span class="ug-button__label"><slot /></span></button>
+{push
+  ? <button type={type} class={classes("ug-button", "ug-push", variant !== "secondary" && `ug-button--${variant}`, className)} data-strata-form={push} data-strata-colour={colour} aria-busy={busy ? "true" : undefined} {...strataAttributes({ size, material, level })} {...rest}><span class="ug-push__object" aria-hidden="true">{parts.map(part => <span class={part.className} data-strata-face={part.face}></span>)}</span><span class="ug-push__cap" data-strata-face="raised">{Astro.slots.has("icon") && <span class="ug-button__icon" aria-hidden="true"><slot name="icon" /></span>}<span class="ug-button__label"><slot /></span></span></button>
+  : <button type={type} class={classes("ug-button", variant !== "secondary" && `ug-button--${variant}`, className)} data-strata-face="raised" aria-busy={busy ? "true" : undefined} form={form} {...strataAttributes({ size, material, level })} {...rest}>{Astro.slots.has("icon") && <span class="ug-button__icon" aria-hidden="true"><slot name="icon" /></span>}<span class="ug-button__label"><slot /></span></button>}
 <Behaviour />

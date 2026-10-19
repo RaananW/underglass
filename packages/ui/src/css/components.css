@@ -263,6 +263,157 @@
   :where(.ug-toolbar--vertical) > :where(.ug-divider--vertical) { width: auto; height: 2px; min-height: 0; margin: var(--strata-space-1) 0; border-left: 0; border-right: 0;
     border-top: 1px solid rgb(0 0 0 / calc(0.1 + 0.12 * var(--_gain))); border-bottom: 1px solid rgb(255 255 255 / calc(0.25 + 0.4 * var(--_gain))); }
 
+  /* ---- PushButton forms: a machined cap with a lit ring, `momentary` on the Button and `latching` on the ToggleButton (anatomy pages button.md, toggle-button.md) ---- */
+
+  /*
+   * The native button is the whole object: a box the cap plus 24 px (64 at medium), the bezel inset 5 px for the bloom's
+   * halo, the lit ring under the cap and the cap itself, in the flow, carrying the icon and the label. Two registered
+   * numbers light it: `--strata-lit` the ring (held, or latched) and `--strata-led` the LED (latching, while latched), 0
+   * unlit and 1 lit, and `--strata-push-t` the cap's travel, 1 held and 0.45 latched, on `spring.button` (sampled into
+   * `linear()` by `switchSpringCurve`, unit-tested). The GPU presentation reads all three frame by frame. With the GPU
+   * drawing the object (the Instrument level) the bezel, ring and LED CSS paint is hidden and the cap's translation held,
+   * so a press repaints nothing; the cap keeps its paint, which the captured cap shows. The light is never the only cue:
+   * the cap goes down, and a latching button says `aria-pressed`.
+   */
+  @property --strata-led { syntax: "<number>"; inherits: true; initial-value: 0; }
+  @property --strata-push-t { syntax: "<number>"; inherits: true; initial-value: 0; }
+  :where(.ug-push) {
+    --strata-lit: 0;
+    --strata-led: 0;
+    --strata-push-t: 0;
+    --_cap: var(--strata-push-size);
+    --_c: var(--strata-colour-glow-on);
+    --_on: color-mix(in srgb, var(--_c), white 18%);
+    --_off: color-mix(in srgb, var(--_c) 16%, #15171b);
+    --_glass: color-mix(in srgb, var(--_on) calc(var(--strata-lit) * 100%), var(--_off));
+    --_led-glass: color-mix(in srgb, var(--_on) calc(var(--strata-led) * 100%), var(--_off));
+    --_metal: var(--strata-colour-knob);
+    --_metal-light: color-mix(in srgb, var(--strata-colour-knob), white 60%);
+    --_metal-shade: color-mix(in srgb, var(--strata-colour-knob), var(--strata-colour-edge) 45%);
+    position: relative;
+    isolation: isolate;
+    box-sizing: border-box;
+    min-width: calc(var(--_cap) + 24px);
+    min-height: calc(var(--_cap) + 24px);
+    max-width: 100%;
+    padding: 12px;
+    border: 0;
+    border-radius: calc(var(--_cap) / 2 + 12px);
+    background: transparent;
+    background-image: none;
+    transition: --strata-lit var(--strata-motion-fast) linear, --strata-led var(--strata-motion-fast) linear, --strata-push-t 380ms linear(0, 0.2396 5.26%, 0.5196 10.53%, 0.7152 15.79%, 0.8355 21.05%, 0.906 26.32%, 0.9466 31.58%, 0.9697 36.84%, 0.9828 42.11%, 0.9903 47.37%, 0.9945 52.63%, 0.9969 57.89%, 0.9982 63.16%, 0.999 68.42%, 0.9994 73.68%, 0.9997 78.95%, 0.9998 84.21%, 0.9999 89.47%, 0.9999 94.74%, 1);
+    touch-action: manipulation;
+  }
+  :where(.ug-push)[data-strata-colour="accent"] { --_c: var(--strata-colour-accent); }
+  :where(.ug-push)[data-strata-colour="success"] { --_c: var(--strata-colour-success); }
+  :where(.ug-push)[data-strata-colour="warning"] { --_c: var(--strata-colour-warning); }
+  :where(.ug-push)[data-strata-colour="danger"] { --_c: var(--strata-colour-danger); }
+  :where(.ug-push)[data-strata-colour="info"] { --_c: var(--strata-colour-info); }
+  :where(.ug-push)[data-strata-colour="glowOn"] { --_c: var(--strata-colour-glow-on); }
+  /* Latched: down at 0.45 of the travel with the ring and the LED lit. Held (the pointer or Space or Enter down): down all the way with the ring lit. */
+  :where(.ug-push[aria-pressed="true"]:not(:disabled, [aria-disabled="true"])) { --strata-lit: 1; --strata-led: 1; --strata-push-t: 0.45; }
+  :where(.ug-push:is(:active:not([data-strata-down="false"]), [data-strata-down="true"], [data-strata-preview~="active"]):not(:disabled, [aria-disabled="true"])) { --strata-lit: 1; --strata-push-t: 1; }
+  :where(.ug-push__object) { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+  :where(.ug-push__object) > :where(*) { position: absolute; box-sizing: border-box; pointer-events: none; }
+  /* The bezel (cap + 14 across, 4.4 px of metal), the socket and the ring under the cap (cap + 5.2 across). */
+  :where(.ug-push__bezel) {
+    --_h: 3px;
+    --_bevel: 3px;
+    inset: 5px;
+    border-radius: 999px;
+    background: linear-gradient(160deg, var(--_metal-light), var(--_metal) 45%, var(--_metal-shade));
+  }
+  :where(.ug-push__socket, .ug-push__ring) { inset: 9.4px; border-radius: 999px; }
+  :where(.ug-push__socket) { background: var(--_off); }
+  :where(.ug-push__ring) { background: var(--_glass); }
+  /* In CSS the ring glows; with the GPU presenting its light is an emitter instead. */
+  :where(:not([data-strata-mode="face"]) .ug-push__ring) { box-shadow: 0 0 calc(var(--strata-lit) * 16px) calc(var(--strata-lit) * 2px) color-mix(in srgb, var(--_on) 55%, transparent); }
+  /* The LED: a 6 px lens on the bezel's top edge, 8 px socket under it. */
+  :where(.ug-push__led-socket, .ug-push__led) { left: calc(50% - 4px); top: 3.2px; width: 8px; height: 8px; border-radius: 50%; }
+  :where(.ug-push__led-socket) { background: var(--_off); }
+  :where(.ug-push__led) {
+    left: calc(50% - 3px);
+    top: 4.2px;
+    width: 6px;
+    height: 6px;
+    background: radial-gradient(circle at 36% 30%, color-mix(in srgb, var(--_led-glass), white 55%) 0, var(--_led-glass) 45%, color-mix(in srgb, var(--_led-glass), black 35%) 100%);
+  }
+  :where(:not([data-strata-mode="face"]) .ug-push__led) { box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.35), 0 0 calc(var(--strata-led) * 6px) calc(var(--strata-led) * 1px) color-mix(in srgb, var(--_on) 55%, transparent); }
+  /* The cap: a pill as tall as the cap size, wide as its content, 12 px of print each side. */
+  :where(.ug-push__cap) {
+    --_h: 6px;
+    --_finish: var(--strata-finish-role-control);
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--strata-space-2);
+    box-sizing: border-box;
+    min-width: var(--_cap);
+    min-height: var(--_cap);
+    max-width: 100%;
+    padding: 6px 12px;
+    border-radius: calc(var(--_cap) / 2);
+    line-height: 1.15;
+    background-color: var(--strata-colour-secondary);
+    color: var(--_text);
+    text-align: center;
+    overflow-wrap: anywhere;
+    translate: 0 calc(var(--strata-push-t) * 2px);
+  }
+  :where(.ug-push.ug-button--accent) :where(.ug-push__cap) { background-color: var(--strata-colour-accent); }
+  :where(.ug-push.ug-button--danger) :where(.ug-push__cap) { background-color: var(--strata-colour-danger); }
+  :where(.ug-push:is(:hover, [data-strata-preview~="hover"]):not(:disabled, [aria-disabled="true"])) :where(.ug-push__bezel, .ug-push__cap) {
+    --_lift: var(--strata-state-hover-height);
+    --_tone: var(--_hover-tone);
+  }
+  :where(.ug-push:is(:active:not([data-strata-down="false"]), [data-strata-down="true"], [data-strata-preview~="active"]):not(:disabled, [aria-disabled="true"])) :where(.ug-push__cap) {
+    --_lift: var(--strata-state-press-height);
+    --_tone: var(--_press-tone);
+  }
+  /* Focus: an accent ring round the bezel, in every presentation (captured content). */
+  :where(.ug-push):is(:focus-visible, [data-strata-preview~="focus"]) { outline: none; }
+  :where(.ug-push:is(:focus-visible, [data-strata-preview~="focus"])) :where(.ug-push__bezel) {
+    outline: var(--strata-focus-width) solid var(--strata-colour-accent);
+    outline-offset: var(--strata-focus-offset);
+  }
+  :where(.ug-push:is(:disabled, [aria-disabled="true"])) :where(.ug-push__object) { opacity: 0.38; }
+  :where(.ug-push:is(:disabled, [aria-disabled="true"])) :where(.ug-push__bezel, .ug-push__cap) { --_h: 0px; --_gain: 0; }
+  :where(.ug-push[aria-busy="true"]) :where(.ug-push__cap) { cursor: progress; }
+  /* With the GPU drawing the object as parts, its CSS paint is hidden and the cap stays where the layout puts it. */
+  :where([data-strata-mode="face"]) .ug-push__bezel[data-strata-dome] { outline-color: transparent; }
+  :where([data-strata-mode="face"]) .ug-push[data-strata-dome] .ug-push__cap { translate: none; }
+
+  /* Reduced motion: lights and travel change at once. */
+  @media (prefers-reduced-motion: reduce) {
+    :where(.ug-push) { transition: none; }
+  }
+  /* More contrast: flat colour, no glow, edges in the text colour. */
+  @media (prefers-contrast: more) {
+    :where(.ug-push__socket) { background: var(--_glass); }
+    :where(.ug-push__led-socket) { background: var(--_led-glass); }
+    :where(.ug-push__ring) { box-shadow: none; }
+    :where(.ug-push__bezel, .ug-push__ring, .ug-push__cap, .ug-push__led) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
+  }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-push__bezel, .ug-push__ring, .ug-push__cap, .ug-push__led) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
+  /* Forced colours: system colours; Highlight is a lit ring or LED, GrayText a disabled one. Specific selectors beat the generic buttons' border. */
+  @media (forced-colors: active) {
+    .ug-push { forced-color-adjust: none; border: 0; background: transparent; color: ButtonText; }
+    .ug-push:is(:disabled, [aria-disabled="true"]) { color: GrayText; }
+    .ug-push .ug-push__bezel { border: 1px solid ButtonText; background: Canvas; }
+    .ug-push .ug-push__socket { background: transparent; }
+    .ug-push .ug-push__ring { border: 1px solid ButtonText; background: Canvas; box-shadow: none; }
+    .ug-push[aria-pressed="true"]:not(:disabled, [aria-disabled="true"]) .ug-push__ring, .ug-push:is(:active:not([data-strata-down="false"]), [data-strata-down="true"]):not(:disabled, [aria-disabled="true"]) .ug-push__ring { background: Highlight; }
+    .ug-push .ug-push__led-socket { background: transparent; }
+    .ug-push .ug-push__led { border: 1px solid ButtonText; background: Canvas; box-shadow: none; }
+    .ug-push[aria-pressed="true"]:not(:disabled, [aria-disabled="true"]) .ug-push__led { background: Highlight; }
+    .ug-push .ug-push__cap { border: 1px solid ButtonText; background: ButtonFace; color: ButtonText; }
+    .ug-push:is(:disabled, [aria-disabled="true"]) :is(.ug-push__bezel, .ug-push__ring, .ug-push__led, .ug-push__cap) { border-color: GrayText; }
+    .ug-push:is(:disabled, [aria-disabled="true"]) .ug-push__cap { color: GrayText; }
+    .ug-push:is(:disabled, [aria-disabled="true"]) .ug-push__object { opacity: 1; }
+    .ug-push:focus-visible .ug-push__bezel { outline-color: Highlight; }
+  }
+
   /* ---- Link ---- */
 
   :where(.ug-link) {
@@ -362,6 +513,206 @@
     font-family: var(--strata-font-family);
     font-size: var(--strata-control-font);
     cursor: pointer;
+  }
+
+  /* ---- RotarySelector: a native select over a printed dial, with a skirt, a cap, its pointer and one detent per option (anatomy page rotary-selector.md) ---- */
+
+  /*
+   * The knob's dial with the options' labels printed round it. The root is a size container (`container-type: inline-size`)
+   * as wide as its dial: the labels need the skirt, 12 px of tick and up to 5em of print each side. A root narrower than
+   * 104 px + 7em (a 320 px screen, or text at 200%) prints the positions as numbers on the dial and the labels in a numbered
+   * legend under it (`@container`). The transparent select covers the whole dial and takes every press; the drawn parts take none.
+   * Every mark is a full-dial overlay at its angle: its tick, and its label placed on the same radius with the anchor
+   * following the side (a label on the right starts at the point, on the left ends at it).
+   */
+  :where(.ug-rotary) {
+    --_size: var(--strata-rotary-size);
+    --_sweep: calc(var(--strata-knob-sweep) * 1deg);
+    --_r: calc(var(--_size) / 2);
+    --_rl: calc(var(--_r) + 12px);
+    --_ink: color-mix(in srgb, var(--strata-colour-edge), black 55%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--strata-space-1);
+    box-sizing: border-box;
+    inline-size: min(100%, calc(2 * (var(--_rl) + 5em)));
+    max-inline-size: 100%;
+    container-type: inline-size;
+    color: var(--strata-colour-text);
+    font-family: var(--strata-font-family);
+    font-size: var(--strata-font-size-caption);
+  }
+  :where(.ug-rotary__dial) {
+    position: relative;
+    flex: none;
+    box-sizing: border-box;
+    width: 100%;
+    height: round(nearest, calc(2 * (var(--_rl) + 1.5em)), 2px);
+    line-height: 1;
+  }
+  :where(.ug-rotary__scale) { position: absolute; inset: 0; pointer-events: none; counter-reset: ug-rotary; }
+  :where(.ug-rotary__mark) {
+    --_a: calc((var(--strata-rotary-at, 0) - 0.5) * var(--_sweep));
+    position: absolute;
+    inset: 0;
+    counter-increment: ug-rotary;
+  }
+  :where(.ug-rotary__tick) {
+    position: absolute;
+    left: calc(50% - 0.8px);
+    top: calc(50% - var(--_r) - 8px);
+    width: 1.6px;
+    height: 6px;
+    transform-origin: 0.8px calc(var(--_r) + 8px);
+    rotate: var(--_a);
+    background: var(--strata-colour-text);
+  }
+  :where(.ug-rotary__text) {
+    position: absolute;
+    left: round(nearest, calc(50% + sin(var(--_a)) * var(--_rl)), 1px);
+    top: round(nearest, calc(50% - cos(var(--_a)) * var(--_rl)), 1px);
+    translate: calc(-50% + sin(var(--_a)) * 50%) calc(-50% - cos(var(--_a)) * 50%);
+    width: max-content;
+    max-width: min(6em, calc((100cqw - 2 * var(--_rl)) / 2));
+    color: var(--strata-colour-muted);
+    font-weight: var(--strata-font-weight-strong);
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+  :where(.ug-rotary__mark[data-strata-disabled="true"]) :where(.ug-rotary__text) { opacity: 0.45; }
+  /* The selected position's print is the text colour, so the setting reads without the pointer. */
+  :where(.ug-rotary__mark[data-strata-selected="true"]) :where(.ug-rotary__text) { color: var(--strata-colour-text); }
+  :where(.ug-rotary__legend) {
+    display: none;
+    margin: 0;
+    padding: 0 0 0 1.6em;
+    max-width: 100%;
+    color: var(--strata-colour-muted);
+    font-size: var(--strata-font-size-small);
+    font-weight: var(--strata-font-weight-strong);
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  :where(.ug-rotary__legend > li[data-strata-selected="true"]) { color: var(--strata-colour-text); }
+  /* Narrow or enlarged: numbers on the dial, the labels in the legend. */
+  @container (max-width: calc(104px + 7em)) {
+    :where(.ug-rotary__text) { font-size: 0; }
+    :where(.ug-rotary__text)::before { content: counter(ug-rotary); font-size: var(--strata-font-size-caption); }
+    :where(.ug-rotary__legend) { display: block; }
+  }
+  /* The skirt: a turned flange; its upper half catches the light, its lower half the floor. */
+  :where(.ug-rotary__skirt) {
+    --_finish: linear-gradient(180deg, rgb(255 255 255 / calc(0.55 * min(1, var(--_gain)))) 0 44%, rgb(255 255 255 / 0) 50%, rgb(0 0 0 / calc(0.16 * min(1, var(--_gain)))) 100%);
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    width: var(--_size);
+    height: var(--_size);
+    margin: auto;
+    border-radius: 50%;
+    background-color: var(--strata-colour-knob);
+    pointer-events: none;
+  }
+  /* The cap: 0.8 of the skirt, spun metal. */
+  :where(.ug-rotary__cap) {
+    --_finish:
+      repeating-radial-gradient(circle, rgb(255 255 255 / calc(0.06 * min(1, var(--_gain)))) 0 0.6px, rgb(0 0 0 / calc(0.05 * min(1, var(--_gain)))) 0.6px 1.4px),
+      conic-gradient(from calc(var(--strata-light-azimuth) * 1deg), rgb(255 255 255 / calc(0.6 * min(1, var(--_gain)))), rgb(255 255 255 / 0) 45deg, rgb(0 0 0 / calc(0.1 * min(1, var(--_gain)))) 90deg,
+        rgb(255 255 255 / 0) 135deg, rgb(255 255 255 / calc(0.45 * min(1, var(--_gain)))) 180deg, rgb(255 255 255 / 0) 225deg, rgb(0 0 0 / calc(0.1 * min(1, var(--_gain)))) 270deg,
+        rgb(255 255 255 / 0) 315deg, rgb(255 255 255 / calc(0.6 * min(1, var(--_gain)))));
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    width: round(nearest, calc(var(--_size) * 0.8), 2px);
+    height: round(nearest, calc(var(--_size) * 0.8), 2px);
+    margin: auto;
+    border-radius: 50%;
+    background-color: var(--strata-colour-knob);
+  }
+  /* Only the pointer turns, and it settles on its detent with a little overshoot (`spring.detent`). */
+  :where(.ug-rotary__pointer) {
+    position: absolute;
+    inset: 0;
+    rotate: calc((var(--strata-rotary-value, 0.5) - 0.5) * var(--_sweep));
+    transition: rotate var(--strata-motion-fast) cubic-bezier(0.3, 1.45, 0.55, 1);
+  }
+  :where(.ug-rotary__pointer)::after {
+    content: "";
+    position: absolute;
+    left: calc(50% - 1.1px);
+    top: 7%;
+    width: 2.2px;
+    height: 29%;
+    border-radius: 1.1px;
+    background: var(--_ink);
+  }
+  :where(.ug-rotary__select) {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    appearance: none;
+    background: transparent;
+    color: transparent;
+    font: inherit;
+    outline: none;
+    cursor: ns-resize;
+    touch-action: none;
+  }
+  /* The native popup (Alt+Down, F4, Space) is drawn by the browser from the options, in the page's colours. */
+  :where(.ug-rotary__select) :where(option) { background-color: var(--strata-colour-panel); color: var(--strata-colour-text); }
+  :where(.ug-rotary__label) {
+    max-width: 100%;
+    font-size: var(--strata-font-size-small);
+    font-weight: var(--strata-font-weight-strong);
+    letter-spacing: 0.08em;
+    text-align: center;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+  }
+  :where(.ug-rotary__dial:has(> .ug-rotary__select:is(:focus-visible, [data-strata-preview~="focus"])) .ug-rotary__skirt) {
+    outline: var(--strata-focus-width) solid var(--strata-colour-accent);
+    outline-offset: calc(var(--strata-focus-offset) + 2px);
+  }
+  :where(.ug-rotary__dial:has(> .ug-rotary__select:is(:hover, [data-strata-preview~="hover"]):not(:disabled)) :is(.ug-rotary__skirt, .ug-rotary__cap)) {
+    --_lift: var(--strata-state-hover-height);
+    --_tone: var(--_hover-tone);
+  }
+  :where(.ug-rotary:has(.ug-rotary__select[aria-invalid="true"])) :where(.ug-rotary__skirt) { border: 2px solid var(--strata-colour-danger); }
+  :where(.ug-rotary:has(.ug-rotary__select:disabled)) { color: color-mix(in srgb, var(--strata-colour-text) 38%, transparent); }
+  :where(.ug-rotary:has(.ug-rotary__select:disabled)) :where(.ug-rotary__dial) { opacity: 0.38; }
+  :where(.ug-rotary:has(.ug-rotary__select:disabled)) :where(.ug-rotary__skirt, .ug-rotary__cap) { --_h: 0px; --_gain: 0; }
+  :where(.ug-rotary__select:disabled) { cursor: not-allowed; }
+
+  /* With the GPU drawing the selector as parts, its CSS paint is hidden: at the Instrument level the skirt, cap and pointer are the Knob's parts, and a turn repaints nothing. */
+  :where([data-strata-mode="face"]) :is(.ug-rotary__skirt, .ug-rotary__cap)[data-strata-dome] { border-color: transparent; }
+  :where([data-strata-mode="face"]) .ug-rotary__cap[data-strata-dome] .ug-rotary__pointer { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    :where(.ug-rotary__pointer) { transition: none; }
+  }
+  /* More contrast: the pointer and the labels take the text colour, and the skirt and cap an edge. */
+  @media (prefers-contrast: more) {
+    :where(.ug-rotary) { --_ink: var(--strata-colour-text); }
+    :where(.ug-rotary__text) { color: var(--strata-colour-text); }
+    :where(.ug-rotary__skirt, .ug-rotary__cap) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-edge); }
+  }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-rotary) { --_ink: var(--strata-colour-text); }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-rotary__text) { color: var(--strata-colour-text); }
+  /* Forced colours: a Canvas skirt and cap with CanvasText rings, pointer, ticks and print, a Highlight focus ring, GrayText when disabled. */
+  @media (forced-colors: active) {
+    .ug-rotary__skirt, .ug-rotary__cap { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; }
+    .ug-rotary__pointer::after, .ug-rotary__tick { forced-color-adjust: none; background: CanvasText; }
+    .ug-rotary__text, .ug-rotary__legend { forced-color-adjust: none; color: CanvasText; }
+    .ug-rotary__dial:has(> .ug-rotary__select:focus-visible) .ug-rotary__skirt { outline-color: Highlight; }
+    .ug-rotary:has(.ug-rotary__select:disabled) :is(.ug-rotary__skirt, .ug-rotary__cap) { border-color: GrayText; }
+    .ug-rotary:has(.ug-rotary__select:disabled) .ug-rotary__pointer::after, .ug-rotary:has(.ug-rotary__select:disabled) .ug-rotary__tick { background: GrayText; }
+    .ug-rotary:has(.ug-rotary__select:disabled) .ug-rotary__dial { opacity: 1; }
   }
 
   /* ---- Checkbox and radio ---- */
@@ -2779,6 +3130,182 @@
     white-space: nowrap;
   }
   :where(.ug-spinner--labelled .ug-spinner__label) { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
+
+  /* ---- Indicator forms: a Rating as lamps, a Badge as an LED pill, a ProgressBar as a segment meter, a Spinner as a ring of LEDs (anatomy pages rating.md, badge.md, progress-bar.md, spinner.md) ---- */
+
+  /*
+   * The native control stays the control (the Rating's radios, the `<progress>`, the Badge's and the Spinner's `<span>`); the form is
+   * decoration over it that follows its state. Every lens is the Lamp's and the StatusLight's: one number, `--strata-lit` (0 dark, 1 lit),
+   * a registered number, lights it, so the CSS presents it as a glass dome with a glow and the GPU presentation, which reads it frame by
+   * frame, draws it as a lens with an emitter (the dome's own CSS paint, its glow and its `::after`, is hidden, `data-strata-dome`; the socket
+   * under it, its `::before`, stays printed on the face). The role is `--_c`, from `colour` (`data-strata-colour`) or, for a Badge, its variant. No `form`, or `flush`,
+   * is none of this: the markup and the look are what they were.
+   */
+  :where(.ug-rating[data-strata-form="lamps"], .ug-badge[data-strata-form="led"]) { --_c: var(--strata-colour-glow-on); }
+  :where(.ug-progress-bar[data-strata-form="meter"], .ug-spinner[data-strata-form="ring"]) { --_c: var(--strata-colour-accent); }
+  :where(.ug-badge--accent[data-strata-form="led"]) { --_c: var(--strata-colour-accent); }
+  :where(.ug-badge--success[data-strata-form="led"]) { --_c: var(--strata-colour-success); }
+  :where(.ug-badge--warning[data-strata-form="led"]) { --_c: var(--strata-colour-warning); }
+  :where(.ug-badge--danger[data-strata-form="led"]) { --_c: var(--strata-colour-danger); }
+  :where(.ug-badge--info[data-strata-form="led"]) { --_c: var(--strata-colour-info); }
+  :where(.ug-rating[data-strata-form="lamps"], .ug-badge[data-strata-form="led"], .ug-progress-bar[data-strata-form="meter"], .ug-spinner[data-strata-form="ring"])[data-strata-colour="accent"] { --_c: var(--strata-colour-accent); }
+  :where(.ug-rating[data-strata-form="lamps"], .ug-badge[data-strata-form="led"], .ug-progress-bar[data-strata-form="meter"], .ug-spinner[data-strata-form="ring"])[data-strata-colour="success"] { --_c: var(--strata-colour-success); }
+  :where(.ug-rating[data-strata-form="lamps"], .ug-badge[data-strata-form="led"], .ug-progress-bar[data-strata-form="meter"], .ug-spinner[data-strata-form="ring"])[data-strata-colour="warning"] { --_c: var(--strata-colour-warning); }
+  :where(.ug-rating[data-strata-form="lamps"], .ug-badge[data-strata-form="led"], .ug-progress-bar[data-strata-form="meter"], .ug-spinner[data-strata-form="ring"])[data-strata-colour="danger"] { --_c: var(--strata-colour-danger); }
+  :where(.ug-rating[data-strata-form="lamps"], .ug-badge[data-strata-form="led"], .ug-progress-bar[data-strata-form="meter"], .ug-spinner[data-strata-form="ring"])[data-strata-colour="info"] { --_c: var(--strata-colour-info); }
+  :where(.ug-rating[data-strata-form="lamps"], .ug-badge[data-strata-form="led"], .ug-progress-bar[data-strata-form="meter"], .ug-spinner[data-strata-form="ring"])[data-strata-colour="glowOn"] { --_c: var(--strata-colour-glow-on); }
+  :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment) {
+    --_on: color-mix(in srgb, var(--_c), white 18%);
+    --_off: color-mix(in srgb, var(--_c) 16%, #15171b);
+    --_glass: color-mix(in srgb, var(--_on) calc(var(--strata-lit) * 100%), var(--_off));
+    --strata-lit: 0;
+    position: relative;
+    display: block;
+    flex: none;
+    box-sizing: border-box;
+    width: var(--_lens);
+    height: var(--_lens);
+    border-radius: 50%;
+    pointer-events: none;
+    box-shadow: 0 0 calc(var(--strata-lit) * var(--_lens) * 0.7) calc(var(--strata-lit) * var(--_lens) * 0.12) color-mix(in srgb, var(--_on) 55%, transparent);
+  }
+  /* The socket under the lens, printed on the face at every level: the unlit glass's dark disc; and the glass over it. */
+  :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment)::before { content: ""; position: absolute; inset: -1px; border-radius: 50%; background: var(--_off); }
+  :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment)::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    border-radius: 50%;
+    background: radial-gradient(circle at 36% 30%, color-mix(in srgb, var(--_glass), white 55%) 0, var(--_glass) 45%, color-mix(in srgb, var(--_glass), black 35%) 100%);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35);
+  }
+  :where([data-strata-mode="face"]) :is(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment)[data-strata-dome]::after { background: transparent; box-shadow: none; }
+
+  /* Rating, lamps: each star's place holds a lens, lit up to the score (the radios' `:checked`, as the stars fill); a hovered star and the ones
+     before it show a lens half lit, the preview of that score, and the rest of the row goes dark, as the stars do. The item is the lens plus 16 px (at least the target). */
+  :where(.ug-rating[data-strata-form="lamps"]) { --_lens: var(--strata-rating-size); }
+  :where(.ug-rating[data-strata-form="lamps"] .ug-rating__item) { width: max(var(--strata-target-min), calc(var(--_lens) + 16px)); height: max(var(--strata-target-min), calc(var(--_lens) + 16px)); }
+  :where(.ug-rating[data-strata-form="lamps"] .ug-rating__star) { display: grid; place-items: center; }
+  :where(.ug-rating[data-strata-form="lamps"] .ug-rating__star)::before { content: none; }
+  :where(.ug-rating[data-strata-form="lamps"] .ug-rating__input:checked + .ug-rating__star > .ug-rating__lens, .ug-rating[data-strata-form="lamps"] .ug-rating__item:has(~ .ug-rating__item > .ug-rating__input:checked) > .ug-rating__star > .ug-rating__lens) { --strata-lit: 1; }
+  /* The preview is for a real hover: on a touch screen the pointer that tapped a star would leave the whole row half lit. */
+  @media (hover: hover) {
+    :where(.ug-rating[data-strata-form="lamps"] .ug-rating__stars:has(> .ug-rating__item:hover > .ug-rating__input:not(:disabled)) > .ug-rating__item > .ug-rating__star > .ug-rating__lens) { --strata-lit: 0; }
+    :where(.ug-rating[data-strata-form="lamps"] .ug-rating__stars:has(> .ug-rating__item:hover > .ug-rating__input:not(:disabled)) > :is(.ug-rating__item:hover, .ug-rating__item:has(~ .ug-rating__item:hover)) > .ug-rating__star > .ug-rating__lens) { --strata-lit: 0.55; }
+  }
+
+  /* Badge, LED: the StatusLight's lens before the text, on a dark pill plate (captured content) that keeps the text's contrast; the lens's colour is the variant's.
+     A neutral badge has no role, so its lens is dark glass; `data-strata-colour` lights it. The pill is the lens plus 16 px tall, so the halo has room. */
+  :where(.ug-badge[data-strata-form="led"]) {
+    --_lens: var(--strata-status-light-size);
+    gap: var(--strata-space-2);
+    min-height: calc(var(--_lens) + 16px);
+    padding-block: 0;
+    padding-inline: 7px var(--strata-space-3);
+    border-color: var(--strata-colour-edge);
+    background-color: color-mix(in srgb, var(--strata-colour-panel), black 12%);
+    color: var(--strata-colour-text);
+  }
+  :where(.ug-badge[data-strata-form="led"]:is(.ug-badge--accent, .ug-badge--success, .ug-badge--warning, .ug-badge--danger, .ug-badge--info, [data-strata-colour]) > .ug-badge__lens) { --strata-lit: 1; }
+
+  /* ProgressBar, segment meter: the native `<progress>` covers the object, transparent, and says the value; a groove with a row of LED segments
+     lit from the value (`--strata-progress-value`, 0–1, kept by `attachStrataProgress`), as the Meter's bar: segment i is lit when value · count − i − ½ is above 0.
+     Indeterminate: a lit head runs from end to end at `chase.bar`, a lap of 1.6 s, with a short trail. */
+  :where(.ug-progress-bar[data-strata-form="meter"]) {
+    --_lens: var(--strata-meter-size);
+    position: relative;
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    height: calc(var(--_lens) + 16px);
+  }
+  :where(.ug-progress-bar[data-strata-form="meter"] > .ug-progress) {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    background-image: none;
+    box-shadow: none;
+    opacity: 0;
+    animation: none;
+  }
+  :where(.ug-progress__object) { position: absolute; inset: 0; pointer-events: none; }
+  :where(.ug-progress__object) :where(*) { box-sizing: border-box; pointer-events: none; }
+  :where(.ug-progress__window) { position: absolute; inset: 4px 0; border-radius: 8px; background-color: var(--strata-colour-track); }
+  :where(.ug-progress__segments) {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    top: 8px;
+    height: var(--_lens);
+    display: grid;
+    grid-template-columns: repeat(var(--strata-progress-count, 20), minmax(0, 1fr));
+    align-items: center;
+    justify-items: center;
+  }
+  :where(.ug-progress__segment) { --_k: clamp(0, calc((var(--strata-progress-value, 0) * var(--strata-progress-count, 20) - var(--_i, 0) - 0.5) * 1000), 1); --strata-lit: var(--_k); }
+  :where(.ug-progress-bar[data-strata-form="meter"]:has(> .ug-progress:indeterminate) .ug-progress__segment) {
+    --strata-lit: 0;
+    animation: ug-chase-bar var(--strata-chase-bar) linear infinite;
+    animation-delay: calc((var(--_i, 0) / var(--strata-progress-count, 20) - 1) * var(--strata-chase-bar));
+  }
+
+  /* Spinner, ring: eight LEDs round a ring (`size.spinner`, the lenses' centres lie on it), a lit head chasing clockwise at `chase.spinner`, a lap of 0.9 s, with a trail.
+     The status is the label (shown under reduced motion, and then the ring is steady); the lenses are decoration. The ring is its diameter plus 16 px, room for the halo. */
+  :where(.ug-spinner[data-strata-form="ring"]) { --_ring: var(--strata-size-spinner-medium); }
+  :where(.ug-spinner--sm[data-strata-form="ring"]) { --_ring: var(--strata-size-spinner-small); }
+  :where(.ug-spinner--md[data-strata-form="ring"]) { --_ring: var(--strata-size-spinner-medium); }
+  :where(.ug-spinner--lg[data-strata-form="ring"]) { --_ring: var(--strata-size-spinner-large); }
+  :where(.ug-spinner__ring) {
+    --_lens: max(5px, calc(var(--_ring) * 0.2));
+    position: relative;
+    flex: none;
+    width: calc(var(--_ring) + 16px);
+    height: calc(var(--_ring) + 16px);
+    pointer-events: none;
+  }
+  :where(.ug-spinner__lens) {
+    --_a: calc(var(--_i, 0) * 45deg);
+    position: absolute;
+    left: calc(50% - var(--_lens) / 2);
+    top: calc(50% - var(--_lens) / 2);
+    translate: calc(sin(var(--_a)) * var(--_ring) / 2) calc(cos(var(--_a)) * var(--_ring) / -2);
+    animation: ug-chase var(--strata-chase-spinner) linear infinite;
+    animation-delay: calc((var(--_i, 0) / 8 - 1) * var(--strata-chase-spinner));
+  }
+  /* A lens lights once a lap: bright at the head, then a trail. The bar's trail is shorter. */
+  @keyframes ug-chase { 0% { --strata-lit: 1; } 12% { --strata-lit: 0.55; } 30% { --strata-lit: 0.2; } 55%, 100% { --strata-lit: 0; } }
+  @keyframes ug-chase-bar { 0% { --strata-lit: 1; } 6% { --strata-lit: 0.5; } 14% { --strata-lit: 0.15; } 25%, 100% { --strata-lit: 0; } }
+
+  /* Reduced motion: nothing chases. A spinner is a steady comet (lit 1, 0.75, 0.5, 0.25 behind lens 0), an indeterminate bar every other segment lit; a lens has no glow. */
+  @media (prefers-reduced-motion: reduce) {
+    :where(.ug-spinner__lens) { animation: none; --strata-lit: clamp(0, calc(1 - mod(8 - var(--_i, 0), 8) * 0.25), 1); }
+    :where(.ug-progress-bar[data-strata-form="meter"]:has(> .ug-progress:indeterminate) .ug-progress__segment) { animation: none; --strata-lit: calc(1 - mod(var(--_i, 0), 2)); }
+    :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment) { box-shadow: none; }
+  }
+  /* More contrast: a lens is flat colour with no glow, edged in the text colour; the socket takes that colour too (so the GPU's glass shows it, and its emitters are off). */
+  @media (prefers-contrast: more) {
+    :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment) { box-shadow: none; }
+    :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment)::after { background: var(--_glass); box-shadow: none; border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
+    :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment)::before { background: var(--_glass); }
+    :where(.ug-progress__window) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
+    :where(.ug-badge[data-strata-form="led"]) { border-color: var(--strata-colour-text); }
+  }
+  /* Forced colours: lit lenses are Highlight and unlit ones Canvas, each edged in CanvasText; the pill and the groove are Canvas with a CanvasText edge. */
+  @media (forced-colors: active) {
+    :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment) { forced-color-adjust: none; box-shadow: none; }
+    :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment)::after { forced-color-adjust: none; border: 1px solid CanvasText; background: color-mix(in srgb, Highlight calc(var(--strata-lit) * 100%), Canvas); box-shadow: none; }
+    :where(.ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment)::before { forced-color-adjust: none; background: Canvas; }
+    :where(.ug-badge[data-strata-form="led"]) { forced-color-adjust: none; border-color: CanvasText; background-color: Canvas; color: CanvasText; }
+    :where(.ug-progress__window) { forced-color-adjust: none; border: 1px solid CanvasText; background-color: Canvas; box-shadow: none; }
+  }
 
   /* ---- Overrides by attribute: after the components, so they win at equal specificity ---- */
 

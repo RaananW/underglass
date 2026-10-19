@@ -1738,6 +1738,82 @@
         }
       }
     },
+    "push": {
+      "small": {
+        "$type": "dimension",
+        "$value": "32px",
+        "$description": "PushButton cap height at small (the button's box is the cap plus 24 px).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 24,
+            "max": 80
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "40px",
+        "$description": "PushButton cap height at medium (the premium push button: a 64 px box).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 24,
+            "max": 80
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "48px",
+        "$description": "PushButton cap height at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 24,
+            "max": 80
+          }
+        }
+      }
+    },
+    "rotary": {
+      "small": {
+        "$type": "dimension",
+        "$value": "48px",
+        "$description": "RotarySelector skirt diameter at small.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 120
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "64px",
+        "$description": "RotarySelector skirt diameter at medium (the premium knob).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 120
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "80px",
+        "$description": "RotarySelector skirt diameter at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 40,
+            "max": 120
+          }
+        }
+      }
+    },
     "lamp": {
       "small": {
         "$type": "dimension",
@@ -1886,6 +1962,82 @@
             "scope": true,
             "min": 80,
             "max": 400
+          }
+        }
+      }
+    },
+    "rating": {
+      "small": {
+        "$type": "dimension",
+        "$value": "12px",
+        "$description": "Rating lamp lens diameter at small.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 8,
+            "max": 32
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "16px",
+        "$description": "Rating lamp lens diameter at medium (the premium rating).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 8,
+            "max": 32
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "20px",
+        "$description": "Rating lamp lens diameter at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 8,
+            "max": 32
+          }
+        }
+      }
+    },
+    "spinner": {
+      "small": {
+        "$type": "dimension",
+        "$value": "24px",
+        "$description": "Spinner ring diameter at small: the lenses of its ring of LEDs lie on it.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 16,
+            "max": 96
+          }
+        }
+      },
+      "medium": {
+        "$type": "dimension",
+        "$value": "36px",
+        "$description": "Spinner ring diameter at medium (the premium spinner).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 16,
+            "max": 96
+          }
+        }
+      },
+      "large": {
+        "$type": "dimension",
+        "$value": "52px",
+        "$description": "Spinner ring diameter at large.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 16,
+            "max": 96
           }
         }
       }
@@ -2292,6 +2444,33 @@
       }
     }
   },
+  "chase": {
+    "$description": "Chase tempos (section 14): one full lap of the lit lens round a Spinner ring or along an indeterminate ProgressBar; a lens is lit once a lap, so never faster than 334 ms keeps it to three flashes a second (WCAG 2.3.1). Steady under reduced motion.",
+    "spinner": {
+      "$type": "duration",
+      "$value": "900ms",
+      "$description": "A Spinner ring's lap: 1.1 flashes a second per lens.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 334,
+          "max": 4000,
+          "scope": true
+        }
+      }
+    },
+    "bar": {
+      "$type": "duration",
+      "$value": "1600ms",
+      "$description": "An indeterminate ProgressBar's sweep from end to end: 0.6 flashes a second per segment.",
+      "$extensions": {
+        "dev.underglass.strata": {
+          "min": 334,
+          "max": 4000,
+          "scope": true
+        }
+      }
+    }
+  },
   "emitter": {
     "$description": "Emitters (section 3): the light a lit lamp or LED gives. Radius and height are in lens diameters; strength is for the reference lens (28 px for a lamp, 10 px for an LED) and scales with the square of the lens.",
     "lamp": {
@@ -2417,6 +2596,44 @@
           "scope": true,
           "min": 0,
           "max": 16
+        }
+      }
+    },
+    "pushButton": {
+      "radius": {
+        "$type": "number",
+        "$value": 4,
+        "$description": "Reach R of the lit ring, in cap diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 1,
+            "max": 20
+          }
+        }
+      },
+      "height": {
+        "$type": "number",
+        "$value": 0.3,
+        "$description": "Height of the lit ring's light above the face, in cap diameters.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0.1,
+            "max": 2
+          }
+        }
+      },
+      "strength": {
+        "$type": "number",
+        "$value": 2400,
+        "$description": "Intensity I at the reference cap (40 px).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "scope": true,
+            "min": 0,
+            "max": 32000
+          }
         }
       }
     }

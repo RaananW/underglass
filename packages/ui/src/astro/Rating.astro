@@ -2,9 +2,12 @@
 /**
  * Rating (anatomy page `rating.md`): native radios in a `<fieldset>` named by its `<legend>`, one per score, each
  * visually hidden over its star. `value` is the checked score; arrow keys, Tab and Space stay native, so it needs no
- * script.
+ * script. `form="lamps"` draws each star's place as a lamp lens, lit up to the score (anatomy page `rating.md`, *Indicator form*); `flush`,
+ * or no `form`, is the look it had before, and any other string is the native `form` attribute, as before.
  */
 import { ratingItemLabel } from "../shared/rating.ts";
+import { ratingForm, ratingLampMarkup, ratingOwner } from "../shared/indicator-forms.ts";
+import type { StrataLampColour } from "../shared/lamp.ts";
 import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
 
 interface Props {
@@ -17,6 +20,10 @@ interface Props {
   value?: number;
   /** Each star's name; "1 star", "2 stars" by default. */
   itemLabel?: (score: number, max: number) => string;
+  /** The form: `lamps`; `flush` is today's look; any other string is the native `form` attribute. */
+  form?: "lamps" | "flush" | (string & {});
+  /** The lit lenses' colour: `glowOn` (amber) by default, or a status role. */
+  colour?: StrataLampColour;
   size?: StrataSize;
   material?: string;
   level?: StrataLevel;
@@ -24,16 +31,17 @@ interface Props {
   [attribute: string]: unknown;
 }
 
-const { label, name, max = 5, value, itemLabel = ratingItemLabel, size, material, level, class: className, ...rest } = Astro.props;
+const { label, name, max = 5, value, itemLabel = ratingItemLabel, form, colour, size, material, level, class: className, ...rest } = Astro.props;
 const scores = Array.from({ length: max }, (_, index) => index + 1);
+const lamps = ratingForm(form), owner = ratingOwner(form);
 ---
-<fieldset class={classes("ug-rating", className)} {...strataAttributes({ size, material, level })} {...rest}>
+<fieldset class={classes("ug-rating", className)} {...strataAttributes({ size, material, level })} data-strata-form={lamps} data-strata-colour={lamps ? colour : undefined} form={owner} {...rest}>
   <legend class="ug-rating__legend">{label}</legend>
   <div class="ug-rating__stars">
     {scores.map(score => (
       <label class="ug-rating__item">
         <input class="ug-rating__input" type="radio" name={name} value={String(score)} checked={score === value} />
-        <span class="ug-rating__star" aria-hidden="true"></span>
+        <span class="ug-rating__star" aria-hidden="true">{lamps && ratingLampMarkup.map(part => <span class={part.className} data-strata-face={part.face}></span>)}</span>
         <span class="ug-rating__label">{itemLabel(score, max)}</span>
       </label>
     ))}

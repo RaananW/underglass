@@ -102,3 +102,39 @@ Minimum size as Button, never below `target.min` (24). Under `forced-colors`: of
 - **Accessibility:** axe in light, dark and high contrast, in both states; the on state is distinguishable
   without colour; accessibility snapshot equal in DOM and GPU modes.
 - **Parity:** Relief and CSS within the P0.6 budget in both states.
+
+## 11. Push-button form: `latching`
+
+Instrument, wave 2 ([plan](../instrument.md#new-components)). `form="latching"` draws the same native toggle as a **latching push
+button**: the [Button's push button](button.md#11-push-button-form-momentary), a machined cap on a polished bezel with a lit ring, that
+stays down while pressed in, with an LED on the bezel that shows the latched state. Without `form` the toggle is the key above; any
+other `form` string is the native `form` attribute. `colour` names the ring's and the LED's role (`glowOn` by default).
+
+| Part | Shape | Moves |
+| --- | --- | --- |
+| Box, bezel, ring, cap | As the [Button's](button.md#11-push-button-form-momentary) | The cap rests at 0.45 of its 4 px travel (1.8) while `aria-pressed="true"`, goes all the way down while held, and returns to rest when unpressed |
+| LED | A 6 px lens (8 px socket) on the bezel's top edge, centred | Lit 0 to 1 by `--strata-led`: lit while latched |
+
+- **Lights.** The ring is lit while the button is held or latched (`--strata-lit`), the LED while it is latched (`--strata-led`); a disabled
+  toggle keeps its state and is unlit and still. Three cues, none of them light alone: the cap stays down, the LED shows, and `aria-pressed` is
+  `true`; the label never changes.
+- **Emitters.** At every GPU level the ring is an emitter and the LED another (`emitter.led.*`), so a panel with a latching button has two
+  per button; toggling is a uniform write. At the Instrument level the LED is a small glass `lens` part of the same object, standing on the bezel.
+- Everything else, the GPU, the preferences, reflow and feedback, is as the Button's.
+
+```html
+<button type="button" class="ug-toggle-button ug-push" data-strata-form="latching" data-strata-colour="warning" aria-pressed="true">
+  <span class="ug-push__object" aria-hidden="true">
+    <span class="ug-push__bezel" data-strata-face="raised"></span>
+    <span class="ug-push__socket"></span>
+    <span class="ug-push__ring"></span>
+    <span class="ug-push__led-socket"></span>
+    <span class="ug-push__led"></span>
+  </span>
+  <span class="ug-push__cap" data-strata-face="raised"><span class="ug-toggle-button__label">Mute</span></span>
+</button>
+```
+
+- The behaviour that toggles `aria-pressed` is the ToggleButton's own (`attachStrata`, or the binding's state); `attachStrataPushButtons` adds
+  only the held state and the feedback. Enter and Space toggle, as on any button.
+- **Tests:** `ui-push-button.test.mjs`, `ui-push-button-bindings.test.mjs`, `ui-push-button-astro.test.mjs`.

@@ -1,8 +1,15 @@
 ---
-/** ProgressBar (anatomy page `progress-bar.md`): a native `<progress>`; indeterminate without `value`. */
+/**
+ * ProgressBar (anatomy page `progress-bar.md`): a native `<progress>`; indeterminate without `value`. `form="meter"` draws a groove with a row of
+ * LED segments lit from the value over it (*Indicator form*), kept in step with a changed value by `attachStrata`, which it then loads; `flush`,
+ * or no `form`, is the bar it was. With `meter`, `class` and `style` reach the wrapper.
+ */
+import Behaviour from "./Behaviour.astro";
 import Field from "./Field.astro";
 import { fieldControl } from "./field.ts";
 import { classes } from "../shared/markup.ts";
+import { lensStyle, progressForm, progressFraction, progressSegmentCount, progressSegments, progressStyle } from "../shared/indicator-forms.ts";
+import type { StrataLampColour } from "../shared/lamp.ts";
 
 interface Props {
   id?: string;
@@ -10,15 +17,26 @@ interface Props {
   max?: number;
   label?: string;
   help?: string;
+  /** `meter`: a segment meter; `flush` is today's bar. */
+  form?: "meter" | "flush";
+  /** The segments of a `meter` bar; 20 by default (4 to 32). */
+  segments?: number;
+  /** The segments' colour: `accent` by default, or another status role. */
+  colour?: StrataLampColour;
   class?: string;
+  style?: string;
   [attribute: string]: unknown;
 }
 
-const { id, value, max = 100, label, help, class: className, ...rest } = Astro.props;
+const { id, value, max = 100, label, help, form, segments, colour, class: className, style, ...rest } = Astro.props;
+const meter = progressForm(form), count = progressSegmentCount(segments);
 const field = fieldControl({ id, label, help }, "progress");
 // A progress bar takes the Field's id and description only; it has no required, disabled or invalid state.
 const { id: controlId, "aria-describedby": describedBy } = field.attrs;
 ---
 <Field wrap={field.wrap} controlId={field.id} label={label} help={help}>
-  <progress class={classes("ug-progress", className)} data-strata-face="groove" id={controlId} aria-describedby={describedBy} value={value} max={max} {...rest}></progress>
+  {meter
+    ? <span class={classes("ug-progress-bar", className)} data-strata-form={meter} data-strata-colour={colour} style={style ? `${progressStyle(progressFraction(value, max), count)} ${style}` : progressStyle(progressFraction(value, max), count)}><progress class="ug-progress" id={controlId} aria-describedby={describedBy} value={value} max={max} {...rest}></progress><span class="ug-progress__object" aria-hidden="true"><span class="ug-progress__window" data-strata-face="groove"></span><span class="ug-progress__segments">{progressSegments(count).map(index => <span class="ug-progress__segment" data-strata-face="knob" style={lensStyle(index)}></span>)}</span></span></span>
+    : <progress class={classes("ug-progress", className)} style={style} data-strata-face="groove" id={controlId} aria-describedby={describedBy} value={value} max={max} {...rest}></progress>}
 </Field>
+{meter && <Behaviour />}

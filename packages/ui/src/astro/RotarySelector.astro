@@ -1,0 +1,51 @@
+---
+/**
+ * RotarySelector (anatomy page `rotary-selector.md`): a native `<select>` over a printed dial, one hard detent per option, the
+ * options' labels printed round the knob and the selector's legend printed under it, rendered on the server. Keys and the
+ * native popup work with no script; the round pointer behaviour (drag, ring click-to-set, cap taps and the wheel) and the dial
+ * following the option come from `attachStrata`, which it loads. `class`, `style` and other attributes reach the `.ug-rotary` root.
+ */
+import Behaviour from "./Behaviour.astro";
+import { nextId } from "./field.ts";
+import { rotaryModel, type RotaryOption } from "../shared/rotary-selector.ts";
+import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+
+interface Props {
+  /** The legend printed under the dial; it names the select. */
+  label: string;
+  /** The positions: one detent and one printed label each, in order round the dial. */
+  options: readonly RotaryOption[];
+  /** The selected option's `value`; the first enabled option by default. */
+  value?: string;
+  /** The cap's turn in degrees; the `knob.sweep` token (270) by default. */
+  sweep?: number;
+  /** The select's id; generated when absent. */
+  id?: string;
+  name?: string;
+  form?: string;
+  required?: boolean;
+  invalid?: boolean;
+  disabled?: boolean;
+  size?: StrataSize;
+  material?: string;
+  level?: StrataLevel;
+  class?: string;
+  style?: string;
+  [attribute: string]: unknown;
+}
+
+const { label, options, value, sweep, id, name, form, required, invalid, disabled, size, material, level, class: className, style, ...rest } = Astro.props;
+const model = rotaryModel({ options, value, sweep });
+const selectId = id ?? nextId("rotary");
+const selected = model.marks[model.index]?.value;
+---
+<div class={classes("ug-rotary", className)} {...strataAttributes({ size, material, level })} style={style ? `${model.style} ${style}` : model.style} {...rest}>
+  <div class="ug-rotary__dial">
+    <span class="ug-rotary__scale" aria-hidden="true">{model.marks.map(mark => <span class="ug-rotary__mark" data-strata-value={mark.value} data-strata-selected={String(mark.selected)} data-strata-disabled={mark.disabled ? "true" : undefined} style={mark.style}><span class="ug-rotary__tick"></span><span class="ug-rotary__text">{mark.text}</span></span>)}</span>
+    <span class="ug-rotary__skirt" data-strata-face="raised" aria-hidden="true"><span class="ug-rotary__cap" data-strata-face="raised"><span class="ug-rotary__pointer"></span></span></span>
+    <select class="ug-rotary__select" id={selectId} name={name} form={form} required={required} aria-invalid={invalid ? "true" : undefined} disabled={disabled}>{options.map(option => <option value={option.value} disabled={option.disabled} selected={option.value === selected}>{option.label}</option>)}</select>
+  </div>
+  <ol class="ug-rotary__legend" aria-hidden="true">{model.marks.map(mark => <li data-strata-selected={String(mark.selected)}>{mark.text}</li>)}</ol>
+  <label class="ug-rotary__label" for={selectId}>{label}</label>
+</div>
+<Behaviour />

@@ -1,0 +1,29 @@
+---
+/**
+ * Strata Astro PushButton check page (`/push-button/`): `[data-contract="button.md#2"]` and `[data-contract="toggle-button.md#2"]` render the
+ * anatomy pages' push-button examples with `@underglass/ui/astro`, and `main` holds live push buttons
+ * `tests/browser/ui-push-button-astro.test.mjs` drives with real input. Server-rendered HTML; the only script is the components' own
+ * `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { Button, ToggleButton } from "@underglass/ui/astro";
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro PushButton check</title>
+</head>
+<body>
+  <div data-contract="button.md#2" hidden><Button form="momentary" colour="danger">Record</Button></div>
+  <div data-contract="toggle-button.md#2" hidden><ToggleButton form="latching" colour="warning" pressed>Mute</ToggleButton></div>
+  <main>
+    <form class="ug-panel" data-strata-face="raised" aria-label="Push buttons" id="pushes" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center">
+      <Button form="momentary" id="talk" name="talk" value="1" type="submit" class="extra" style="margin-right: 4px" data-testid="talk">Talk</Button>
+      <ToggleButton form="latching" id="mute" colour="info">Mute</ToggleButton>
+      <Button form="momentary" id="locked" disabled>Locked</Button>
+      <Button id="owned" form="settings">Owned</Button>
+    </form>
+  </main>
+</body>
+</html>
