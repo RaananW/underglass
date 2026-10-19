@@ -42,3 +42,47 @@ throws are CSS transitions), lamp and meter glass tints, the sound set's use bey
 
 **Evidence** (not committed): `evidence/regression/current/ui-probes/instrument-i5-studio/` (premium and studio
 screenshots and `variants.json`), from `tests/browser/ui-character-studio.test.mjs`.
+
+## Playful
+
+**Mechanism.** The same as studio: `characters/playful.json` extends premium and `data-strata-character="playful"` selects it
+from the shipped stylesheet. It adds eight presets (two rubbers, six candy lacquers), and `gpu/instrument-character.ts` now
+reads a preset's `coat.*` (premium's presets in use have none, so the premium tables are still built exactly). The
+prototype page's **Character** switch gained Playful, with page tables for sky rubber, sun-yellow, mint and grape.
+
+**Judged on the page** (premium beside playful, Instrument, Objects and CSS, light and dark, DPR 2): sky-blue rubber caps
+on sun-yellow skirts over a mint plate read at once as a toy, with pink flags and lamps as the accent; in the dark the
+grape plate carries cream print. The first room (environment 1.25, fill 3.2) washed the rubber to pale cyan at the
+Instrument level against the Objects and CSS copies, so the room was lowered (environment 0.9, fill 2.2) and the blue
+deepened from #3ea8ff to #2d93ff. Print contrast on decoded pixels (4.5 required), minimum per presentation: DPR 2 light
+Instrument 5.99, Objects 6.06, CSS 5.99 (premium 5.96, 7.20, 7.11), dark the same minima; DPR 1 5.79, 5.85, 5.93. The
+minimum is the push button's "Rec" on its cap. The display text is 14.1:1 and texel-exact. Mesh pixels stay inside the
+controls with 0 hit mismatches in light and dark (3,048 hits sampled at DPR 2, 3,207 at DPR 1). The bounce, sampled frame
+by frame on the GPU: the detent knob 0.500 to 0.750 peaks at 0.786 (about 14% of the step overshoot; theory 15.4%) and
+rests in about 0.95 s; the continuous volume knob 0.62 to 0.95 peaks at 0.979 and rests in about 1.1 s; neither passes a
+stop.
+
+**Decisions the plan left open.**
+
+- Damping ratios are 0.51 to 0.60 on every spring. The clamp at the stops (section 12) means a switch throw never
+  overshoots; the visible bounce is a detent settling, a knob arriving, a meter and a gauge. Core's containment check
+  passes with the sweep stretched by twice the maximum overshoot (about 31%), more than the clamped spring ever draws.
+- Roles per control: sky rubber knob caps, coral rubber fader caps, yellow skirts, lime levers, cream bezels, pink rocker
+  plates, mint or grape faceplates. The prototype page has one cap, one skirt and one plate material, so it shows sky,
+  yellow and mint or grape; coral, lime, cream and pink are in the bundle and the Instrument runtime's role table.
+- Glow: hot pink (#ff3d8b), distinct from the yellow skirts and the blue accent; yellow would vanish on the skirts.
+- "Several hues" and "coloured bounce" cannot be set directly: a character sets only `glowOn` among the colour roles and
+  `studio.*` has no hue. They come from the role colours and the saturated faceplate the lacquer and metal reflect.
+- Soft caps are rubber (a matte dielectric, roughness 0.82), not `subsurface`: that layer is not yet probed (section 4).
+- Geometry (rounder, oversized parts) is not wired: the runtime builds parts from constants, as for studio, so only the
+  pointer width (4 px) is set. Default form: Switch is `wall`, recorded (`form.switch`), not wired.
+- Sound: bright, short and nearly noiseless (a pop, not a thud); `feedback.sound` and `haptics` stay forbidden.
+- Havok snap and inertia (decision 11) are not used: the springs are the CPU springs.
+- Conformance (`instrument-4.json`): character-independent, as for studio.
+
+**Not wired yet** (in the bundle and the prototype, not read by the runtime): as studio's, plus `form.switch`, the geometry
+above, and the switch and meter springs (CSS transitions). The gallery's character switch does not list playful: follow-up.
+
+**Evidence** (not committed): `evidence/regression/current/ui-probes/instrument-i5-playful/` (premium and playful screenshots
+and `variants.json`), from `tests/browser/ui-character-playful.test.mjs`. Tested on Chrome Canary 158.0.8110.0, headless and
+headed; WICG html-in-canvas main at 5fb3df8 (2026-10-09).
