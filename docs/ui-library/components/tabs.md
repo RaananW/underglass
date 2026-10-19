@@ -153,3 +153,60 @@ small cast shadow from the light. Under `forced-colors` the rail is a `CanvasTex
   another tab moves the indicator there with GPU on, the pixels under the new tab show it, and the arrow keys
   select through the GPU.
 - **Accessibility:** axe with the tabs in light and dark; the tab and panel roles, names and selection.
+
+## 11. Rail form: `rail`
+
+The tabs as **latching keys on one rail** ([Instrument plan](../instrument.md#everyday-components-at-the-instrument-level), [design language section 6](../design-language.md#instrument-object-table)):
+`form` (prop) or `data-strata-form` (on the root) chooses `rail`. Without it, or with `flush`, the Tabs are the flat tabs over a groove above, in the markup and the look
+they had before, at every level; the premium character's default form, `rail`, is reached by naming it, so a page that does not opt in is unchanged. Sections 1, 6 and 8
+hold: the tablist, the native `<button role="tab">`s, the panels, `aria-selected`, `aria-controls`, the roving tabindex, the arrow keys, Home and End, automatic and manual
+activation, `strata-tab-change` and the reflow are exactly the Tabs'; the accessibility snapshot is the same with and without the form (the form's parts are `aria-hidden`).
+
+```html
+<div class="ug-tabs" data-strata-form="rail">
+  <div class="ug-tabs__list" role="tablist" aria-label="Account" data-strata-face="raised">
+    <button class="ug-tab" type="button" role="tab" id="account-tab-profile" aria-selected="true" aria-controls="account-panel-profile">
+      <span class="ug-tab__led" data-strata-face="knob" aria-hidden="true"></span>
+      <span class="ug-tab__cap" data-strata-face="raised"><span class="ug-tab__label">Profile</span></span>
+    </button>
+    <button class="ug-tab" type="button" role="tab" id="account-tab-security" aria-selected="false" aria-controls="account-panel-security" tabindex="-1">
+      <span class="ug-tab__led" data-strata-face="knob" aria-hidden="true"></span>
+      <span class="ug-tab__cap" data-strata-face="raised"><span class="ug-tab__label">Security</span></span>
+    </button>
+    <button class="ug-tab" type="button" role="tab" id="account-tab-billing" aria-selected="false" aria-controls="account-panel-billing" tabindex="-1" disabled>
+      <span class="ug-tab__led" data-strata-face="knob" aria-hidden="true"></span>
+      <span class="ug-tab__cap" data-strata-face="raised"><span class="ug-tab__label">Billing</span></span>
+    </button>
+  </div>
+  <div class="ug-tabs__panel" role="tabpanel" id="account-panel-profile" aria-labelledby="account-tab-profile" tabindex="0">
+    <p>Your name and photo.</p>
+  </div>
+  <div class="ug-tabs__panel" role="tabpanel" id="account-panel-security" aria-labelledby="account-tab-security" tabindex="0" hidden>
+    <p>Your password and two-step sign-in.</p>
+  </div>
+  <div class="ug-tabs__panel" role="tabpanel" id="account-panel-billing" aria-labelledby="account-tab-billing" tabindex="0" hidden>
+    <p>Your plan and invoices.</p>
+  </div>
+</div>
+```
+
+- **The construction is the bank's** (one polished plinth, each key its own object). The **tablist is the plinth** (`data-strata-face="raised"`, polished metal in the `knob`
+  material; there is no `.ug-tabs__rail` groove and no `.ug-tab__indicator`). Each tab's native button holds its **cap** (`.ug-tab__cap`, a raised face: a key, the label on it) and
+  its **LED** (`.ug-tab__led`, a lens on the plinth above the cap). The button covers both and the room round them, so every press lands on it.
+- **Latching.** The selected tab is the key that is down (`--strata-push-t` 0.45, the push button's latched place, `spring.button`; 1 while it is held) and its LED lit
+  (`--strata-lit` 1, an emitter at every GPU level: the `emitter.led.*` tokens). Selection is never the light alone: the key is down, `aria-selected` says so, and under
+  more contrast, the contrast themes and forced colours the selected key also takes a bar under its label or the `Highlight` colours.
+- **The panel is the faceplate under the rail**: a printed plate edge (a 1 px `edge` border, the control radius, a faint tint) the rail sits over. Its semantics, `tabindex="0"`,
+  `hidden` and place in the focus order are unchanged; it is captured content, never a GPU face, so its text is never shaded.
+- **Keyboard.** Unchanged: Tab onto the selected key, Left and Right (Up and Down when vertical) move and select (or only move, with manual activation), Home and End, Enter
+  and Space; the focus ring is the CSS outline round the cap.
+- **Reflow.** The plinth wraps its keys at a narrow width as the flat tabs do (`flex-wrap`), and a vertical rail is a column plinth; text at 200% grows the caps, not the page.
+- **Presentations.** Relief: the plinth and each cap are raised faces and each LED a ring; the selected cap is pressed. Objects: the plinth a slab, each cap a key standing on it
+  (travelling when pressed, fitted so its shadow stays in its tab's box), each LED a dome. Instrument: **one polished plinth part** (the box rule's margin inside the tablist's
+  box, no shadow of its own) and, per tab, an object of a body with the captured cap travelling on the CSS throw and a glass LED lens with its emitter, both standing on the
+  plinth; selecting a tab changes the pose and the emitters, and the capture core makes of the changed `aria-selected`.
+- **Props.** `form` on `Tabs` (React, Vue and Astro): `rail`; `flush` or none for the flat tabs; any other string is not used (a `<div>` has no native `form`). Everything else is the
+  Tabs'.
+
+**Tests.** `ui-tabs-forms.test.mjs` (plain DOM, touch at 390 and 320 px, preferences, GPU at Relief, Objects and Instrument at DPR 1 and 2), `ui-tabs-forms-bindings.test.mjs`
+(React and Vue), `ui-tabs-forms-astro.test.mjs`.

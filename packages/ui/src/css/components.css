@@ -2139,6 +2139,201 @@
   :where(.ug-tabs--vertical) :where(.ug-tab__indicator) { inset: var(--strata-space-2) 0 var(--strata-space-2) auto; width: 4px; height: auto; }
   :where(.ug-tabs--vertical) > :where(.ug-tabs__panel) { flex: 1; min-width: 0; padding-block: 0; }
 
+  /* ---- Select forms: `selector` (a RotarySelector's dial over the Select's own select) and `display` (a Display window with step buttons); Tabs form `rail` (anatomy pages select.md, tabs.md, section 11) ---- */
+
+  /*
+   * `selector` is the RotarySelector's markup (classes `ug-rotary__*`, the Select's own `<select>` as `.ug-rotary__select`, no legend title: the
+   * Field's label names it), so its CSS, behaviour and GPU drawing are the RotarySelector's and need nothing here. `display` is a Display (the
+   * TextField's bezel and window and the Display's backlight, CSS and GPU alike) whose native element is the Select's own `<select>` as
+   * `.ug-display__text`: its selected option's text is the window's, printed under the glass and captured with the face. Two momentary push
+   * buttons (the PushButton's CSS, behaviour and GPU drawing) stand either side, a size smaller; they step the select and are out of the tab
+   * order and hidden from assistive technology (the select is the control). `flush`, or no form, is the key with a chevron: none of this reaches it.
+   */
+  /* A selector in a Field that shrinks to its content (a flex row) must not collapse: the root is a size container, so it has no content width of its own. */
+  :where(.ug-rotary[data-strata-form="selector"]) { min-inline-size: min(calc(var(--_size) + 24px + 10em), calc(100vw - 2 * var(--strata-space-5))); }
+  :where(.ug-select-display) {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    inline-size: min(100%, 360px);
+    max-inline-size: 100%;
+    vertical-align: middle;
+  }
+  :where(.ug-select-display__window) { flex: 1 1 0; width: auto; min-width: 0; }
+  :where(.ug-select-display__step) { --_cap: calc(var(--strata-push-size) * 0.7); flex: none; }
+  /* The step buttons' glyphs: a chevron drawn in CSS, pointing back and forward (reversed in right-to-left text). */
+  :where(.ug-select-display__glyph) { display: block; box-sizing: border-box; width: 7px; height: 7px; border: solid currentColor; border-width: 0 0 2px 2px; }
+  :where(.ug-select-display__step--previous .ug-select-display__glyph) { rotate: 45deg; translate: 2px 0; }
+  :where(.ug-select-display__step--next .ug-select-display__glyph) { rotate: -135deg; translate: -2px 0; }
+  :where(.ug-select-display[dir="rtl"], [dir="rtl"] .ug-select-display) :where(.ug-select-display__step--previous .ug-select-display__glyph) { rotate: -135deg; translate: -2px 0; }
+  :where(.ug-select-display[dir="rtl"], [dir="rtl"] .ug-select-display) :where(.ug-select-display__step--next .ug-select-display__glyph) { rotate: 45deg; translate: 2px 0; }
+  /* The select's own text, as the window's: one line, clipped, with a chevron on the glass for the list. */
+  :where(.ug-select-display__select) {
+    --_chevron: var(--strata-colour-muted);
+    padding-inline-end: calc(var(--_pad) + 14px);
+    appearance: none;
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--_chevron) 50%),
+      linear-gradient(135deg, var(--_chevron) 50%, transparent 50%);
+    background-position: right calc(var(--_pad) + 5px) center, right var(--_pad) center;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :where(.ug-select-display__select:disabled) { cursor: not-allowed; }
+  /* The native list is drawn by the browser from the options, in the page's colours. */
+  :where(.ug-select-display__select) :where(option) { background-color: var(--strata-colour-panel); color: var(--strata-colour-text); }
+  @media (forced-colors: active) {
+    :where(.ug-select-display__select) { --_chevron: CanvasText; }
+  }
+
+  /*
+   * `rail`: the tablist is a plinth of polished metal and each tab a latching key on it, a cap that carries the label with an LED above it on the
+   * plinth that lights while the tab is selected (`--strata-lit`, 1 selected, 0 not, the number the GPU reads for the LED's emitter) and the cap
+   * down. The panel is the faceplate under the rail: a printed plate edge, so the rail and the panel read as one face. Roles, ids, roving tabindex,
+   * keys and activation are the WAI-ARIA Tabs pattern's, unchanged; the native `<button role="tab">` covers its LED and its cap, so every press lands on it.
+   * `flush`, or no form, is the flat tabs over a groove: none of this reaches it.
+   */
+  :where(.ug-tabs[data-strata-form="rail"] > .ug-tabs__list) {
+    --_h: 2px;
+    --_bevel: 3px;
+    --_metal: var(--strata-colour-knob);
+    --_metal-light: color-mix(in srgb, var(--strata-colour-knob), white 60%);
+    --_metal-shade: color-mix(in srgb, var(--strata-colour-knob), var(--strata-colour-edge) 45%);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0;
+    box-sizing: border-box;
+    inline-size: fit-content;
+    max-inline-size: 100%;
+    margin-block-end: var(--strata-space-3);
+    padding: 2px;
+    border-radius: calc(var(--strata-radius-control) + 8px);
+    background-color: var(--strata-colour-knob);
+    background-image: linear-gradient(160deg, var(--_metal-light), var(--_metal) 45%, var(--_metal-shade));
+  }
+  :where(.ug-tabs--vertical[data-strata-form="rail"]) > :where(.ug-tabs__list) { flex-direction: column; flex-wrap: nowrap; align-self: flex-start; margin-block-end: 0; padding: 2px; }
+  /* With the GPU drawing the plinth (Relief and Objects as a face, Instrument as a part) its metal is the GPU's. */
+  :where([data-strata-mode="face"]) :is(.ug-tabs[data-strata-form="rail"] > .ug-tabs__list) { background-image: none; }
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab) {
+    --_c: var(--strata-colour-glow-on);
+    --_text: var(--strata-colour-text);
+    --strata-push-t: 0;
+    flex: 0 1 auto;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-end;
+    min-height: 0;
+    margin: 0;
+    /* The room above the cap holds the LED; 6 px round the rest is the room for the key's shadow inside the button's box. */
+    padding: 12px 6px 6px;
+    border-radius: var(--strata-radius-control);
+    color: var(--_text);
+    transition: --strata-push-t 380ms linear(0, 0.2396 5.26%, 0.5196 10.53%, 0.7152 15.79%, 0.8355 21.05%, 0.906 26.32%, 0.9466 31.58%, 0.9697 36.84%, 0.9828 42.11%, 0.9903 47.37%, 0.9945 52.63%, 0.9969 57.89%, 0.9982 63.16%, 0.999 68.42%, 0.9994 73.68%, 0.9997 78.95%, 0.9998 84.21%, 0.9999 89.47%, 0.9999 94.74%, 1);
+    touch-action: manipulation;
+  }
+  /* The cap's travel: 0.45 of the held throw while selected, all the way while held, on the push button's spring (read by the GPU frame by frame). */
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab[aria-selected="true"]) { --strata-push-t: 0.45; }
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab:is(:active, [data-strata-preview~="active"]):not(:disabled)) { --strata-push-t: 1; }
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab:disabled) { color: color-mix(in srgb, var(--_text) 38%, transparent); }
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab):is(:focus-visible, [data-strata-preview~="focus"]) { outline: none; }
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab__cap) {
+    --_finish: var(--strata-finish-role-control);
+    --_h: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-width: var(--strata-target-min);
+    min-height: max(calc(var(--strata-control-height) + var(--strata-control-offset)), var(--strata-target-min));
+    padding: 0 var(--strata-space-4);
+    border-radius: var(--strata-radius-control);
+    background-color: var(--strata-colour-secondary);
+    color: inherit;
+    font-family: var(--strata-font-family);
+    font-size: var(--strata-control-font);
+    font-weight: var(--strata-font-weight-strong);
+    line-height: 1;
+    translate: 0 calc(var(--strata-push-t) * 2px);
+  }
+  /* Selected: the key is down (the push button's latched place) and its LED lit. Hover and press lift and sink it as a key's. */
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab[aria-selected="true"] .ug-tab__cap) { --_lift: var(--strata-state-press-height); --_tone: var(--_press-tone); }
+  /* With the GPU drawing the key as parts (the Instrument level), the cap's CSS travel is held: the captured cap travels with the part. */
+  :where([data-strata-mode="face"]) .ug-tab[data-strata-dome] .ug-tab__cap { translate: none; }
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab:is(:hover, [data-strata-preview~="hover"]):not(:disabled) .ug-tab__cap) { --_lift: var(--strata-state-hover-height); --_tone: var(--_hover-tone); }
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab:is(:active, [data-strata-preview~="active"]):not(:disabled) .ug-tab__cap) { --_lift: var(--strata-state-press-height); --_tone: var(--_press-tone); }
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab:is(:focus-visible, [data-strata-preview~="focus"]) .ug-tab__cap) {
+    outline: var(--strata-focus-width) solid var(--strata-colour-accent);
+    outline-offset: var(--strata-focus-offset);
+  }
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab:disabled .ug-tab__cap) { --_h: 0px; --_gain: 0; }
+  /* The LED: the StatusLight's lens, a glass dome on the plinth above the cap, lit while the tab is selected. */
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab__led) {
+    --_on: color-mix(in srgb, var(--_c), white 18%);
+    --_off: color-mix(in srgb, var(--_c) 16%, #15171b);
+    --_glass: color-mix(in srgb, var(--_on) calc(var(--strata-lit) * 100%), var(--_off));
+    --strata-lit: 0;
+    position: absolute;
+    top: 3px;
+    left: calc(50% - 3px);
+    box-sizing: border-box;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    pointer-events: none;
+    box-shadow: 0 0 calc(var(--strata-lit) * 8px) calc(var(--strata-lit) * 1px) color-mix(in srgb, var(--_on) 55%, transparent);
+    transition: --strata-lit var(--strata-motion-fast) linear;
+  }
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab__led)::before { content: ""; position: absolute; inset: -1px; border-radius: 50%; background: var(--_off); }
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab__led)::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    border-radius: 50%;
+    background: radial-gradient(circle at 36% 30%, color-mix(in srgb, var(--_glass), white 55%) 0, var(--_glass) 45%, color-mix(in srgb, var(--_glass), black 35%) 100%);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35);
+  }
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab[aria-selected="true"]:not(:disabled) .ug-tab__led) { --strata-lit: 1; }
+  :where([data-strata-mode="face"]) .ug-tab__led[data-strata-dome]::after { background: transparent; box-shadow: none; }
+  /* The panel is the faceplate under the rail: a printed plate edge and a faint tint, the rail's own width apart. */
+  :where(.ug-tabs[data-strata-form="rail"] > .ug-tabs__panel) {
+    box-sizing: border-box;
+    padding: var(--strata-space-4);
+    border: 1px solid var(--strata-colour-edge);
+    border-radius: var(--strata-radius-control);
+    background-color: color-mix(in srgb, var(--strata-colour-text) 3%, transparent);
+  }
+  :where(.ug-tabs--vertical[data-strata-form="rail"]) > :where(.ug-tabs__panel) { padding: var(--strata-space-4); }
+  @media (prefers-reduced-motion: reduce) {
+    :where(.ug-tabs[data-strata-form="rail"] .ug-tab, .ug-tabs[data-strata-form="rail"] .ug-tab__led) { transition: none; }
+  }
+  /* More contrast: the selected key says so in more than light and travel, a bar under its label; the LED is flat colour with an edge. */
+  @media (prefers-contrast: more) {
+    :where(.ug-tabs[data-strata-form="rail"] .ug-tab[aria-selected="true"] .ug-tab__cap) { border-bottom: 3px solid var(--strata-colour-text); }
+    :where(.ug-tabs[data-strata-form="rail"] .ug-tab__led) { box-shadow: none; }
+    :where(.ug-tabs[data-strata-form="rail"] .ug-tab__led)::after { box-shadow: inset 0 0 0 1px var(--strata-colour-text); }
+  }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-tabs[data-strata-form="rail"] .ug-tab[aria-selected="true"] .ug-tab__cap) { border-bottom: 3px solid var(--strata-colour-text); }
+  /* Forced colours: system colours; Highlight is the selected key and its LED. */
+  @media (forced-colors: active) {
+    .ug-tabs[data-strata-form="rail"] > .ug-tabs__list { forced-color-adjust: none; border: 1px solid ButtonText; background: Canvas; }
+    .ug-tabs[data-strata-form="rail"] .ug-tab { color: ButtonText; }
+    .ug-tabs[data-strata-form="rail"] .ug-tab:disabled { color: GrayText; }
+    .ug-tabs[data-strata-form="rail"] .ug-tab__cap { forced-color-adjust: none; border: 1px solid ButtonText; background: ButtonFace; color: ButtonText; }
+    .ug-tabs[data-strata-form="rail"] .ug-tab[aria-selected="true"] .ug-tab__cap { background: Highlight; color: HighlightText; }
+    .ug-tabs[data-strata-form="rail"] .ug-tab:disabled .ug-tab__cap { border-color: GrayText; color: GrayText; }
+    .ug-tabs[data-strata-form="rail"] .ug-tab__led { forced-color-adjust: none; border: 1px solid ButtonText; background: Canvas; box-shadow: none; }
+    .ug-tabs[data-strata-form="rail"] .ug-tab__led::before, .ug-tabs[data-strata-form="rail"] .ug-tab__led::after { display: none; }
+    .ug-tabs[data-strata-form="rail"] .ug-tab[aria-selected="true"]:not(:disabled) .ug-tab__led { background: Highlight; }
+    .ug-tabs[data-strata-form="rail"] .ug-tab:focus-visible .ug-tab__cap { outline-color: Highlight; }
+    .ug-tabs[data-strata-form="rail"] > .ug-tabs__panel { border-color: CanvasText; background: transparent; }
+  }
+
   /* ---- Accordion ---- */
 
   /* A stack of raised slabs, one per native <details>; the header row is the <summary>, with a chevron that turns. */

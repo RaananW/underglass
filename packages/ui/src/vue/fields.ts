@@ -124,29 +124,7 @@ export const TextArea = defineComponent({
   },
 });
 
-export const Select = defineComponent({
-  name: "StrataSelect",
-  props: {
-    modelValue: { type: String, default: undefined },
-    /** Initial value when uncontrolled. */
-    defaultValue: { type: String, default: undefined },
-    invalid: { type: Boolean, default: false },
-    ...strataProps,
-  },
-  emits: ["update:modelValue"],
-  setup(props, { slots, emit }) {
-    const field = useFieldControl();
-    const element = ref<HTMLSelectElement | null>(null);
-    // Options are children, so the value is applied once they exist.
-    onMounted(() => { const value = props.modelValue ?? props.defaultValue; if (value !== undefined && element.value) element.value.value = value; });
-    return () => h("select", {
-      ref: element, class: "ug-select", "data-strata-face": "raised", ...strataAttributes(props), ...field?.value,
-      ...(props.invalid ? { "aria-invalid": "true" } : {}),
-      ...(props.modelValue !== undefined ? { value: props.modelValue } : {}),
-      onChange: (event: Event) => emit("update:modelValue", (event.target as HTMLSelectElement).value),
-    }, slots.default?.());
-  },
-});
+export { Select } from "./select.ts";
 
 export const Slider = defineComponent({
   name: "StrataSlider",

@@ -8,14 +8,14 @@
  */
 
 /** Every indicator lens, by class. */
-export const INDICATOR_LENS = ".ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment";
+export const INDICATOR_LENS = ".ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment, .ug-tab__led";
 
 /** Where an indicator lens's light comes from: the Lamp's tokens (`emitter.lamp.*`), the LED's (`emitter.led.*`) or a segment's (`emitter.segment.*`). */
 export type IndicatorEmitter = "lamp" | "led" | "segment";
 
 /** An indicator lens's place in its component. */
 export interface IndicatorPlace {
-  kind: "rating" | "badge" | "spinner" | "progress";
+  kind: "rating" | "badge" | "spinner" | "progress" | "tab";
   /** The component's root. */
   root: HTMLElement;
   /** The native control the lens belongs to (a Rating's radio, a Badge's or Spinner's `<span>`, the `<progress>`). */
@@ -48,6 +48,11 @@ export function indicatorOf(lens: Element): IndicatorPlace | undefined {
   if (lens.matches(".ug-progress__segment")) {
     const root = find(".ug-progress-bar"), control = root?.querySelector<HTMLElement>(":scope > .ug-progress");
     return root && control ? { kind: "progress", root, control, box: control, emitter: "segment" } : undefined;
+  }
+  if (lens.matches(".ug-tab__led")) {
+    // A rail Tabs' LED: on the plinth above its cap, in the tab's box, which holds the room for its halo and no text apart from the cap's.
+    const root = find(".ug-tabs"), tab = find(".ug-tab");
+    return root && tab ? { kind: "tab", root, control: tab, box: tab, tight: true, emitter: "led" } : undefined;
   }
   return undefined;
 }

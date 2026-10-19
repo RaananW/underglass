@@ -1,0 +1,37 @@
+---
+/**
+ * Strata Astro Select forms check page (`/select-forms/`): `[data-contract]` renders the anatomy page's form examples (`select.md` section 11) with
+ * `@underglass/ui/astro`, and `main` holds live selects `tests/browser/ui-select-forms-astro.test.mjs` drives. Server-rendered HTML; the only script is the
+ * components' own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { Select } from "@underglass/ui/astro";
+const waves = [{ value: "sine", label: "Sine" }, { value: "saw", label: "Saw" }, { value: "square", label: "Square" }];
+const presets = [{ value: "init", label: "Init" }, { value: "warm-pad", label: "Warm Pad" }, { value: "glass-bell", label: "Glass Bell" }, { value: "sub-bass", label: "Sub Bass" }];
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro Select forms check</title>
+</head>
+<body>
+  <div data-contract="select.md#selector" hidden><Select form="selector" id="wave-example" name="wave" aria-label="Wave" options={waves} value="saw" /></div>
+  <div data-contract="select.md#display" hidden><Select form="display" id="preset-example" name="preset" aria-label="Preset" options={presets} value="warm-pad" /></div>
+  <main>
+    <form class="ug-panel" data-strata-face="raised" aria-label="Selects" id="selects" style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+      <Select form="selector" id="wave" name="wave" label="Wave" options={waves} value="saw" class="extra" style="margin-right: 4px" data-testid="wave" />
+      <Select form="display" id="preset" name="preset" label="Preset" options={presets} value="glass-bell" size="small" />
+      <Select form="selector" id="slot" name="slot" label="Slot" help="From the slot."><option value="a">One</option><option value="b" selected>Two</option><option value="c">Three</option></Select>
+      <Select form="selector" id="many" name="many" label="Channel" options={Array.from({ length: 11 }, (_, index) => ({ value: `ch${index + 1}`, label: `Ch ${index + 1}` }))} value="ch3" />
+      <Select form="selector" id="grouped" name="grouped" label="Sound"><optgroup label="Drums"><option value="a1">Kick</option></optgroup><optgroup label="Synth"><option value="b1">Bass</option></optgroup></Select>
+      <Select form="selector" id="locked" name="locked" label="Locked" options={waves} value="saw" disabled />
+      <Select form="selector" id="list" name="list" label="List" options={waves} multiple />
+      <Select form="flush" id="flat" name="flat" label="Flat" options={waves} value="saw" />
+      <Select id="plain" name="plain" label="Plain" options={waves} value="square" />
+      <Select form="owner-form" id="owned" name="owned" label="Owned" options={waves} />
+    </form>
+    <form id="owner-form"></form>
+  </main>
+</body>
+</html>

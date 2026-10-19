@@ -5,6 +5,7 @@
  */
 import { createContext, forwardRef, useContext, useId, useState, type ButtonHTMLAttributes, type HTMLAttributes, type KeyboardEvent, type ReactNode } from "react";
 import { strataTabTarget, type TabsActivation } from "../dom/tabs.ts";
+import { tabCap, tabLed, tabsForm, type StrataTabsForm } from "../shared/tabs-forms.ts";
 import { classes, strataAttributes, type StrataProps } from "./shared.ts";
 
 interface TabsContext {
@@ -13,6 +14,7 @@ interface TabsContext {
   select(value: string): void;
   orientation: "horizontal" | "vertical";
   activation: TabsActivation;
+  form?: StrataTabsForm;
 }
 
 const TabsContext = createContext<TabsContext | undefined>(undefined);
@@ -35,12 +37,19 @@ export interface TabsProps extends Omit<HTMLAttributes<HTMLDivElement>, "onChang
   orientation?: "horizontal" | "vertical";
   /** `automatic` (default) selects the tab focus moves to; `manual` waits for Enter or Space. */
   activation?: TabsActivation;
+  /**
+   * `rail`: the tabs as latching keys on one rail, each with an LED that lights while its tab is selected, the panel the faceplate under
+   * them (anatomy page `tabs.md`, section 11); the tablist, the tabs, the panels and the keys are the WAI-ARIA Tabs pattern, unchanged.
+   * `flush` and no form are the flat tabs over a groove; a `<div>` has no native `form` attribute, so no other string is used.
+   */
+  form?: StrataTabsForm | "flush" | (string & {});
   children: ReactNode;
 }
 
 export const Tabs = forwardRef<HTMLDivElement, TabsProps>(function Tabs(
-  { id, value, defaultValue, onChange, orientation = "horizontal", activation = "automatic", size, material, level, className, children, ...rest }, ref,
+  { id, value, defaultValue, onChange, orientation = "horizontal", activation = "automatic", form, size, material, level, className, children, ...rest }, ref,
 ) {
+  const rail = tabsForm(form);
   const generated = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const [own, setOwn] = useState(defaultValue);
   const selected = value !== undefined ? value : own;
@@ -50,8 +59,8 @@ export const Tabs = forwardRef<HTMLDivElement, TabsProps>(function Tabs(
     onChange?.(next);
   };
   return (
-    <div ref={ref} className={classes("ug-tabs", orientation === "vertical" && "ug-tabs--vertical", className)} {...strataAttributes({ size, material, level })} {...rest}>
-      <TabsContext.Provider value={{ id: id ?? `tabs-${generated}`, value: selected, select, orientation, activation }}>{children}</TabsContext.Provider>
+    <div ref={ref} className={classes("ug-tabs", orientation === "vertical" && "ug-tabs--vertical", className)} {...(rail ? { "data-strata-form": rail } : {})} {...strataAttributes({ size, material, level })} {...rest}>
+      <TabsContext.Provider value={{ id: id ?? `tabs-${generated}`, value: selected, select, orientation, activation, form: rail }}>{children}</TabsContext.Provider>
     </div>
   );
 });
@@ -78,8 +87,8 @@ export const TabList = forwardRef<HTMLDivElement, TabListProps>(function TabList
   return (
     <div ref={ref} className={classes("ug-tabs__list", className)} role="tablist" aria-label={label}
       aria-orientation={tabs.orientation === "vertical" ? "vertical" : undefined}
-      data-strata-activation={tabs.activation === "manual" ? "manual" : undefined} onKeyDown={keyDown} {...rest}>
-      <span className="ug-tabs__rail" data-strata-face="groove" aria-hidden="true" />
+      data-strata-activation={tabs.activation === "manual" ? "manual" : undefined} {...(tabs.form ? { "data-strata-face": "raised" } : {})} onKeyDown={keyDown} {...rest}>
+      {!tabs.form && <span className="ug-tabs__rail" data-strata-face="groove" aria-hidden="true" />}
       {children}
     </div>
   );
@@ -97,8 +106,9 @@ export const Tab = forwardRef<HTMLButtonElement, TabProps>(function Tab({ value,
     <button ref={ref} className={classes("ug-tab", className)} type="button" role="tab" id={`${tabs.id}-tab-${value}`} aria-selected={selected}
       aria-controls={`${tabs.id}-panel-${value}`} tabIndex={selected ? undefined : -1}
       onClick={event => { onClick?.(event); if (!event.defaultPrevented) tabs.select(value); }} {...rest}>
-      <span className="ug-tab__label">{children}</span>
-      <span className="ug-tab__indicator" data-strata-face="mark" aria-hidden="true" />
+      {tabs.form
+        ? <><span className={tabLed.className} data-strata-face={tabLed.face} aria-hidden="true" /><span className={tabCap.className} data-strata-face={tabCap.face}><span className="ug-tab__label">{children}</span></span></>
+        : <><span className="ug-tab__label">{children}</span><span className="ug-tab__indicator" data-strata-face="mark" aria-hidden="true" /></>}
     </button>
   );
 });

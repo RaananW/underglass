@@ -1,0 +1,41 @@
+---
+/**
+ * Strata Astro Tabs forms check page (`/tabs-forms/`): `[data-contract]` renders the anatomy page's rail example (`tabs.md` section 11) with
+ * `@underglass/ui/astro`, and `main` holds live Tabs `tests/browser/ui-tabs-forms-astro.test.mjs` drives. Server-rendered HTML; the only script is the
+ * components' own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { Tabs } from "@underglass/ui/astro";
+const tabs = [{ value: "profile", label: "Profile" }, { value: "security", label: "Security" }, { value: "billing", label: "Billing", disabled: true }];
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro Tabs forms check</title>
+</head>
+<body>
+  <div data-contract="tabs.md#rail" hidden>
+    <Tabs form="rail" id="account" label="Account" tabs={tabs}>
+      <p slot="profile">Your name and photo.</p>
+      <p slot="security">Your password and two-step sign-in.</p>
+      <p slot="billing">Your plan and invoices.</p>
+    </Tabs>
+  </div>
+  <main>
+    <section class="ug-panel" data-strata-face="raised" aria-label="Tabs forms">
+      <Tabs form="rail" id="acct" label="Rail" tabs={tabs} class="extra" style="margin-right: 4px" data-testid="acct">
+        <p slot="profile">Your name and photo.</p>
+        <p slot="security">Your password and two-step sign-in.</p>
+        <p slot="billing">Your plan and invoices.</p>
+      </Tabs>
+      <Tabs form="rail" id="manual" label="Manual" tabs={tabs} activation="manual" value="security">
+        <p slot="profile">Your name and photo.</p>
+        <p slot="security">Your password and two-step sign-in.</p>
+      </Tabs>
+      <Tabs form="flush" id="flat" label="Flat" tabs={tabs}><p slot="profile">Flat.</p></Tabs>
+      <Tabs id="plain" label="Plain" tabs={tabs}><p slot="profile">Plain.</p></Tabs>
+    </section>
+  </main>
+</body>
+</html>
