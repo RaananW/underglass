@@ -181,12 +181,12 @@ function hash(text: string): string {
 /**
  * One mesh per distinct shape, held between scenes: core validates an inline mesh once per array identity. A layer that moves reports its elements' boxes
  * and the stage's zoom with float noise, or a real change of zoom (a Dialog's depth entry scales its layer by 1.5%), and none of it may make a new mesh,
- * since a new mesh is a new profile and a rebuild of the layer, while its parts show as Relief. So the shape is quantised: the size down to a quarter px
- * (the rim stays inside the box), the radii to a quarter px, and the stage up to 64 px (a larger stage only makes the margin larger, which is safe).
+ * since a new mesh is a new profile and a rebuild of the layer, while its parts show as Relief. So the shape is quantised: the size to the nearest quarter px
+ * (the margin has px to spare, and sizes are mostly whole, so the steps lie between them), the radii to a quarter px, and the stage up to 64 px less a px of slack, so a stage of exactly 640 stays 640 (a larger stage only makes the margin larger, which is safe).
  */
 function cachedMesh(input: Pick<PlateInput, "box" | "radii" | "form" | "scale" | "stage" | "open" | "tokens">): { key: string; mesh: PlateMesh } {
-  const width = Math.floor(input.box[2] * 4) / 4, height = Math.floor(input.box[3] * 4) / 4, radii = input.radii.map(radius => Math.round(radius * 4) / 4) as PlateInput["radii"];
-  const stage = { width: Math.ceil(input.stage.width / 64) * 64, height: Math.ceil(input.stage.height / 64) * 64 };
+  const width = Math.round(input.box[2] * 4) / 4, height = Math.round(input.box[3] * 4) / 4, radii = input.radii.map(radius => Math.round(radius * 4) / 4) as PlateInput["radii"];
+  const stage = { width: Math.ceil((input.stage.width - 1) / 64) * 64, height: Math.ceil((input.stage.height - 1) / 64) * 64 };
   const key = JSON.stringify([input.form, width, height, radii, input.scale, input.open ?? null, stage.width, stage.height, input.tokens ?? null]);
   let mesh = meshes.get(key);
   if (!mesh) {

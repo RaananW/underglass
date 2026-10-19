@@ -132,12 +132,12 @@ function openPair() {
   const scrim = document.createElement("div");
   scrim.className = "ug-scrim";
   scrim.setAttribute("aria-hidden", "true");
-  const sections = ([["plate", 20], [undefined, 340]] as const).map(([form, left]) => {
+  const sections = ([["plate", 30], [undefined, 350]] as const).map(([form, left]) => {
     const section = document.createElement("section");
     section.className = "ug-panel ug-dialog";
     section.id = form ? "pair-plate" : "pair-flush";
     section.tabIndex = -1;
-    section.style.cssText = `inset: 40px auto auto ${left}px; margin: 0; width: 280px; height: auto;`;
+    section.style.cssText = `inset: 40px auto auto ${left}px; margin: 0; width: 200px; height: auto;`;
     for (const [name, value] of [["role", "dialog"], ["aria-modal", "true"], ["aria-labelledby", `${section.id}-title`], ["data-strata-face", "raised"], ["data-strata-elevation", "modal"], ["data-strata-form", form]] as const) if (value) section.setAttribute(name, value);
     section.innerHTML = `<h2 class="ug-dialog__title" id="${section.id}-title">Output stage</h2>
       <div class="ug-dialog__body"><p style="margin:0 0 8px">Set the level.</p>${slider({ id: `${section.id}-knob`, label: "Level", form: "knob", min: 0, max: 10, step: 1, value: 4, unit: "", marks: [[0, "0"], [5, "5"], [10, "10"]] })}</div>
