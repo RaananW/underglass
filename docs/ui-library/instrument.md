@@ -192,9 +192,9 @@ divider a groove) or stay flat, because they are print on the faceplate.
 | TextField, TextArea | `display` (a glass window in a bezel) | `flush` (a well, as Objects) |
 | Tabs | Latching buttons on a rail; the panel is the faceplate under them | `flush` |
 | SegmentedControl | Interlocking latching buttons on one plinth | `flush` |
-| ProgressBar, Spinner | Segment meter, ring of LEDs ([`meter`](components/progress-bar.md#11-indicator-form-meter), [`ring`](components/spinner.md#11-indicator-form-ring), done) | `flush` |
-| Badge | An LED pill (a StatusLight with text) ([`led`, done](components/badge.md#11-indicator-form-led)) | `flush` |
-| Rating | A row of lamps ([`lamps`, done](components/rating.md#11-indicator-form-lamps)) | `flush` |
+| ProgressBar, Spinner | Segment meter, ring of LEDs | `flush` |
+| Badge | An LED pill (a StatusLight with text) | `flush` |
+| Rating | A row of lamps | `flush` |
 | Card, Panel | A machined plate (`plate`); no screws in premium | `plate`, `tray` |
 | Dialog | A plate that rises out of the chassis (depth entry), with its controls on it | `flush` |
 | Drawer | A tray that slides out of the chassis edge | `flush` |
