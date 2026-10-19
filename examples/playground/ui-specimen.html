@@ -267,6 +267,28 @@
         </div>
       </section>
 
+      <section class="ug-panel" data-strata-face="raised" data-strata-form="plate" aria-labelledby="structure-title">
+        <h3 id="structure-title">Structural forms</h3>
+        <div class="row" style="align-items: flex-start">
+          <div class="ug-field">
+            <label class="ug-field__label" for="spec-sf-knob">Drive</label>
+            <div class="ug-knob" data-strata-form="knob" style="--strata-knob-value: 0.4;"><div class="ug-knob__dial"><span class="ug-knob__scale" aria-hidden="true"><span class="ug-knob__mark" data-strata-value="10" style="--strata-knob-at: 0.1;">10</span><span class="ug-knob__mark" data-strata-value="90" style="--strata-knob-at: 0.9;">90</span></span><span class="ug-knob__skirt" data-strata-face="raised" aria-hidden="true"><span class="ug-knob__cap" data-strata-face="raised"><span class="ug-knob__pointer"></span></span></span><input class="ug-knob__input" type="range" id="spec-sf-knob" min="0" max="100" step="1" value="40" data-strata-default="40"></div></div>
+          </div>
+          <div class="ug-field">
+            <label class="ug-field__label" for="spec-sf-fader">Trim</label>
+            <div class="ug-fader ug-fader--horizontal" data-strata-form="fader" style="--strata-fader-value: 0.5;"><div class="ug-fader__track"><span class="ug-fader__scale" aria-hidden="true"><span class="ug-fader__mark" data-strata-value="-6" style="--strata-fader-at: 0.25;">−6</span><span class="ug-fader__mark" data-strata-value="6" style="--strata-fader-at: 0.75;">6</span></span><span class="ug-fader__slot" data-strata-face="groove" aria-hidden="true"></span><span class="ug-fader__carriage" data-strata-face="raised" aria-hidden="true"><span class="ug-fader__grip"></span></span><input class="ug-fader__input" type="range" id="spec-sf-fader" min="-12" max="12" step="1" value="0" data-strata-default="0" data-strata-unit=" dB" aria-valuetext="0 dB"></div></div>
+          </div>
+        </div>
+        <article class="ug-card" data-strata-face="raised" data-strata-form="plate" aria-labelledby="spec-sf-plate-title">
+          <h4 id="spec-sf-plate-title" class="ug-card__title">Plate card</h4>
+          <div class="ug-card__body">A machined plate with an edge break.</div>
+        </article>
+        <article class="ug-card" data-strata-face="raised" data-strata-form="tray" aria-labelledby="spec-sf-tray-title">
+          <h4 id="spec-sf-tray-title" class="ug-card__title">Tray card</h4>
+          <div class="ug-card__body" data-strata-face="well">The body sits in a recessed tray.</div>
+        </article>
+      </section>
+
       <section class="ug-panel" data-strata-face="raised" aria-labelledby="select-title">
         <h3 id="select-title">Select, Slider</h3>
         <div class="stack">

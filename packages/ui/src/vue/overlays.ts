@@ -7,6 +7,7 @@
  */
 import { defineComponent, h, mergeProps, ref, Teleport, useId, watch, type PropType } from "vue";
 import { showStrataDialog, type DialogCloseReason } from "../dom/dialog.ts";
+import { dialogForm, drawerForm } from "../shared/structure-forms.ts";
 import { classes, strataAttributes, strataProps } from "./shared.ts";
 
 function modal(part: "dialog" | "drawer") {
@@ -32,6 +33,8 @@ function modal(part: "dialog" | "drawer") {
       returnFocus: { type: Object as PropType<HTMLElement>, default: undefined },
       /** Whether a click on the scrim asks to close; false by default, as for a native `<dialog>`. */
       closeOnScrim: { type: Boolean, default: false },
+      /** `plate` (a Dialog) or `tray` (a Drawer): the hardware form; `flush` or none is the panel of before. */
+      form: { type: String as PropType<"plate" | "tray" | "flush">, default: undefined },
       /** Drawer only: the edge it sits on. */
       ...(part === "drawer" ? { side: { type: String as PropType<"start" | "end" | "top" | "bottom">, default: "end" } } : {}),
       ...strataProps,
@@ -62,6 +65,7 @@ function modal(part: "dialog" | "drawer") {
         const id = props.titleId ?? `${part}-title-${generated}`;
         const descriptionId = props.descriptionId ?? `${part}-description-${generated}`;
         const side = (props as { side?: string }).side;
+        const formed = part === "dialog" ? dialogForm(props.form) : drawerForm(props.form);
         return h(Teleport, { to: props.container }, [
           h("div", { class: "ug-scrim", "aria-hidden": "true" }),
           h("section", mergeProps({
@@ -69,7 +73,7 @@ function modal(part: "dialog" | "drawer") {
             class: classes("ug-panel", `ug-${part}`, part === "drawer" && `ug-drawer--${side}`),
             role: "dialog", "aria-modal": "true", "aria-labelledby": id,
             "aria-describedby": props.description !== undefined ? descriptionId : undefined,
-            "data-strata-face": "raised", "data-strata-elevation": "modal", tabindex: "-1", ...strataAttributes(props),
+            "data-strata-face": "raised", "data-strata-elevation": "modal", tabindex: "-1", ...(formed ? { "data-strata-form": formed } : {}), ...strataAttributes(props),
           }, attrs), [
             h("h2", { class: `ug-${part}__title`, id }, props.title),
             h("div", { class: `ug-${part}__body` }, [
