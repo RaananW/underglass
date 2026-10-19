@@ -1350,6 +1350,39 @@ provisional (†) until the owner's look sign-off; what was judged is in [instru
 Serif or wide printed scales are not available: the type tokens carry no per-character face, so the character leaves type
 alone. As with studio, a character may not set `light.*`; its bright room comes from `studio.*`, not the key.
 
+**Playful.** A toy or an appliance: soft-touch rubber caps in sky blue (knobs) and coral (faders), glossy candy lacquers for
+skirts (sun yellow), levers (lime), bezels (cream), rocker plates (pink) and faceplates (mint by day, grape in the dark),
+a bright high-key room, hot-pink lamps, bouncy underdamped springs with overshoot, a fat pointer and a bright, short,
+nearly noiseless sound set. It ships as `characters/playful.json`, a sparse layer that extends premium like studio;
+`data-strata-character="playful"` selects it with no new mechanism. Values are provisional (†) until the owner's look
+sign-off; what was judged is in [instrument-characters.md](instrument-characters.md#playful).
+
+| Token | Premium | Playful† | Why |
+| --- | --- | --- | --- |
+| `material.roles.knobCap`, `faderCap` | metal | `rubberSky`, `rubberCoral` | Soft-touch caps in bold colours; a different hue per control family |
+| `material.roles.knobSkirt`, `lever`, `bezel`, `rockerPlate` | polished, metal, polished, metal | `candyYellow`, `candyLime`, `candyCream`, `candyPink` | Glossy candy lacquers; cream keeps a lamp's bezel bright |
+| `material.roles.plate` | metal / gunmetal (dark) | `candyMint` / `candyGrape` (dark), every theme premium names | A saturated faceplate: dark ink by day, cream ink at night |
+| `instrument.material.rubberSky / rubberCoral` | none | #2d93ff / #ff6a5c, rough 0.82, metallic 0, no coat | Matte dielectrics that take the room as a soft sheen; saturated enough to survive a bright room |
+| `instrument.material.candy*` (yellow, lime, pink, cream, mint, grape) | none | #ffd12e, #8be04a, #ff7ac0, #fff2d6 (rough 0.35), #5fd6c0, #3b2680 (0.4); coat 1 at 0.04 to 0.05 | Candy: a saturated dielectric under a full, sharp coat |
+| `instrument.material.glass` | tint #d6ede6, absorption 0.03, dispersion 0.2 | tint #ffe4f0, 0.03, 0.15 | Clear lenses with a faint pink cast |
+| `instrument.ink.cap` | #26282c | #1a1240 | Indigo ink: 5.9:1 or more on both rubbers |
+| `colour.glowOn`, `pointerLight.colour` | #ff9228, #fff2e0 | #ff3d8b, #fff4cc | Hot-pink lamps read on mint and grape and apart from the yellow skirts; a lemon pointer light |
+| `studio.key / keyRadius / fill / front / strip / floor / ceiling` | 12 / 0.24 / 1.2 / 0.12 / 2.5 / 0.03 / 0.25 | 7 / 0.45 / 2.2 / 0.3 / 1.4 / 0.2 / 0.55 | A bright, soft, high-key room with a lifted floor and ceiling |
+| `environment.intensity` | 1 | 0.9 | A brighter room (1.25) washed the sky rubber to cyan; 0.9 keeps the colour |
+| `emitter.lamp.radius / strength`, `emitter.led.radius / strength` | 6 / 3200, 6 / 520 | 8 / 4600, 7 / 760 | Bigger, punchier lamps and LEDs |
+| `emitter.pushButton.strength`, `emitter.segment.strength` | 2400, 260 | 3400, 380 | A brighter ring and meter segments |
+| `knob.pointer.width` | 2.2 px | 4 px | A fat, friendly pointer |
+| `spring.knob / fader` | 420/41, 420/41 | 340/22, 360/22 | Ratios 0.60 and 0.58: a visible bounce |
+| `spring.detent` | 900/42 | 700/27 | Ratio 0.51, about 15% overshoot of a detent step: lively detents |
+| `spring.slide / rocker / bat / wall / button` | 600/49, 1200/58, 1400/45, 1200/58, 1600/80 | 520/27, 900/31, 1000/33, 900/33, 1300/41 | Ratios 0.52 to 0.59; clamped at the stops, so a throw arrives fast and stops, and only a detent or a meter overshoots |
+| `spring.meter / gauge / patch` | 360/28, 160/20, 1100/60 | 300/18, 140/12, 900/32 | Ratios 0.52, 0.51, 0.53: a needle that wobbles into place |
+| `feedback.click / tick / thunk / snap` (pitch Hz, decay ms, noise) | 2400/4/0.6, 3200/2/0.3, 140/18/0.25, 1800/6/0.75 | 3600/2.5/0.25, 4600/1.2/0.1, 260/9/0.15, 2800/3.5/0.3 | Higher, shorter and cleaner than premium's and studio's on every sound |
+| `form.switch` | `slide` | `wall` | The big paddle of an appliance; recorded, not yet read by the components |
+
+A character cannot set a hue per lamp or the room's tint (among the colour roles only `glowOn` and `glowOff` are its to
+set, and `studio.*` has no hue), so "lamps in several hues" is the glow plus the bold role colours, and "coloured bounce" is
+the saturated faceplate that the metal and lacquer reflect. As with studio, a character may not set `light.*`.
+
 ## 20. Feedback
 
 Instrument controls may click, tick and snap, and pulse under a finger. Feedback is **decorative**: nothing depends on
