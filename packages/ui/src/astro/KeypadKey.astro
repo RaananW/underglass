@@ -1,0 +1,22 @@
+---
+/**
+ * KeypadKey (anatomy page `keypad.md`): one native `<button>` of a `Keypad`. The slot is its printed legend, `shift` an optional
+ * second, smaller legend printed under it (large, when the keypad is `shifted`). `value`, `name` and the other attributes are the
+ * native button's.
+ */
+import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+
+interface Props {
+  type?: "button" | "submit" | "reset";
+  /** A second, smaller legend. */
+  shift?: string;
+  size?: StrataSize;
+  material?: string;
+  level?: StrataLevel;
+  class?: string;
+  [attribute: string]: unknown;
+}
+
+const { type = "button", shift, size, material, level, class: className, ...rest } = Astro.props;
+---
+<button type={type} class={classes("ug-keypad__key", className)} {...strataAttributes({ size, material, level })} {...rest}><span class="ug-keypad__cap" data-strata-face="raised"><span class="ug-keypad__print"><slot /></span>{shift !== undefined && <span class="ug-keypad__shift">{shift}</span>}</span></button>

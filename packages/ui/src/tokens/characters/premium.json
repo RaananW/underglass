@@ -20,6 +20,7 @@
           "statusLight.lens",
           "emitter.pushButton",
           "emitter.display",
+          "emitter.pad",
           "material.presets.chrome",
           "instrument.material.chrome"
         ]
@@ -955,6 +956,91 @@
       }
     }
   },
+  "pad": {
+    "$description": "Pad: a square soft cap in a grid, lit from below (design language section 6, Instrument object table).",
+    "box": {
+      "$type": "dimension",
+      "$value": "82px",
+      "$description": "The box, with room for the glow's rim and the halo."
+    },
+    "cap": {
+      "side": {
+        "$type": "dimension",
+        "$value": "64px",
+        "$description": "Cap side."
+      },
+      "height": {
+        "$type": "dimension",
+        "$value": "5px",
+        "$description": "Cap height at 50% depth.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "anchors": [
+              3,
+              5,
+              8
+            ]
+          }
+        }
+      },
+      "radius": {
+        "$type": "number",
+        "$value": 0.22,
+        "$description": "Corner radius, in cap sides."
+      }
+    },
+    "travel": {
+      "$type": "dimension",
+      "$value": "3px",
+      "$description": "Travel held down at 50% depth."
+    }
+  },
+  "keypad": {
+    "$description": "Keypad: machined push buttons in a grid on one plinth (design language section 6, Instrument object table).",
+    "box": {
+      "$type": "dimension",
+      "$value": "56px",
+      "$description": "A key's box, with room for its shadow."
+    },
+    "cap": {
+      "side": {
+        "$type": "dimension",
+        "$value": "44px",
+        "$description": "Cap side."
+      },
+      "height": {
+        "$type": "dimension",
+        "$value": "6px",
+        "$description": "Cap height at 50% depth.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "anchors": [
+              3.6,
+              6,
+              9.6
+            ]
+          }
+        }
+      },
+      "radius": {
+        "$type": "number",
+        "$value": 0.22,
+        "$description": "Corner radius, in cap sides."
+      }
+    },
+    "plinth": {
+      "height": {
+        "$type": "dimension",
+        "$value": "2.4px",
+        "$description": "Plinth height at 50% depth."
+      }
+    },
+    "travel": {
+      "$type": "dimension",
+      "$value": "2.5px",
+      "$description": "Travel held down at 50% depth."
+    }
+  },
   "display": {
     "$description": "Display.",
     "box": {
@@ -1149,6 +1235,41 @@
         "dev.underglass.strata": {
           "min": 0,
           "max": 16
+        }
+      }
+    },
+    "pad": {
+      "radius": {
+        "$type": "number",
+        "$value": 3,
+        "$description": "Reach of a lit pad, in cap sides.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 1,
+            "max": 20
+          }
+        }
+      },
+      "height": {
+        "$type": "number",
+        "$value": 0.25,
+        "$description": "Height above the face, in cap sides.",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0.1,
+            "max": 2
+          }
+        }
+      },
+      "strength": {
+        "$type": "number",
+        "$value": 3600,
+        "$description": "Intensity I at the reference pad (64 px).",
+        "$extensions": {
+          "dev.underglass.strata": {
+            "min": 0,
+            "max": 32000
+          }
         }
       }
     },

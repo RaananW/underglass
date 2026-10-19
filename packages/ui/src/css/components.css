@@ -414,6 +414,247 @@
     .ug-push:focus-visible .ug-push__bezel { outline-color: Highlight; }
   }
 
+  /* ---- Pad and PadGrid: a square soft cap lit from below, in a grid (anatomy page pad.md) ---- */
+
+  /*
+   * The native button is the whole object: a box the cap plus 18 px (82 at medium), the socket and the glow inset 6 px for the halo
+   * and the cap's shadow, so the glow shows as a 3 px rim round the cap, and the cap itself, in the flow, carrying the icon and the
+   * label. The Pad lights and moves with the PushButton's registered numbers: `--strata-lit` (the glow, 0 unlit and 1 lit: held, or
+   * latched) and `--strata-push-t` (the cap's travel, 1 held and 0.45 latched, on `spring.button`, the same `linear()` curve the
+   * PushButton samples). The GPU presentation reads both frame by frame; with the GPU drawing the object (the Instrument level) the
+   * glow's CSS paint is hidden and the cap's translation held, so a press repaints nothing. The light is never the only cue: the cap
+   * goes down, and a latching pad says `aria-pressed`.
+   */
+  :where(.ug-pad-grid) {
+    display: grid;
+    grid-template-columns: repeat(var(--strata-pad-columns, 4), minmax(0, max-content));
+    justify-content: start;
+    box-sizing: border-box;
+    max-width: 100%;
+    margin: 0;
+  }
+  :where(.ug-pad) {
+    --strata-lit: 0;
+    --strata-push-t: 0;
+    --_cap: var(--strata-pad-size);
+    --_radius: calc(var(--_cap) * 0.22);
+    --_c: var(--strata-colour-glow-on);
+    --_on: color-mix(in srgb, var(--_c), white 18%);
+    --_off: color-mix(in srgb, var(--_c) 16%, #15171b);
+    --_glass: color-mix(in srgb, var(--_on) calc(var(--strata-lit) * 100%), var(--_off));
+    display: grid;
+    position: relative;
+    isolation: isolate;
+    box-sizing: border-box;
+    width: calc(var(--_cap) + 18px);
+    max-width: 100%;
+    min-width: var(--strata-target-min);
+    aspect-ratio: 1;
+    margin: 0;
+    padding: 9px;
+    border: 0;
+    border-radius: calc(var(--_radius) + 9px);
+    background: transparent;
+    background-image: none;
+    color: var(--strata-colour-text);
+    font-family: var(--strata-font-family);
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: --strata-lit var(--strata-motion-fast) linear, --strata-push-t 380ms linear(0, 0.2396 5.26%, 0.5196 10.53%, 0.7152 15.79%, 0.8355 21.05%, 0.906 26.32%, 0.9466 31.58%, 0.9697 36.84%, 0.9828 42.11%, 0.9903 47.37%, 0.9945 52.63%, 0.9969 57.89%, 0.9982 63.16%, 0.999 68.42%, 0.9994 73.68%, 0.9997 78.95%, 0.9998 84.21%, 0.9999 89.47%, 0.9999 94.74%, 1);
+  }
+  :where(.ug-pad)[data-strata-colour="accent"] { --_c: var(--strata-colour-accent); }
+  :where(.ug-pad)[data-strata-colour="success"] { --_c: var(--strata-colour-success); }
+  :where(.ug-pad)[data-strata-colour="warning"] { --_c: var(--strata-colour-warning); }
+  :where(.ug-pad)[data-strata-colour="danger"] { --_c: var(--strata-colour-danger); }
+  :where(.ug-pad)[data-strata-colour="info"] { --_c: var(--strata-colour-info); }
+  :where(.ug-pad)[data-strata-colour="glowOn"] { --_c: var(--strata-colour-glow-on); }
+  /* Latched: down at 0.45 of the travel with the glow lit. Held (the pointer or Space or Enter down): down all the way with the glow lit. */
+  :where(.ug-pad[aria-pressed="true"]:not(:disabled, [aria-disabled="true"])) { --strata-lit: 1; --strata-push-t: 0.45; }
+  :where(.ug-pad:is(:active:not([data-strata-down="false"]), [data-strata-down="true"], [data-strata-preview~="active"]):not(:disabled, [aria-disabled="true"])) { --strata-lit: 1; --strata-push-t: 1; }
+  :where(.ug-pad__object) { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+  :where(.ug-pad__object) > :where(*) { position: absolute; box-sizing: border-box; inset: 6px; border-radius: calc(var(--_radius) + 3px); pointer-events: none; }
+  :where(.ug-pad__socket) { background: var(--_off); }
+  :where(.ug-pad__glow) { background: var(--_glass); }
+  /* In CSS the glow blooms; with the GPU presenting its light is an emitter instead. */
+  :where(:not([data-strata-mode="face"]) .ug-pad__glow) { box-shadow: 0 0 calc(var(--strata-lit) * 18px) calc(var(--strata-lit) * 3px) color-mix(in srgb, var(--_on) 55%, transparent); }
+  /* The cap: a rounded square, as wide as the cap size, tall as it, taller when its label wraps. */
+  :where(.ug-pad__cap) {
+    --_h: 5px;
+    --_finish: var(--strata-finish-role-control);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--strata-space-1);
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 4px;
+    border-radius: var(--_radius);
+    background-color: var(--strata-colour-secondary);
+    color: var(--strata-colour-text);
+    font-size: var(--strata-control-font);
+    font-weight: var(--strata-font-weight-strong);
+    line-height: 1.15;
+    text-align: center;
+    overflow-wrap: anywhere;
+    translate: 0 calc(var(--strata-push-t) * 1.5px);
+  }
+  :where(.ug-pad__icon) { display: inline-grid; width: 1.4em; height: 1.4em; }
+  :where(.ug-pad__icon) > svg { width: 100%; height: 100%; }
+  :where(.ug-pad__label) { min-width: 0; }
+  :where(.ug-pad:is(:hover, [data-strata-preview~="hover"]):not(:disabled, [aria-disabled="true"])) :where(.ug-pad__cap) {
+    --_lift: var(--strata-state-hover-height);
+    --_tone: var(--_hover-tone);
+  }
+  :where(.ug-pad:is(:active:not([data-strata-down="false"]), [data-strata-down="true"], [data-strata-preview~="active"]):not(:disabled, [aria-disabled="true"])) :where(.ug-pad__cap) {
+    --_lift: var(--strata-state-press-height);
+    --_tone: var(--_press-tone);
+  }
+  /* Focus: an accent ring round the glow, in every presentation (captured content, inside the 6 px the box leaves). */
+  :where(.ug-pad):is(:focus-visible, [data-strata-preview~="focus"]) { outline: none; }
+  :where(.ug-pad:is(:focus-visible, [data-strata-preview~="focus"])) :where(.ug-pad__glow) {
+    outline: var(--strata-focus-width) solid var(--strata-colour-accent);
+    outline-offset: var(--strata-focus-offset);
+  }
+  :where(.ug-pad:is(:disabled, [aria-disabled="true"])) { cursor: not-allowed; }
+  :where(.ug-pad:is(:disabled, [aria-disabled="true"])) :where(.ug-pad__object) { opacity: 0.38; }
+  :where(.ug-pad:is(:disabled, [aria-disabled="true"])) :where(.ug-pad__cap) { --_h: 0px; --_gain: 0; color: color-mix(in srgb, var(--strata-colour-text) 38%, transparent); }
+  /* With the GPU drawing the object as parts, its CSS paint is hidden and the cap stays where the layout puts it. */
+  :where([data-strata-mode="face"]) .ug-pad[data-strata-dome] .ug-pad__cap { translate: none; }
+
+  /* ---- Keypad: machined square caps with printed legends on one plinth (anatomy page keypad.md) ---- */
+
+  /*
+   * The native `<fieldset>` is the group: 12 px of room round the plinth (for its shadow inside the group's box), the legend above.
+   * The plinth is one polished frame, 2 px round a grid of keys; each key is a native `<button>` whose box is its cap plus 6 px a
+   * side (56 at medium, over the 44 px a touch target should be), the cap in the flow carrying the printed legend and an optional
+   * smaller second one (`shift`). A key moves with `--strata-push-t` (1 held, on `spring.button`); it has no light.
+   */
+  :where(.ug-keypad) {
+    --_key: var(--strata-keypad-size);
+    --_metal: var(--strata-colour-knob);
+    --_metal-light: color-mix(in srgb, var(--strata-colour-knob), white 60%);
+    --_metal-shade: color-mix(in srgb, var(--strata-colour-knob), var(--strata-colour-edge) 45%);
+    box-sizing: border-box;
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 12px;
+    border: 0;
+    color: var(--strata-colour-text);
+    font-family: var(--strata-font-family);
+  }
+  :where(.ug-keypad__legend) { padding: 0; font-size: var(--strata-font-size-caption); font-weight: var(--strata-font-weight-strong); }
+  :where(.ug-keypad__plinth) {
+    --_h: 2.4px;
+    --_bevel: 3px;
+    --_finish: none;
+    display: grid;
+    grid-template-columns: repeat(var(--strata-keypad-columns, 3), minmax(0, max-content));
+    gap: 0;
+    box-sizing: border-box;
+    width: fit-content;
+    max-width: 100%;
+    padding: 2px;
+    border-radius: calc(var(--_key) * 0.22 + 8px);
+    background: linear-gradient(160deg, var(--_metal-light), var(--_metal) 45%, var(--_metal-shade));
+  }
+  :where(.ug-keypad__key) {
+    --strata-push-t: 0;
+    display: grid;
+    position: relative;
+    box-sizing: border-box;
+    width: calc(var(--_key) + 12px);
+    max-width: 100%;
+    min-width: var(--strata-target-min);
+    min-height: calc(var(--_key) + 12px);
+    margin: 0;
+    padding: 6px;
+    border: 0;
+    border-radius: calc(var(--_key) * 0.22 + 6px);
+    background: transparent;
+    background-image: none;
+    color: var(--strata-colour-text);
+    font-family: var(--strata-font-family);
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    transition: --strata-push-t 380ms linear(0, 0.2396 5.26%, 0.5196 10.53%, 0.7152 15.79%, 0.8355 21.05%, 0.906 26.32%, 0.9466 31.58%, 0.9697 36.84%, 0.9828 42.11%, 0.9903 47.37%, 0.9945 52.63%, 0.9969 57.89%, 0.9982 63.16%, 0.999 68.42%, 0.9994 73.68%, 0.9997 78.95%, 0.9998 84.21%, 0.9999 89.47%, 0.9999 94.74%, 1);
+  }
+  :where(.ug-keypad__key:is(:active:not([data-strata-down="false"]), [data-strata-down="true"], [data-strata-preview~="active"]):not(:disabled, [aria-disabled="true"])) { --strata-push-t: 1; }
+  :where(.ug-keypad__cap) {
+    --_h: 6px;
+    --_finish: var(--strata-finish-role-control);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    box-sizing: border-box;
+    min-width: 0;
+    padding: 2px;
+    border-radius: calc(var(--_key) * 0.22);
+    background-color: var(--strata-colour-secondary);
+    color: var(--strata-colour-text);
+    line-height: 1.1;
+    text-align: center;
+    overflow-wrap: anywhere;
+    translate: 0 calc(var(--strata-push-t) * 1.25px);
+  }
+  :where(.ug-keypad__print) { font-size: var(--strata-control-font); font-weight: var(--strata-font-weight-strong); }
+  :where(.ug-keypad__shift) { font-size: var(--strata-font-size-caption); font-weight: normal; }
+  /* A shifted keypad prints the second legend large and the first small, below it. */
+  :where(.ug-keypad[data-strata-shifted="true"]) :where(.ug-keypad__shift) { order: -1; font-size: var(--strata-control-font); font-weight: var(--strata-font-weight-strong); }
+  :where(.ug-keypad[data-strata-shifted="true"]) :where(.ug-keypad__print) { font-size: var(--strata-font-size-caption); font-weight: normal; }
+  :where(.ug-keypad__key:is(:hover, [data-strata-preview~="hover"]):not(:disabled, [aria-disabled="true"])) :where(.ug-keypad__cap) {
+    --_lift: var(--strata-state-hover-height);
+    --_tone: var(--_hover-tone);
+  }
+  :where(.ug-keypad__key:is(:active:not([data-strata-down="false"]), [data-strata-down="true"], [data-strata-preview~="active"]):not(:disabled, [aria-disabled="true"])) :where(.ug-keypad__cap) {
+    --_lift: var(--strata-state-press-height);
+    --_tone: var(--_press-tone);
+  }
+  /* Focus: an accent ring round the cap, in every presentation (captured content, inside the 6 px the key's box leaves). */
+  :where(.ug-keypad__key):is(:focus-visible, [data-strata-preview~="focus"]) { outline: none; }
+  :where(.ug-keypad__key:is(:focus-visible, [data-strata-preview~="focus"])) :where(.ug-keypad__cap) {
+    outline: var(--strata-focus-width) solid var(--strata-colour-accent);
+    outline-offset: 0;
+  }
+  :where(.ug-keypad__key:is(:disabled, [aria-disabled="true"])) { cursor: not-allowed; }
+  :where(.ug-keypad__key:is(:disabled, [aria-disabled="true"])) :where(.ug-keypad__cap) { --_h: 0px; --_gain: 0; color: color-mix(in srgb, var(--strata-colour-text) 38%, transparent); }
+  /* With the GPU drawing the key as parts, the cap stays where the layout puts it. */
+  :where([data-strata-mode="face"]) .ug-keypad__key[data-strata-dome] .ug-keypad__cap { translate: none; }
+
+  /* Reduced motion: lights and travel change at once. */
+  @media (prefers-reduced-motion: reduce) {
+    :where(.ug-pad, .ug-keypad__key) { transition: none; }
+  }
+  /* More contrast: flat colour, no glow, edges in the text colour. */
+  @media (prefers-contrast: more) {
+    :where(.ug-pad__socket) { background: var(--_glass); }
+    :where(.ug-pad__glow) { box-shadow: none; }
+    :where(.ug-pad__glow, .ug-pad__cap, .ug-keypad__plinth, .ug-keypad__cap) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
+  }
+  :where([data-strata-theme="contrast"], [data-strata-theme="contrast-dark"]) :where(.ug-pad__glow, .ug-pad__cap, .ug-keypad__plinth, .ug-keypad__cap) { border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
+  /* Forced colours: system colours; Highlight is a lit glow, GrayText a disabled pad. Specific selectors beat the generic buttons' border. */
+  @media (forced-colors: active) {
+    .ug-pad, .ug-keypad__key { forced-color-adjust: none; border: 0; background: transparent; color: ButtonText; }
+    .ug-pad:is(:disabled, [aria-disabled="true"]), .ug-keypad__key:is(:disabled, [aria-disabled="true"]) { color: GrayText; }
+    .ug-pad .ug-pad__socket { background: transparent; }
+    .ug-pad .ug-pad__glow { border: 1px solid ButtonText; background: Canvas; box-shadow: none; }
+    .ug-pad[aria-pressed="true"]:not(:disabled, [aria-disabled="true"]) .ug-pad__glow, .ug-pad:is(:active:not([data-strata-down="false"]), [data-strata-down="true"]):not(:disabled, [aria-disabled="true"]) .ug-pad__glow { background: Highlight; }
+    .ug-pad .ug-pad__cap, .ug-keypad__key .ug-keypad__cap { border: 1px solid ButtonText; background: ButtonFace; color: ButtonText; }
+    .ug-keypad .ug-keypad__plinth { border: 1px solid ButtonText; background: Canvas; }
+    .ug-pad:is(:disabled, [aria-disabled="true"]) :is(.ug-pad__glow, .ug-pad__cap), .ug-keypad__key:is(:disabled, [aria-disabled="true"]) .ug-keypad__cap { border-color: GrayText; color: GrayText; }
+    .ug-pad:is(:disabled, [aria-disabled="true"]) .ug-pad__object { opacity: 1; }
+    .ug-pad:focus-visible .ug-pad__glow, .ug-keypad__key:focus-visible .ug-keypad__cap { outline-color: Highlight; }
+  }
+
   /* ---- Link ---- */
 
   :where(.ug-link) {
