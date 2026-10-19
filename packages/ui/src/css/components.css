@@ -2149,8 +2149,8 @@
    * buttons (the PushButton's CSS, behaviour and GPU drawing) stand either side, a size smaller; they step the select and are out of the tab
    * order and hidden from assistive technology (the select is the control). `flush`, or no form, is the key with a chevron: none of this reaches it.
    */
-  /* A selector in a Field that shrinks to its content (a flex row) must not collapse: the root is a size container, so it has no content width of its own. */
-  :where(.ug-rotary[data-strata-form="selector"]) { min-inline-size: min(calc(var(--_size) + 24px + 10em), calc(100vw - 2 * var(--strata-space-5))); }
+  /* A selector in a Field that shrinks to its content (a flex row) must not collapse: the root is a size container, so it has no content width of its own. It keeps room for the whole dial and its labels where the viewport has it, and for the dial and its numbers where it has not. */
+  :where(.ug-rotary[data-strata-form="selector"]) { min-inline-size: min(calc(var(--_size) + 24px + 10em), max(calc(var(--_size) + 24px + 4em), calc(100vw - 120px))); }
   :where(.ug-select-display) {
     display: flex;
     align-items: center;
@@ -2238,7 +2238,11 @@
   }
   /* The cap's travel: 0.45 of the held throw while selected, all the way while held, on the push button's spring (read by the GPU frame by frame). */
   :where(.ug-tabs[data-strata-form="rail"] .ug-tab[aria-selected="true"]) { --strata-push-t: 0.45; }
-  :where(.ug-tabs[data-strata-form="rail"] .ug-tab:is(:active, [data-strata-preview~="active"]):not(:disabled)) { --strata-push-t: 1; }
+  :where(.ug-tabs[data-strata-form="rail"] .ug-tab[data-strata-preview~="active"]:not(:disabled)) { --strata-push-t: 1; }
+  /* Held: a pointer that hovers (a mouse or a pen) holds the key all the way down; a touch does not, as `:active` can outlast a touch on some browsers. */
+  @media (hover: hover) {
+    :where(.ug-tabs[data-strata-form="rail"] .ug-tab:active:not(:disabled)) { --strata-push-t: 1; }
+  }
   :where(.ug-tabs[data-strata-form="rail"] .ug-tab:disabled) { color: color-mix(in srgb, var(--_text) 38%, transparent); }
   :where(.ug-tabs[data-strata-form="rail"] .ug-tab):is(:focus-visible, [data-strata-preview~="focus"]) { outline: none; }
   :where(.ug-tabs[data-strata-form="rail"] .ug-tab__cap) {
@@ -2308,7 +2312,9 @@
     border-radius: var(--strata-radius-control);
     background-color: color-mix(in srgb, var(--strata-colour-text) 3%, transparent);
   }
-  :where(.ug-tabs--vertical[data-strata-form="rail"]) > :where(.ug-tabs__panel) { padding: var(--strata-space-4); }
+  :where(.ug-tabs--vertical[data-strata-form="rail"]) > :where(.ug-tabs__panel) { flex: 1 1 10em; padding: var(--strata-space-4); }
+  /* The plinth is wider than the flat tabs, so a vertical rail whose panel would be squeezed under 10em (a narrow screen, text at 200%) puts the panel under it. */
+  :where(.ug-tabs--vertical[data-strata-form="rail"]) { flex-wrap: wrap; }
   @media (prefers-reduced-motion: reduce) {
     :where(.ug-tabs[data-strata-form="rail"] .ug-tab, .ug-tabs[data-strata-form="rail"] .ug-tab__led) { transition: none; }
   }
