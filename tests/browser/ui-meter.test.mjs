@@ -230,7 +230,7 @@ test("the meters pass axe in light, dark, face mode, forced colours and more con
   const colours = await page.evaluate(() => {
     const segments = [...document.getElementById("level").closest(".ug-meter").querySelectorAll(".ug-meter__segment")];
     const needle = getComputedStyle(document.getElementById("vu").closest(".ug-meter").querySelector(".ug-meter__needle"));
-    return { litSegment: getComputedStyle(segments[0]).backgroundColor, unlit: getComputedStyle(segments[15]).backgroundColor, glow: getComputedStyle(segments[0]).boxShadow, needle: needle.backgroundColor, text: getComputedStyle(document.getElementById("note")).color };
+    return { litSegment: getComputedStyle(segments[0], "::after").backgroundColor, unlit: getComputedStyle(segments[15], "::after").backgroundColor, glow: getComputedStyle(segments[0]).boxShadow, needle: needle.backgroundColor, text: getComputedStyle(document.getElementById("note")).color };
   });
   expect(colours.litSegment, "a lit segment is Highlight, an unlit one Canvas").not.toBe(colours.unlit);
   expect(colours.glow, "no glow").toBe("none");
@@ -243,6 +243,40 @@ test("the meters pass axe in light, dark, face mode, forced colours and more con
   expect(Number.parseFloat(more.border)).toBeGreaterThanOrEqual(1);
   const contrast = await new AxeBuilder({ page }).include("#meter-panel").withTags(tags).analyze();
   expect(summary(contrast.violations), "axe, more contrast").toEqual([]);
+  await context.close();
+});
+
+/** The mean of the 4 × 4 decoded px at a segment's centre in a full-viewport screenshot (DPR 1): a lit segment (the first) and an unlit one of the same zone. */
+async function segmentPixels(page, id = "level") {
+  const centres = await page.locator(`#${id}`).evaluate(native => [...native.closest(".ug-meter").querySelectorAll(".ug-meter__segment")].map(segment => { const box = segment.getBoundingClientRect(); return [Math.round(box.left + box.width / 2), Math.round(box.top + box.height / 2), Number(getComputedStyle(segment).getPropertyValue("--strata-lit")), segment.getAttribute("data-strata-zone")]; }));
+  const png = PNG.sync.read(await page.screenshot());
+  const mean = ([cx, cy]) => { const sum = [0, 0, 0]; for (let y = cy - 2; y < cy + 2; y++) for (let x = cx - 2; x < cx + 2; x++) for (let c = 0; c < 3; c++) sum[c] += png.data[(y * png.width + x) * 4 + c] / 16; return sum.map(value => Math.round(value * 10) / 10); };
+  const litCentre = centres.find(centre => centre[2] >= 0.5), darkCentre = centres.find(centre => centre[2] < 0.5 && centre[3] === litCentre[3]);
+  return { lit: mean(litCentre), dark: mean(darkCentre) };
+}
+const luma = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+/** The margin a lit segment's centre must beat an unlit one's by (8-bit luma): the glass is the lit colour, 18% towards white, against the 16% tint on #15171b. */
+const LIT_MARGIN = 40;
+
+test("in the plain CSS presentation a lit segment is brighter than an unlit one, in light and dark, and the state shows under more contrast and forced colours", async ({ browser }) => {
+  const { context, page } = await plain(browser);
+  await page.evaluate(() => document.getElementById("level").scrollIntoView());
+  expect(await page.evaluate(() => document.getElementById("meter-panel").hasAttribute("data-strata-mode")), "no GPU, no face mode").toBe(false);
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate(value => { document.documentElement.dataset.strataTheme = value; }, theme);
+    const { lit, dark } = await segmentPixels(page);
+    console.log(`CSS ${theme}: lit ${lit} (luma ${luma(lit).toFixed(1)}), unlit ${dark} (luma ${luma(dark).toFixed(1)})`);
+    expect(luma(lit) - luma(dark), `${theme}: a lit segment is brighter than an unlit one`).toBeGreaterThan(LIT_MARGIN);
+  }
+  await page.evaluate(() => { document.documentElement.dataset.strataTheme = "light"; });
+  await page.emulateMedia({ contrast: "more" });
+  const more = await segmentPixels(page);
+  console.log(`CSS more contrast: lit ${more.lit}, unlit ${more.dark}`);
+  expect(luma(more.lit) - luma(more.dark), "more contrast: the state still shows").toBeGreaterThan(LIT_MARGIN);
+  await page.emulateMedia({ contrast: "no-preference", forcedColors: "active" });
+  const forced = await segmentPixels(page);
+  console.log(`CSS forced colours: lit ${forced.lit}, unlit ${forced.dark}`);
+  expect(Math.max(...forced.lit.map((value, channel) => Math.abs(value - forced.dark[channel]))), "forced colours: Highlight against Canvas").toBeGreaterThan(60);
   await context.close();
 });
 
@@ -754,4 +788,26 @@ test("the meter page keeps the accessibility snapshot of the DOM, on every level
     const { violations } = await new AxeBuilder({ page }).include("#meter-panel").withTags(tags).analyze();
     expect(summary(violations), `axe on the GPU page at ${level}`).toEqual([]);
   }
+});
+
+for (const level of levels) test(`at ${level} the CSS glass of a segment is hidden and its socket stays printed (the lit glass cannot show through the GPU lens)`, async ({ browser }) => {
+  test.setTimeout(240000);
+  const context = await browser.newContext({ viewport: { width: 900, height: 750 } });
+  const page = await context.newPage();
+  await ready(page, `?level=${level}`);
+  expect(await mode(page), "GPU stays on").toBe("gpu");
+  const paint = await page.evaluate(() => [...document.querySelectorAll(".ug-meter__segment")].map(segment => {
+    const glass = getComputedStyle(segment, "::after"), socket = getComputedStyle(segment, "::before"), own = getComputedStyle(segment);
+    return { glass: glass.backgroundImage, glassShadow: glass.boxShadow, ownBackground: own.backgroundImage, ownShadow: own.boxShadow, socket: socket.backgroundColor, lit: Number(own.getPropertyValue("--strata-lit")) };
+  }));
+  expect(paint.length).toBeGreaterThan(0);
+  expect(paint.some(segment => segment.lit >= 0.5), "some segments are lit").toBe(true);
+  for (const segment of paint) {
+    expect(segment.glass, "the glass is hidden").toBe("none");
+    expect(segment.glassShadow).toBe("none");
+    expect(segment.ownBackground).toBe("none");
+    expect(segment.ownShadow, "no glow").toBe("none");
+    expect(segment.socket, "the socket stays").not.toBe("rgba(0, 0, 0, 0)");
+  }
+  await context.close();
 });

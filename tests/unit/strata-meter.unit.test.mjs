@@ -201,7 +201,7 @@ test("the tokens carry the sizes, the arcs and the segment light, and the CSS ta
   assert.match(css, /--strata-meter-t: var\(--strata-meter-value, 0\);/);
   assert.match(css, /rotate: calc\(\(clamp\(0, var\(--strata-meter-t, 0\), 1\) - 0\.5\) \* var\(--_sweep\)\);/);
   // Preferences: reduced motion moves the needle at once and takes the glow off the segments; forced colours flatten; more contrast edges them.
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\n\s+:where\(\.ug-meter--needle, \.ug-meter--dial\) \{ transition: none; \}\n\s+:where\(\.ug-meter__segment\) \{ box-shadow: inset 0 0 0 1px rgb\(0 0 0 \/ 0\.35\); \}/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\n\s+:where\(\.ug-meter--needle, \.ug-meter--dial\) \{ transition: none; \}\n\s+:where\(\.ug-meter__segment\) \{ box-shadow: none; \}/);
   assert.match(css, /@media \(forced-colors: active\) \{\n\s+:where\(\.ug-meter__window, \.ug-meter__bezel\) \{ forced-color-adjust: none; border: 1px solid CanvasText;/);
   assert.match(css, /@media \(prefers-contrast: more\) \{\n\s+:where\(\.ug-meter\) \{ --_ink: var\(--strata-colour-text\); \}/);
   // The GPU hides the needle's CSS paint when it draws the needle as a part.

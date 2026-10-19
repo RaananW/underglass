@@ -2058,13 +2058,23 @@
     width: var(--_lens);
     height: var(--_lens);
     border-radius: 50%;
-    background: radial-gradient(circle at 36% 30%, color-mix(in srgb, var(--_glass), white 55%) 0, var(--_glass) 45%, color-mix(in srgb, var(--_glass), black 35%) 100%);
-    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35), 0 0 calc(var(--strata-lit) * var(--_lens) * 0.9) calc(var(--strata-lit) * var(--_lens) * 0.1) color-mix(in srgb, var(--_on) 55%, transparent);
+    box-shadow: 0 0 calc(var(--strata-lit) * var(--_lens) * 0.9) calc(var(--strata-lit) * var(--_lens) * 0.1) color-mix(in srgb, var(--_on) 55%, transparent);
   }
   /* The socket under the lens, printed on the face at every level (and the only paint left when the GPU draws the lens as glass,
-     which refracts it): the unlit glass's dark disc. */
+     which refracts it): the unlit glass's dark disc; and the glass over it, as the indicator forms do (a pseudo-element at z-index -1
+     paints over its own element's background, so the glass cannot be the segment's own background). */
   :where(.ug-meter__segment) { position: relative; isolation: isolate; }
   :where(.ug-meter__segment)::before { content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: 50%; background: var(--_off); }
+  :where(.ug-meter__segment)::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle at 36% 30%, color-mix(in srgb, var(--_glass), white 55%) 0, var(--_glass) 45%, color-mix(in srgb, var(--_glass), black 35%) 100%);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35);
+  }
+  /* The GPU draws the lens as a part: its glass and glow are hidden, the socket stays. */
+  :where([data-strata-mode="face"]) .ug-meter__segment[data-strata-dome]::after { background: transparent; box-shadow: none; }
   :where(.ug-meter__segment[data-strata-zone="warn"]) { --_c: var(--strata-colour-warning); }
   :where(.ug-meter__segment[data-strata-zone="bad"]) { --_c: var(--strata-colour-danger); }
 
@@ -2166,13 +2176,13 @@
   /* Preferences. Reduced motion: the needle moves at once and a lit segment has no glow. */
   @media (prefers-reduced-motion: reduce) {
     :where(.ug-meter--needle, .ug-meter--dial) { transition: none; }
-    :where(.ug-meter__segment) { box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.35); }
+    :where(.ug-meter__segment) { box-shadow: none; }
   }
   /* More contrast: the high-contrast themes apply through the tokens; the needle, the scale and the segments take the text colour, and a lit segment has no glow. */
   @media (prefers-contrast: more) {
     :where(.ug-meter) { --_ink: var(--strata-colour-text); }
     :where(.ug-meter__mark) { color: var(--strata-colour-text); }
-    :where(.ug-meter__segment) { background: var(--_glass); box-shadow: none; border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
+    :where(.ug-meter__segment) { box-shadow: none; border: max(1px, var(--strata-outline-width)) solid var(--strata-colour-text); }
     :where(.ug-meter__segment)::before { background: var(--_glass); }
     :where(.ug-meter__window) { border-color: var(--strata-colour-text); }
   }
@@ -2181,8 +2191,9 @@
   /* Forced colours: a CanvasText window; lit segments are Highlight and unlit ones Canvas with a CanvasText edge; the needle and scale CanvasText. */
   @media (forced-colors: active) {
     :where(.ug-meter__window, .ug-meter__bezel) { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
-    :where(.ug-meter__segment) { forced-color-adjust: none; border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
-    :where(.ug-meter__segment) { background: color-mix(in srgb, Highlight calc(var(--strata-lit) * 100%), Canvas); }
+    :where(.ug-meter__segment) { forced-color-adjust: none; border: 1px solid CanvasText; background: none; box-shadow: none; }
+    :where(.ug-meter__segment)::before { background: Canvas; }
+    :where(.ug-meter__segment)::after { background: color-mix(in srgb, Highlight calc(var(--strata-lit) * 100%), Canvas); box-shadow: none; }
     :where(.ug-meter__needle) { forced-color-adjust: none; background: CanvasText; }
     :where(.ug-meter__hub) { forced-color-adjust: none; background: CanvasText; border: 0; }
     :where(.ug-meter__mark) { forced-color-adjust: none; color: CanvasText; }
