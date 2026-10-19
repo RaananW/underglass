@@ -225,7 +225,7 @@ showing the chosen label under the glass, between two momentary push buttons tha
 that lights while it is selected, the panel the faceplate under them); `flush`, and an absent `form`, are the controls of before. Decided here: a selector prints at most 8 options of at most 12 characters and
 no optgroup (a dial's labels sit on a 270° arc), and any other list asked as a selector is drawn as a display, which keeps the hardware face and scales to any list, with `data-strata-form` saying which;
 the step buttons are `aria-hidden` with `tabindex="-1"` (the select is the control, they duplicate its arrow keys); a rail's tablist is its plinth (no groove, no indicator) and its LED is the indicator lens
-of the Rating and the Badge, so selecting is a pose and an emitter, not a rebuild. [Select](components/select.md#11-hardware-forms-selector-and-display), [Tabs](components/tabs.md#11-rail-form-rail).
+of the Rating and the Badge, so selecting is a pose and an emitter, not a rebuild. The rail is built as the bank's keys (the latching forms' plinth and key objects, one shared construction, `gpu/instrument-bank.ts`): a tab and a bank key of the same size and state are the same parts. [Select](components/select.md#11-hardware-forms-selector-and-display), [Tabs](components/tabs.md#11-rail-form-rail).
 
 ### Interaction, in detail
 
@@ -618,7 +618,7 @@ Everyday forms, fourth part: the Select and the Tabs at every presentation, in C
 [`selector`](components/select.md#11-hardware-forms-selector-and-display) (the RotarySelector over its own select, for lists up to 8 short options, otherwise drawn as a `display`) or a
 `display` (a Display window with two momentary step buttons, `aria-hidden`), and Tabs as a [`rail`](components/tabs.md#11-rail-form-rail) (a plinth of latching keys with an LED each, the panel the
 faceplate under it), with `flush` and an absent `form` the control of before. They reuse the RotarySelector, the Display, the PushButton's parts and the indicator lens, so the Instrument level adds only a
-plinth and a key object for the rail (`gpu/instrument-tabs.ts`); a selection or a step is a pose and an emitter, and a held step button is 0 captures.
+plinth and a key object for the rail, which are the bank's (`gpu/instrument-bank.ts`: one construction for keys on a plinth, the Tabs adding only their mapping, `gpu/tabs-forms.ts`); a selection or a step is a pose and an emitter, and a held step button is 0 captures.
 
 PR 12, wave 2, first part: the Lamp and the StatusLight ([Lamp](components/lamp.md), [StatusLight](components/status-light.md)),
 at every presentation: CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Instrument on the GPU, with the helper's

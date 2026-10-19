@@ -617,7 +617,7 @@ export const materials: Record<string, [title: string, count: number]> = {
   "ig-tabs-panel-wave2": ["Lamps, lights and meters", 12], "w2-controls": ["Selector, buttons and displays", 14],
   "ig-tabs-panel-wave3": ["JogWheel and PatchBay", 12], "w3-pads": ["Pad and Keypad", 7],
   "ig-tabs-panel-everyday": ["Sliders, ratings and badges", 14], "e-plates": ["Progress, plates and trays (a tray panel)", 8],
-  "ig-tabs-panel-inputs": ["Checkbox, radio bank and segmented control", 7], "e-select": ["Select and tabs forms", 14], "ig-tabs-panel-notes": ["Notes", 2],
+  "ig-tabs-panel-inputs": ["Checkbox, radio bank and segmented control", 7], "e-select": ["Select and tabs forms", 13], "ig-tabs-panel-notes": ["Notes", 2],
 };
 
 function Notes() {
@@ -643,6 +643,11 @@ function Notes() {
         A scene holds at most 16 materials, so each group is split into panels; the helper's own count (<code>StrataGpu.diagnostics</code>) for each is:</p>
       <ul>{Object.entries(materials).map(([id, [title, count]]) => <li key={id}>{title}: {count} of 16 materials</li>)}</ul>
       <p>On a phone the stage is at most 4,096 CSS px tall (one canvas, 8,192 device px at DPR 2), so at 320 px the intro is hidden.</p>
+    </section>
+    <section aria-labelledby="ig-notes-keys">
+      <h3 id="ig-notes-keys">Keys on a plinth are one construction</h3>
+      <p>The radio bank, the segmented control and the tabs' rail are three components with one scene: a polished plinth part, and for each key a body with a captured cap, an LED lens with its emitter and the
+        same registry calls, so a tab and a bank key of the same size and state are the same parts and share their materials.</p>
     </section>
     <section aria-labelledby="ig-notes-light">
       <h3 id="ig-notes-light">The pointer light and the characters</h3>
