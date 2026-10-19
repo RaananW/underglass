@@ -1,0 +1,31 @@
+---
+/**
+ * Display (anatomy page `display.md`): a read-only glass window in a bezel over a native `<output>`, backlit, rendered on the
+ * server. The text is the slot, printed under the glass; `<output>` is a polite live region natively, so a changed value is
+ * announced once (`live="off"` for a value that changes faster than it can be read, `"assertive"` for an urgent one). It is
+ * never submitted with a form: a value that must submit is a TextField with `form="display"` and `readonly`. The native
+ * attributes (`id`, `name`, `for`, `aria-*`) reach the `<output>`; `class` and `style` go on the display's root.
+ */
+import { displayAttributes, displayClasses, displayMarkup, type StrataDisplayBacklight, type StrataDisplayLive } from "../shared/display.ts";
+import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+
+interface Props {
+  /** The accessible name (`aria-label`); leave it out when `aria-labelledby` or a `<label for>` names the display. */
+  label?: string;
+  /** How a changed value is announced: `off`, `polite` (the native default, no attribute) or `assertive`. */
+  live?: StrataDisplayLive;
+  /** The backlight: a colour role (`glowOn` by default) or `off`. */
+  backlight?: StrataDisplayBacklight;
+  /** The backlight is lit by default; `false` switches it off. */
+  lit?: boolean;
+  size?: StrataSize;
+  material?: string;
+  level?: StrataLevel;
+  class?: string;
+  style?: string;
+  [attribute: string]: unknown;
+}
+
+const { label, live, backlight, lit, size, material, level, class: className, style, ...rest } = Astro.props;
+---
+<span class={classes(...displayClasses(true), className)} style={style} {...strataAttributes({ size, material, level })} {...displayAttributes({ backlight, lit })}><span class="ug-display__object" aria-hidden="true"><span class={displayMarkup.bezel.className} data-strata-face={displayMarkup.bezel.face}><span class={displayMarkup.window.className} data-strata-face={displayMarkup.window.face}></span></span></span><output class="ug-display__text" aria-label={label} aria-live={live === "off" || live === "assertive" ? live : undefined} {...rest}><slot /></output></span>
