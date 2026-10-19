@@ -32,7 +32,10 @@ export const INSTRUMENT_CASTERS_PER_OBJECT = 8;
 
 /** Profiles and materials a scene may name. */
 export const INSTRUMENT_PROFILES = 64;
+/** Materials a layer draws with: a scene naming more is valid but drawn at Relief (`budget`, detail names the count). */
 export const INSTRUMENT_MATERIALS = 16;
+/** Materials a scene may name; above it the format refuses the scene (between the two the layer steps down). */
+export const INSTRUMENT_MATERIALS_CEILING = 64;
 /** The containment margin of 2D.9: every vertex projects at least this far inside `bounds`. */
 export const CONTAINMENT_MARGIN = 0.5;
 /** The camera rule's floor (2D.3, design language section 6). */
@@ -236,7 +239,7 @@ export function validateInstrumentScene(input: InstrumentScene): InstrumentScene
   // Materials: the face's relief layers are checked with the face below; the Instrument layers here.
   const materials = record(scene.materials, "materials");
   const names = Object.keys(materials);
-  if (names.length > INSTRUMENT_MATERIALS) fail("materials", `holds more than ${INSTRUMENT_MATERIALS} materials`);
+  if (names.length > INSTRUMENT_MATERIALS_CEILING) fail("materials", `holds more than ${INSTRUMENT_MATERIALS_CEILING} materials`);
   const recipes = Object.fromEntries(names.map(name => [name, recipe(record(materials[name], `materials.${name}`), `materials.${name}`)]));
   // Profiles.
   const profiles = record(scene.profiles, "profiles");
@@ -279,15 +282,17 @@ export function validateInstrumentScene(input: InstrumentScene): InstrumentScene
       relief: entry.relief as ReliefPrimitive | undefined };
   });
   // The face (part 2), with each object's Relief primitive checked in the same list: validated as a version 1 scene.
-  const reliefMaterials = Object.fromEntries(names.map(name => [name, faceMaterial(recipes[name]!)]));
   const reliefOf = (object: (typeof objects)[number]): ReliefPrimitive => object.relief ?? { face: "raised", rect: object.bounds.rect,
     radius: object.bounds.radius, height: Math.min(16, Math.max(1, ...object.parts.map(part => part.at[2] + profileHeight(shapes[part.profile]!)))), material: object.parts[0]!.material };
+  // The face binds at most RELIEF_MATERIALS (16): a scene past the layer's cap (drawn at Relief, `budget`) gives it the materials its primitives use.
+  const faceEntries = [...(primitivesIn as ReliefPrimitive[]), ...objects.map(reliefOf)];
+  const reliefMaterials = faceMaterials(names.map(name => [name, recipes[name]!] as const), faceEntries);
   let face: ReliefScene;
   try {
     face = validateReliefScene({ format: "strata-scene", version: 1, extent: scene.extent, ...(scene.outset === undefined ? {} : { outset: scene.outset }),
       backdrop: scene.backdrop, light: { azimuth: light.azimuth, elevation: light.elevation }, bevel: scene.bevel, shadow: { strength: shadow.strength },
       interior: scene.interior, state: scene.state, focus: scene.focus, materials: reliefMaterials,
-      primitives: [...(primitivesIn as ReliefPrimitive[]), ...objects.map(reliefOf)] } as ReliefScene);
+      primitives: faceEntries } as ReliefScene);
   } catch (error) {
     // Report the face's paths in the Instrument scene's terms: an object's step-down primitive is `objects[i].relief`.
     const count = (primitivesIn as unknown[]).length;
@@ -902,6 +907,15 @@ export function partCaster(part: InstrumentPart, shape: InstrumentProfile, t: nu
 }
 
 /**
+ * The face's materials: every material of the scene, or, past the 16 the Relief binding holds (a scene the layer steps down for its
+ * materials), those the face's `entries` use.
+ */
+function faceMaterials(all: (readonly [string, InstrumentRecipe])[], entries: readonly ReliefPrimitive[]) {
+  const used = all.length > INSTRUMENT_MATERIALS ? new Set(entries.map(entry => entry.material)) : undefined;
+  return Object.fromEntries(all.filter(([name]) => !used || used.has(name)).map(([name, recipe]) => [name, faceMaterial(recipe)]));
+}
+
+/**
  * The face's relief scene (version 1): the scene's primitives, then the Relief primitive of every object in `stepped`
  * (by index), in object order. Cached per scene and step-down set, so `reliefUniforms` packs it once.
  */
@@ -916,7 +930,7 @@ export function instrumentFaceScene(scene: InstrumentScene, stepped: readonly nu
   const value: ReliefScene = {
     format: "strata-scene", version: 1, extent: scene.extent, ...(scene.outset ? { outset: scene.outset } : {}), backdrop: scene.backdrop,
     light: { azimuth: scene.light.azimuth, elevation: scene.light.elevation }, bevel: scene.bevel, shadow: { strength: scene.shadow.strength },
-    interior: scene.interior, state: scene.state, focus: scene.focus, materials: Object.fromEntries(Object.entries(scene.materials).map(([name, layers]) => [name, faceMaterial(layers)])),
+    interior: scene.interior, state: scene.state, focus: scene.focus, materials: faceMaterials(Object.entries(scene.materials), [...scene.primitives, ...stepped.map(index => scene.objects[index]!.relief!)]),
     primitives: [...scene.primitives, ...stepped.map(index => scene.objects[index]!.relief!)],
   };
   cache.set(key, value);

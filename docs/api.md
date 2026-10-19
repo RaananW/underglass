@@ -595,8 +595,13 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
   box over its bounds).
 - **Budgets.** 2,048 parts per layer and 6,000 per stage; above either, the layer is drawn at the Relief level. More
   than 16 part kinds per layer is reported; more than 64 steps the layer down. The format accepts up to 8,192 parts.
+- **Material cap.** A layer draws with at most 16 materials (`INSTRUMENT_MATERIALS`). A scene naming 17 to 64 is valid: the whole
+  layer is drawn at the Relief level, every object stepped down with reason `budget` (`detail`: `17 materials in the layer, above 16`) and a
+  `materials:` warning, GPU on. A scene naming more than 64 (`INSTRUMENT_MATERIALS_CEILING`) is a validation error. The face's own
+  Relief binding holds 16, so past the cap it binds the materials the face's primitives use. Each layer reports `materials: { count, cap }`
+  and `state().instrument.budgets.materialsPerLayer` is the cap.
 - **Diagnostics.** `state().instrument` lists each layer's `status` (`ready`, `pending`, `stepped-down`, `failed`),
-  objects, parts, drawn parts, kinds, `steppedDown` entries (`{ object, reason, part?, inset?, overshoot?, detail? }`,
+  objects, parts, drawn parts, kinds, `materials` (`{ count, cap }`), `steppedDown` entries (`{ object, reason, part?, inset?, overshoot?, detail? }`,
   reasons `containment`, `budget`, `compile`, `pending`, `transform`, `order-unavailable`, `post`), warnings and GPU time
   (`lastMs`, `p50Ms`, `p95Ms`); each layer's `probe` (`status` `on`, `off`, `budget` or `failed` with `reason`; with a probe its `size`, `bytes`, `refreshes` and the GPU time of the refreshes) and `glass` (`status` `none`, `on` or `fallback` with `error`); `state().instrument.probes` (`budget`, `live`, `builds`, `failures`, `refreshes`, `bytes`); the stage's parts; the timing status; and the compile counters (builds, failures,
   deferred successor deadlines). `state().instrument.post` lists per layer each stage's status (`on`, `off`, `idle`
