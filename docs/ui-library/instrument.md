@@ -166,8 +166,8 @@ object is drawn around it.
 | **[StatusLight](components/status-light.md)** (LED) | `<output>` or a `<span role="img" aria-label>`; an optional `aria-live` region names changes | A small lens; `colour` from a role; `blink` is a tempo token, off under reduced motion | None; emitter | 2 (done) |
 | **[Meter](components/meter.md)** | `<meter>` (implicit role meter); `min`, `max`, `low`, `high`, `optimum` | A bar of LED segments in a window (`segments`; the glass covers the printed scale under them), or a needle meter (`form="needle"`) | Segments light; a needle sweeps with a damped spring | 2 (done) |
 | **[Gauge](components/gauge.md)** | `<meter>` (a bounded measurement; indeterminate is not supported) with `aria-valuetext` | A round dial under glass with a needle and a printed scale | Needle | 2 (done) |
-| **RotarySelector** | `<select>`; the native popup stays in the overlay host, as Select does today | A knob with a pointer over a ring of printed positions, one detent per `<option>` | Cap turns to the selected position | 2 |
-| **PushButton** forms | The existing Button and ToggleButton, `<button>` | `momentary`: a machined cap with a lit ring. `latching` (ToggleButton): stays down with an LED on | Travel; ring lights | 2 |
+| **[RotarySelector](components/rotary-selector.md)** | `<select>`; the native popup stays in the overlay host, as Select does today | A knob with a pointer over a ring of printed positions, one detent per `<option>` | Cap turns to the selected position | 2 (done) |
+| **PushButton** forms ([Button](components/button.md#11-push-button-form-momentary), [ToggleButton](components/toggle-button.md#11-push-button-form-latching)) | The existing Button and ToggleButton, `<button>` | `momentary`: a machined cap with a lit ring. `latching` (ToggleButton): stays down with an LED on | Travel; ring lights | 2 (done) |
 | **[Display](components/display.md)** | The existing TextField, `<input>`, as `form="display"` ([TextField, section 11](components/text-field.md#11-the-display-form)); read-only displays are `<output>` | A glass window in a bezel, backlit, with the text printed under the glass | None; backlight is an emitter | 2 (done) |
 | **Pad** | `<button>`, with `aria-pressed` for latching pads | A square soft cap in a grid, lit from below when active | Travel; emitter | 3 |
 | **JogWheel** | `<input type="range">` with `wrap` (an endless encoder: the value steps, the visual position wraps) | A large flat wheel with a finger dimple | Turns | 3 |
@@ -565,11 +565,25 @@ first use of emitters (a version 4 scene with `emitters`, `protected` rects and 
 a blink), the `blink` tempo tokens and the opt-in `click` feedback. Meter, Gauge, RotarySelector, the PushButton forms and
 Display follow.
 
+Everyday forms, second part: the indicator family at every presentation. The Rating as lamps ([`lamps`](components/rating.md#11-indicator-form-lamps)), the Badge as an LED pill
+([`led`](components/badge.md#11-indicator-form-led)), the ProgressBar as a segment meter ([`meter`](components/progress-bar.md#11-indicator-form-meter)) and the Spinner as a ring of
+LEDs ([`ring`](components/spinner.md#11-indicator-form-ring)) take their premium forms through `form` (`flush` names today's look, and an absent `form` is `flush`, so a page that does
+not opt in is unchanged). They are the Lamp's lens and the Meter's segments on the native controls: the radios, the `<span>`, the `<progress>` and the status stay the controls, and the form is
+decoration over them whose lenses are lit by one number, `--strata-lit`, each lens an emitter (a 5-star rating is 5 emitters, a 20-segment bar 20, a ring 8). A value, a score or a chase is a
+uniform write at every GPU level; a chase is a CSS animation of `--strata-lit` at a tempo token (`chase.spinner`, `chase.bar`, never under 334 ms, so never over three flashes a second per
+lens), steady under reduced motion (a comet, every other segment). `attachStrataProgress` keeps a bar's value; `driveStrataMeter` stays the Meter's.
+
 PR 13, wave 2, second part: the Meter and the Gauge ([Meter](components/meter.md), [Gauge](components/gauge.md)) at every
 presentation: CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Instrument on the GPU. A bar's segments are the
 Lamp's LED lens with an emitter each (the Lamp's wiring, so this PR is based on the Lamp's); a needle meter and a gauge are a glass
 window, a needle on `spring.meter` or `spring.gauge` and a hub. `driveStrataMeter` drives a live value as a uniform and a pose with
-no capture. RotarySelector, the PushButton forms and Display follow.
+no capture. Display follows.
+
+PR 14, wave 2, third part: the RotarySelector ([anatomy](components/rotary-selector.md)) and the PushButton forms
+([`momentary`](components/button.md#11-push-button-form-momentary), [`latching`](components/toggle-button.md#11-push-button-form-latching)),
+at every presentation. The selector is a native `<select>` over the Knob's dial with one detent per option and the labels printed round
+it, the knob's round behaviour and its parts at the Instrument level; the push forms are the Button and ToggleButton as a machined cap on
+a bezel with a lit ring (an emitter) and, latching, an LED, with the key's travel, `click` feedback and a panel of emitters at every level.
 
 PR 15, wave 2, last part: the Display ([anatomy](components/display.md), [TextField, section 11](components/text-field.md#11-the-display-form))
 at every presentation: the TextField as `form="display"` (a native `<input>` that covers a bezel and a glass window, backlit) and a read-only

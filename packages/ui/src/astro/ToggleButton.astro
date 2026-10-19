@@ -1,14 +1,22 @@
 ---
 /**
  * ToggleButton (anatomy page `toggle-button.md`): a latching `<button aria-pressed>`. `attachStrata` toggles it in the
- * browser and dispatches `strata-pressed-change`.
+ * browser and dispatches `strata-pressed-change`. `form="latching"` draws it as a push button (*Push-button forms*): a machined
+ * cap that stays down while pressed in, with a lit ring and an LED; any other `form` string is the native form owner's id, as
+ * before. `colour` is the ring's and LED's role.
  */
 import Behaviour from "./Behaviour.astro";
 import { classes, strataAttributes, type StrataLevel, type StrataSize } from "../shared/markup.ts";
+import { pushMarkup, togglePushForm } from "../shared/push-button.ts";
+import type { StrataLampColour } from "../shared/lamp.ts";
 
 interface Props {
   pressed?: boolean;
   type?: "button" | "submit" | "reset";
+  /** The push-button form; any other string is the native `form` attribute. */
+  form?: "latching" | (string & {});
+  /** The lit ring's and LED's colour of a push button. */
+  colour?: StrataLampColour;
   size?: StrataSize;
   material?: string;
   level?: StrataLevel;
@@ -16,7 +24,11 @@ interface Props {
   [attribute: string]: unknown;
 }
 
-const { pressed = false, type = "button", size, material, level, class: className, ...rest } = Astro.props;
+const { pressed = false, type = "button", form, colour, size, material, level, class: className, ...rest } = Astro.props;
+const push = togglePushForm(form);
+const parts = push ? pushMarkup(push) : [];
 ---
-<button type={type} class={classes("ug-toggle-button", className)} data-strata-face="raised" aria-pressed={String(pressed)} {...strataAttributes({ size, material, level })} {...rest}><span class="ug-toggle-button__label"><slot /></span></button>
+{push
+  ? <button type={type} class={classes("ug-toggle-button", "ug-push", className)} data-strata-form={push} data-strata-colour={colour} aria-pressed={String(pressed)} {...strataAttributes({ size, material, level })} {...rest}><span class="ug-push__object" aria-hidden="true">{parts.map(part => <span class={part.className} data-strata-face={part.face}></span>)}</span><span class="ug-push__cap" data-strata-face="raised"><span class="ug-toggle-button__label"><slot /></span></span></button>
+  : <button type={type} class={classes("ug-toggle-button", className)} data-strata-face="raised" aria-pressed={String(pressed)} form={form} {...strataAttributes({ size, material, level })} {...rest}><span class="ug-toggle-button__label"><slot /></span></button>}
 <Behaviour />

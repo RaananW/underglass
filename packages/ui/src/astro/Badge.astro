@@ -1,15 +1,22 @@
 ---
-/** Badge (anatomy page `badge.md`): a flat pill. `count` above `max` reads "99+", with the full number visually hidden. */
+/**
+ * Badge (anatomy page `badge.md`): a flat pill. `count` above `max` reads "99+", with the full number visually hidden. `form="led"` puts the
+ * StatusLight's lens before the text, in the variant's colour (*Indicator form*); `flush`, or no `form`, is the pill it was.
+ */
 import { classes } from "../shared/markup.ts";
+import { badgeForm, badgeLensMarkup } from "../shared/indicator-forms.ts";
 
 interface Props {
   variant?: "neutral" | "accent" | "success" | "warning" | "danger" | "info";
   count?: number;
   max?: number;
+  /** `led`: an LED pill; `flush` is today's pill. */
+  form?: "led" | "flush";
   class?: string;
   [attribute: string]: unknown;
 }
 
-const { variant = "neutral", count, max = 99, class: className, ...rest } = Astro.props;
+const { variant = "neutral", count, max = 99, form, class: className, ...rest } = Astro.props;
+const led = badgeForm(form);
 ---
-<span class={classes("ug-badge", variant !== "neutral" && `ug-badge--${variant}`, className)} data-strata-face="flat" {...rest}>{count === undefined ? <slot /> : count > max ? <Fragment>{`${max}+`}<span class="ug-badge__full">{` (${count})`}</span></Fragment> : String(count)}</span>
+<span class={classes("ug-badge", variant !== "neutral" && `ug-badge--${variant}`, className)} data-strata-face="flat" data-strata-form={led} {...rest}>{led && <span class={badgeLensMarkup.className} data-strata-face={badgeLensMarkup.face} aria-hidden="true"></span>}{count === undefined ? <slot /> : count > max ? <Fragment>{`${max}+`}<span class="ug-badge__full">{` (${count})`}</span></Fragment> : String(count)}</span>

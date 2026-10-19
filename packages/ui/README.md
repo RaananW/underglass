@@ -605,6 +605,30 @@ fractions included, as one image named "4.5 out of 5 stars":
 Vue uses `v-model`; Astro takes `value` and `name`. The stars are captured content on the GPU, not relief.
 [Anatomy](../../docs/ui-library/components/rating.md).
 
+## Indicator forms: Rating, Badge, ProgressBar and Spinner
+
+The second of the Instrument level's everyday forms: LED lenses on the native indicators. `form="lamps"` on a **Rating** puts a lamp lens in each star's place, lit up to the score (a
+hovered star and the ones before it half lit, where hover is real); `form="led"` on a **Badge** puts the StatusLight's lens before the text on a dark pill, in the variant's colour (a
+neutral badge's is dark glass); `form="meter"` on a **ProgressBar** draws a groove of LED segments lit from the value (`segments`, 20 by default), and, while indeterminate, a head
+running along it; `form="ring"` on a **Spinner** draws eight LEDs round a ring with a head chasing clockwise. The native control stays the control (the radios, the `<span>`, the
+`<progress>` with its role and value, the status with its label), the accessibility snapshot is the same with and without the form, and `flush`, or no `form`, is the markup and the look they
+had before, pixel for pixel; on a Rating any other `form` string is still the native form owner. `colour` is the lenses' role, as the Lamp's.
+
+```tsx
+<Rating form="lamps" label="Your rating" value={score} onChange={setScore} />
+<Badge form="led" variant="success">Active</Badge>
+<ProgressBar form="meter" aria-label="Upload" value={40} segments={20} />
+<Spinner form="ring" label="Loading" />
+```
+
+Vue takes the same props (`v-model` on the Rating); Astro takes `value`, `name` and `segments`. A bar's value reaches the drawing through `attachStrataProgress` in `@underglass/ui/dom`
+(which `attachStrata` and the components attach). On the GPU every lens is an emitter at every level (a Rating's 1,045 at 16 px, a Badge's or a ring's LED 520 at 10 px scaled by the square
+of its diameter, a segment 260), lit by `--strata-lit`, so a score, a value and a chase are uniform writes: 300 frames of a chasing ring cause 0 captures, 0 uploads and 0
+hit-geometry updates. The chase runs at `chase.spinner` (900 ms) and `chase.bar` (1,600 ms), never under 334 ms, and is a steady comet or pattern under reduced motion. Relief draws each lens as a ring
+face, Objects as a dome, the Instrument level as a glass LED lens (`gpu/indicator-forms.ts`); every part and shadow is inside the native control's box. Anatomy:
+[Rating](../../docs/ui-library/components/rating.md#11-indicator-form-lamps), [Badge](../../docs/ui-library/components/badge.md#11-indicator-form-led),
+[ProgressBar](../../docs/ui-library/components/progress-bar.md#11-indicator-form-meter), [Spinner](../../docs/ui-library/components/spinner.md#11-indicator-form-ring).
+
 ## SegmentedControl
 
 One choice from two to five short options, as keys on a plinth: native radios in a `<fieldset>`, so arrow keys and
@@ -654,6 +678,36 @@ Vue uses `v-model`; Astro takes `value` and `unit`. The ref is the `.ug-fader` r
 At the Instrument level (`level: "instrument"`) the carriage is a chamfered brushed carriage with a grip, sliding on
 `spring.fader` (`gpu/instrument-fader.ts`), its shadow kept inside the input's box at every depth. A detented fader
 plays `tick` as it passes a detent when feedback is on (off by default). [Anatomy](../../docs/ui-library/components/fader.md).
+
+## RotarySelector and the push-button forms
+
+The third part of the Instrument level's second wave. A **RotarySelector** is a native `<select>` over a printed dial: a knob with
+one hard detent per option, the options' labels printed round it (a numbered legend when the dial is narrow or the text large). The
+select takes every press and stays the control; `attachStrataRotarySelectors` in `@underglass/ui/dom` (which `attachStrata` and the
+components attach) gives it the Knob's round behaviour: a vertical drag, a click on the ring or a printed label, a tap on the cap's
+upper or lower half, and the wheel, snapping to the nearest enabled option, with the select's own keys, type-ahead and popup. The
+**push-button forms** draw the existing Button and ToggleButton as machined caps on a bezel with a lit ring: `form="momentary"`
+lights the ring and lowers the cap while the button is held (`data-strata-down`), `form="latching"` keeps the cap down at 0.45 of its
+travel while `aria-pressed`, with an LED on the bezel; any other `form` is still the native form owner (`attachStrataPushButtons`).
+`colour` is the ring's role, as the Lamp's.
+
+```tsx
+<RotarySelector label="Filter" options={[{ value: "lp", label: "LP" }, { value: "hp", label: "HP" }, { value: "bp", label: "BP" }]} value={filter} onValueChange={setFilter} />
+<Button form="momentary" colour="danger" onClick={record}>Record</Button>
+<ToggleButton form="latching" colour="warning" pressed={muted} onPressedChange={setMuted}>Mute</ToggleButton>
+```
+
+Vue uses `v-model` on the selector and `v-model:pressed` on the toggle; Astro takes `value` and `pressed`. On the GPU the selector is the
+Knob's skirt and cap at Relief and Objects, and the Knob's parts at the Instrument level (`knobObject`), the pointer turned to the
+chosen option on `spring.detent` with no capture and no hit-geometry update. A push button's ring is an emitter at every level (and a
+latching button's LED another; `emitter.pushButton.*`, `emitter.led.*`): a panel with push buttons takes a version 4 scene with its
+`emitters`, the `protected` rects of its text and a `feather`, so the face is lit within the contrast guard and a press is a uniform
+write. Relief draws the bezel and the cap as raised faces, Objects as a slab and a key (`gpu/push-forms.ts`); at the Instrument level
+each button is a polished bezel, a glass ring, and a body with a captured cap travelling 4 px on the CSS throw (`gpu/instrument-push.ts`).
+Every part and shadow is inside the button's box. The selector plays the opt-in `tick` as its pointer moves to another option, a push
+button the opt-in `click` as it goes down. Anatomy: [RotarySelector](../../docs/ui-library/components/rotary-selector.md),
+[Button](../../docs/ui-library/components/button.md#11-push-button-form-momentary),
+[ToggleButton](../../docs/ui-library/components/toggle-button.md#11-push-button-form-latching).
 
 ## Lamp and StatusLight
 
