@@ -30,6 +30,15 @@ async function open(browser, dpr) {
   return { context, page, errors, call };
 }
 const shot = async page => PNG.sync.read(await page.screenshot());
+/** Mean luminance of a client rect. */
+function meanLuminance(png, rect, dpr) {
+  let sum = 0, count = 0;
+  for (let y = Math.floor(rect.y * dpr); y < Math.ceil((rect.y + rect.height) * dpr); y++) for (let x = Math.floor(rect.x * dpr); x < Math.ceil((rect.x + rect.width) * dpr); x++) {
+    const offset = (y * png.width + x) * 4;
+    sum += png.data[offset] + png.data[offset + 1] + png.data[offset + 2]; count++;
+  }
+  return sum / Math.max(1, count) / 3;
+}
 /** Number of pixels of a client rect that differ between two screenshots, and the largest channel difference. */
 function difference(a, b, rect, dpr) {
   let count = 0, largest = 0;
@@ -81,6 +90,9 @@ for (const dpr of [1, 2]) {
       await call("settle");
       const end = await gpu(call, "after the sweep"), second = await shot(page);
       const moved = difference(first, second, card, dpr);
+      // The light starts at the card's left and ends at its right: the left strip darkens and the right strip brightens.
+      const left = { x: card.x + 10, y: card.y + 190, width: 90, height: 70 }, right = { x: card.x + card.width - 100, y: card.y + 190, width: 90, height: 70 };
+      const leftChange = meanLuminance(second, left, dpr) - meanLuminance(first, left, dpr), rightChange = meanLuminance(second, right, dpr) - meanLuminance(first, right, dpr);
       console.log(`DPR ${dpr} marked: 300 events, ${end.captures - start.captures} captures, ${end.uploads - start.uploads} uploads, ${end.inputCapturesSkipped - start.inputCapturesSkipped} skipped (layer ${end.layer.inputCapturesSkipped}), ${end.geometryUpdates - start.geometryUpdates} geometry updates, ${end.gpuFrames - start.gpuFrames} GPU frames, ${moved.count} card pixels changed`);
       expect(end.captures - start.captures, "no capture").toBe(0);
       expect(end.uploads - start.uploads, "no upload").toBe(0);
@@ -89,6 +101,9 @@ for (const dpr of [1, 2]) {
       expect(end.layer.inputCapturesSkipped, "counted on its layer").toBeGreaterThanOrEqual(300);
       expect(end.gpuFrames - start.gpuFrames, "the GPU kept drawing").toBeGreaterThan(100);
       expect(moved.count, "the light moved: pixels changed in the card through the uniform path").toBeGreaterThan(500);
+      console.log(`DPR ${dpr} marked: left strip luminance ${leftChange.toFixed(1)}, right strip ${rightChange.toFixed(1)}`);
+      expect(leftChange, "the light left the card's left").toBeLessThan(-3);
+      expect(rightChange, "the light reached the card's right").toBeGreaterThan(3);
       expect(errors).toEqual([]);
     } finally { await context.close(); }
   });
@@ -115,6 +130,38 @@ for (const dpr of [1, 2]) {
       expect(end.captures - start.captures, "the text write is captured").toBeGreaterThanOrEqual(4);
       expect(end.inputCapturesSkipped - start.inputCapturesSkipped, "the input events themselves were skipped").toBe(4);
       for (const count of changed) expect(count, "the readout's pixels are fresh after each change").toBeGreaterThan(20);
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  });
+
+  test(`a native repaint on a marked element reaches the GPU through the paint event, not an input capture (DPR ${dpr})`, async ({ browser }) => {
+    const { context, page, errors, call } = await open(browser, dpr);
+    try {
+      await call("settle");
+      const marked = await call("box", "marked");
+      await page.mouse.move(2, 2);
+      await call("settle");
+      const idle = await shot(page);
+      const start = await gpu(call, "start");
+      await page.mouse.move(marked.x + 150, marked.y + marked.height / 2);
+      await call("settle");
+      await page.waitForTimeout(400);
+      await call("settle");
+      const hovered = await gpu(call, "hovered");
+      const after = await shot(page);
+      await call("settle");
+      const quiet = await gpu(call, "quiet");
+      const hover = difference(idle, after, marked, dpr);
+      // Inputs while hovered: skipped, and the hover paint stays.
+      await call("sweep", "marked", 20, 10, 30);
+      await call("settle");
+      const swept = await gpu(call, "swept");
+      console.log(`DPR ${dpr} hover on a marked range: ${hovered.captures - start.captures} captures from the paint event, ${hover.count} pixels fresh in its box, then 20 inputs: ${swept.captures - quiet.captures} captures, ${swept.inputCapturesSkipped - quiet.inputCapturesSkipped} skipped`);
+      expect(hovered.captures - start.captures, "the hover repaint was captured").toBeGreaterThanOrEqual(1);
+      expect(hovered.inputCapturesSkipped - start.inputCapturesSkipped, "no input event involved").toBe(0);
+      expect(hover.count, "the hover colour is in the box").toBeGreaterThan(marked.width * marked.height * dpr * dpr * 0.5);
+      expect(swept.captures - quiet.captures, "inputs capture nothing (the screenshot's own paint is counted before the baseline)").toBe(0);
+      expect(swept.inputCapturesSkipped - quiet.inputCapturesSkipped).toBe(20);
       expect(errors).toEqual([]);
     } finally { await context.close(); }
   });

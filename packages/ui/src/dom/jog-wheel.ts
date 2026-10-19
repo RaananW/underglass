@@ -83,15 +83,6 @@ function angleOf(root: HTMLElement, input: HTMLInputElement, turn: number): numb
 /** Whether the GPU draws the wheel's dimple (the helper marks it), so the angle need not reach the DOM while it moves. */
 const drawn = (root: HTMLElement) => root.querySelector(".ug-jog-wheel__dimple")?.hasAttribute("data-strata-dome") === true;
 /**
- * Core's opt-out for an `input` that changes no native paint (`data-underglass-gpu-value`, api.md): set on the wheel's input while the GPU
- * draws the dimple, where the thumb is never painted (`display: none`), and taken off when it does not, so the next `input` captures as
- * any native control's does. Whatever a page's handler writes to the DOM is still seen by the mutation observer.
- */
-function markValue(input: HTMLInputElement, root: HTMLElement | null) {
-  const marked = input.hasAttribute("data-underglass-gpu-value"), wanted = root !== null && drawn(root);
-  if (wanted !== marked) { if (wanted) input.setAttribute("data-underglass-gpu-value", ""); else input.removeAttribute("data-underglass-gpu-value"); }
-}
-/**
  * Keeps a wheel's angle and shows it: in `--strata-jog-angle` for the CSS presentation, except for a `motion` (a drag move, a coasting
  * frame) of a wheel the GPU draws, which only wakes the helper (a bubbling event is no mutation, so nothing is recaptured).
  */
@@ -213,7 +204,6 @@ export function flingStrataJogWheel(input: HTMLInputElement, velocity: number): 
   const root = input.closest<HTMLElement>(".ug-jog-wheel");
   if (!root || input.disabled || reduced() || !Number.isFinite(velocity) || velocity === 0) return false;
   stopCoast(input);
-  markValue(input, root);
   const tokens = tokensOf(root), { stepAngle } = limits(input, tokens);
   const angle = angleOf(root, input, tokens.turn);
   const run: Coasting = { input, root, motion: { a: angle, v: jogLimit(velocity, stepAngle, tokens.maxRate) }, steps: jogSteps(angle, stepAngle), time: performance.now(), allowance: 0,
@@ -265,7 +255,6 @@ export function attachStrataJogWheels(doc: Document = document): void {
     input.focus({ preventScroll: true });
     try { input.setPointerCapture(event.pointerId); } catch { /* the pointer is already gone */ }
     stopCoast(input);
-    markValue(input, root);
     const tokens = tokensOf(root), box = input.getBoundingClientRect(), cx = box.left + box.width / 2, cy = box.top + box.height / 2;
     const angle = angleOf(root, input, tokens.turn);
     gestures.set(event.pointerId, { input, root, x: event.clientX, y: event.clientY, cx, cy, last: pointerAngle(event.clientX - cx, event.clientY - cy), lastY: event.clientY, angle,
@@ -373,7 +362,6 @@ export function attachStrataJogWheels(doc: Document = document): void {
     if (!(input instanceof HTMLInputElement)) return;
     const value = Number(input.value), last = seen.get(input);
     seen.set(input, value);
-    markValue(input, input.closest<HTMLElement>(".ug-jog-wheel"));
     // A detented wheel ticks (feedback, off by default) for each change of the value: a step, or a jump of several, once.
     if (input.closest(".ug-jog-wheel")?.matches(".ug-jog-wheel--detented") && (last === undefined || last !== value)) strataFeedback(input, "tick");
     syncStrataJogWheel(input);

@@ -15,6 +15,8 @@
     #marked { appearance: none; background: transparent; height: 40px; outline: none; }
     #marked::-webkit-slider-runnable-track { height: 100%; background: transparent; border: 0; }
     #marked::-webkit-slider-thumb { display: none; }
+    /* A native repaint that does not depend on the value: the browser's paint event carries it, not an input capture. */
+    #marked:hover { background: rgb(200, 60, 60); }
     #readout { display: inline-block; min-width: 6ch; font: 600 16px ui-monospace, monospace; }
   </style>
 </head>

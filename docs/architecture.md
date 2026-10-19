@@ -87,7 +87,7 @@ a spinning descendant kept GPU active with about 62 fresh uploads/s).
 A native `input` event queues a capture of its layer (a control's value is not a DOM mutation), except from an element that
 carries `data-underglass-gpu-value`: its presenter draws the value itself with the native paint hidden, so the event is
 counted (`metrics.inputCapturesSkipped`) and queues nothing, while any DOM the handlers write is still captured by the
-mutation observer ([api](api.md#input-events-and-captures)).
+mutation observer; a remaining native repaint rides the paint event ([api](api.md#input-events-and-captures)).
 Structural style/DOM-derived checks are cached and re-evaluated after
 mutations, resize, scroll, animation/transition events, input/focus,
 membership, ownership, effects and phase changes; ownership checks and

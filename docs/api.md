@@ -561,16 +561,24 @@ mutation observer as usual. A presenter that draws a control's value itself and 
 element that receives the event:
 
 - An `input` event whose target carries it queues no capture. It is counted: `state().metrics.inputCapturesSkipped`, and
-  `state().metrics.perLayer[id].inputCapturesSkipped` for each layer containing the element.
-- Nothing else changes: attribute, text and child changes a handler makes still recapture through the mutation observer, the
-  browser's own paint event still uploads any native repaint, and every element without the attribute (text fields, selects,
-  checkboxes, a range whose thumb is painted) captures on `input` exactly as before.
-- The attribute is a promise: **the element's native paint does not depend on its value.** Set it only where the value is drawn
-  elsewhere (a uniform, a part) and the native thumb, track fill or text is not painted, and remove it when that stops being
-  true. A marked control with a visible thumb would show stale pixels, which the contract forbids. The Strata JogWheel's helper
-  sets it on the wheel's input while the GPU draws the dimple (its thumb is never painted); a flick of 49 steps costs 0
-  captures for its input events (36 to 38 before). A Knob or Fader writes its value to a custom property on its root for each
-  `input`, which is a DOM write that recaptures anyway, so they are not marked.
+  `state().metrics.perLayer[id].inputCapturesSkipped` for each layer that contains the element or is contained by it (as
+  `queueCapture` attributes), so the per-layer sum can differ from the global count.
+- Nothing else changes: attribute, text and child changes a handler makes still recapture through the mutation observer, and every
+  element without the attribute captures on `input` exactly as before.
+- **The mark is a promise, and the presenter must guarantee all of it:**
+  1. The element's own paint does not depend on its value. A hidden thumb is not enough if a visible spinner, text, caret,
+     selection, track fill or `datalist` tick still shows the value.
+  2. No CSS keyed on the element's state restyles it or anything else without a DOM write (`:valid`, `:invalid`, `:in-range`,
+     `:out-of-range`, `:placeholder-shown`, `:has(...)`, sibling selectors): such a change repaints with no mutation, and only an
+     `input` capture would have caught it.
+  3. Text, number, select and checkbox controls are never marked: their paint shows the value.
+  4. A native repaint that remains (a focus ring, hover) does not need the `input` capture: it reaches the GPU through the browser's
+     paint event (`changedElements`), the documented path for hover and focus repaints (`focusin`/`focusout` also queue one).
+  A marked control with a value-dependent paint would show stale pixels, which the contract forbids.
+- The Strata JogWheel's helper sets the mark on the wheel's input with the dimple's `data-strata-dome` (while the GPU draws the dimple;
+  its thumb is never painted) and removes it where the dome is removed, so a flick of 49 steps costs 0 captures for its input events
+  (36 to 38 before). A Knob or Fader writes its value to a custom property on its root for each `input`, which is a DOM write that
+  recaptures anyway, so they are not marked.
 
 ### The instrument material
 

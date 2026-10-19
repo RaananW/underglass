@@ -88,7 +88,7 @@ if (params.has("plain")) {
 }
 
 window.strataJogProbe = {
-  controller, panel: () => panel, scene: () => strata?.scene(panel), refresh: () => strata?.refresh(),
+  controller, panel: () => panel, scene: () => strata?.scene(panel), refresh: () => strata?.refresh(), detach: () => strata?.detach(),
   events: () => [...events], clearEvents: () => { events.length = 0; },
   feedback: (options: StrataFeedbackOptions) => { attachStrataFeedback(options); },
   muteReadout: (muted: boolean) => { readoutMuted = muted; },
@@ -100,7 +100,7 @@ window.strataJogProbe = {
 };
 declare global {
   interface Window { strataJogProbe: {
-    controller: CanvasController | undefined; panel(): HTMLElement; scene(): ReturnType<StrataGpu["scene"]>; refresh(): void;
+    controller: CanvasController | undefined; panel(): HTMLElement; scene(): ReturnType<StrataGpu["scene"]>; refresh(): void; detach(): void;
     events(): { id: string; type: string; value: string }[]; clearEvents(): void; muteReadout(muted: boolean): void; fling(id: string, velocity: number): boolean; angle(id: string): number;
     instrument(): unknown; feedback(options: StrataFeedbackOptions): void; counts(): { mode: string; inputCapturesSkipped: number; captures: number; uploads: number; geometryUpdates: number } | undefined;
   } }

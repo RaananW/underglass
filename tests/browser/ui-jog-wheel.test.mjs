@@ -740,8 +740,9 @@ for (const dpr of [1, 2]) for (const level of levels) test(`300 frames of a flic
   expect(run.atRest, "the angle, the value text and `change` at rest are one capture").toBeLessThanOrEqual(2);
   // The wheel's input is marked `data-underglass-gpu-value` (the GPU draws the dimple, the thumb is never painted): its input events capture nothing (#167).
   expect(run.skipped, "every input event of the flick was skipped by core").toBe(run.inputs);
-  // The one capture besides the rest is the helper marking the input the first time the wheel moves (an attribute write); it was 36 to 38 before (#167).
-  expect(run.captures, "the input events recapture nothing: only the mark and the write at rest remain").toBeLessThanOrEqual(run.atRest + 1);
+  // The helper marks the input with the dome (before the flick), so the 49 input events capture nothing and only the angle and value text written at rest remain: 1 capture (36 to 38 before, #167).
+  expect(run.atRest, "the angle, the value text and `change` at rest are one capture").toBe(1);
+  expect(run.captures, "only the write at rest is captured").toBe(1);
   expect(run.uploads).toBeLessThanOrEqual(run.captures + 1);
   await healthy(page, "after the flick", level);
   await context.close();
@@ -786,4 +787,37 @@ test("the jog wheel page keeps the accessibility snapshot of the DOM, on every l
     const { violations } = await new AxeBuilder({ page }).include("#jog-panel").withTags(tags).analyze();
     expect(summary(violations), `axe on the GPU page at ${level}`).toEqual([]);
   }
+});
+
+test("the input's mark goes with the dimple's dome: detaching the helper mid-flick removes it, and the next input captures again", async ({ browser }) => {
+  test.setTimeout(120000);
+  const context = await browser.newContext({ viewport: { width: 900, height: 750 }, deviceScaleFactor: 1 });
+  const page = await context.newPage();
+  await ready(page);
+  await page.evaluate(() => window.strataJogProbe.muteReadout(true));
+  await settled(page);
+  const run = await page.evaluate(async () => {
+    const probe = window.strataJogProbe, frame = () => new Promise(requestAnimationFrame), input = document.getElementById("shuttle");
+    const marked = () => input.hasAttribute("data-underglass-gpu-value");
+    const before = marked();
+    let inputs = 0;
+    document.addEventListener("input", () => { inputs++; }, true);
+    probe.fling("shuttle", 2400);
+    for (let index = 0; index < 20; index++) await frame();
+    const turning = { marked: marked(), inputs, skipped: probe.counts().inputCapturesSkipped, captures: probe.counts().captures };
+    probe.detach();
+    const gone = marked();
+    for (let index = 0; index < 4; index++) await frame();
+    const at = { inputs, skipped: probe.counts().inputCapturesSkipped, captures: probe.counts().captures };
+    for (let index = 0; index < 60; index++) await frame();
+    const end = { inputs, skipped: probe.counts().inputCapturesSkipped, captures: probe.counts().captures };
+    return { before, turning, gone, at, end };
+  });
+  console.log(`mark ${run.before} at start, ${run.turning.marked} while turning (${run.turning.inputs} inputs, ${run.turning.skipped} skipped, ${run.turning.captures} captures); after detach ${run.gone}; ${run.end.inputs - run.at.inputs} more inputs: ${run.end.skipped - run.at.skipped} skipped, ${run.end.captures - run.at.captures} captures`);
+  expect(run.before, "marked while the GPU draws the dimple, before any input").toBe(true);
+  expect(run.turning.skipped, "its inputs were skipped while marked").toBe(run.turning.inputs);
+  expect(run.gone, "the mark went with the dome").toBe(false);
+  expect(run.end.inputs - run.at.inputs, "the wheel kept coasting").toBeGreaterThan(0);
+  expect(run.end.skipped - run.at.skipped, "no input is skipped once the mark is gone").toBe(0);
+  await context.close();
 });
