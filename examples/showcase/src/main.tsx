@@ -178,7 +178,7 @@ function App() {
         <div className="stage-frame">
           <div className="stage-chrome" aria-hidden="true"><i /><i /><i /><span>{gpu ? "webgpu · shared compositor" : "ordinary dom"}</span></div>
           <div className="stage-scroll" role="region" aria-label="Live example canvas; scroll horizontally on small screens" tabIndex={0}>
-            <div className="stage" ref={frame} /></div>
+            <div className={selected === "instrument" ? "stage stage-fluid" : "stage"} ref={frame} /></div>
         </div>
         <section className="why-gpu" aria-labelledby="why-gpu-heading">
           <div className="why-col">
@@ -192,7 +192,7 @@ function App() {
             <p>{current.gpu.css}</p>
           </div>
         </section>
-        <p className="stage-note">Same original controls in DOM and GPU. On smaller screens, scroll the studio horizontally. No data is sent or stored.</p>
+        <p className="stage-note">Same original controls in DOM and GPU. {selected === "instrument" ? "This example reflows to the width of your screen." : "On smaller screens, scroll the studio horizontally."} No data is sent or stored.</p>
       </section>
       <section className="about" id="about"><p className="eyebrow">AN HONEST EXPERIMENT</p><h2>Progressive presentation, not pretend compatibility.</h2>
         <div className="about-grid">

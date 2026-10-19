@@ -4,12 +4,15 @@
  * without a label, they take its description, invalid, required and disabled state.
  */
 import { forwardRef, useEffect, useLayoutEffect, useRef, type CSSProperties, type InputHTMLAttributes, type ReactNode } from "react";
+import { attachStrataPushButtons } from "../dom/push-button.ts";
 import { attachStrataSwitches } from "../dom/switch.ts";
+import type { StrataLampColour } from "../shared/lamp.ts";
+import { checkboxMarkup, latchForm, nativeForm } from "../shared/latching-forms.ts";
 import { isSwitchForm, switchFormMarkup, type StrataSwitchForm, type SwitchPart } from "../shared/switch-forms.ts";
 import { useFieldControl } from "./Field.tsx";
 import { classes, mergeRefs, strataAttributes, type StrataProps } from "./shared.ts";
 
-type NativeCheckbox = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "size" | "children" | "className" | "style">;
+type NativeCheckbox = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "size" | "children" | "className" | "style" | "form">;
 
 interface ChoiceProps extends NativeCheckbox, StrataProps {
   /** The visible label. A switch's label must not contain "on" or "off": screen readers announce the state. */
@@ -24,17 +27,41 @@ interface ChoiceProps extends NativeCheckbox, StrataProps {
 export interface CheckboxProps extends ChoiceProps {
   /** The mixed state, set as a property on every render (it has no attribute). A click clears it, as native. */
   indeterminate?: boolean;
+  /**
+   * The form (anatomy page `checkbox.md`, *Latching forms*): `latching`, the same native checkbox drawn as a small latching square
+   * button whose ring lights when it is checked; `flush`, or absent, is today's look. Any other string is the native `form`
+   * attribute (the id of the input's form owner), as before.
+   */
+  form?: "latching" | "flush" | (string & {});
+  /** The lit ring's colour of a latching checkbox: `glowOn` (amber) by default, or a status role. */
+  colour?: StrataLampColour;
 }
 
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox(
-  { indeterminate = false, invalid, size, material, level, className, style, children, ...rest }, ref,
+  { indeterminate = false, invalid, form, colour, size, material, level, className, style, children, ...rest }, ref,
 ) {
   const own = useRef<HTMLInputElement>(null);
   const field = useFieldControl();
+  const latching = latchForm(form), owner = nativeForm(form, "latching");
   useLayoutEffect(() => { if (own.current) own.current.indeterminate = indeterminate; });
+  // A latching key is held down while it is pressed and plays its feedback (`dom/push-button.ts`), once per document.
+  useEffect(() => { if (latching) attachStrataPushButtons(); }, [latching]);
+  const input = <input ref={mergeRefs(own, ref)} className="ug-checkbox__input" data-strata-face={latching ? undefined : "well"} type="checkbox" {...field} {...(invalid ? { "aria-invalid": true as const } : {})} {...(owner !== undefined ? { form: owner } : {})} {...rest} />;
+  if (latching) return (
+    <label className={classes("ug-checkbox", className)} style={style} {...strataAttributes({ size, material, level })} data-strata-form={latching}>
+      <span className="ug-push ug-latch ug-latch--key" {...(colour ? { "data-strata-colour": colour } : {})}>
+        {input}
+        <span className="ug-push__object" aria-hidden="true">
+          {checkboxMarkup.map(part => <span key={part.className} className={part.className} data-strata-face={part.face} />)}
+        </span>
+        <span className="ug-push__cap" data-strata-face="raised" aria-hidden="true"><span className="ug-checkbox__mark" /></span>
+      </span>
+      <span className="ug-checkbox__label">{children}</span>
+    </label>
+  );
   return (
     <label className={classes("ug-checkbox", className)} style={style} {...strataAttributes({ size, material, level })}>
-      <input ref={mergeRefs(own, ref)} className="ug-checkbox__input" data-strata-face="well" type="checkbox" {...field} {...(invalid ? { "aria-invalid": true as const } : {})} {...rest} />
+      {input}
       <span className="ug-checkbox__mark" data-strata-face="mark" aria-hidden="true" />
       <span className="ug-checkbox__label">{children}</span>
     </label>

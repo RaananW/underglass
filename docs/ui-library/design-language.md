@@ -644,6 +644,8 @@ keep their Objects object, drawn as meshes of the same shapes. Lit parts give th
 | Switch `wall` | `plate`, 3 high, radius 6 | `paddle`, with a lit dot near its On end | Tilt ±9° | Box 66 × 92, the plate 58 × 84 inside it (4 px for its edge and shadow). Paddle 30 × 54, 7 high, taper 0.6, chamfer 2, its top crowned 1.6 along its length (the reflection band moves as it tips). Dot 12 × 4, 1.0 / 0.12 |
 | PushButton `momentary` | `bezel` (r 27 → 22.6, 3.2 high); the lit ring, a `lens` (r 22.6 → 20.6), 1.0 / 0.22, in the bloom | `cap`, carrying its captured label | Travel 4, while held; a contact gap darkens round the cap as it goes in | Box 64 (room for the halo). Cap Ø40, 6 high, taper 0.6, chamfer 2. As built for any label width: the cap a stadium `size.push` high (40) and as wide as its label, the box the cap + 24 (64 at medium), the bezel a stadium inset 5 and 4.4 wide, the ring a glass plate 0.5 on it of which the cap leaves 2.6 showing, the cap a body 5 high with the captured cap 1 on it. [Anatomy](components/button.md#11-push-button-form-momentary) |
 | PushButton `latching` | As momentary, with an LED | `cap` | Travel 4 held, 1.8 latched | As momentary, and the LED a Ø6 glass lens (an 8 px socket) on the bezel's top edge, centred, its own emitter. [Anatomy](components/toggle-button.md#11-push-button-form-latching) |
+| Checkbox `latching` | As the push button's `bezel` and ring (a rounded square, corner `radius.small` + 7), no LED | `cap`, a square body carrying the printed mark | Travel 4 held, 1.8 latched, 0.8 mixed | The box the cap (`size.indicator`, 20) + 22 (42), the bezel inset 4. The ring's emitter 600 at the 20 px cap. [Anatomy](components/checkbox.md#11-latching-form-latching) |
+| RadioGroup `bank`, SegmentedControl `latching` | `plinth`, one polished part 2.4 high shared by the group's keys; each key's LED a Ø6 glass lens on it | `cap` on a 5 high body, carrying its captured label | Travel 4 held, 1.8 selected: one key down at a time | A key's box is its cap (the control's height, 34 at medium) + 6 each side and 14 above; the plinth 2 outside the keys, the fieldset 8 outside the plinth (room for its shadow). No bezel, no ring. [Anatomy](components/radio.md#11-latching-form-the-preset-bank-bank) |
 | Lamp | `bezel`; `lens`, an emitter | None | The emitter turns on | Lens 28† ([I0.3](instrument-phase0.md#i03-emitters-and-the-pointer-light)); the box is the lens + 28 (56), 10 px each side of the bezel for the bloom halo. Bezel Ø lens + 8, 3 high, polished; the lens a glass plano-convex lens 0.4 of its diameter high over a socket printed on the face. [Anatomy](components/lamp.md) |
 | StatusLight | `lens`, an emitter | None | `blink`, at most 3 flashes a second | Lens 10† (I0.3); the box is the lens + 16 (26); a glass lens 0.35 of its diameter high over a printed socket, no bezel. `blink.slow`, `normal` and `fast` are 1,600, 1,000 and 400 ms a cycle (never under 334 ms). [Anatomy](components/status-light.md) |
 | Meter `bar` | `window` over the printed scale; `segment`s | Each segment an LED lens whose emitter is lit or dark | — | 16 `segments`† (I0.1). Box 286 × 58 (16 segments × 15 + 2 × `max(10 px, 1.6em)` + 8); segment lens Ø `size.meter` 10, 0.35 of its diameter high; window 2.4 high, a 2.2 px bevel. **The glass covers the scale, not the LEDs:** core's glass parts write no depth, and a window's exact pixels cover them where the capture is opaque. [Anatomy](components/meter.md) |
@@ -1315,6 +1317,36 @@ owner's look sign-off; the decisions and what was judged are in [instrument-char
 
 A character may not set `light.*`, so studio's lower, warmer key is the application's choice
 (`createStrataTheme({ character: "studio", light: { elevation: 33 } })`), not the character's.
+
+**Hifi.** Home hi-fi of the brushed-champagne and walnut kind: warm champagne aluminium caps with polished chrome rings,
+levers and bezels, oiled-walnut plates by day and black lacquer in the dark, a dial-lamp gold glow, a wide bright soft room,
+heavy slow springs with soft detents, a chunky pointer and a muted, soft sound set. It ships as `characters/hifi.json`, a
+sparse layer that extends premium like studio; `data-strata-character="hifi"` selects it with no new mechanism. Values are
+provisional (†) until the owner's look sign-off; what was judged is in [instrument-characters.md](instrument-characters.md#hifi).
+
+| Token | Premium | Hifi† | Why |
+| --- | --- | --- | --- |
+| `material.roles.knobCap`, `faderCap` | metal | `champagne` | Champagne-silver caps are the receiver's face; warm against the cool chrome |
+| `material.roles.knobSkirt`, `lever`, `bezel` | polished, metal, polished | `chrome` | Polished chrome rings, toggles and bezels |
+| `material.roles.plate`, `rockerPlate` | metal / gunmetal (dark), metal | `walnut` / `lacquer` (dark), `walnut` | Wood by day, black lacquer in the dark (every theme premium names) |
+| `instrument.material.champagne` | none | #e6d9bd, rough 0.3, metallic 1, brush 0.95, grain 0.12 | A warm tint on premium's metal |
+| `instrument.material.walnut` | none | #4a2f1d, rough 0.42, coat 0.3 / 0.3, linear brush 0.35 | Oiled veneer: dark, warm, a satin glint and a faint grain streak |
+| `instrument.material.chrome` | #fafafc, 0.04 | #f4f7fc, 0.03 | Cooler, clearer mirror |
+| `instrument.material.glass` | tint #d6ede6, absorption 0.03, dispersion 0.2 | tint #ecdfc6, 0.05, 0.12 | Warm dial glass, less rainbow |
+| `instrument.ink.cap` | #26282c | #241c12 | Warm near-black on champagne |
+| `colour.glowOn`, `pointerLight.colour` | #ff9228, #fff2e0 | #ffd36b, #ffe9c2 | Incandescent dial lamp, yellower than studio's amber; blue would sit beside the blue accent |
+| `studio.key / keyRadius / fill / front / strip / floor / ceiling` | 12 / 0.24 / 1.2 / 0.12 / 2.5 / 0.03 / 0.25 | 8 / 0.42 / 2.2 / 0.3 / 1.8 / 0.12 / 0.5 | A bright, wide, low-contrast room |
+| `environment.intensity` | 1 | 1.1 | Brighter reflections |
+| `emitter.lamp.radius / strength`, `emitter.led.radius / strength` | 6 / 3200, 6 / 520 | 9 / 3600, 7 / 480 | Bigger, softer dial lamps |
+| `knob.pointer.width` | 2.2 px | 3 px | A bold engraved line on a big knob |
+| `spring.knob / detent / fader` | 420/41, 900/42, 420/41 | 260/32, 600/46, 300/35 | Slow, weighted, soft detents, near critical damping |
+| `spring.slide / rocker / bat / wall / button` | 600/49, 1200/58, 1400/45, 1200/58, 1600/80 | 420/41, 800/57, 900/57, 800/57, 1100/66 | Heavy, damped throws, no bounce |
+| `spring.meter / gauge` | 360/28, 160/20 | 240/24, 120/17 | A needle that settles slowly, with a little overshoot |
+| `feedback.click / tick / thunk / snap` (pitch Hz, decay ms, noise) | 2400/4/0.6, 3200/2/0.3, 140/18/0.25, 1800/6/0.75 | 1800/6/0.35, 2400/3/0.15, 90/28/0.18, 1400/9/0.55 | Muted clicks, soft ticks, a soft thump |
+| `form.switch` | `slide` | `bat` | Chunky chrome toggles; recorded, not yet read by the components |
+
+Serif or wide printed scales are not available: the type tokens carry no per-character face, so the character leaves type
+alone. As with studio, a character may not set `light.*`; its bright room comes from `studio.*`, not the key.
 
 **Playful.** A toy or an appliance: soft-touch rubber caps in sky blue (knobs) and coral (faders), glossy candy lacquers for
 skirts (sun yellow), levers (lime), bezels (cream), rocker plates (pink) and faceplates (mint by day, grape in the dark),

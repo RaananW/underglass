@@ -48,9 +48,9 @@ export interface TuningValues {
   theme: "light" | "dark";
 }
 
-export const characterNames = ["premium", "studio", "playful"] as const;
+export const characterNames = ["premium", "studio", "hifi", "playful"] as const;
 export type CharacterName = (typeof characterNames)[number];
-export const materialNames = ["brushed", "polished", "lacquer", "glass", "gold", "gunmetal", "anodised", "rubberSky", "candyYellow", "candyMint", "candyGrape"] as const;
+export const materialNames = ["brushed", "polished", "lacquer", "glass", "gold", "gunmetal", "anodised", "champagne", "walnut", "chrome", "rubberSky", "candyYellow", "candyMint", "candyGrape"] as const;
 export type MaterialName = (typeof materialNames)[number];
 type Rgb = readonly [number, number, number];
 
@@ -113,6 +113,21 @@ export const materials: Record<MaterialName, MaterialRecipe> = {
     ink: [236, 237, 240], css: { base: [40, 42, 47], light: [96, 99, 106], shade: [12, 13, 15], gloss: 0.2 },
     plate: { base: [34, 36, 41], ink: [240, 241, 244], muted: [204, 207, 214], grain: 0.05 },
   },
+  champagne: {
+    label: "Champagne aluminium", colour: [230, 217, 189], metallic: 1, roughness: 0.3, brush: 0.95, coat: 0, coatRoughness: 0, environment: 1, direct: 1,
+    ink: [36, 28, 18], css: { base: [214, 198, 164], light: [252, 244, 222], shade: [134, 120, 94], gloss: 0.35 },
+    plate: { base: [214, 200, 168], ink: [32, 24, 14], muted: [62, 52, 34], grain: 0.05 },
+  },
+  walnut: {
+    label: "Oiled walnut", colour: [74, 47, 29], metallic: 0, roughness: 0.42, brush: 0.35, coat: 0.3, coatRoughness: 0.3, environment: 1, direct: 1,
+    ink: [246, 236, 218], css: { base: [78, 50, 31], light: [146, 102, 68], shade: [30, 18, 10], gloss: 0.4 },
+    plate: { base: [74, 47, 29], ink: [250, 242, 228], muted: [228, 212, 186], grain: 0.07 },
+  },
+  chrome: {
+    label: "Polished chrome", colour: [244, 247, 252], metallic: 1, roughness: 0.03, brush: 0, coat: 0, coatRoughness: 0, environment: 1, direct: 1,
+    ink: [26, 28, 32], css: { base: [218, 222, 232], light: [255, 255, 255], shade: [86, 91, 104], gloss: 0.85 },
+    plate: { base: [226, 229, 236], ink: [22, 23, 26], muted: [50, 52, 57], grain: 0.01 },
+  },
   gunmetal: {
     label: "Dark gunmetal", colour: [104, 107, 114], metallic: 1, roughness: 0.36, brush: 0.9, coat: 0, coatRoughness: 0, environment: 1, direct: 1,
     ink: [236, 237, 240], css: { base: [76, 79, 86], light: [164, 168, 176], shade: [28, 30, 34], gloss: 0.3 },
@@ -172,7 +187,7 @@ export interface CharacterLook {
 }
 const roomOf = (values: Record<string, unknown>) => Object.fromEntries((["key", "keyRadius", "fill", "front", "strip", "floor", "ceiling"] as const)
   .map(key => [key, Number(values[`studio.${key}`])])) as CharacterLook["room"];
-const presetOf: Record<MaterialName, string> = { brushed: "metal", polished: "polished", lacquer: "lacquer", glass: "glass", gold: "gold", gunmetal: "gunmetal", anodised: "anodised", rubberSky: "rubberSky", candyYellow: "candyYellow", candyMint: "candyMint", candyGrape: "candyGrape" };
+const presetOf: Record<MaterialName, string> = { brushed: "metal", polished: "polished", lacquer: "lacquer", glass: "glass", gold: "gold", gunmetal: "gunmetal", anodised: "anodised", champagne: "champagne", walnut: "walnut", chrome: "chrome", rubberSky: "rubberSky", candyYellow: "candyYellow", candyMint: "candyMint", candyGrape: "candyGrape" };
 const hexRgb = (hex: string) => [1, 3, 5].map(index => Number.parseInt(hex.slice(index, index + 2), 16)) as unknown as Rgb;
 const scale = (colour: Rgb, ratio: Rgb): Rgb => colour.map((channel, index) => Math.min(255, Math.round(channel * ratio[index]!))) as unknown as Rgb;
 /** The page's material for a preset name (`metal` is the brushed material). */

@@ -116,3 +116,59 @@ is `size.indicator` square and the row is at least the density's control height 
 - **Accessibility:** axe on all states, in light, dark and high contrast; accessibility snapshot equal in DOM
   and GPU modes (`checked`, `mixed`); focus ring in decoded pixels; mark contrast against the lit well floor.
 - **Parity:** Relief and CSS within the P0.6 budget at rest, hover, checked and mixed.
+
+## 11. Latching form: `latching`
+
+Instrument, everyday forms ([plan](../instrument.md#everyday-components-at-the-instrument-level)). `form="latching"` draws the same native
+checkbox as a **small latching square button**: a key on a polished bezel with a lit ring, that goes down and lights when the box is
+checked. It is the [ToggleButton's latching push button](toggle-button.md#11-push-button-form-latching) in the shape of a checkbox, with
+no LED (the ring is the light), and it reuses that button's host class, numbers, spring and emitters. `flush`, or no `form`, is the checkbox
+above, in the markup and the look it had before, pixel for pixel; any other `form` string is the native `form` attribute (the id of the
+input's form owner), as before. `colour` names the ring's role (`glowOn` by default). As with the Switch's hardware forms, the premium character's default form is reached by naming it: with no `form` the control is its flush look, so a page that does not opt in is unchanged.
+
+| Part | Shape | Moves |
+| --- | --- | --- |
+| Box | A square: the cap (`size.indicator`: 16, 20 or 24 px) plus 22 px, so 38, 42 or 46 px, at least `target.min`; the native `<input>` covers it, square, as an invisible overlay | No |
+| Bezel | A rounded square of polished metal, inset 4 px (the bloom's halo), 3.2 high at 50% depth, 7 px of metal round the cap at `radius.small` | No |
+| Ring | The lit ring under the cap, a glass plate 0.5 px on the bezel of which the cap leaves 2.6 px showing | Lit 0 to 1 by `--strata-lit` |
+| Cap | A square body in the secondary face colour, `radius.small`, 6 high (taper 0.6), carrying the printed mark | Travel 4 px at 50% depth: 1.8 (0.45) while checked, 4 while held, 0.8 (0.2) while mixed, 0 at rest |
+
+- **State and cues.** Checked: the ring is lit, the cap rests at 0.45 of its travel and a **check** is printed on it. Mixed
+  (`indeterminate`, a property with no attribute): the ring is half lit, the cap rests at 0.2 and a **dash** is printed on it. Held (the
+  pointer down on the key or its label, or Space down on the key): the ring is lit and the cap all the way down. Unchecked: dark and up. Light is never the only
+  cue: the cap is down, the mark is printed, and `checked` and `aria-checked="mixed"` are native. A **disabled** checkbox is never held and
+  never lit, and a checked one keeps its place (the cap down, the mark at 38%), so it still says what it is set to.
+- **The native control stays the control.** The `<input type="checkbox">` is the host's first child, covering the key (`opacity: 0`,
+  `z-index: 1`), so every press and every key lands on it. A click on the label toggles it once (the label's text also holds the key down while pressed).
+  Refs, `checked`, `indeterminate`, `name`, `value`, `form`, `required`, form data and `change` are the native checkbox's.
+- **Emitters.** The ring is an emitter at every GPU level (`emitter.pushButton.*`, 2,400 at the 40 px reference cap, so 600 at the 20 px
+  cap, reach 4 cap diameters), lit by `--strata-lit`; checking is a uniform write. A panel with latching checkboxes takes a version 4 scene
+  with its `emitters`, the `protected` rects of its text and a `feather`, so a label beside a lit key keeps the contrast guard.
+- **GPU.** Relief draws the bezel and the cap as raised faces, Objects as a slab and a key; at the Instrument level the checkbox is the
+  push button's object (`pushObject`): a polished bezel, a glass ring, a body and a captured cap travelling 4 px on the CSS throw
+  (`--strata-push-t`, `spring.button`), every part and shadow inside the 38 to 46 px box.
+- **Presentation.** Under `prefers-contrast: more` and the contrast themes: flat colour, no glow, edges in the text colour. Under
+  `forced-colors`: a Canvas bezel and ring with `ButtonText` borders, `Highlight` when lit, `GrayText` when disabled, and the mark in `Highlight`.
+  Reduced motion: lights and travel change at once. Under `prefers-reduced-transparency` the ring is opaque lacquer. At 200% text the label
+  wraps and the row grows; the key keeps its size.
+
+```html
+<label class="ug-checkbox" data-strata-form="latching">
+  <span class="ug-push ug-latch ug-latch--key" data-strata-colour="info">
+    <input class="ug-checkbox__input" type="checkbox">
+    <span class="ug-push__object" aria-hidden="true">
+      <span class="ug-push__bezel" data-strata-face="raised"></span>
+      <span class="ug-push__socket"></span>
+      <span class="ug-push__ring"></span>
+    </span>
+    <span class="ug-push__cap" data-strata-face="raised" aria-hidden="true"><span class="ug-checkbox__mark"></span></span>
+  </span>
+  <span class="ug-checkbox__label">Phantom power</span>
+</label>
+```
+
+- `attachStrataPushButtons` (`attachStrata`, or the bindings, once a latching form mounts) adds only the held state (`data-strata-down` on the
+  host) and the feedback: `click` once per real `change` (never for a script's assignment), where feedback is on (off by default).
+  React: `<Checkbox form="latching" colour="info">`; Vue: the same props with `v-model`; Astro: `<Checkbox form="latching" colour="info">`.
+- **Tests:** `ui-latching-forms.test.mjs` (plain DOM, touch, reflow, preferences, GPU at Relief, Objects and Instrument, feedback),
+  `ui-latching-forms-bindings.test.mjs`, `ui-latching-forms-astro.test.mjs`.
