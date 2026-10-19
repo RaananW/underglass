@@ -138,7 +138,7 @@ test("the segments CSS: the face and size on the text, the ghost behind it from 
 
 test("the wheel and selector CSS: a roller on the fader's track, radios as invisible overlays of at least 24 px on their prints, forced colours and disabled", () => {
   assert.match(css, /:where\(\.ug-fader--wheel\) \{[^}]*--strata-wheel-travel[^}]*--_pitch: calc\(3\.14159 \* var\(--_along\) \/ var\(--strata-wheel-ridges\)\);/);
-  assert.match(css, /:where\(\.ug-fader--wheel \.ug-fader__carriage\) \{[^}]*left: calc\(50% - var\(--_along\) \/ 2\);/);
+  assert.match(css, /:where\(\.ug-fader__wheel\) \{[^}]*left: calc\(50% - var\(--_along\) \/ 2\);/);
   assert.ok(css.includes(".ug-fader__carriage[data-strata-dome] :is(.ug-fader__grip, .ug-fader__ridges) { display: none; }"), "the print gives way to the part");
   assert.match(css, /:where\(\.ug-rotary__radio\) \{[^}]*width: max\(calc\(100% \+ 8px\), 24px\);[^}]*height: max\(calc\(100% \+ 8px\), 24px\);[^}]*opacity: 0;[^}]*pointer-events: auto;/);
   assert.ok(css.includes(":where(.ug-rotary__mark:has(.ug-rotary__radio:checked)) :where(.ug-rotary__text)"));

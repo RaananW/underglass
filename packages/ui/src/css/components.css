@@ -1763,7 +1763,7 @@
     --_roll: calc(var(--strata-wheel-sweep) * 0.017453 * var(--_along) / 2);
     --_pitch: calc(3.14159 * var(--_along) / var(--strata-wheel-ridges));
   }
-  :where(.ug-fader--wheel .ug-fader__carriage) {
+  :where(.ug-fader__wheel) {
     --_finish: linear-gradient(90deg, rgb(0 0 0 / calc(0.32 * min(1, var(--_gain)))), rgb(255 255 255 / calc(0.5 * min(1, var(--_gain)))) 34%, rgb(0 0 0 / 0) 62%, rgb(0 0 0 / calc(0.3 * min(1, var(--_gain)))));
     left: calc(50% - var(--_along) / 2);
     border-radius: 4px;

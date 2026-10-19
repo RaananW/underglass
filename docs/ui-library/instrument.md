@@ -186,9 +186,9 @@ divider a groove) or stay flat, because they are print on the faceplate.
 | ToggleButton | `latching` push button with an LED | `rocker` |
 | Switch | `slide` | `rocker`, `bat`, `wall` |
 | Checkbox | A small latching square button whose cap lights when checked ([`latching`, done](components/checkbox.md#11-latching-form-latching)) | `flush` |
-| Radio, RadioGroup | A **preset bank**: interlocking latching buttons, one down at a time (where the name comes from) ([`bank`, done](components/radio.md#11-latching-form-the-preset-bank-bank)) | `selector` (a RotarySelector over the group; later), `flush` |
+| Radio, RadioGroup | A **preset bank**: interlocking latching buttons, one down at a time (where the name comes from) ([`bank`, done](components/radio.md#11-hardware-forms-the-preset-bank-bank-and-the-rotary-selector-selector)) | `selector` (a RotarySelector over the group; [done](components/radio.md#the-rotary-selector-selector)), `flush` |
 | Select | `selector` (RotarySelector) ([done](components/select.md#11-hardware-forms-selector-and-display)) | `display` (a display with step buttons; done), `flush` |
-| Slider | `fader` | `knob`, `wheel` |
+| Slider | `fader` | `knob`, `wheel` ([done](components/slider.md#11-hardware-forms-knob-fader-and-wheel)) |
 | TextField, TextArea | `display` (a glass window in a bezel) | `flush` (a well, as Objects) |
 | Tabs | Latching buttons on a rail; the panel is the faceplate under them ([`rail`, done](components/tabs.md#11-rail-form-rail)) | `flush` |
 | SegmentedControl | Interlocking latching buttons on one plinth ([`latching`, done](components/segmented-control.md#11-latching-form-latching)) | `flush` |
@@ -205,20 +205,28 @@ divider a groove) or stay flat, because they are print on the faceplate.
 does not opt in is unchanged; the character's default form is reached by naming it). They are the PushButton's machinery on native inputs: the
 input is an invisible overlay on its key's box inside a push button's host, the lit ring, the LED and the cap's travel are the same three
 numbers, the same spring and the same emitters, and the keys of a bank stand on one polished plinth that is a part of its own. A bank key has no
-bezel and no ring: the plinth is the frame, and the LED above each key shows the one that is down. The `selector` form of the RadioGroup is a later
-change. [Checkbox](components/checkbox.md#11-latching-form-latching), [RadioGroup](components/radio.md#11-latching-form-the-preset-bank-bank),
+bezel and no ring: the plinth is the frame, and the LED above each key shows the one that is down. The `selector` form of the RadioGroup followed (see the deferred forms below). [Checkbox](components/checkbox.md#11-latching-form-latching), [RadioGroup](components/radio.md#11-hardware-forms-the-preset-bank-bank-and-the-rotary-selector-selector),
 [SegmentedControl](components/segmented-control.md#11-latching-form-latching).
 
 **Structural forms (everyday forms, third part).** The Slider, the Card and Panel, and the Dialog and Drawer take their forms through `form` at
 every presentation (`flush`, and an absent `form`, are the control of before). A Slider's `knob` and `fader` are the Knob's and the Fader's object
-over the Slider's own native input ([`slider.md` section 11](components/slider.md#11-hardware-forms-knob-and-fader)): `fader`, the premium default,
-presents the Fader's object (horizontal) rather than being deferred, and the reserved `wheel` (a thumbwheel: a ridged cylinder rolling under a slot, a
-form of its own with three renderers) is not built. A Card's or Panel's `plate` and `tray`, a Dialog's `plate` and a Drawer's `tray` are a rim or a
+over the Slider's own native input ([`slider.md` section 11](components/slider.md#11-hardware-forms-knob-fader-and-wheel)): `fader`, the premium default,
+presents the Fader's object (horizontal) rather than being deferred, and `wheel` (a thumbwheel) was reserved and followed (see the deferred forms below). A Card's or Panel's `plate` and `tray`, a Dialog's `plate` and a Drawer's `tray` are a rim or a
 wall of parts (an inline mesh swept along the element's rounded outline) standing inside the element's box, over its face, which stays captured:
 content, text and hits are untouched ([Card](components/card.md#11-plate-and-tray-forms), [Panel](components/panel.md#11-plate-and-tray-forms),
 [Dialog](components/dialog.md#11-plate-form), [Drawer](components/drawer.md#11-tray-form)). The Dialog's plate rises out of the chassis with the panel
 motion's eased progress and the Drawer's tray slides out of its edge (CSS, and core's panel transition with `x` or `y` on the GPU), the wall rising with
 it; the rise is a scene number, a uniform update.
+
+**The deferred forms (everyday forms, last part).** The three forms the table held back, built. A Slider's `wheel` ([`slider.md` section 11](components/slider.md#11-hardware-forms-knob-fader-and-wheel)):
+the Fader's track and behaviour with a **ridged roller** that rolls in place under the value (a pose about its own axis from −`wheel.sweep`/2 to +`wheel.sweep`/2, 150° by default and at most 180°),
+its ridges the part's geometry (an extruded ridged circle, polished metal, with an ink index tooth) rather than a print, because a print that moves is a capture a frame; the roller lies on the face, so
+nothing is below it, and rotation about its own axis contains it over the whole turn by construction. A RadioGroup's `selector` ([`radio.md`](components/radio.md#the-rotary-selector-selector)): the RotarySelector's
+dial over the native radios, one detent per radio with its label printed at its position and the radio an invisible 24 px overlay on the print (a click on a position is a click on that radio), the
+Select's limits (2 to 8 radios of at most 12 characters, otherwise a `bank`) and the Knob's object at the Instrument level. A Display's `segments`
+([`display.md` section 11](components/display.md#11-the-segments-look-a-seven-segment-face)): a seven-segment face **Strata draws itself** (no third-party font is vendored: it is generated from the segments as data, embedded in the stylesheet as a
+10 KB data URI, token `font.segments`) with the unlit segments faintly printed behind the digits (`display.segments.ghost`), the text still the native element's own and, under the glass, exact. Letters beyond the
+seven-segment set fall to the code face; a fourteen-segment or dot-matrix face is a follow-up.
 
 **Select and Tabs forms (everyday forms, fourth part).** A Select takes `form="selector"` (the RotarySelector's dial over the Select's own native select) or `form="display"` (a Display window
 showing the chosen label under the glass, between two momentary push buttons that step the select), and Tabs takes `form="rail"` (each tab a latching key on one polished plinth, the tablist, with an LED
@@ -607,7 +615,7 @@ Objects and Instrument (the helper's `instrument` level), with sound and haptics
 detents' `tick`.
 
 Everyday forms, third part: the structural family at every presentation, in CSS, plain DOM, React, Vue and Astro, and Relief, Objects and Instrument on the GPU.
-The Slider as a knob or a fader ([`knob`, `fader`](components/slider.md#11-hardware-forms-knob-and-fader): the Knob's and the Fader's object over the Slider's own
+The Slider as a knob or a fader ([`knob`, `fader`](components/slider.md#11-hardware-forms-knob-fader-and-wheel): the Knob's and the Fader's object over the Slider's own
 input; `wheel` is reserved and follows), the Card and Panel as a [`plate`](components/card.md#11-plate-and-tray-forms) or a `tray`, the Dialog as a
 [`plate` that rises out of the chassis](components/dialog.md#11-plate-form) and the Drawer as a [`tray` that slides out of its edge](components/drawer.md#11-tray-form),
 with `flush` and an absent `form` the control of before. The plate's rim and the tray's wall are inline meshes swept along the element's rounded outline,
