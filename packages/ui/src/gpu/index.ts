@@ -45,7 +45,7 @@
  * A JogWheel's wheel and a PatchPoint's jack are drawn at every level (`gpu/wave3.ts`; design language section 6): the wheel a disc in a recess with a
  * finger dimple, the jack a washer with a hole and, while it is connected, a plug and a cable stub. At the Instrument level the wheel is a
  * turned cap in a bearing collar whose dimple turns on its accumulated angle (`--strata-jog-angle`, on the knob's spring), and the jack a
- * washer and barrel whose plug rises out of the hole on `spring.patch`; both are uniform updates, so a spin or a connect recaptures nothing.
+ * washer and barrel whose plug rises out of the hole on `spring.patch`; both are uniform updates, so a turning frame or a rising frame recaptures nothing (core captures each native `input` event, as for a Knob).
  *
  * Everything the scene needs comes from the page as the CSS presentation sees it: geometry from layout (followed through
  * CSS transitions frame by frame), states from
@@ -487,7 +487,8 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
     if (element.closest(".ug-jog-wheel, .ug-patch-point")) {
       const parts = wave3Entries(element, panel, { instrument: instrumentLayer && effective(element) !== "relief", objects: objects(element), base: baseOf(element), rect: rectWithin(element, panel),
         rectOf: part => rectWithin(part, panel), states, material: materialFor, knob: { material: material(tokens.raw("material.roles.knob") || "satin"), colour: tokens.colour("knob") },
-        well: level(element, "well"), light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, hoverHeight: tokens.number("state.hoverHeight", 1.6), domes: options.domes });
+        well: level(element, "well"), light: { azimuth: tokens.number("light.azimuth", 323), elevation: tokens.number("light.elevation", 41) }, hoverHeight: tokens.number("state.hoverHeight", 1.6), domes: options.domes,
+        follow: { now: options.now ?? performance.now(), instant: reducedMotion(), springs: options.springs, moving: options.moving } });
       if (parts) { entries.push(...parts); continue; }
     }
     // A Meter's or Gauge's segments, hub and a Gauge's bezel are drawn as its Instrument object (its window stays the well of the face).
@@ -1278,6 +1279,8 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     };
   }
   const events = ["pointerover", "pointerout", "pointerdown", "pointerup", "focusin", "focusout", "keydown", "keyup", "input", "change", "transitionrun", "transitionend", "strata-meter-live"];
+  // A JogWheel the GPU draws turns without a write to the DOM: its behaviour wakes the helper with this event instead.
+  events.push("strata-jog-live");
   for (const type of events) root.addEventListener(type, schedule, true);
   const mutation = new MutationObserver(schedule);
   mutation.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "disabled", "checked", "aria-checked",

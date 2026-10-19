@@ -2725,9 +2725,10 @@
     touch-action: none;
   }
   :where(.ug-jog-wheel__input)::-webkit-slider-runnable-track { height: 100%; border: 0; background: transparent; }
-  :where(.ug-jog-wheel__input)::-webkit-slider-thumb { width: 1px; height: 1px; appearance: none; border: 0; background: transparent; }
+  /* The thumb is not drawn at all: one that moves with the value is paint, and a wheel turning must not recapture its layer. */
+  :where(.ug-jog-wheel__input)::-webkit-slider-thumb { display: none; }
   :where(.ug-jog-wheel__input)::-moz-range-track { height: 100%; border: 0; background: transparent; }
-  :where(.ug-jog-wheel__input)::-moz-range-thumb { width: 1px; height: 1px; border: 0; background: transparent; }
+  :where(.ug-jog-wheel__input)::-moz-range-thumb { width: 0; height: 0; border: 0; background: transparent; }
   /* The printed legend, on the faceplate under the dial. */
   :where(.ug-jog-wheel__label) {
     max-width: 100%;
@@ -2932,6 +2933,7 @@
    * parts: their paint is hidden too, so a turn or a connect repaints nothing (the recess, the printed hole and the focus ring stay).
    */
   :where([data-strata-mode="face"]) .ug-jog-wheel__wheel[data-strata-dome] { border-color: transparent; }
+  :where([data-strata-mode="face"]) .ug-jog-wheel__dimple[data-strata-dome] { border-color: transparent; }
   :where([data-strata-mode="face"]) .ug-patch-point__washer[data-strata-dome] { border-color: transparent; }
   :where([data-strata-mode="face"]) .ug-patch-point__stub[data-strata-dome] { visibility: hidden; }
   @media (prefers-reduced-motion: reduce) {

@@ -24,6 +24,12 @@
  *   (ArrowUp, ArrowRight and PageUp past `max` to `min`; ArrowDown, ArrowLeft and PageDown past `min` to `max`; the arrows swap in
  *   a right-to-left page). **Double-click** returns to `data-strata-default`, or the input's default value.
  * Every change goes through the input's `value`, firing `input` and `change`, so forms and framework bindings see native events.
+ * **Where the GPU draws the dimple** (the helper marks it `data-strata-dome`), the angle of a drag or of coasting is kept in script
+ * (`liveStrataJog`) and reaches the GPU as a bubbling `strata-jog-live` event, and nothing is written to the DOM while it moves: a
+ * custom property written inside the layer recaptures it every frame, as a native value written by a script does. The input's thumb
+ * is hidden for the same reason (a thumb moving with the value is paint), and `aria-valuetext` is held back until the wheel rests (an
+ * attribute written inside the layer recaptures it too), so a flick adds no capture of its own. The angle and the value text are written
+ * to the DOM (`--strata-jog-angle` for the CSS presentation) whenever the wheel comes to rest and for every change that is not a motion.
  * On every `input`, the wheel's angle follows the value (the shorter way round) and, when the input has `data-strata-unit`, its
  * `aria-valuetext`; a detented wheel (`.ug-jog-wheel--detented`) plays `tick` through `strataFeedback` once for each value change
  * (sound and haptics, both off unless the page or scope turns them on).
@@ -61,13 +67,29 @@ function tokensOf(root: Element): JogTokens {
 const reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
-/** The accumulated angle on a wheel's root: the inline `--strata-jog-angle`, or the computed one, or that of the value (a step each). */
+/** The accumulated angle of each wheel, as the behaviour has it now (the DOM's `--strata-jog-angle` may be a step behind while the GPU draws a motion). */
+const angles = new WeakMap<Element, number>();
+
+/** The angle a wheel shows now (degrees, accumulated), as the behaviour keeps it, or undefined for a wheel it has not turned. */
+export const liveStrataJog = (root: Element): number | undefined => angles.get(root);
+
+/** The accumulated angle on a wheel's root: the one the behaviour keeps, or the inline `--strata-jog-angle`, or the computed one, or that of the value (a step each). */
 function angleOf(root: HTMLElement, input: HTMLInputElement, turn: number): number {
+  const kept = angles.get(root);
+  if (kept !== undefined) return kept;
   const read = Number.parseFloat(root.style.getPropertyValue("--strata-jog-angle") || getComputedStyle(root).getPropertyValue("--strata-jog-angle"));
   return Number.isFinite(read) ? read : jogIndex(Number(input.value), rangeOf(input)) * jogStepAngle(turn);
 }
-function writeAngle(root: HTMLElement, angle: number) {
+/** Whether the GPU draws the wheel's dimple (the helper marks it), so the angle need not reach the DOM while it moves. */
+const drawn = (root: HTMLElement) => root.querySelector(".ug-jog-wheel__dimple")?.hasAttribute("data-strata-dome") === true;
+/**
+ * Keeps a wheel's angle and shows it: in `--strata-jog-angle` for the CSS presentation, except for a `motion` (a drag move, a coasting
+ * frame) of a wheel the GPU draws, which only wakes the helper (a bubbling event is no mutation, so nothing is recaptured).
+ */
+function writeAngle(root: HTMLElement, angle: number, motion = false, input?: HTMLInputElement) {
   const text = String(round2(angle));
+  angles.set(root, Number(text));
+  if (motion && drawn(root)) { (input ?? root).dispatchEvent(new CustomEvent("strata-jog-live", { bubbles: true })); return; }
   if (root.style.getPropertyValue("--strata-jog-angle") !== text) root.style.setProperty("--strata-jog-angle", text);
 }
 function writeText(input: HTMLInputElement) {
@@ -116,7 +138,8 @@ function stepBy(input: HTMLInputElement, dir: 1 | -1, own = false): boolean {
  */
 export function syncStrataJogWheel(input: HTMLInputElement): void {
   const root = input.closest<HTMLElement>(".ug-jog-wheel");
-  writeText(input);
+  // A motion the GPU draws writes nothing to the DOM, `aria-valuetext` included (an attribute written inside the layer recaptures it); it is written when the wheel rests.
+  if (!root || !driving.has(input) || !drawn(root)) writeText(input);
   if (!root || driving.has(input)) return;
   const range = rangeOf(input), turn = tokensOf(root).turn, wrap = wraps(input), angle = angleOf(root, input, turn);
   // Already on the value (a drag leaves the angle between steps): leave it be.
@@ -168,7 +191,8 @@ function stopCoast(input: HTMLInputElement) {
   if (!run) return;
   cancelAnimationFrame(run.frame);
   coasting.delete(input);
-  if (run.detented) writeAngle(run.root, run.steps * jogStepAngle(run.tokens.turn));
+  writeAngle(run.root, run.detented ? run.steps * jogStepAngle(run.tokens.turn) : run.motion.a);
+  writeText(input);
   if (input.value !== run.before) finish(input);
 }
 
@@ -201,7 +225,7 @@ export function flingStrataJogWheel(input: HTMLInputElement, velocity: number): 
     const next = Math.abs(target - run.steps) <= room ? target : run.steps + Math.sign(target - run.steps) * room;
     run.allowance -= Math.abs(next - run.steps);
     run.steps = applySteps(input, run.steps, next, room || 1);
-    writeAngle(run.root, run.detented ? run.steps * unit : run.motion.a);
+    writeAngle(run.root, run.detented ? run.steps * unit : run.motion.a, true, input);
     if ((rest || run.motion.v === 0) && run.steps === target) { stopCoast(input); return; }
     run.frame = requestAnimationFrame(tick);
   });
@@ -259,7 +283,7 @@ export function attachStrataJogWheels(doc: Document = document): void {
       }
     }
     g.steps = applySteps(g.input, g.steps, jogSteps(g.angle, stepAngle));
-    writeAngle(g.root, g.detented ? g.steps * stepAngle : g.angle);
+    writeAngle(g.root, g.detented ? g.steps * stepAngle : g.angle, true, g.input);
     g.samples.push({ time: event.timeStamp, angle: g.angle });
     while (g.samples.length > 2 && event.timeStamp - g.samples[0]!.time > 100) g.samples.shift();
   });
@@ -268,7 +292,7 @@ export function attachStrataJogWheels(doc: Document = document): void {
     if (!g) return;
     gestures.delete(event.pointerId);
     const { input, root, moved, before } = g;
-    if (cancelled) { if (g.detented) writeAngle(root, g.steps * jogStepAngle(g.tokens.turn)); if (moved && input.value !== before) finish(input); return; }
+    if (cancelled) { if (moved) { writeAngle(root, g.detented ? g.steps * jogStepAngle(g.tokens.turn) : g.angle); writeText(input); } if (moved && input.value !== before) finish(input); return; }
     if (!moved) {
       // No drag: the single-pointer alternative. The upper half of the box steps up, the lower half down.
       const box = input.getBoundingClientRect();
@@ -280,7 +304,8 @@ export function attachStrataJogWheels(doc: Document = document): void {
     const seconds = Math.max(0.001, (last.time - first.time) / 1000), speed = (last.angle - first.angle) / seconds;
     const recent = event.timeStamp - last.time < 80;
     if (recent && Math.abs(speed) >= g.tokens.flick && flingStrataJogWheel(input, speed)) { const run = coasting.get(input); if (run) run.before = before; return; }
-    if (g.detented) writeAngle(root, g.steps * jogStepAngle(g.tokens.turn));
+    writeAngle(root, g.detented ? g.steps * jogStepAngle(g.tokens.turn) : g.angle);
+    writeText(input);
     if (input.value !== before) finish(input);
   };
   doc.addEventListener("pointerup", event => end(event, false));

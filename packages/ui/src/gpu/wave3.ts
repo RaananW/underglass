@@ -9,11 +9,12 @@
 import type { SceneEntry, SceneFace, SceneState } from "../tokens/scene.ts";
 import { jogWheelFormEntries } from "./jog-forms.ts";
 import { patchPointFormEntries } from "./patch-forms.ts";
-import { jogHeight, jogMaterials, jogWheelObject } from "./instrument-jog.ts";
+import { dimpleOf, jogHeight, jogMaterials, jogWheelObject } from "./instrument-jog.ts";
 import { patchHeight, patchMaterials, patchPointObject } from "./instrument-patch.ts";
 import { followSpring, type FollowContext } from "./instrument-follow.ts";
 import { knobSprings, premiumMaterials, type InstrumentObject, type InstrumentProfile, type InstrumentRecipe } from "./instrument.ts";
 import { jogDefaults, jogIndex, jogStepAngle } from "../shared/jog-wheel.ts";
+import { liveStrataJog } from "../dom/jog-wheel.ts";
 import { patchSpring } from "../shared/patch-point.ts";
 
 type Box = [number, number, number, number];
@@ -47,7 +48,24 @@ export interface Wave3Context {
   light: { azimuth: number; elevation: number };
   hoverHeight: number;
   domes?: Set<Element>;
+  /** The springs of the Instrument parts and of the dimple at Relief and Objects: the time, reduced motion, the springs kept between scenes and the ones still moving. */
+  follow: FollowContext;
 }
+
+/**
+ * The accumulated angle a wheel stands at (degrees): the one the behaviour keeps while it moves it (`liveStrataJog`), else the root's
+ * `--strata-jog-angle`, else the value's step. It is the target of the wheel's spring; nothing here is written to the DOM.
+ */
+function wheelAngle(root: HTMLElement, input: HTMLInputElement): number {
+  const live = liveStrataJog(root);
+  if (live !== undefined) return live;
+  const style = getComputedStyle(root), read = Number.parseFloat(style.getPropertyValue("--strata-jog-angle"));
+  if (Number.isFinite(read)) return read;
+  const turn = Number.parseFloat(style.getPropertyValue("--strata-jog-turn")) || jogDefaults.turn, max = Number.parseFloat(input.max);
+  return jogIndex(Number(input.value), { min: Number.parseFloat(input.min) || 0, max: Number.isFinite(max) ? max : 100, step: Number.parseFloat(input.step) || 1 }) * jogStepAngle(turn);
+}
+/** The spring a wheel follows its angle on: the detent spring for a detented wheel, the knob's otherwise. */
+const wheelSpring = (root: Element) => (root.matches(".ug-jog-wheel--detented") ? knobSprings.detent : knobSprings.knob);
 
 /** Whether a wheel's input is hovered (or previewed), for its parts; a wheel is one control, whose input covers it. */
 function jogState(input: HTMLInputElement): SceneState {
@@ -70,7 +88,14 @@ export function wave3Entries(element: Element, panel: HTMLElement, context: Wave
       context.domes?.add(element);
       return [];
     }
-    return jogWheelFormEntries(element, { rect: context.rect, box: context.rectOf(input), state: jogState(input), objects: context.objects, base: context.base, rectOf: context.rectOf,
+    // The dimple is where the angle puts it (on its spring), not where the layout has it: nothing is written to the DOM while the wheel turns.
+    let rect = context.rect;
+    if (element.matches(".ug-jog-wheel__dimple")) {
+      const wheelBox = context.rectOf(wheel.querySelector(".ug-jog-wheel__wheel") ?? element), size = Math.min(context.rect[2], context.rect[3]);
+      const angle = (followSpring(input, wheelAngle(wheel, input), wheelSpring(wheel), context.follow, { tolerance: 0.01 }) * Math.PI) / 180, at = dimpleOf(wheelBox[2]).at;
+      rect = [wheelBox[0] + wheelBox[2] / 2 + at * Math.sin(angle) - size / 2, wheelBox[1] + wheelBox[3] / 2 - at * Math.cos(angle) - size / 2, context.rect[2], context.rect[3]];
+    }
+    return jogWheelFormEntries(element, { rect, box: context.rectOf(input), state: jogState(input), objects: context.objects, base: context.base, rectOf: context.rectOf,
       material: context.material, knob: context.knob.material, well: context.well, light: context.light, hoverHeight: context.hoverHeight, domes: context.domes });
   }
   const jack = element.closest<HTMLElement>(".ug-patch-point");
@@ -126,11 +151,7 @@ export function wave3Objects(panel: HTMLElement, context: Wave3ObjectContext): {
     if (!input || !wheel || !context.room()) continue;
     const box = context.rectOf(input), size = context.rectOf(wheel)[2];
     if (box[2] <= 0 || box[3] <= 0 || size <= 0) continue;
-    const style = getComputedStyle(root), read = Number.parseFloat(style.getPropertyValue("--strata-jog-angle"));
-    const turn = Number.parseFloat(style.getPropertyValue("--strata-jog-turn")) || jogDefaults.turn;
-    // The accumulated angle; a wheel with no angle yet stands at its value's step.
-    const target = Number.isFinite(read) ? read : jogIndex(Number(input.value), { min: Number.parseFloat(input.min) || 0, max: Number.isFinite(Number.parseFloat(input.max)) ? Number.parseFloat(input.max) : 100, step: Number.parseFloat(input.step) || 1 }) * jogStepAngle(turn);
-    const angle = followSpring(input, target, root.matches(".ug-jog-wheel--detented") ? knobSprings.detent : knobSprings.knob, context, { tolerance: 0.01 });
+    const angle = followSpring(input, wheelAngle(root, input), wheelSpring(root), context, { tolerance: 0.01 });
     const state = jogState(input);
     objects.push(jogWheelObject({ id: context.idOf(input, "jog"), box, size, angle, scale: context.scale, state: { hover: !!state.hover, disabled: !!state.disabled }, light: context.light, relief: { height: context.raised, material: "knobSkirt" } }, context.profile) as unknown as InstrumentObject);
     use(context.materials, "knobSkirt", "knobCap", "knobChamfer", "jogDimple");
