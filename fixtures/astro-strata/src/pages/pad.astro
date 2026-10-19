@@ -1,0 +1,33 @@
+---
+/**
+ * Strata Astro Pad check page (`/pad/`): `[data-contract]` renders the anatomy page's three examples (`pad.md`) with
+ * `@underglass/ui/astro`, and `main` holds live pads `tests/browser/ui-pad-astro.test.mjs` drives with real input. Server-rendered
+ * HTML; the only script is the components' own `attachStrata`.
+ */
+import "@underglass/ui/css";
+import { Pad, PadGrid } from "@underglass/ui/astro";
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Strata Astro Pad check</title>
+</head>
+<body>
+  <div data-contract="pad.md" hidden><Pad colour="danger" name="kick" value="1">Kick</Pad></div>
+  <div data-contract="pad.md#2" hidden><Pad latching colour="accent">Loop</Pad></div>
+  <div data-contract="pad.md#3" hidden><PadGrid label="Drum pads" columns={2}><Pad>Snare</Pad><Pad colour="success">Hat</Pad></PadGrid></div>
+  <main>
+    <form class="ug-panel" data-strata-face="raised" aria-label="Pads" id="pads" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center">
+      <PadGrid label="Rack" columns={3} id="rack" size="small">
+        <Pad id="kick" name="kick" value="1" type="submit" colour="danger" class="extra" style="margin-right: 4px" data-testid="kick">Kick</Pad>
+        <Pad id="snare" colour="accent">Snare</Pad>
+        <Pad id="loop" latching colour="warning">Loop</Pad>
+        <Pad id="arm" latching pressed colour="info">Arm</Pad>
+        <Pad id="locked" disabled>Locked</Pad>
+        <Pad id="hat" colour="success">Hat</Pad>
+      </PadGrid>
+    </form>
+  </main>
+</body>
+</html>
