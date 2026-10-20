@@ -111,12 +111,12 @@ the DOM passed through B and the observer cannot prove the painted state equals 
 (the attribute was added) and every child-list record (re-appending a node reorders it) always capture. The paint event's
 `changedElements` path is separate and unaffected ([api](api.md#same-value-mutations-are-ignored)).
 
-A layer that contains a `<canvas>` is refused by the same structural policy (reason `canvas-content`, issue #184): on Canary 158.0.8112.0
-`drawElementImage` and `drawElementImageToTexture` capture a nested canvas only when it is the first thing attached to the layer, so
-presenting it would be a silent blank, not a presentation. This is a factual lack of required capture support, diagnosed and runtime-wide
-like every structural reason; `data-underglass-gpu-canvas="allow"` on a canvas is the author's explicit acceptance. Measurements, the
-proposal SHA and the tracker access limits are in [upstream/canvas-in-drawable.md](upstream/canvas-in-drawable.md); the contract is in
-[api.md](api.md#canvas-inside-a-layer).
+A `<canvas>` inside an enrolled layer is captured by HTML-in-Canvas only when it is itself `content="drawable"` (Canary 158.0.8112.0, issue
+#184). Core sets the mark on every such canvas while GPU presents (`CanvasRuntime.markCanvases`, called from `presentation()` and the
+mutation observer), keeps the author's own value and restores it when GPU ends, so the canvas is ordinary captured content: no refusal, no
+fallback. The one gap is an `OffscreenCanvas`-transferred canvas, whose commits raise no `paint` event (the author calls `invalidate`). See
+[api.md](api.md#canvas-inside-a-layer); the measurements, proposal SHA and tracker access limits are in
+[upstream/canvas-in-drawable.md](upstream/canvas-in-drawable.md).
 
 ### Capability versus implementation matrix
 

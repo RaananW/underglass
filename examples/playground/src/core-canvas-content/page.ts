@@ -3,7 +3,7 @@
  * `#probe` (320 x 200, filled with variants by `window.canvasContent.install`) and `#plain` (a text card beside it that never holds
  * a canvas). `window.canvasContent.ready` resolves with the test API.
  */
-import { createCanvasHosts, GPU_CANVAS_ATTRIBUTE, mountApplicationModule, type CanvasController } from "@underglass/core";
+import { createCanvasHosts, mountApplicationModule, type CanvasController } from "@underglass/core";
 
 const frame = document.getElementById("frame")!;
 const status = document.getElementById("status")!;
@@ -80,18 +80,32 @@ const nodes: HTMLElement[] = [];
 declare global { interface Window { canvasContent: { ready: Promise<unknown> } } }
 window.canvasContent = { ready: Promise.resolve({
   dpr: devicePixelRatio, settle, state: () => controller.state(),
-  /** Replaces the probe layer's content with the named variants, in order, 4 per row; `allow` marks every canvas with the override. */
-  async install(kinds: string[], allow = false) {
+  /** Replaces the probe layer's content with the named variants, in order, 4 per row; `contents` gives the author's own `content` attribute per slot. */
+  async install(kinds: string[], contents: Array<string | null> = []) {
     probe.replaceChildren(); nodes.length = 0;
-    kinds.forEach((kind, index) => { const node = place(makers[kind]!(), index); if (allow && node instanceof HTMLCanvasElement) node.setAttribute(GPU_CANVAS_ATTRIBUTE, "allow"); nodes.push(node); probe.append(node); });
+    kinds.forEach((kind, index) => {
+      const node = place(makers[kind]!(), index);
+      if (contents[index]) node.setAttribute("content", contents[index]!);
+      nodes.push(node); probe.append(node);
+    });
     await settle();
   },
   /** Appends one variant at the next slot. */
-  async add(kind: string, allow = false) {
-    const node = place(makers[kind]!(), nodes.length);
-    if (allow && node instanceof HTMLCanvasElement) node.setAttribute(GPU_CANVAS_ATTRIBUTE, "allow");
-    nodes.push(node); probe.append(node); await settle(); return nodes.length - 1;
+  async add(kind: string) { const node = place(makers[kind]!(), nodes.length); nodes.push(node); probe.append(node); await settle(); return nodes.length - 1; },
+  /** Appends one variant without waiting: the caller counts frames. */
+  appendOnly(kind: string) { const node = place(makers[kind]!(), nodes.length); nodes.push(node); probe.append(node); return nodes.length - 1; },
+  /** The `content` attribute of a slot, null when absent. */
+  content: (index: number) => nodes[index]!.getAttribute("content"),
+  /** Resets a 2d canvas slot's size (clearing it) and fills it again. */
+  async resize(index: number, fill: Rgb) {
+    const node = nodes[index] as HTMLCanvasElement; node.width = 60; node.height = 30;
+    const context = node.getContext("2d")!; context.fillStyle = css(fill); context.fillRect(0, 0, 60, 30); await settle();
   },
+  /** Moves a slot's canvas out of the layer into the body (still in the document, no longer in a layer). */
+  async leave(index: number) { document.body.append(nodes[index]!); await settle(); },
+  /** Marks the probe layer for recapture (what the author calls after drawing an OffscreenCanvas-transferred canvas). */
+  async invalidate() { controller.invalidate("probe"); await settle(); },
+  dispose: () => controller.dispose(),
   /** A canvas outside every layer (in the page, beside the output canvas), drawn red. */
   outsideCanvas() {
     const node = canvas2d(RED);

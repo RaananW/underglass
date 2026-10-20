@@ -1,7 +1,7 @@
 # A `<canvas>` inside a `drawable` element is captured blank (draft, not filed)
 
 Found with Underglass issue [#184](https://github.com/RaananW/underglass/issues/184). Core's answer is documented in
-[api.md](../api.md#canvas-inside-a-layer): a layer that contains a `<canvas>` is refused with the reason `canvas-content`.
+[api.md](../api.md#canvas-inside-a-layer): it sets `content="drawable"` on every canvas in an enrolled layer while GPU presents.
 
 ## What was checked, and what could not be
 
@@ -39,20 +39,39 @@ nested canvas in the 2D `drawElementImage` result (the same through `GPUQueue.dr
 The order is not tree order and not creation order alone (a canvas created first but placed after a `div` is blank); it behaves like
 "the first thing attached to the drawable". The cause was not investigated.
 
+## The mark: `content="drawable"` on the nested canvas
+
+Setting `content="drawable"` on the nested canvas itself makes it captured. Raw probe (no Underglass code; `canvas-capture-raw.html`,
+`marked.ts`), the nine variants (2D fill, 2D `drawImage`, 2D redrawn after a frame, WebGL, WebGL `preserveDrawingBuffer`,
+`willReadFrequently`, `transferControlToOffscreen`, two wrappers deep, hidden then shown) in the five arrangements (alone, after a painted
+`div`, after an `img`, last of three canvases, inserted before another with `insertBefore`), marked (a) before attaching, (b) after
+attaching, (c) after attaching then resized (width/height reset) and redrawn in a fresh colour: **135 of 135 captured with the right pixels**
+at the first snapshot and after the redraw, and the other canvases in the layer are captured too. The one platform throw is resizing an
+`OffscreenCanvas`-transferred canvas (`InvalidStateError`, marked or not); redrawing it works. Through core (`drawElementImageToTexture`, GPU
+screenshots, DPR 1 and 2): all variants, the 8-canvas mixed layer, a canvas added later, a redraw and a resize captured.
+
+Side effects of the mark on the canvas itself (2D and WebGL, with and without the mark): `getBoundingClientRect` identical before and after
+and identical to the unmarked canvas; `getContext` returns the same context; `toDataURL` returns the same pixels; the canvas's own DOM
+pixels are unchanged; `elementFromPoint` at its centre returns the canvas. (Tables: `evidence/regression/current/core-canvas-content/`:
+`raw-marked-before|after|resize.json`, `mark-effects-2d|webgl.json`, `raw-alone.json`, `raw-together.json`, `core-dpr1|2.json`.)
+
+One gap, also reproducible raw: a marked `OffscreenCanvas`-transferred canvas is captured when a paint happens (`requestPaint()`), but its
+commits raise **no** `paint` event (0 paints for three redraws; 2D, WebGL, `preserveDrawingBuffer` and `bitmaprenderer` each raise one), so
+an observer that waits for `paint` never sees the new frame.
+
 ## Draft issue
 
-**Title:** HTML-in-Canvas: a `<canvas>` descendant of a drawable element is captured as transparent unless it is the first thing attached
+**Title:** HTML-in-Canvas: a `<canvas>` descendant of a drawable element is captured as transparent unless it is itself `content="drawable"`
 
 **Steps:** open `canvas-in-drawable.html`. Three identical 2D canvases (filled red) sit in one `drawable` div.
 
 **Expected:** `drawElementImage` shows three red canvases, as `drawImage` of each canvas does.
 
-**Actual:** the first is red, the other two show the `drawable` element's background. A canvas after a painted sibling (a `div` with a
-background, an `img`) is also blank. Redrawing the canvas, `requestPaint()` and waiting frames do not change it. The same holds for
-`GPUQueue.drawElementImageToTexture`, and for 2D, WebGL, `preserveDrawingBuffer` and `OffscreenCanvas` canvases. A single canvas
-alone in the drawable is captured, with fresh pixels after a redraw.
+**Actual:** the first is red, the other two show the `drawable` element's background; a canvas after a painted sibling is also blank.
+Redrawing, `requestPaint()` and waiting frames do not change it, for `drawElementImage` and `GPUQueue.drawElementImageToTexture`, and for 2D,
+WebGL, `preserveDrawingBuffer` and `OffscreenCanvas` canvases. Adding `content="drawable"` to each nested canvas makes all of them
+captured with fresh pixels, in every arrangement tried, with no other visible effect on the canvas.
 
-**Impact:** a library that presents real DOM through HTML-in-Canvas cannot tell from the API whether a nested canvas will appear, and
-the failure is silent (the page shows the background). Underglass refuses such layers (`canvas-content`) until this is fixed.
-
-**Question for the explainer:** is a nested `<canvas>`'s bitmap part of a drawable subtree's snapshot, and if so when is it resolved?
+**Questions for the explainer:** (1) is a nested canvas captured only when it is itself marked drawable, and is that intended? If so the
+explainer could say so; if not, an unmarked nested canvas should be captured, or never. Today it depends on attach order. (2) A commit of
+an `OffscreenCanvas`-transferred canvas should invalidate the owning drawable and raise `paint`, as every other canvas type does.

@@ -40,11 +40,6 @@ import { createInstrumentController, INSTRUMENT_SUCCESSOR_DEFERRAL_MS, type Inst
 
 /** Marks an element whose presenter draws its value itself with its native paint hidden: its `input` events queue no capture. */
 export const GPU_VALUE_ATTRIBUTE = "data-underglass-gpu-value";
-/**
- * Marks a `<canvas>` inside a layer that the author accepts may be presented blank under GPU. Without it a layer that contains a
- * `<canvas>` is refused (`canvas-content`): HTML-in-Canvas does not capture a nested canvas reliably (issue #184).
- */
-export const GPU_CANVAS_ATTRIBUTE = "data-underglass-gpu-canvas";
 
 /**
  * One enrolled layer as the runtime describes it to the renderer. The callbacks are read again on every

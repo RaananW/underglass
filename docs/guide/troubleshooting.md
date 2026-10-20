@@ -23,7 +23,6 @@ the showcase's **Status** line. Then call `enable()` again once the cause is gon
 | `Exclusive GPU presentation declarations were changed` | Code wrote `transform`/`opacity` on a layer root | Use the controller (`setTransform`, `transition`) |
 | `Custom stacking/clipping` | `z-index` on a layer | Remove it; order layers in the DOM |
 | `Content extends beyond enrolled capture bounds` | Visible overflow outside the layer | Clip or scroll the content, or enlarge the layer |
-| `canvas-content` | A `<canvas>` inside a layer: this browser build captures a nested canvas blank unless it is the first thing in its layer | Keep the canvas outside enrolled layers, or mark a canvas that may be blank `data-underglass-gpu-canvas="allow"` ([api](../api.md#canvas-inside-a-layer)) |
 | `Nested enrollment` | A layer inside a layer | Make them siblings |
 | `Zero-sized layer` / `Detached enrolled layer` | A layer collapsed or left the DOM | Give it a size; unmount its `Surface` instead of hiding the element |
 | `Transformed viewport ancestors` | A CSS-transformed ancestor around the stage or a layer | Keep transforms on layers, not their containers |

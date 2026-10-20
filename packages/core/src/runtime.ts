@@ -7,7 +7,7 @@
  * motion, declarative transitions, animation ownership and decorative effects.
  */
 import { canonical, cssMatrix, DEFAULT_PERSPECTIVE, pivot, project, tilted, type Transform, type TransformOrigin } from "./affine.js";
-import { createSurfaceRenderer, GPU_CANVAS_ATTRIBUTE, type SurfaceRendererOptions } from "./renderer.js";
+import { createSurfaceRenderer, type SurfaceRendererOptions } from "./renderer.js";
 import type { Layout } from "./compiler.js";
 import type { MountBoundaryOptions } from "./mount-boundary.js";
 import { DeclarationOwnership, prepareAnimation, rejectImportantPresentation, type AnimationPlayback } from "./animation.js";
@@ -214,6 +214,7 @@ export class CanvasRuntime {
         else changed.push(record);
       }
       if (!changed.length) return;
+      this.markCanvases();
       this.invalidatePolicy();
       for (const record of changed) {
         const target = record.target instanceof Element ? record.target : record.target.parentElement;
@@ -612,6 +613,7 @@ export class CanvasRuntime {
    */
   private presentation(mode: "dom" | "gpu", releaseOwnership = false) {
     this.invalidatePolicy();
+    this.markCanvases(mode === "gpu");
     const restored = new Map<string, ReturnType<DeclarationOwnership["restore"]>>();
     const owned = new Set(this.ownership.keys());
     if (mode === "dom") {
@@ -701,10 +703,6 @@ export class CanvasRuntime {
       if (layer.element.getAnimations().some(animation => !sources.has(animation) && animatesPresentation(animation))) {
         return `Unowned/overlapping CSS/WAAPI animation requires explicit adapter: ${layer.id}`;
       }
-      // A nested <canvas> is captured blank by this browser build whenever another canvas or earlier painted content precedes it in the
-      // layer (docs/upstream/canvas-in-drawable.md), so presenting it would be silent stale pixels: refuse unless the author accepts it.
-      const canvas = layer.element.querySelector(`canvas:not([${GPU_CANVAS_ATTRIBUTE}="allow"])`);
-      if (canvas) return `canvas-content: layer ${layer.id} contains a <canvas>${canvas.id ? ` (#${canvas.id})` : ""} that HTML-in-Canvas does not capture on this build; keep it outside enrolled layers or mark it ${GPU_CANVAS_ATTRIBUTE}="allow"; ordinary DOM required`;
       if (!layer.element.isConnected) return `Detached enrolled layer: ${layer.id}`;
       if (layer.layout.width === 0 || layer.layout.height === 0 || !layer.element.offsetWidth || !layer.element.offsetHeight) return `Zero-sized layer: ${layer.id}`;
       const style = getComputedStyle(layer.element);
@@ -726,6 +724,33 @@ export class CanvasRuntime {
       }
     }
     return undefined;
+  }
+  /** Canvases marked `content="drawable"` for capture, with the author's own `content` attribute (null: none) to give back. */
+  private markedCanvases = new Map<HTMLCanvasElement, string | null>();
+  /**
+   * HTML-in-Canvas captures a nested `<canvas>` only when the canvas is itself `content="drawable"` (issue #184; otherwise it is the
+   * layer background unless it is the first thing in its layer). While GPU presents (`active`, default: the phase is `gpu` or `admitting`)
+   * every `<canvas>` inside an enrolled layer gets the mark, at admission and when one is added later; the author's value is
+   * remembered and restored when GPU ends, or the canvas leaves every layer. The mark changes neither the canvas's layout, context,
+   * bitmap, `toDataURL` nor hits (`tests/browser/core-canvas-content.test.mjs`).
+   */
+  private markCanvases(active = this.core?.phase() === "gpu" || this.core?.phase() === "admitting") {
+    const live = new Set<HTMLCanvasElement>();
+    if (active) {
+      for (const layer of this.registry.values()) {
+        for (const canvas of layer.element.querySelectorAll("canvas")) {
+          live.add(canvas);
+          if (!this.markedCanvases.has(canvas)) this.markedCanvases.set(canvas, canvas.getAttribute("content"));
+          if (canvas.getAttribute("content") !== "drawable") canvas.setAttribute("content", "drawable");
+        }
+      }
+    }
+    for (const [canvas, original] of this.markedCanvases) {
+      if (live.has(canvas)) continue;
+      this.markedCanvases.delete(canvas);
+      if (original === "drawable" || canvas.getAttribute("content") !== "drawable") continue;
+      if (original === null) canvas.removeAttribute("content"); else canvas.setAttribute("content", original);
+    }
   }
   /** Runs `policy()` and recovers to DOM with its reason when it reports a violation. Idle ordinary DOM is skipped. */
   private checkPolicy() {

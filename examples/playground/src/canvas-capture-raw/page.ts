@@ -5,6 +5,7 @@
  * snapshot pixel at its centre next to the pixel the variant's own bitmap holds (read back through the canvas API). Used by
  * `tests/browser/core-canvas-content.test.mjs`; the results are the evidence recorded in `docs/upstream/canvas-in-drawable.md`.
  */
+import "./marked";
 export {};
 type Rgb = [number, number, number];
 const BACKGROUND: Rgb = [233, 235, 239];

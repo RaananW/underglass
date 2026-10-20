@@ -156,15 +156,18 @@ for (const dpr of [1, 2]) {
     return { captures: after.captures - before.captures, ignored: after.mutationsIgnored - before.mutationsIgnored };
   }
 
-  test(`a same-value canvas width write clears the bitmap in the DOM: captured, not ignored (DPR ${dpr})`, async ({ browser }) => {
-    const { context, call, frames, errors } = await open(browser, dpr);
+  test(`a same-value canvas width write clears the bitmap in the DOM: captured, not ignored, and the pixels follow (DPR ${dpr})`, async ({ browser }) => {
+    const { context, page, call, frames, errors } = await open(browser, dpr);
     try {
-      // The pixels cannot prove this one: this Canary build captures a <canvas> that follows painted siblings in its layer as the layer
-      // background whether or not it was cleared (#184; core-canvas-content.test.mjs). The page marks it data-underglass-gpu-canvas="allow"
-      // so core admits the layer, and the probe asserts the observer's decision: the record is counted by neither path as ignored.
+      // A <canvas> in a layer is captured (core marks it content="drawable", #184), so the pixels prove this one: red before the write,
+      // the card background after it (the write clears the bitmap), and the observer counts the record as a capture, not as ignored.
+      await call("settle");
+      const pad = await call("box", "pad");
+      expect(near(colour(await shot(page), pad, dpr), RGB.red), "the canvas shows its red fill").toBe(true);
       const result = await write(call, frames, "sameCanvas");
       expect(result.ignored, "not ignored").toBe(0);
       expect(result.captures, "captured").toBeGreaterThanOrEqual(1);
+      expect(near(colour(await shot(page), pad, dpr), [233, 235, 239]), "the cleared canvas shows the card").toBe(true);
       expect(errors).toEqual([]);
     } finally { await context.close(); }
   });

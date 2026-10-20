@@ -1,13 +1,13 @@
 /**
  * A `<canvas>` inside a layer (issue #184). Two pages:
- * - `canvas-capture-raw.html` (`window.canvasCapture`): no core, one `content="drawable"` canvas and `drawElementImage`. It pins what this
- *   browser build captures of a nested canvas, so a browser change that fixes it (or breaks more) is noticed here first;
- * - `core-canvas-content.html` (`window.canvasContent`): core with a probe layer and a plain layer. The same arrangements through core's
- *   capture (marked `data-underglass-gpu-canvas="allow"` so the layer is admitted), and core's decision: a layer containing a `<canvas>`
- *   is refused with the reason `canvas-content` (never presented blank), the DOM presentation then shows the canvas, the override admits
- *   it, and a canvas outside every layer changes nothing.
- * Measured on Canary 158.0.8112.0: a canvas is captured only when it is the first thing attached to its layer; any later canvas, and any
- * canvas after a painted sibling, is the layer background. At DPR 1 and 2; decoded screenshots.
+ * - `canvas-capture-raw.html` (`window.canvasCapture`, `window.canvasMarked`): no core, one `content="drawable"` output canvas and
+ *   `drawElementImage`. It pins what this browser build captures of a nested canvas, unmarked and marked `content="drawable"` itself
+ *   (before attaching, after attaching, after attaching then resized and redrawn), so a browser change is noticed here first;
+ * - `core-canvas-content.html` (`window.canvasContent`): core with a probe layer and a plain layer. Core marks every `<canvas>` in an
+ *   enrolled layer `content="drawable"` while GPU presents (at admission and for one added later), restores the author's value when GPU
+ *   ends, and captures it like any content.
+ * Measured on Canary 158.0.8112.0: an unmarked nested canvas is captured only when it is the first thing attached to its layer; a marked one
+ * is captured in every arrangement and variant. At DPR 1 and 2; decoded screenshots.
  */
 import { test, expect } from "../helpers/current-browser.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -17,6 +17,10 @@ import { evidenceDirectory } from "../helpers/evidence.mjs";
 const viewport = { width: 1280, height: 720 };
 const BACKGROUND = [233, 235, 239], RED = [200, 40, 40], GREEN = [40, 160, 60], BLUE = [40, 40, 200], YELLOW = [230, 200, 20];
 const near = (actual, expected, tolerance = 8) => actual.every((value, index) => Math.abs(value - expected[index]) <= tolerance);
+const evidence = async (name, value) => {
+  await mkdir(evidenceDirectory("core-canvas-content"), { recursive: true });
+  await writeFile(`${evidenceDirectory("core-canvas-content")}/${name}.json`, JSON.stringify(value, null, 2));
+};
 
 async function open(browser, dpr, path) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: dpr });
@@ -36,15 +40,14 @@ async function openCore(browser, dpr) {
     return typeof value === "function" ? value(...args) : value;
   }, { name, args });
   const shot = async () => PNG.sync.read(await opened.page.screenshot());
-  return { ...opened, call, shot };
+  const frames = n => opened.page.evaluate(async n => { for (let i = 0; i < n; i++) await new Promise(resolve => requestAnimationFrame(resolve)); }, n);
+  return { ...opened, call, shot, frames };
 }
 /** The pixel at the centre of a client box in a screenshot. */
 function centre(png, box, dpr) {
   const x = Math.round((box.x + box.width / 2) * dpr), y = Math.round((box.y + box.height / 2) * dpr), offset = (y * png.width + x) * 4;
   return [png.data[offset], png.data[offset + 1], png.data[offset + 2]];
 }
-/** Core logs a refused admission as a console error; those are expected where a test enables with a canvas present. */
-const refusal = text => !/^console: GPU admission failed: Error: canvas-content:/.test(text);
 const healthy = /^Current content=drawable owning WebGPU canvas/;
 
 test.describe("the raw browser behaviour (no core)", () => {
@@ -60,7 +63,7 @@ test.describe("the raw browser behaviour (no core)", () => {
   const variants = ["2d-fill", "2d-drawImage", "2d-after-frame", "webgl", "webgl-preserve", "2d-read-frequently", "img-of-toDataURL", "offscreen",
     "nested-drawable-canvas", "deep-2d", "hidden-then-shown-2d"];
 
-  test("each variant alone in a layer is captured, with fresh pixels after a redraw", async ({ browser }) => {
+  test("unmarked, each variant alone in a layer is captured, with fresh pixels after a redraw", async ({ browser }) => {
     const table = [];
     for (const id of variants) {
       const [row] = await raw(browser, [id]);
@@ -69,41 +72,118 @@ test.describe("the raw browser behaviour (no core)", () => {
       expect(row.capturesFirst || id === "2d-after-frame" || id === "hidden-then-shown-2d", `${id}: captured (${row.snapshotFirst})`).toBe(true);
       expect(row.capturesSecond, `${id}: captured after the redraw/show (${row.snapshotSecond})`).toBe(true);
     }
-    // A canvas that holds a drawable canvas is not itself a plain canvas; its content is not captured.
     const [holder] = await raw(browser, ["nested-canvas-holding-canvas"]);
     table.push(holder);
     expect(holder.blank, "canvas holding a drawable child: blank").toBe(true);
-    await mkdir(evidenceDirectory("core-canvas-content"), { recursive: true });
-    await writeFile(`${evidenceDirectory("core-canvas-content")}/raw-alone.json`, JSON.stringify(table, null, 2));
+    await evidence("raw-alone", table);
   });
 
-  test("with the variants together only the first-attached canvas is captured; the img and a nested drawable canvas are", async ({ browser }) => {
+  test("unmarked, with the variants together only the first-attached canvas is captured; the img and a nested drawable canvas are", async ({ browser }) => {
     const rows = await raw(browser, undefined);
     const byId = Object.fromEntries(rows.map(row => [row.id, row]));
-    await mkdir(evidenceDirectory("core-canvas-content"), { recursive: true });
-    await writeFile(`${evidenceDirectory("core-canvas-content")}/raw-together.json`, JSON.stringify(rows, null, 2));
+    await evidence("raw-together", rows);
     expect(byId["2d-fill"].capturesSecond, "the first canvas").toBe(true);
     for (const id of ["2d-drawImage", "2d-after-frame", "webgl", "webgl-preserve", "2d-read-frequently", "offscreen", "nested-canvas-holding-canvas", "deep-2d", "hidden-then-shown-2d"]) {
       expect(byId[id].blank, `${id}: blank behind the first canvas (${byId[id].snapshotSecond})`).toBe(true);
     }
     for (const id of ["img-of-toDataURL", "nested-drawable-canvas"]) expect(byId[id].capturesSecond, `${id} is captured`).toBe(true);
-    // Created in the opposite order: the first one attached wins, whichever kind it is.
     const reversed = Object.fromEntries((await raw(browser, undefined, true)).map(row => [row.id, row]));
     expect(reversed["hidden-then-shown-2d"].capturesSecond, "reversed: the first canvas").toBe(true);
     for (const id of ["2d-fill", "2d-drawImage", "webgl", "2d-read-frequently", "offscreen", "deep-2d"]) expect(reversed[id].blank, `reversed ${id}: blank`).toBe(true);
   });
+
+  const kinds = ["2d-fill", "2d-drawImage", "2d-after-frame", "webgl", "webgl-preserve", "2d-read-frequently", "offscreen", "deep", "hidden-then-shown"];
+  const arrangements = ["alone", "after-div", "after-img", "last-of-three", "insert-before"];
+  for (const mode of ["before", "after", "resize"]) {
+    test(`marked content="drawable" (${mode === "before" ? "set before attaching" : mode === "after" ? "set after attaching" : "set, then resized and redrawn"}): every variant in every arrangement is captured`, async ({ browser }) => {
+      const { context, page, errors } = await open(browser, 1, "/canvas-capture-raw.html");
+      try {
+        await page.waitForFunction(() => window.canvasMarked, null, { timeout: 60000 });
+        const table = [];
+        for (const kind of kinds) for (const arrangement of arrangements) {
+          await page.reload();
+          await page.waitForFunction(() => window.canvasMarked, null, { timeout: 60000 });
+          const row = await page.evaluate(a => window.canvasMarked.runMarked(a.kind, a.mode, a.arrangement), { kind, mode, arrangement });
+          table.push(row);
+          const label = `${mode} ${kind} ${arrangement}`;
+          // An OffscreenCanvas-transferred canvas cannot be resized by the platform, marked or not: the throw is the platform's.
+          expect(row.errors.filter(text => !(kind === "offscreen" && mode === "resize" && /InvalidStateError/.test(text))), `${label}: no error`).toEqual([]);
+          expect(row.capturesSecond, `${label}: captured (${row.snapshotSecond}, expected ${row.expectedSecond})`).toBe(true);
+          if (mode !== "resize" && kind !== "hidden-then-shown") expect(row.capturesFirst, `${label}: captured at the first snapshot (${row.snapshotFirst})`).toBe(true);
+          for (const other of row.others) expect(other.captures, `${label}: the other canvas ${other.name} (${other.second})`).toBe(true);
+        }
+        expect(errors).toEqual([]);
+        await evidence(`raw-marked-${mode}`, table);
+      } finally { await context.close(); }
+    });
+  }
+
+  test("a redraw of a marked canvas raises a paint event of its own for 2D, WebGL and bitmaprenderer canvases, never for an OffscreenCanvas-transferred one", async ({ browser }) => {
+    const { context, page, errors } = await open(browser, 1, "/canvas-capture-raw.html");
+    try {
+      const rows = {};
+      for (const kind of ["2d", "2d-read-frequently", "webgl", "webgl-preserve", "bitmaprenderer", "offscreen"]) {
+        await page.reload();
+        await page.waitForFunction(() => window.canvasMarked, null, { timeout: 60000 });
+        rows[kind] = await page.evaluate(kind => window.canvasMarked.paintsAfterRedraw(kind), kind);
+      }
+      await evidence("raw-marked-redraw-paints", rows);
+      for (const kind of ["2d", "2d-read-frequently", "webgl", "webgl-preserve", "bitmaprenderer"]) {
+        expect(rows[kind].paints, `${kind}: one paint per redraw`).toEqual([1, 1, 1]);
+        expect(near(rows[kind].last, BLUE), `${kind}: the layer shows the last colour`).toBe(true);
+      }
+      // The browser raises no paint for an OffscreenCanvas commit (the layer stays at what the first paint saw): core cannot see it either.
+      expect(rows.offscreen.paints.slice(1), "offscreen: no paint events from its commits (the first count is the layer's first paint)").toEqual([0, 0]);
+      expect(near(rows.offscreen.last, BLUE), "offscreen: the layer never saw the last colour").toBe(false);
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  });
+
+  for (const kind of ["2d", "webgl"]) {
+    test(`the mark's side effects on the canvas itself (${kind}): layout, context, toDataURL, DOM pixels and hits unchanged`, async ({ browser }) => {
+      const { context, page, errors } = await open(browser, 1, "/canvas-capture-raw.html");
+      try {
+        await page.waitForFunction(() => window.canvasMarked, null, { timeout: 60000 });
+        const rows = {};
+        for (const withMark of [false, true]) {
+          await page.reload();
+          await page.waitForFunction(() => window.canvasMarked, null, { timeout: 60000 });
+          const row = await page.evaluate(a => window.canvasMarked.markEffects(a.kind, a.withMark), { kind, withMark });
+          const png = PNG.sync.read(await page.screenshot());
+          const offset = (Math.round(row.clientCentre[1]) * png.width + Math.round(row.clientCentre[0])) * 4;
+          row.screenshotCentre = [png.data[offset], png.data[offset + 1], png.data[offset + 2]];
+          rows[withMark ? "marked" : "unmarked"] = row;
+        }
+        await evidence(`mark-effects-${kind}`, rows);
+        const { marked, unmarked } = rows;
+        expect(unmarked.contentAfter, "an unmarked canvas is not drawable").not.toBe("drawable");
+        expect(marked.contentAfter).toBe("drawable");
+        expect(marked.rectBefore, "layout before and after the mark").toEqual(marked.rectAfter);
+        expect(marked.rectAfter, "layout equals the unmarked canvas's").toEqual(unmarked.rectAfter);
+        expect(marked.sameContext, "getContext returns the same context").toBe(true);
+        expect(near(marked.toDataURLPixel, RED), "toDataURL still works").toBe(true);
+        expect(near(marked.screenshotCentre, RED), `its own DOM presentation is unchanged (${marked.screenshotCentre})`).toBe(true);
+        expect(near(unmarked.screenshotCentre, RED), "same as unmarked").toBe(true);
+        expect(marked.hitOnCanvas, "native hit lands on the canvas").toBe(true);
+        expect(errors).toEqual([]);
+      } finally { await context.close(); }
+    });
+  }
 });
 
 for (const dpr of [1, 2]) {
   test.describe(`core, DPR ${dpr}`, () => {
-    /** Installs `kinds` (marked allowed) and returns the layer-background-or-colour of each slot as seen on screen in GPU. */
+    const colours = { "2d": RED, "2d-blue": BLUE, "2d-read-frequently": RED, webgl: YELLOW, "webgl-preserve": YELLOW, offscreen: RED, img: BLUE, div: GREEN };
     async function measure(browser, kinds) {
       const { context, call, shot, errors } = await openCore(browser, dpr);
       try {
         expect((await call("state")).mode, "starts on GPU").toBe("gpu");
-        await call("install", kinds, true);
+        await call("install", kinds);
+        // An OffscreenCanvas-transferred canvas raises no paint when it commits: the author recaptures the layer after drawing it.
+        if (kinds.includes("offscreen")) await call("invalidate");
         const state = await call("state");
-        expect(state.mode, `GPU stays on with the override (${state.reason})`).toBe("gpu");
+        expect(state.mode, `GPU stays on (${state.reason})`).toBe("gpu");
+        expect(state.reason).toMatch(healthy);
         const png = await shot();
         const out = [];
         for (let index = 0; index < kinds.length; index++) out.push(centre(png, await call("slot", index), dpr));
@@ -112,128 +192,107 @@ for (const dpr of [1, 2]) {
       } finally { await context.close(); }
     }
 
-    test("core's capture matches the raw probe: the first canvas is captured, later canvases and canvases after painted content are blank", async ({ browser }) => {
+    test("every canvas in a layer is captured whatever its kind or place, and GPU stays on", async ({ browser }) => {
       const rows = {};
       for (const kinds of [["2d"], ["webgl"], ["webgl-preserve"], ["offscreen"], ["2d-read-frequently"], ["2d", "2d-blue"], ["2d", "div"], ["2d", "img"],
-        ["div", "2d"], ["img", "2d", "2d-blue"], ["webgl", "2d"], ["2d", "div", "2d-blue"]]) rows[kinds.join(",")] = await measure(browser, kinds);
-      await mkdir(evidenceDirectory("core-canvas-content"), { recursive: true });
-      await writeFile(`${evidenceDirectory("core-canvas-content")}/core-dpr${dpr}.json`, JSON.stringify(rows, null, 2));
-      expect(near(rows["2d"][0], RED), `2d alone ${rows["2d"][0]}`).toBe(true);
-      expect(near(rows["webgl"][0], YELLOW), `webgl alone ${rows["webgl"][0]}`).toBe(true);
-      expect(near(rows["webgl-preserve"][0], YELLOW), "webgl preserveDrawingBuffer alone").toBe(true);
-      expect(near(rows["offscreen"][0], RED), "transferred to OffscreenCanvas, alone").toBe(true);
-      expect(near(rows["2d-read-frequently"][0], RED), "willReadFrequently, alone").toBe(true);
-      expect(near(rows["2d,2d-blue"][0], RED) && near(rows["2d,2d-blue"][1], BACKGROUND), `two canvases: first only ${rows["2d,2d-blue"]}`).toBe(true);
-      expect(near(rows["2d,div"][0], RED) && near(rows["2d,div"][1], GREEN), "canvas then a painted div: both captured").toBe(true);
-      expect(near(rows["2d,img"][0], RED) && near(rows["2d,img"][1], BLUE), "canvas then an img: both captured").toBe(true);
-      expect(near(rows["div,2d"][0], GREEN) && near(rows["div,2d"][1], BACKGROUND), "a painted div first: the canvas is blank").toBe(true);
-      expect(near(rows["img,2d,2d-blue"][0], BLUE) && near(rows["img,2d,2d-blue"][1], BACKGROUND) && near(rows["img,2d,2d-blue"][2], BACKGROUND), "an img first: both canvases blank").toBe(true);
-      expect(near(rows["webgl,2d"][0], YELLOW) && near(rows["webgl,2d"][1], BACKGROUND), "webgl first, 2d second").toBe(true);
-      expect(near(rows["2d,div,2d-blue"][0], RED) && near(rows["2d,div,2d-blue"][1], GREEN) && near(rows["2d,div,2d-blue"][2], BACKGROUND), "a second canvas behind a div").toBe(true);
+        ["div", "2d"], ["img", "2d", "2d-blue"], ["webgl", "2d"], ["2d", "div", "2d-blue"], ["div", "img", "2d", "webgl", "offscreen", "2d-blue", "2d-read-frequently", "webgl-preserve"]]) {
+        const name = kinds.join(",");
+        rows[name] = await measure(browser, kinds);
+        kinds.forEach((kind, index) => expect(near(rows[name][index], colours[kind]), `${name}: slot ${index} (${kind}) is ${rows[name][index]}, expected ${colours[kind]}`).toBe(true));
+      }
+      await evidence(`core-dpr${dpr}`, rows);
     });
 
-    test("a layer with a canvas is refused with the reason canvas-content and shows the canvas in DOM; removing it and enabling again admits it", async ({ browser }) => {
+    test("a canvas redrawn or resized stays fresh, and hits land on the canvas and beside it", async ({ browser }) => {
       const { context, call, shot, page, errors } = await openCore(browser, dpr);
       try {
-        const before = await call("state");
-        expect(before.mode).toBe("gpu");
-        expect(before.reason).toMatch(healthy);
-        // A canvas added to a GPU layer: diagnosed fallback to DOM, with the named reason, never GPU pixels with a blank canvas.
-        await call("install", ["div", "2d"]);
-        const fallen = await call("state");
-        expect(fallen.mode, "fell back to DOM").toBe("dom");
-        expect(fallen.reason, "named reason").toMatch(/canvas-content/);
-        expect(fallen.reason).toContain("probe");
-        const png = await shot();
-        const [div, canvas] = [await call("slot", 0), await call("slot", 1)];
-        expect(near(centre(png, canvas, dpr), RED), `the DOM presentation shows the canvas (${centre(png, canvas, dpr)})`).toBe(true);
-        expect(near(centre(png, div, dpr), GREEN)).toBe(true);
-        // An explicit enable() with the canvas still there is refused with the same reason.
-        const refused = await call("enable");
-        expect(refused.mode).toBe("dom");
-        expect(JSON.stringify(refused.admission) + refused.reason).toMatch(/canvas-content/);
-        // The canvas goes; an explicit enable() admits again (no automatic readmission, as for every other reason).
-        await call("remove", 1);
-        const admitted = await call("enable");
-        expect(admitted.mode, `admitted again (${admitted.reason})`).toBe("gpu");
-        expect(admitted.reason).toMatch(healthy);
-        // The plain layer is untouched throughout: pixels and native hits.
-        const swatch = await call("box", "swatch"), button = await call("box", "plain-button");
-        const after = await shot();
-        expect(near(centre(after, swatch, dpr), GREEN)).toBe(true);
-        const hit = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.id, { x: button.x + button.width / 2, y: button.y + button.height / 2 });
-        expect(hit, "native hit lands on the original button").toBe("plain-button");
-        expect(errors.filter(refusal), "only the logged refusal").toEqual([]);
+        await call("install", ["div", "2d", "2d-blue"]);
+        await call("redraw", 1, BLUE);
+        let png = await shot();
+        expect(near(centre(png, await call("slot", 1), dpr), BLUE), `fresh after a redraw (${centre(png, await call("slot", 1), dpr)})`).toBe(true);
+        await call("resize", 2, GREEN);
+        png = await shot();
+        expect(near(centre(png, await call("slot", 2), dpr), GREEN), `fresh after a resize and redraw (${centre(png, await call("slot", 2), dpr)})`).toBe(true);
+        expect(near(centre(png, await call("slot", 0), dpr), GREEN), "the div beside them").toBe(true);
+        expect((await call("state")).mode).toBe("gpu");
+        const hit = async (x, y) => page.evaluate(({ x, y }) => { const e = document.elementFromPoint(x, y); return e ? (e.getAttribute("data-slot") ?? e.id) : null; }, { x, y });
+        const canvas = await call("slot", 1);
+        expect(await hit(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2), "native hit on the canvas").toBe("1");
+        expect(await hit(canvas.x + canvas.width + 8, canvas.y + canvas.height / 2), "beside the canvas: the layer").toBe("probe");
+        const plain = await call("box", "plain-button");
+        expect(await hit(plain.x + plain.width / 2, plain.y + plain.height / 2), "the plain layer's button").toBe("plain-button");
+        expect(errors).toEqual([]);
       } finally { await context.close(); }
     });
 
-    test("a canvas added later falls back at once; enabling with a canvas present is refused; the override admits it", async ({ browser }) => {
-      const { context, call, errors } = await openCore(browser, dpr);
+    test("a canvas added later is marked and captured within a frame or two, GPU on", async ({ browser }) => {
+      const { context, call, shot, page, frames, errors } = await openCore(browser, dpr);
       try {
         await call("install", ["div"]);
+        const index = await call("appendOnly", "2d");
+        await frames(2);
+        const state = await call("state");
+        expect(state.mode, state.reason).toBe("gpu");
+        expect(await call("content", index), "marked").toBe("drawable");
+        expect(near(centre(await shot(), await call("slot", index), dpr), RED), "captured").toBe(true);
+        // A second and third, one a different kind, in the same frame.
+        const more = [await call("appendOnly", "webgl"), await call("appendOnly", "2d-blue")];
+        await frames(2);
+        const png = await shot();
+        expect(near(centre(png, await call("slot", more[0]), dpr), YELLOW) && near(centre(png, await call("slot", more[1]), dpr), BLUE), "both captured").toBe(true);
         expect((await call("state")).mode).toBe("gpu");
-        await call("add", "2d");
-        const fallen = await call("state");
-        expect(fallen.mode, "a canvas added later: DOM").toBe("dom");
-        expect(fallen.reason).toMatch(/canvas-content/);
-        // The override, set on the canvas in DOM mode, is read at the next explicit admission.
-        await call("setAttribute", 1, "data-underglass-gpu-canvas", "allow");
-        const admitted = await call("enable");
-        expect(admitted.mode, `override admits (${admitted.reason})`).toBe("gpu");
-        // A second canvas without the override, added while on GPU: refused again, and only by that canvas.
-        await call("add", "2d-blue");
-        const again = await call("state");
-        expect(again.mode).toBe("dom");
-        expect(again.reason).toMatch(/canvas-content/);
-        // Any other value of the attribute is not the override.
-        await call("remove", 2);
-        await call("setAttribute", 1, "data-underglass-gpu-canvas", "yes");
-        const wrong = await call("enable");
-        expect(wrong.mode).toBe("dom");
-        await call("setAttribute", 1, "data-underglass-gpu-canvas", null);
-        expect((await call("enable")).mode).toBe("dom");
-        expect(errors.filter(refusal), "only the logged refusals").toEqual([]);
+        expect(await page.evaluate(() => document.querySelectorAll("canvas[content=drawable]").length), "output canvas plus three marked").toBe(4);
+        expect(errors).toEqual([]);
       } finally { await context.close(); }
     });
 
-    test("a canvas outside every layer changes nothing: GPU stays on, the plain layer stays fresh and its hits correct", async ({ browser }) => {
+    test("the mark follows GPU: given back on disable, restored to the author's value, kept when the author set it, dropped when a canvas leaves its layer", async ({ browser }) => {
+      const { context, call, errors } = await openCore(browser, dpr);
+      try {
+        await call("install", ["2d", "2d-blue", "webgl", "2d-read-frequently"], [null, "fallback", "drawable", null]);
+        expect(await call("content", 0), "marked").toBe("drawable");
+        expect(await call("content", 1), "the author's fallback is replaced while GPU presents").toBe("drawable");
+        expect(await call("content", 2)).toBe("drawable");
+        // Layout does not move: the slot's box in GPU equals its box in DOM.
+        const gpuBoxes = [await call("slot", 0), await call("slot", 1)];
+        await call("disable");
+        expect((await call("state")).mode).toBe("dom");
+        expect(await call("content", 0), "no value before: none again").toBe(null);
+        expect(await call("content", 1), "the author's value is back").toBe("fallback");
+        expect(await call("content", 2), "the author set drawable: kept").toBe("drawable");
+        const domBoxes = [await call("slot", 0), await call("slot", 1)];
+        domBoxes.forEach((box, i) => ["x", "y", "width", "height"].forEach(key => expect(Math.abs(box[key] - gpuBoxes[i][key]), `slot ${i} ${key} is the same in GPU and DOM`).toBeLessThan(0.51)));
+        // Enabling again marks them again; a canvas that leaves its layer gets its own value back while GPU stays on.
+        const enabled = await call("enable");
+        expect(enabled.mode, enabled.reason).toBe("gpu");
+        expect(await call("content", 0)).toBe("drawable");
+        expect(await call("content", 1)).toBe("drawable");
+        await call("leave", 1);
+        expect(await call("content", 1), "left the layer: the author's value").toBe("fallback");
+        expect(await call("content", 0), "still in the layer").toBe("drawable");
+        // Dispose gives everything back.
+        await call("dispose");
+        expect(await call("content", 0), "disposed").toBe(null);
+        expect(await call("content", 3), "disposed").toBe(null);
+        expect(await call("content", 2), "the author's drawable stays").toBe("drawable");
+        expect(errors).toEqual([]);
+      } finally { await context.close(); }
+    });
+
+    test("a canvas outside every layer is not marked and changes nothing", async ({ browser }) => {
       const { context, call, shot, page, errors } = await openCore(browser, dpr);
       try {
         await call("outsideCanvas");
         await call("settle");
         const state = await call("state");
         expect(state.mode, state.reason).toBe("gpu");
-        expect(state.reason).toMatch(healthy);
+        expect(await page.evaluate(() => document.getElementById("outside").getAttribute("content")), "not marked").toBe(null);
         const png = await shot();
-        expect(near(centre(png, await call("box", "outside"), dpr), RED), "the outside canvas is plain DOM pixels").toBe(true);
+        expect(near(centre(png, await call("box", "outside"), dpr), RED), "plain DOM pixels").toBe(true);
         expect(near(centre(png, await call("box", "swatch"), dpr), GREEN)).toBe(true);
-        // Fresh pixels: restyle the plain layer and see the change on the GPU output.
         await page.evaluate(() => { document.getElementById("swatch").style.background = "rgb(40, 40, 200)"; });
         await call("settle");
-        const changed = await shot();
-        expect(near(centre(changed, await call("box", "swatch"), dpr), BLUE), "fresh pixels after a change").toBe(true);
-        expect((await call("state")).mode).toBe("gpu");
-        expect(errors).toEqual([]);
-      } finally { await context.close(); }
-    });
-
-    test("with the override the layer stays on GPU and its other content stays fresh with correct hits", async ({ browser }) => {
-      const { context, call, shot, page, errors } = await openCore(browser, dpr);
-      try {
-        await call("install", ["2d", "div"], true);
-        const state = await call("state");
-        expect(state.mode, state.reason).toBe("gpu");
-        const png = await shot();
-        expect(near(centre(png, await call("slot", 0), dpr), RED), "the first canvas is captured").toBe(true);
-        expect(near(centre(png, await call("slot", 1), dpr), GREEN)).toBe(true);
-        // Redraw the canvas: the capture follows (a repaint of the canvas is a paint-event change).
-        await call("redraw", 0, BLUE);
-        const redrawn = await shot();
-        expect(near(centre(redrawn, await call("slot", 0), dpr), BLUE), `fresh pixels after a redraw (${centre(redrawn, await call("slot", 0), dpr)})`).toBe(true);
-        const slot = await call("slot", 1);
-        const hit = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.getAttribute("data-slot"), { x: slot.x + slot.width / 2, y: slot.y + slot.height / 2 });
-        expect(hit, "native hit on the original element").toBe("1");
-        expect((await call("state")).mode).toBe("gpu");
+        expect(near(centre(await shot(), await call("box", "swatch"), dpr), BLUE), "fresh pixels after a change").toBe(true);
         expect(errors).toEqual([]);
       } finally { await context.close(); }
     });

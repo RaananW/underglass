@@ -583,24 +583,26 @@ element that receives the event:
 
 ### Canvas inside a layer
 
-A `<canvas>` inside an enrolled layer is not captured reliably by HTML-in-Canvas on the tested build (Canary 158.0.8112.0): only a
-canvas that is the first thing attached to the layer is captured; a later canvas, or one that follows painted siblings, is the layer
-background, before and after a redraw (2D, WebGL, `preserveDrawingBuffer` and `OffscreenCanvas` alike; the measurements are pinned by
-`tests/browser/core-canvas-content.test.mjs` and written up in [upstream/canvas-in-drawable.md](upstream/canvas-in-drawable.md)). Core does
-not present it blank:
+On the tested build (Canary 158.0.8112.0) HTML-in-Canvas captures a nested `<canvas>` only when the canvas is itself
+`content="drawable"`; an unmarked one is captured only if it is the first thing attached to its layer and is otherwise the layer background,
+before and after a redraw (issue #184; measurements in [upstream/canvas-in-drawable.md](upstream/canvas-in-drawable.md), pinned by
+`tests/browser/core-canvas-content.test.mjs`). Marked, every variant is captured in every arrangement, whether the mark is set before
+or after attaching or followed by a resize and redraw: 2D (also `willReadFrequently`), WebGL (also `preserveDrawingBuffer`),
+`bitmaprenderer`, `OffscreenCanvas`-transferred, deep, hidden then shown, after a painted `div` or `img`, last of three,
+`insertBefore`. The mark changes nothing else on the canvas: layout, `getContext`, `toDataURL`, its DOM pixels and native hits are
+the same.
 
-- A layer that contains a `<canvas>` is refused by the structural policy with a reason that starts `canvas-content`
-  (`canvas-content: layer <id> contains a <canvas> (#id) that HTML-in-Canvas does not capture on this build; ...`). At `enable()` that is the
-  admission reason (ordinary DOM, the canvas visible); on a live GPU session a canvas appended to a layer (or an override removed) makes the
-  next policy check recover the whole runtime to ordinary DOM with the same reason, as for every other structural reason. Re-admission is
-  the usual explicit `enable()` after the canvas is gone (or marked); nothing retries by itself.
-- The fallback is runtime-wide, not per layer: GPU mode has no per-layer DOM presentation (a layer inside the capture canvas is invisible
-  unless drawn). Keep a canvas outside every enrolled layer (in unenrolled native content, as `NativeOverlay` does for dialogs) and
-  GPU is unaffected; a canvas outside all layers is plain DOM.
-- **Override:** `data-underglass-gpu-canvas="allow"` (`GPU_CANVAS_ATTRIBUTE`, exported by `@underglass/core`) on the `<canvas>` exempts
-  that canvas from the refusal. It is the author's statement that the canvas may be presented blank under GPU (it is decorative, empty,
-  hidden, or the only canvas and the first thing in its layer, where this build does capture it). No other value counts. Everything else
-  in the layer stays captured with fresh pixels and correct hits.
+So core does it for you, with nothing to opt into:
+
+- While GPU presents, every `<canvas>` inside an enrolled layer is set `content="drawable"`, at admission and for a canvas added
+  (or a layer registered) later; the next paint captures it like any content, with fresh pixels after a redraw or resize.
+- The author's own `content` value is remembered and restored when GPU ends (`disable()`, `dispose()`, any diagnosed fallback), or when the
+  canvas leaves every layer. Do not rely on the attribute: it reads `drawable` only while GPU presents.
+- A canvas outside every layer is not touched.
+- **Limit: an `OffscreenCanvas`-transferred canvas** (`transferControlToOffscreen()`) is captured correctly when a paint happens, but its
+  commits raise no `paint` event (a redraw of every other kind raises one), so the layer is not recaptured by itself. After drawing it,
+  call `controller.invalidate(layerId)` (the matrix in `core-canvas-content.test.mjs` does). Core cannot detect such a canvas without a
+  destructive probe (`getContext` or `toDataURL` on a canvas it does not own), so it neither refuses nor recaptures them on its own.
 
 ### Same-value mutations are ignored
 
