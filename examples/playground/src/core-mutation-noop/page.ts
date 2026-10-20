@@ -21,7 +21,8 @@ const controller: CanvasController = mountApplicationModule({ ...createCanvasHos
   card.setAttribute("drawable", "");
   const list = make("div", { id: "list" });
   list.append(make("span"));
-  const pad = make("canvas", { id: "pad", width: "60", height: "30" });
+  // The override admits the layer: a canvas after painted siblings is captured blank on this build (#184, core-canvas-content.test.mjs).
+  const pad = make("canvas", { id: "pad", width: "60", height: "30", "data-underglass-gpu-canvas": "allow" });
   pad.getContext("2d")!.fillStyle = "rgb(200, 40, 40)";
   pad.getContext("2d")!.fillRect(0, 0, 60, 30);
   const pic = make("img", { id: "pic", width: "60", height: "30", alt: "" });

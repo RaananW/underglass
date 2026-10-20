@@ -159,8 +159,9 @@ for (const dpr of [1, 2]) {
   test(`a same-value canvas width write clears the bitmap in the DOM: captured, not ignored (DPR ${dpr})`, async ({ browser }) => {
     const { context, call, frames, errors } = await open(browser, dpr);
     try {
-      // The pixels cannot prove this one: this Canary build paints a <canvas> descendant's bitmap blank into a layer's capture whether or
-      // not it was cleared (open-issues), so the probe asserts the observer's decision: the record is counted by neither path as ignored.
+      // The pixels cannot prove this one: this Canary build captures a <canvas> that follows painted siblings in its layer as the layer
+      // background whether or not it was cleared (#184; core-canvas-content.test.mjs). The page marks it data-underglass-gpu-canvas="allow"
+      // so core admits the layer, and the probe asserts the observer's decision: the record is counted by neither path as ignored.
       const result = await write(call, frames, "sameCanvas");
       expect(result.ignored, "not ignored").toBe(0);
       expect(result.captures, "captured").toBeGreaterThanOrEqual(1);

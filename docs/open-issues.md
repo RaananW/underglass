@@ -87,9 +87,7 @@ different from currently failing supported code.
   (`metrics.mutationsIgnored`; [api](api.md#same-value-mutations-are-ignored)); 300 frames of one cost 299 captures before and 0 now. Not covered, by design:
   a custom-property or style write that changes a value, and any write the DOM sees as a change (a different value, an added or removed attribute).
 
-- **A `<canvas>` inside a layer is captured blank (Canary 158, found with #181).** In `core-mutation-noop.html` a 2D canvas with drawn content shows its
-  bitmap in ordinary DOM and in a screenshot of the DOM presentation, but the GPU capture of its layer paints it as the layer background, also after a redraw.
-  Not investigated further (browser or core); a layer that contains a `<canvas>` needs its own probe before it is relied on.
+- **A `<canvas>` inside a layer is captured blank (#184): narrowed, core refuses it.** Measured on Canary 158.0.8112.0 (details in [upstream/canvas-in-drawable.md](upstream/canvas-in-drawable.md)): a nested canvas (2D, WebGL, `preserveDrawingBuffer`, `OffscreenCanvas`) is captured only when it is the first thing attached to its layer, with fresh pixels after a redraw; a later canvas, or one after a painted sibling, is the layer background. Core now refuses a layer that contains a `<canvas>` (reason `canvas-content`, ordinary DOM shows it) instead of presenting it blank; `data-underglass-gpu-canvas="allow"` opts one canvas in ([api](api.md#canvas-inside-a-layer)). Limits: the fallback is runtime-wide (there is no per-layer DOM presentation inside GPU mode) and re-admission needs an explicit `enable()`. The upstream issue is drafted, not filed, and the Chromium hotlist could not be read without sign-in. Closure: when the browser captures nested canvases in every arrangement (the `core-canvas-content` raw probe fails first), drop the refusal and prove it with the same pixel probes.
 
 ## Unsupported or untargeted scope
 

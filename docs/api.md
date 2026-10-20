@@ -581,6 +581,27 @@ element that receives the event:
   (36 to 38 before). A Knob or Fader writes its value to a custom property on its root for each `input`, which is a DOM write that
   recaptures anyway, so they are not marked.
 
+### Canvas inside a layer
+
+A `<canvas>` inside an enrolled layer is not captured reliably by HTML-in-Canvas on the tested build (Canary 158.0.8112.0): only a
+canvas that is the first thing attached to the layer is captured; a later canvas, or one that follows painted siblings, is the layer
+background, before and after a redraw (2D, WebGL, `preserveDrawingBuffer` and `OffscreenCanvas` alike; the measurements are pinned by
+`tests/browser/core-canvas-content.test.mjs` and written up in [upstream/canvas-in-drawable.md](upstream/canvas-in-drawable.md)). Core does
+not present it blank:
+
+- A layer that contains a `<canvas>` is refused by the structural policy with a reason that starts `canvas-content`
+  (`canvas-content: layer <id> contains a <canvas> (#id) that HTML-in-Canvas does not capture on this build; ...`). At `enable()` that is the
+  admission reason (ordinary DOM, the canvas visible); on a live GPU session a canvas appended to a layer (or an override removed) makes the
+  next policy check recover the whole runtime to ordinary DOM with the same reason, as for every other structural reason. Re-admission is
+  the usual explicit `enable()` after the canvas is gone (or marked); nothing retries by itself.
+- The fallback is runtime-wide, not per layer: GPU mode has no per-layer DOM presentation (a layer inside the capture canvas is invisible
+  unless drawn). Keep a canvas outside every enrolled layer (in unenrolled native content, as `NativeOverlay` does for dialogs) and
+  GPU is unaffected; a canvas outside all layers is plain DOM.
+- **Override:** `data-underglass-gpu-canvas="allow"` (`GPU_CANVAS_ATTRIBUTE`, exported by `@underglass/core`) on the `<canvas>` exempts
+  that canvas from the refusal. It is the author's statement that the canvas may be presented blank under GPU (it is decorative, empty,
+  hidden, or the only canvas and the first thing in its layer, where this build does capture it). No other value counts. Everything else
+  in the layer stays captured with fresh pixels and correct hits.
+
 ### Same-value mutations are ignored
 
 A write that leaves the DOM as it was costs no capture. The runtime observes the root with `attributeOldValue` and

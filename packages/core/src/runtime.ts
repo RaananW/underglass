@@ -7,7 +7,7 @@
  * motion, declarative transitions, animation ownership and decorative effects.
  */
 import { canonical, cssMatrix, DEFAULT_PERSPECTIVE, pivot, project, tilted, type Transform, type TransformOrigin } from "./affine.js";
-import { createSurfaceRenderer, type SurfaceRendererOptions } from "./renderer.js";
+import { createSurfaceRenderer, GPU_CANVAS_ATTRIBUTE, type SurfaceRendererOptions } from "./renderer.js";
 import type { Layout } from "./compiler.js";
 import type { MountBoundaryOptions } from "./mount-boundary.js";
 import { DeclarationOwnership, prepareAnimation, rejectImportantPresentation, type AnimationPlayback } from "./animation.js";
@@ -701,6 +701,10 @@ export class CanvasRuntime {
       if (layer.element.getAnimations().some(animation => !sources.has(animation) && animatesPresentation(animation))) {
         return `Unowned/overlapping CSS/WAAPI animation requires explicit adapter: ${layer.id}`;
       }
+      // A nested <canvas> is captured blank by this browser build whenever another canvas or earlier painted content precedes it in the
+      // layer (docs/upstream/canvas-in-drawable.md), so presenting it would be silent stale pixels: refuse unless the author accepts it.
+      const canvas = layer.element.querySelector(`canvas:not([${GPU_CANVAS_ATTRIBUTE}="allow"])`);
+      if (canvas) return `canvas-content: layer ${layer.id} contains a <canvas>${canvas.id ? ` (#${canvas.id})` : ""} that HTML-in-Canvas does not capture on this build; keep it outside enrolled layers or mark it ${GPU_CANVAS_ATTRIBUTE}="allow"; ordinary DOM required`;
       if (!layer.element.isConnected) return `Detached enrolled layer: ${layer.id}`;
       if (layer.layout.width === 0 || layer.layout.height === 0 || !layer.element.offsetWidth || !layer.element.offsetHeight) return `Zero-sized layer: ${layer.id}`;
       const style = getComputedStyle(layer.element);

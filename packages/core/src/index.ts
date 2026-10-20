@@ -20,7 +20,7 @@ export type { Layout, Appearance, CompiledStyle } from "./compiler.js";
 export { mountApplicationModule } from "./module.js";
 export type { LocalApplicationModule } from "./module.js";
 export type { RendererStatus as CanvasStatus } from "./renderer.js";
-export { GPU_VALUE_ATTRIBUTE } from "./renderer.js";
+export { GPU_VALUE_ATTRIBUTE, GPU_CANVAS_ATTRIBUTE } from "./renderer.js";
 export type { AnimationPlayback, ReleaseOptions } from "./animation.js";
 export type { CSSAnimationSource } from "./css-animation.js";
 export type { CompiledAnimation, CompiledProgramSet } from "./compiled.js";
