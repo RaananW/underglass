@@ -357,7 +357,8 @@ for (const action of ["disable", "dispose"]) {
     expect(cancelled.state.initializing).toBe(false);
     expect(cancelled.state.resources.pendingEngines).toBe(1);
     await page.waitForFunction(() => window.__results?.length === 1);
-    expect((await page.evaluate(() => window.__results[0])).mode).toBe(action === "dispose" ? "disposed" : "dom");
+    // The cancelled enable() resolves with the DOM state it recovered to (disposal completes after it).
+    expect((await page.evaluate(() => window.__results[0])).mode).toBe("dom");
     if (action === "disable") {
       expect(cancelled.state.reason).toMatch(/Explicit disable/);
       await expect(page.evaluate(() => window.surfaceProbe.enable())).rejects.toThrow("Previous engine admission has not settled");
