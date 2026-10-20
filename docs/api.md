@@ -448,7 +448,7 @@ App CSS must still size/position/style these elements. Neutral authored
 transform/opacity and existing stacking/clipping/bounds restrictions apply
 at GPU admission; arbitrary CSS/animation-library roots are not certified.
 Use the library's **public** container API before its portal mounts; never
-move existing library DOM. Only Radix Dialog1.2.0 Root/Trigger/Portal/Overlay/
+move existing library DOM. Only Radix Dialog1.3.1 Root/Trigger/Portal/Overlay/
 Content/Title/Description/Close in this pilot are verified. See [integration](archive/integration.md).
 
 ### Declarative numeric motion and presence

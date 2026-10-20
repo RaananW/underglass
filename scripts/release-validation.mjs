@@ -1,5 +1,5 @@
 /**
- * Release validation of the `@underglass/react` package (with the `@underglass/core` runtime it depends on) for both supported React peers (18.3.1 and 19.3.0).
+ * Release validation of the `@underglass/react` package (with the `@underglass/core` runtime it depends on) for both supported React peers (18.3.1 and 19.3.1).
  * For each peer it copies the repository into a clean workspace and runs the unit tests, typechecks, builds
  * the library and the playground, packs the library, checks the archive against the exact allowlist, installs
  * the archive into a fresh consumer app, typechecks and builds that app, and (for the `dom` and `native`
@@ -174,7 +174,7 @@ try {
     for (const path of ["todo-main.tsx", "tsconfig.json", "public-types.ts"]) {
       await cp(join(root, "fixtures/package-consumer", path), join(peer, "fixtures/package-consumer", path));
     }
-    const version = major === 18 ? "18.3.1" : "19.3.0";
+    const version = major === 18 ? "18.3.1" : "19.3.1";
     await cp(join(root, "package.json"), join(peer, "package.json"));
     // Root tools first; for React 18 the fixture's React 18 packages are then copied over them.
     await copyDependencies(join(root, "node_modules"), join(peer, "node_modules"));

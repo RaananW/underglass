@@ -164,7 +164,7 @@ not reconstructed or restored. **The old adoption-v1 seal is not wholly intact.*
   were verified separately, not covered by an "all old bytes intact" claim.
 
 The subsequent repair used physically isolated dependency/cache trees, actual
-React18.3.1/19.3.0 runtime preassertions and independent fresh status proof.
+React18.3.1/19.3.1 runtime preassertions and independent fresh status proof.
 Earlier unidentified React18-labelled runs are not certified React18 evidence.
 The fresh acceptance retained this exception explicitly; it did not repair the
 historical archive. Closure means preserving/disclosing the exception and

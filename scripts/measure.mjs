@@ -138,7 +138,7 @@ try {
         try {
           await page.goto(`${url}/performance.html?layers=${layers}&variant=${variant}`);
           await page.waitForFunction(() => window.measurement, null, { timeout: 10000 });
-          assert.equal(await page.evaluate(() => window.measurement.version), "19.3.0");
+          assert.equal(await page.evaluate(() => window.measurement.version), "19.3.1");
           // The warmup window yields the refresh-interval baseline used by `summary`; the measurement window follows.
           const warmup = await page.evaluate(() => window.measurement.collect(500));
           const measurement = await page.evaluate(ms => window.measurement.collect(ms), report.method.requestedWindowMs);

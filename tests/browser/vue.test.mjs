@@ -20,7 +20,7 @@ test("Vue Surface renders the original drawable section with compiled styles", a
   await page.goto("/vue.html");
   await page.waitForFunction(() => window.frameworkProbe);
   const state = await page.evaluate(() => window.frameworkProbe.state());
-  expect(state.vue).toBe("3.5.43");
+  expect(state.vue).toBe("3.5.44");
   const panel = await page.locator("#panel").evaluate(node => ({
     tag: node.tagName, drawable: node.getAttribute("drawable"), parent: node.parentElement === window.frameworkProbe.controller.container,
     left: node.style.left, width: node.style.width, origin: node.style.transformOrigin, background: getComputedStyle(node).backgroundColor,

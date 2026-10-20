@@ -121,7 +121,7 @@ for (const strict of [false, true]) test(`decoded effect identity, time, alpha, 
   const changedPixels = await pixels(page, `content-${strict}`);
   expect(changed(region(changedPixels, 330, 220, 240, 60), region(neutral, 330, 220, 240, 60))).toBeGreaterThan(50);
   const state = await page.evaluate(() => window.effectsProbe.state());
-  expect(state.reactVersion).toBe(process.env.CANVAS_EXPECT_REACT_VERSION ?? "19.3.0");
+  expect(state.reactVersion).toBe(process.env.CANVAS_EXPECT_REACT_VERSION ?? "19.3.1");
   expect(state.resources.engines).toBe(1); expect(state.resources.effects).toBe(EFFECT_PASSES);
   // The single admission recorded GPU probe pixels and no native pixels.
   expect(state.metrics.admission.last.nativePixels).toEqual([]);

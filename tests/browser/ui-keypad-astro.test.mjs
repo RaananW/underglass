@@ -73,7 +73,7 @@ test("with JavaScript the Astro keys are held while pressed and the grid's arrow
   const two = page.locator("#two");
   expect(await page.locator("#dial").evaluate(fieldset => ({ className: fieldset.className, style: fieldset.getAttribute("style"), testid: fieldset.dataset.testid, legend: fieldset.querySelector(":scope > legend").textContent }))).toEqual({ className: "ug-keypad extra", style: "--strata-keypad-columns: 3; margin-right: 4px", testid: "dial", legend: "Dial" });
   expect(await two.evaluate(button => ({ className: button.className, value: button.value, testid: button.dataset.testid, type: button.type }))).toEqual({ className: "ug-keypad__key extra", value: "2", testid: "two", type: "submit" });
-  await expect(page.locator("#five")).toHaveAccessibleName("Five");
+  await expect(page.locator("#five")).toHaveAccessibleName("5, five");
   // The behaviour script is a module: wait until a press takes effect.
   const box = await two.boundingBox();
   await expect(async () => {

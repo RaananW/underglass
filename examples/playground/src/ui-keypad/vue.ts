@@ -29,7 +29,7 @@ const App = defineComponent({
           h(KeypadKey, { id: "two", value: "2", class: "extra", "data-testid": "two", onClick: () => clicks.push("two") }, { default: () => "2", ...shift("ABC") }),
           h(KeypadKey, { id: "three", value: "3", onClick: () => clicks.push("three") }, { default: () => "3", ...shift("DEF") }),
           h(KeypadKey, { id: "four", value: "4", disabled: true }, { default: () => "4" }),
-          h(KeypadKey, { id: "five", value: "5", "aria-label": "Five", onClick: () => clicks.push("five") }, { default: () => "5" }),
+          h(KeypadKey, { id: "five", value: "5", "aria-label": "5, five", onClick: () => clicks.push("five") }, { default: () => "5" }),
         ] }),
         h(Keypad, { id: "locked", label: "Locked", columns: 2, disabled: true, size: "small" }, { default: () => [
           h(KeypadKey, { id: "locked-a", value: "a" }, { default: () => "A" }),

@@ -209,7 +209,7 @@ cases and124 full React19 browser cases plus18 units, types and production
 builds. Three routing-only units were added afterward for P8-A1; independent
 final independent acceptance passed21 units/types/build/124 browsers and
 retained source-identical React18 types/build/78 browsers. Actual mounted
-React18.3.1/19.3.0 and Dialog resolution are in the
+React18.3.1/19.3.1 and Dialog resolution are in the
 [React18 matrix (archived raw)](archive/archive-catalog.md) and
 [React19 matrix (archived raw)](archive/archive-catalog.md).
 

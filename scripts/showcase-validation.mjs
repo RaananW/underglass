@@ -175,7 +175,7 @@ try {
       await page.goto(`${url}#/layers`);
       await page.waitForFunction(() => window.showcase);
       record.peer = await page.evaluate(() => ({ react: window.showcase.react, reactDOM: window.showcase.reactDOM }));
-      assertRuntimePeer(record.peer, "19.3.0");
+      assertRuntimePeer(record.peer, "19.3.1");
       await page.getByLabel("Find an example").fill("no matching term");
       await page.getByText("No matching examples. Try another search or category.").waitFor();
       await page.getByLabel("Find an example").fill("");
