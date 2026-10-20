@@ -994,7 +994,14 @@ These are exact, and a renderer keeps them in every configuration, post options 
    2's `out`.
 6. **The map never reaches the face:** face pixels are the same with the map on and off.
 7. **Flat glass over text is exact:** a window's pixels inside protected rects grown by 2 px are the captured colour
-   `c(p)`.
+   `c(p)`. This is the same colour the plain layer pass gives: with no primitives and no objects, a captured texel
+   passes through the layer pass unchanged (core reads it with the same function, exact on the pixel grid, as the
+   window's exact twin), and no stage of the chain (SMAA, bloom, the shadow map, exposure, contrast, the output
+   transform: they act on parts only) touches it. A window and the layer without objects therefore agree on every pixel
+   of a protected text run, 0 mismatches ([issue #159](https://github.com/RaananW/underglass/issues/159); the
+   `core-layer-exactness` suite, DPR 1 and 2, light and dark, with the chain off, SMAA only, bloom only, by default and
+   with every stage). A comparison box wider than the protected rect can reach the window's bevel, which is glass by
+   design (2D.6); the pixels that differ there are not text.
 8. **No hits, no recapture.** Instrument scenes take no hits. A renderer applies changes of `t`, of emitters (the
    pointer light included) and of `post` as scene data: none recaptures the layer or changes its hit geometry.
    Underglass's browser tests check this with counters; a suite of scenes cannot.

@@ -1229,6 +1229,8 @@ throughout.
 | Typing into the display: uploads / probe refreshes | 1 / 1 | 1 / 1 |
 | Moving the layer once: probe refreshes (within 300 ms) | 1 | 1 |
 
+**The plain layer pass is exact (issue #159, resolved).** The Meter wave once reported numerals under a window as "about one level off, up to 22" against the layer drawn without objects (243 of 2,431 px at DPR 1, 635 of 9,108 at DPR 2). Those pixels were the window's own bottom bevel inside the numerals' text boxes (every one exactly +22 levels, faceplate pixels), not text. A captured texel passes through the layer pass unchanged: plain layer, face pass and text under a window are the same pixels with the chain off, SMAA only, bloom only, by default and with every stage, 0 mismatches at DPR 1 and 2, light and dark (`core-layer-exactness`; [rendering model 2D.9](rendering-model.md#2d9-geometric-guarantees) item 7).
+
 The lens knobs differ from the lacquer by about 18% of their box because the lens fills 46 of 100 px; the plate and the
 display differ almost entirely, since the lacquer hides the capture.
 
