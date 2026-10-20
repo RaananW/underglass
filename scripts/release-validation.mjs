@@ -162,7 +162,7 @@ try {
     await mkdir(peer);
     // Sources and configuration for the copy; `node_modules`, `dist` and Vite caches are not copied.
     const copied = ["packages", "examples", "tests", "scripts", ".changeset", "vite.config.ts", "package-lock.json",
-      "README.md", "docs/distribution.md", "docs/showcase.md", "docs/ui-library", ".github/workflows/showcase-pages.yml"];
+      "README.md", "docs/distribution.md", "docs/showcase.md", ".github/workflows/showcase-pages.yml"];
     for (const path of copied) await cp(join(root, path), join(peer, path), {
       recursive: true, filter: path => !["node_modules", "dist", "owned-vite-cache"].includes(basename(path)),
     });
