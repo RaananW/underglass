@@ -133,6 +133,12 @@ Implementer-verified, not independently accepted.
   space and antialiases layer/clip edges analytically. Pixel-aligned, untransformed
   layers still sample exact texels (verified identical to ordinary DOM at a 50%
   alpha probe); rotated or scaled layers no longer alias or show dark edge fringes.
+- **Stage background:** the output canvas is premultiplied and cleared to transparent, so the
+  area no layer covers shows the page's own background in GPU mode exactly as in DOM mode: a
+  dark page stays dark, a runtime theme change shows on the next frame, and a page with no
+  background shows the browser's white. There is no stage colour option; set the background on
+  the page (or on the frame/canvas element's CSS). A layer that is not fully opaque shows that
+  background through it, as in DOM mode.
 - **DOM-mode rotation:** declarative transitions with rotation no longer cancel in
   ordinary DOM. GPU viewport-clip geometry is only checked while GPU presents.
 - **`createCanvasHosts(frame)`:** creates the output canvas, ordinary host and overlay host with the required styles. The output canvas is deliberately not `aria-hidden`, because GPU mode moves the original controls inside it.

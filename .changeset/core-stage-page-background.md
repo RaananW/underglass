@@ -1,0 +1,5 @@
+---
+"@underglass/core": patch
+---
+
+The GPU stage now shows the page's own background instead of a hard-coded white one (#134). The output canvas is configured `premultiplied` and cleared to transparent, so whatever no layer covers is the page behind it, the same as in DOM mode: a dark page stays dark when GPU presentation starts, a theme change at runtime shows on the next frame with GPU still on (nothing is read, tracked or recaptured), and a page with no background still shows the browser's white. No new option or API; a dark theme no longer needs a stage layer in its colour. A layer that is not fully opaque now shows the page background through it, as in DOM mode. The admission probe's viewport-clip check expects the transparent clear instead of white. Upstream check: WICG html-in-canvas default branch `5fb3df86d84de598c7f0fcfc5ee53de1df067e7d` (2026-10-09); the Chromium hotlist 6783002 could not be read (the tracker serves a script shell, no issue list, to unauthenticated fetches); tested on Chrome Canary 158.0.8113.0 with decoded pixels and native-hit probes (`tests/browser/core-stage-background.test.mjs`).

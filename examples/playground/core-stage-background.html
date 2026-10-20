@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Underglass core: stage background</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; font: 14px system-ui; }
+    html[data-theme="dark"] { background: rgb(18, 20, 28); }
+    html[data-theme="light"] { background: rgb(222, 225, 230); }
+    #frame { position: fixed; inset: 0; }
+    #status { display: none; }
+    #card { position: absolute; left: 40px; top: 40px; width: 300px; height: 200px; box-sizing: border-box; padding: 20px; background: rgb(200, 40, 40); border-radius: 12px; }
+    #card button { font: 600 16px system-ui; padding: 10px 16px; }
+  </style>
+</head>
+<body>
+  <div id="frame"></div>
+  <pre id="status" role="status"></pre>
+  <script type="module" src="/src/core-stage-background/page.ts"></script>
+</body>
+</html>
