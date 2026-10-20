@@ -33,7 +33,8 @@ export function Tooltip({ content, children, id, placement = "top", container, c
     <>
       {cloneElement(children, { "aria-describedby": describedBy })}
       {host && createPortal(
-        <div className={classes("ug-tooltip", className)} id={tipId} role="tooltip" popover="manual" data-strata-placement={placement === "bottom" ? "bottom" : undefined}>{content}</div>,
+        // `popover` is not in the React 18 attribute types; it is written to the element as is (as Menu and Popover do).
+        <div {...({ popover: "manual" } as Record<string, unknown>)} className={classes("ug-tooltip", className)} id={tipId} role="tooltip" data-strata-placement={placement === "bottom" ? "bottom" : undefined}>{content}</div>,
         host,
       )}
     </>

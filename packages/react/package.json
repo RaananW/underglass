@@ -19,7 +19,7 @@
     "url": "git+https://github.com/RaananW/underglass.git",
     "directory": "packages/react"
   },
-  "private": true,
+  "author": "Raanan Weber (https://github.com/RaananW)",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/library/index.js",
