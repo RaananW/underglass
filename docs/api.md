@@ -581,6 +581,40 @@ element that receives the event:
   (36 to 38 before). A Knob or Fader writes its value to a custom property on its root for each `input`, which is a DOM write that
   recaptures anyway, so they are not marked.
 
+### Canvas inside a layer
+
+On the tested build (Canary 158.0.8112.0) HTML-in-Canvas captures a nested `<canvas>` only when the canvas is itself
+`content="drawable"`; an unmarked one is captured only if it is the first thing attached to its layer and is otherwise the layer background,
+before and after a redraw (issue #184; measurements in [upstream/canvas-in-drawable.md](upstream/canvas-in-drawable.md), pinned by
+`tests/browser/core-canvas-content.test.mjs`). Marked, every variant is captured in every arrangement, whether the mark is set before
+or after attaching or followed by a resize and redraw: 2D (also `willReadFrequently`), WebGL (also `preserveDrawingBuffer`),
+`bitmaprenderer`, `OffscreenCanvas`-transferred, deep, hidden then shown, after a painted `div` or `img`, last of three,
+`insertBefore`. The mark changes nothing else on the canvas: layout, `getContext`, `toDataURL`, its DOM pixels and native hits are
+the same.
+
+So core does it for you, with nothing to opt into:
+
+- While GPU presents, every `<canvas>` inside an enrolled layer is set `content="drawable"`, at admission and for a canvas added
+  (or a layer registered) later; the next paint captures it like any content, with fresh pixels after a redraw or resize.
+- The author's own `content` value is remembered and restored (absent, empty and any other value exactly) when GPU ends (`disable()`,
+  `dispose()`, any diagnosed fallback), when the layer is released while the element stays in the DOM, and when the canvas leaves every
+  layer (removed, or moved outside the root). A canvas moved between two enrolled layers stays marked. Do not rely on the attribute: it
+  reads `drawable` only while GPU presents.
+- A value the author or a framework writes to `content` while GPU presents (a React or Vue prop that changes, `setAttribute`, a removal)
+  is overwritten by the mark at once and remembered instead: it is what comes back when GPU ends.
+- Cost: one attribute write per canvas per marking event. It is an ordinary DOM mutation, captured like any other (it shows in
+  `state().metrics.captures`, not attributed separately), and it costs one recapture of the layer.
+- Not marked: a canvas outside every layer; a `<canvas>` that hosts drawable children (nested HTML-in-Canvas, which draws its own
+  subtree) or sits inside one; and a canvas inside an open shadow root, which `querySelectorAll` and the runtime's mutation observer do not reach.
+  **Limit:** such a canvas is captured only as an unmarked canvas is (the first thing in its layer; blank behind other canvases): set
+  `content="drawable"` on it yourself, and core leaves it alone. The nested-host canvas's own bitmap is captured unmarked.
+  Both are pinned in `core-canvas-content.test.mjs`.
+- **Limit: an `OffscreenCanvas`-transferred canvas** (`transferControlToOffscreen()`) is captured correctly when a paint happens, but its
+  commits raise no `paint` event (a redraw of every other kind raises one), so **its pixels stay stale until `controller.invalidate(layerId)`
+  is called**; call it after drawing (the matrix in `core-canvas-content.test.mjs` does, and a test pins the stale state so a browser fix is
+  noticed). Core cannot detect such a canvas without a destructive probe (`getContext` or `toDataURL` on a canvas it does not own), so it
+  neither refuses nor recaptures them on its own.
+
 ### Same-value mutations are ignored
 
 A write that leaves the DOM as it was costs no capture. The runtime observes the root with `attributeOldValue` and

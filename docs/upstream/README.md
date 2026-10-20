@@ -1,7 +1,8 @@
 # Upstream reports
 
 Babylon Lite findings (defects, missing APIs and behaviours found by the Instrument work, not yet filed upstream) are
-collected in [babylon-lite.md](babylon-lite.md).
+collected in [babylon-lite.md](babylon-lite.md). A nested `<canvas>` captured blank (#184, drafted, not filed) is in
+[canvas-in-drawable.md](canvas-in-drawable.md).
 
 ## canvasClip hit testing uses the bounding box on rotated drawable children
 
