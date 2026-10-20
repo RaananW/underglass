@@ -41,7 +41,7 @@
     "validate:release": "node scripts/release-validation.mjs"
   },
   "devDependencies": {
-    "@axe-core/playwright": "4.13.0",
+    "@axe-core/playwright": "4.14.0",
     "@changesets/cli": "3.0.3",
     "@playwright/test": "1.64.0",
     "@types/react": "19.3.0",
