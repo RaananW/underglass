@@ -592,8 +592,9 @@ for (const dpr of [1, 2]) test(`at the Instrument level (DPR ${dpr}) the printed
   console.log(`instrument DPR ${dpr}: needle meters': ${needleMarks.length} numerals, ${exactNeedles.compared} px compared: ${exactNeedles.plain} faceplate px, ${exactNeedles.tinted} not exact; ${exactNeedles.mismatched} differ from the DOM's, by at most ${exactNeedles.max} levels`);
   const layer = compare(glass.png, bare.png, bars), layerNeedles = compare(glass.png, bare.png, needleMarks);
   console.log(`instrument DPR ${dpr}: against the layer without windows and relief (the capture through the layer pass): bars ${layer.mismatched} of ${layer.compared} px differ, at most ${layer.max} levels; needle meters ${layerNeedles.mismatched} of ${layerNeedles.compared}, at most ${layerNeedles.max} levels`);
-  // The numerals' ink (the glyphs and their anti-aliased edges: every pixel of the layer without windows that is not the faceplate) is the capture texel under the glass: 0 mismatched against that layer
-  // (#159). What differs elsewhere inside a numeral's text box is the glass's own bevel and edge, which the text box's last rows reach: faceplate pixels, not text.
+  // The comparison box is the numerals' ink only: the glyphs and their anti-aliased edges, i.e. every pixel of the layer without windows that is not the faceplate colour. A numeral's text box
+  // (the line box) is taller than its glyphs, and its last rows reach the window's own bottom bevel, which is glass by design (Rendering Model 2D.6) and not text, so those faceplate pixels
+  // are excluded and only counted (the 243 / 635 px that #159 reported as "up to 22 levels"). Any ink pixel that differs fails the test below; nothing about the ink is merely logged.
   const ink = (marks, faceplate) => {
     let compared = 0, mismatched = 0, bevel = 0;
     for (const mark of marks) {
