@@ -19,7 +19,7 @@
     "url": "git+https://github.com/RaananW/underglass.git",
     "directory": "packages/ui"
   },
-  "private": true,
+  "author": "Raanan Weber (https://github.com/RaananW)",
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
@@ -49,7 +49,10 @@
       "types": "./dist/vue/index.d.ts",
       "import": "./dist/vue/index.js"
     },
-    "./astro": "./src/astro/index.ts",
+    "./astro": {
+      "types": "./dist/astro/astro/index.d.ts",
+      "import": "./dist/astro/astro/index.js"
+    },
     "./css": "./dist/css/strata.css",
     "./css/tokens.css": "./dist/css/tokens.css",
     "./css/components.css": "./dist/css/components.css"
@@ -65,15 +68,12 @@
     "dist/react/*.d.ts",
     "dist/vue/*.js",
     "dist/vue/*.d.ts",
+    "dist/shared/*.d.ts",
     "dist/*.js",
     "dist/tokens.json",
     "dist/css/*.css",
-    "src/astro/*",
-    "src/shared/*.ts",
-    "src/dom/*.ts",
-    "src/tokens/*.ts",
-    "src/tokens/*.json",
-    "src/tokens/characters/*.json",
+    "dist/astro",
+    "src/tokens/strata-scene.schema.json",
     "conformance/*.json",
     "CHANGELOG.md"
   ],
@@ -81,7 +81,7 @@
     "*.css"
   ],
   "scripts": {
-    "build": "vite build && tsc -p tsconfig.json && node scripts/build-css.mjs",
+    "build": "vite build && tsc -p tsconfig.json && node scripts/build-css.mjs && node scripts/build-astro.mjs",
     "prepack": "npm run build",
     "build:conformance": "node scripts/build-conformance.mjs"
   },

@@ -1,7 +1,7 @@
 # Releasing
 
 The library packages are versioned and published with [Changesets](https://changesets.dev) and the
-[Release workflow](../.github/workflows/release.yml). The four public packages are no longer
+[Release workflow](../.github/workflows/release.yml). The five library packages are no longer
 `"private"`, but nothing is on npm yet and the workflow does nothing until the repository variable
 `RELEASES_ENABLED` is `true`. Nothing reaches npm until the owner completes
 [First publish](#first-publish-one-time-local) and [Enabling releases](#enabling-releases).
@@ -10,10 +10,8 @@ The library packages are versioned and published with [Changesets](https://chang
 
 `@underglass/core`, `@underglass/react`, `@underglass/vue`, `@underglass/css-compiler` and
 `@underglass/ui` share one version (a Changesets `fixed` group in
-[`.changeset/config.json`](../.changeset/config.json)). The first four are the **public packages**: they
-are published to npm. `@underglass/ui` (Strata) is in the version group but is still
-`"private": true`: it is versioned and changelogged in lockstep, never tagged or published, until the
-owner decides to publish it (see [Publishing `@underglass/ui`](#publishing-underglassui)).
+[`.changeset/config.json`](../.changeset/config.json)). All five are public packages published to npm
+(the owner decided on 2026-10-20 to publish `@underglass/ui`, Strata, with the rest).
 
 - A release bumps all five together, to the largest bump any pending changeset asks for.
 - The adapters and the compiler pin the exact core version they were released with, so an
@@ -80,20 +78,20 @@ These steps are the owner's. They are account and repository settings that no pu
 not exist, so the first publish comes first):
 
 1. Do the one-time [first publish](#first-publish-one-time-local) so each package name exists, then
-   [configure the trusted publisher](#configure-the-trusted-publisher) for each of the four.
+   [configure the trusted publisher](#configure-the-trusted-publisher) for each of the five.
 2. Create the GitHub environment `npm` (*Settings → Environments*). Add yourself as a required
    reviewer if every publish should wait for approval.
 3. Keep the self-hosted GPU runner online with `GPU_RUNNER=true` ([ci-gpu-runner.md](ci-gpu-runner.md)).
    The workflow refuses to publish without it.
 4. Set `RELEASES_ENABLED=true` if it is not already set. The `"private": true` flag is already removed
-   from the four public manifests, [distribution.md](distribution.md) is updated and open issue SCOPE-005
+   from the five public manifests, [distribution.md](distribution.md) is updated and open issue SCOPE-005
    is closed, so the next push to `main` starts the flow in
    [What the first real version is](#what-the-first-real-version-is).
 
 ## First publish (one time, local)
 
 npm trusted publishing cannot be configured for a package that does not exist yet, and the Release
-workflow cannot create one without a trusted publisher or a stored token. So each of the four names is
+workflow cannot create one without a trusted publisher or a stored token. So each of the five names is
 claimed once from your machine with a placeholder, and every real release then comes from CI with
 provenance. The placeholder is not built from the repository.
 
@@ -107,7 +105,7 @@ npm --version                  # 11.5.1 or later
 npm login                      # 2FA; then check with: npm whoami
 REPO=/path/to/underglass
 
-for name in core react vue css-compiler; do
+for name in core react vue css-compiler ui; do
   mkdir -p "placeholder-$name" && cd "placeholder-$name"
   cat > package.json <<EOF
 {
@@ -126,7 +124,7 @@ EOF
   cd ..
 done
 
-for name in core react vue css-compiler; do
+for name in core react vue css-compiler ui; do
   npm deprecate "@underglass/$name@0.0.0-placeholder.0" "Placeholder that reserves the name; install a released version once one is published."
 done
 ```
@@ -144,7 +142,7 @@ Notes on npm's behavior:
 
 ### Configure the trusted publisher
 
-For each of the four packages: on npmjs.com open the package, *Settings → Trusted Publisher*, choose
+For each of the five packages: on npmjs.com open the package, *Settings → Trusted Publisher*, choose
 GitHub Actions and enter the user `RaananW`, the repository `underglass`, the workflow filename
 `release.yml` and the environment `npm`. With an npm that has the `trust` command (11.19 was checked;
 the options come from `npm trust github --help`) the same can be done from the terminal:
@@ -152,7 +150,7 @@ the options come from `npm trust github --help`) the same can be done from the t
 ```sh
 npm trust github @underglass/core --file release.yml --repo RaananW/underglass --env npm --dry-run
 npm trust github @underglass/core --file release.yml --repo RaananW/underglass --env npm -y
-npm trust list @underglass/core      # confirm; repeat both commands for react, vue and css-compiler
+npm trust list @underglass/core      # confirm; repeat both commands for react, vue, css-compiler and ui
 ```
 
 Do not add an npm token to the repository: the Release workflow publishes with OIDC only (`id-token:
@@ -169,6 +167,7 @@ npm publish --workspace @underglass/core --provenance=false
 npm publish --workspace @underglass/react --provenance=false
 npm publish --workspace @underglass/vue --provenance=false
 npm publish --workspace @underglass/css-compiler --provenance=false
+npm publish --workspace @underglass/ui --provenance=false
 ```
 
 `publishConfig.access` is `public` and `prepack` rebuilds each package. The downside: that first
@@ -184,24 +183,15 @@ The manifests say `0.1.0`, but `0.1.0` was never published, and about 100 change
 2026-10-20) reports every package in the fixed group moving **0.1.0 -> 0.2.0**. So:
 
 1. The first push to `main` after `RELEASES_ENABLED` is set opens the **Version Packages** pull request, which
-   bumps `core`, `react`, `vue`, `css-compiler` (and the private `ui`) to `0.2.0`, pins core `0.2.0` in the
+   bumps `core`, `react`, `vue`, `css-compiler` and `ui` to `0.2.0`, pins core `0.2.0` in the
    dependents and prepends the changesets to each `CHANGELOG.md`.
-2. Merging it makes the workflow pack, run the GPU gate and publish `0.2.0` of the four public packages from
+2. Merging it makes the workflow pack, run the GPU gate and publish `0.2.0` of the five packages from
    CI with provenance, then tag `@underglass/core@0.2.0` and so on.
 
 The first version on npm is therefore `0.2.0`, not `0.1.0`. If you want `0.1.0` to be the first release,
 that is a deliberate manual choice (for example, change the pending changesets' bump to `patch`, which
 yields `0.1.1` at the lowest, or edit versions by hand, which this repository forbids); nothing here
 does it. Re-run `npx changeset status --verbose` before the release, since new pull requests change the result.
-
-## Publishing `@underglass/ui`
-
-`@underglass/ui` is in the fixed version group and has complete publishing metadata, but it is still
-`"private": true` because nothing records a decision to publish it, and the Release workflow publishes
-every non-private package whose version is missing from npm. To publish it: claim the name and configure
-the trusted publisher as above for `@underglass/ui`, review its README (which still says it is not
-published) and its exports (`./astro` points at TypeScript source), then remove `"private": true` in a
-pull request and add it to [distribution.md](distribution.md).
 
 ## Prereleases
 
