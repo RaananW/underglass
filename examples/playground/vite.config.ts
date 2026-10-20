@@ -20,6 +20,9 @@ export default defineConfig({
       { find: /^@underglass\/core\/experimental-worker$/, replacement: resolve(root, "../../packages/core/src/experimental-worker.ts") },
       // Strata's modules from source too; its CSS (`@underglass/ui/css`) is the built stylesheet.
       { find: /^@underglass\/ui\/(tokens|dom|gpu|react|vue)$/, replacement: resolve(root, "../../packages/ui/src/$1/index.ts") },
+      // The built stylesheets by path, so the React 18 run copy (which has no workspace symlinks) resolves them too.
+      { find: /^@underglass\/ui\/css$/, replacement: resolve(root, "../../packages/ui/dist/css/strata.css") },
+      { find: /^@underglass\/ui\/css\/(tokens|components)\.css$/, replacement: resolve(root, "../../packages/ui/dist/css/$1.css") },
     ],
     // Force a single copy of React and of Vue so the libraries and the pages share hooks, context and injection.
     dedupe: ["react", "react-dom", "vue"],

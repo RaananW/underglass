@@ -52,12 +52,16 @@ const sourceSha256 = sourceHash.digest("hex");
 // `node_modules` and the Vite cache are excluded so the copy builds and resolves independently.
 if (!isPrimary) {
   await mkdir(destination, { recursive: true });
-  for (const path of ["packages", "examples", "tests", "scripts", ".changeset", "vite.config.ts", "package-lock.json", "docs/distribution.md"]) {
-    await cp(resolve(path), resolve(destination, path), {
+  // Copy every top-level repository entry except a small exclude list, so a unit test that starts reading a
+  // new path (docs, .github, README, ...) works in the copy without this script being edited. `fixtures` gets
+  // its own handling below, `evidence` is history recreated per run, and the rest is VCS or tool state.
+  const excluded = new Set([".git", ".claude", "node_modules", "fixtures", "evidence", "dist", "test-results", "playwright-report", "owned-vite-cache"]);
+  for (const entry of await readdir(root)) {
+    if (excluded.has(entry)) continue;
+    await cp(resolve(entry), resolve(destination, entry), {
       recursive: true, filter: path => !["dist", "node_modules", "owned-vite-cache"].includes(basename(path)),
     });
   }
-  await cp(resolve("package.json"), resolve(destination, "package.json"));
   await mkdir(resolve(destination, "fixtures/react18"), { recursive: true });
   for (const path of ["package.json", "package-lock.json"]) await cp(resolve("fixtures/react18", path), resolve(destination, "fixtures/react18", path));
   await copyDependencies(resolve("node_modules"), resolve(destination, "node_modules"));
@@ -96,6 +100,8 @@ try {
     const units = (await readdir(resolve(destination, "tests/unit"))).filter(path => path.endsWith(".unit.test.mjs")).map(path => `tests/unit/${path}`);
     await run(process.execPath, ["--test", ...units], "units");
     await run(process.execPath, ["node_modules/typescript/bin/tsc", "-p", "examples/playground/tsconfig.json"], "types");
+    // The copy has no `dist`, and the playground imports Strata's built stylesheet, so write it first.
+    await run(process.execPath, ["packages/ui/scripts/build-css.mjs"], "ui-css");
     await run(process.execPath, ["node_modules/vite/bin/vite.js", "build"], "build");
     await run(process.execPath, ["scripts/test-browser.mjs", "runtime.test.mjs", "animation.test.mjs", "todo.test.mjs", "integration.test.mjs", "effects.test.mjs", "hardening.test.mjs", "dynamic.test.mjs", "native-editing.test.mjs", "viewport.test.mjs",
       ...process.argv.slice(2).filter(argument => argument !== "--primary"), "--max-failures=1"], "behavior");
