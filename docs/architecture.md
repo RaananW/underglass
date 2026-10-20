@@ -114,7 +114,7 @@ the DOM passed through B and the observer cannot prove the painted state equals 
 A `<canvas>` inside an enrolled layer is captured by HTML-in-Canvas only when it is itself `content="drawable"` (Canary 158.0.8112.0, issue
 #184). Core sets the mark on every such canvas while GPU presents (`CanvasRuntime.markCanvases`, called from `presentation()` and the
 mutation observer), keeps the author's own value and restores it when GPU ends, so the canvas is ordinary captured content: no refusal, no
-fallback. The one gap is an `OffscreenCanvas`-transferred canvas, whose commits raise no `paint` event (the author calls `invalidate`). See
+fallback. The mark is remembered per canvas and restored when GPU ends, a layer is released or the canvas leaves every layer; an author write mid-GPU replaces the remembered value. The one gap is an `OffscreenCanvas`-transferred canvas, whose commits raise no `paint` event (its pixels stay stale until the author calls `invalidate`). See
 [api.md](api.md#canvas-inside-a-layer); the measurements, proposal SHA and tracker access limits are in
 [upstream/canvas-in-drawable.md](upstream/canvas-in-drawable.md).
 

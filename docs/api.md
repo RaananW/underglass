@@ -596,13 +596,24 @@ So core does it for you, with nothing to opt into:
 
 - While GPU presents, every `<canvas>` inside an enrolled layer is set `content="drawable"`, at admission and for a canvas added
   (or a layer registered) later; the next paint captures it like any content, with fresh pixels after a redraw or resize.
-- The author's own `content` value is remembered and restored when GPU ends (`disable()`, `dispose()`, any diagnosed fallback), or when the
-  canvas leaves every layer. Do not rely on the attribute: it reads `drawable` only while GPU presents.
-- A canvas outside every layer is not touched.
+- The author's own `content` value is remembered and restored (absent, empty and any other value exactly) when GPU ends (`disable()`,
+  `dispose()`, any diagnosed fallback), when the layer is released while the element stays in the DOM, and when the canvas leaves every
+  layer (removed, or moved outside the root). A canvas moved between two enrolled layers stays marked. Do not rely on the attribute: it
+  reads `drawable` only while GPU presents.
+- A value the author or a framework writes to `content` while GPU presents (a React or Vue prop that changes, `setAttribute`, a removal)
+  is overwritten by the mark at once and remembered instead: it is what comes back when GPU ends.
+- Cost: one attribute write per canvas per marking event. It is an ordinary DOM mutation, captured like any other (it shows in
+  `state().metrics.captures`, not attributed separately), and it costs one recapture of the layer.
+- Not marked: a canvas outside every layer; a `<canvas>` that hosts drawable children (nested HTML-in-Canvas, which draws its own
+  subtree) or sits inside one; and a canvas inside an open shadow root, which `querySelectorAll` and the runtime's mutation observer do not reach.
+  **Limit:** such a canvas is captured only as an unmarked canvas is (the first thing in its layer; blank behind other canvases): set
+  `content="drawable"` on it yourself, and core leaves it alone. The nested-host canvas's own bitmap is captured unmarked.
+  Both are pinned in `core-canvas-content.test.mjs`.
 - **Limit: an `OffscreenCanvas`-transferred canvas** (`transferControlToOffscreen()`) is captured correctly when a paint happens, but its
-  commits raise no `paint` event (a redraw of every other kind raises one), so the layer is not recaptured by itself. After drawing it,
-  call `controller.invalidate(layerId)` (the matrix in `core-canvas-content.test.mjs` does). Core cannot detect such a canvas without a
-  destructive probe (`getContext` or `toDataURL` on a canvas it does not own), so it neither refuses nor recaptures them on its own.
+  commits raise no `paint` event (a redraw of every other kind raises one), so **its pixels stay stale until `controller.invalidate(layerId)`
+  is called**; call it after drawing (the matrix in `core-canvas-content.test.mjs` does, and a test pins the stale state so a browser fix is
+  noticed). Core cannot detect such a canvas without a destructive probe (`getContext` or `toDataURL` on a canvas it does not own), so it
+  neither refuses nor recaptures them on its own.
 
 ### Same-value mutations are ignored
 

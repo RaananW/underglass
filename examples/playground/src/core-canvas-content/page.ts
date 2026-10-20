@@ -65,8 +65,20 @@ const makers: Record<string, () => HTMLElement> = {
   "offscreen": () => {
     const node = document.createElement("canvas"); node.width = 60; node.height = 30;
     const context = node.transferControlToOffscreen().getContext("2d")!; context.fillStyle = css(RED); context.fillRect(0, 0, 60, 30);
+    (node as unknown as { draw: (fill: Rgb) => void }).draw = fill => { context.fillStyle = css(fill); context.fillRect(0, 0, 60, 30); };
     return node;
   },
+};
+/** A canvas that hosts a drawable child (nested HTML-in-Canvas), and a canvas inside an open shadow root. */
+makers["host"] = () => {
+  const node = canvas2d(RED), child = document.createElement("div");
+  child.setAttribute("drawable", ""); child.style.cssText = "width:60px;height:30px;background:" + css(BLUE); node.append(child);
+  return node;
+};
+makers["shadow"] = () => {
+  const host = document.createElement("div");
+  host.attachShadow({ mode: "open" }).append(canvas2d(RED));
+  return host;
 };
 const place = (node: HTMLElement, index: number) => {
   node.style.cssText += `;position:absolute;display:block;width:60px;height:30px;left:${10 + (index % 4) * 76}px;top:${10 + Math.floor(index / 4) * 46}px`;
@@ -85,7 +97,7 @@ window.canvasContent = { ready: Promise.resolve({
     probe.replaceChildren(); nodes.length = 0;
     kinds.forEach((kind, index) => {
       const node = place(makers[kind]!(), index);
-      if (contents[index]) node.setAttribute("content", contents[index]!);
+      if (contents[index] !== undefined && contents[index] !== null) node.setAttribute("content", contents[index]!);
       nodes.push(node); probe.append(node);
     });
     await settle();
@@ -105,6 +117,22 @@ window.canvasContent = { ready: Promise.resolve({
   async leave(index: number) { document.body.append(nodes[index]!); await settle(); },
   /** Marks the probe layer for recapture (what the author calls after drawing an OffscreenCanvas-transferred canvas). */
   async invalidate() { controller.invalidate("probe"); await settle(); },
+  /** Releases the probe layer's enrollment while its element stays in the DOM, and enrolls it again. */
+  releaseProbe() { release?.(); release = undefined; },
+  enrollProbe() { release = enrollProbe(); },
+  /** Moves a slot's element into the plain layer (a canvas moved between two enrolled layers). */
+  async moveToPlain(index: number) { plain.append(nodes[index]!); await settle(); },
+  /** A real diagnosed fallback while GPU is on (z-index on a layer), and its repair. */
+  breakPolicy() { probe.style.zIndex = "5"; },
+  fixPolicy() { probe.style.zIndex = ""; },
+  /** The `content` attribute of the canvas inside a shadow-root slot. */
+  shadowContent: (index: number) => (nodes[index]!.shadowRoot?.querySelector("canvas") as HTMLCanvasElement | undefined)?.getAttribute("content") ?? null,
+  /** The author marks the canvas inside a shadow-root slot themselves. */
+  async markShadow(index: number) { nodes[index]!.shadowRoot!.querySelector("canvas")!.setAttribute("content", "drawable"); await settle(); },
+  /** Draws an OffscreenCanvas-transferred slot again (no waiting). */
+  offscreenDraw(index: number, fill: Rgb) { (nodes[index] as unknown as { draw: (fill: Rgb) => void }).draw(fill); },
+  /** Appends a canvas and disposes the controller in the same task: a capture is pending. */
+  appendAndDispose(kind: string) { const node = place(makers[kind]!(), nodes.length); nodes.push(node); probe.append(node); return controller.dispose(); },
   dispose: () => controller.dispose(),
   /** A canvas outside every layer (in the page, beside the output canvas), drawn red. */
   outsideCanvas() {

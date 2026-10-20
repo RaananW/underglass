@@ -82,7 +82,7 @@ and it always reports why: `controller.state().reason` and `onStatusChange`. See
   clipping (scrolling or `overflow: hidden`) ancestor.
 - No nested layers, and no `z-index` on a layer: paint order is DOM order.
 - A `<canvas>` inside a layer is presented as it is: core marks it `content="drawable"` while GPU presents. One that is
-  `OffscreenCanvas`-transferred needs `controller.invalidate(layerId)` after you draw it ([api](../api.md#canvas-inside-a-layer)).
+  `OffscreenCanvas`-transferred stays stale until you call `controller.invalidate(layerId)` after drawing it ([api](../api.md#canvas-inside-a-layer)).
 - `contenteditable`, `<dialog>` and popovers inside a layer need ordinary DOM. Render
   dialogs and popovers through `NativeOverlay` instead (see
   [Building components](components.md)).

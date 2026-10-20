@@ -167,5 +167,46 @@ async function paintsAfterRedraw(kind: "2d" | "2d-read-frequently" | "webgl" | "
   return { kind, paints, last: seen[seen.length - 1] ?? null, seen };
 }
 
-declare global { interface Window { canvasMarked: { runMarked: typeof runMarked; markEffects: typeof markEffects; paintsAfterRedraw: typeof paintsAfterRedraw } } }
-window.canvasMarked = { runMarked, markEffects, paintsAfterRedraw };
+/**
+ * A canvas inside an open shadow root of an element in the layer, after a painted div (so an unmarked canvas would be blank), marked or
+ * not; and a canvas that hosts a drawable child (nested HTML-in-Canvas), marked or not. Reports the pixel `drawElementImage` captured at
+ * the canvas's centre.
+ */
+async function scopes(variant: "shadow" | "nested-host", marked: boolean) {
+  document.body.replaceChildren();
+  const out = document.createElement("canvas") as HTMLCanvasElement & { content: string; requestPaint(): void };
+  out.width = 300; out.height = 100; out.content = "drawable"; out.style.cssText = "position:fixed;left:0;top:0;width:300px;height:100px";
+  const layer = document.createElement("div");
+  layer.setAttribute("drawable", ""); layer.style.cssText = `position:absolute;left:0;top:0;width:300px;height:100px;background:${css(BACKGROUND)}`;
+  const div = document.createElement("div");
+  div.style.cssText = `position:absolute;left:100px;top:10px;width:60px;height:30px;background:${css(GREEN)}`;
+  layer.append(div);
+  const canvas = filled(RED) as Marked;
+  canvas.style.cssText = "position:absolute;left:10px;top:10px;width:60px;height:30px;display:block";
+  if (marked) canvas.content = "drawable";
+  if (variant === "shadow") {
+    const host = document.createElement("div");
+    host.style.cssText = "position:absolute;left:0;top:0;width:100px;height:50px";
+    host.attachShadow({ mode: "open" }).append(canvas);
+    layer.append(host);
+  } else {
+    const child = document.createElement("div");
+    child.setAttribute("drawable", ""); child.style.cssText = `width:60px;height:30px;background:${css(BLUE)}`;
+    canvas.append(child); layer.append(canvas);
+  }
+  out.append(layer); document.body.append(out);
+  const context = out.getContext("2d", { willReadFrequently: true })! as CanvasRenderingContext2D & { drawElementImage(element: Element, x: number, y: number): void };
+  await frame(); await frame();
+  const pixel = await new Promise<Rgb>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("no paint event")), 4000);
+    out.addEventListener("paint", () => {
+      clearTimeout(timer); context.clearRect(0, 0, 300, 100); context.drawElementImage(layer, 0, 0);
+      const p = context.getImageData(40, 25, 1, 1).data; resolve([p[0]!, p[1]!, p[2]!]);
+    }, { once: true });
+    out.requestPaint();
+  });
+  return { variant, marked, pixel, red: near(pixel, RED), blue: near(pixel, BLUE), background: near(pixel, BACKGROUND) };
+}
+
+declare global { interface Window { canvasMarked: { runMarked: typeof runMarked; markEffects: typeof markEffects; paintsAfterRedraw: typeof paintsAfterRedraw; scopes: typeof scopes } } }
+window.canvasMarked = { runMarked, markEffects, paintsAfterRedraw, scopes };

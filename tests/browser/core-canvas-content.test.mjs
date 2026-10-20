@@ -139,6 +139,23 @@ test.describe("the raw browser behaviour (no core)", () => {
     } finally { await context.close(); }
   });
 
+  test("scopes core does not mark: a lone canvas in an open shadow root, and a canvas that hosts a drawable child, are captured as an unmarked canvas is (first in the layer)", async ({ browser }) => {
+    const { context, page, errors } = await open(browser, 1, "/canvas-capture-raw.html");
+    try {
+      const rows = [];
+      for (const variant of ["shadow", "nested-host"]) for (const marked of [false, true]) {
+        await page.reload();
+        await page.waitForFunction(() => window.canvasMarked, null, { timeout: 60000 });
+        const row = await page.evaluate(a => window.canvasMarked.scopes(a.variant, a.marked), { variant, marked });
+        rows.push(row);
+        // After a painted div, where an unmarked plain canvas would be the layer background; both are the canvas bitmap, marked or not.
+        expect(row.red, `${variant} marked=${marked}: the canvas bitmap (${row.pixel})`).toBe(true);
+      }
+      await evidence("raw-scopes", rows);
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  });
+
   for (const kind of ["2d", "webgl"]) {
     test(`the mark's side effects on the canvas itself (${kind}): layout, context, toDataURL, DOM pixels and hits unchanged`, async ({ browser }) => {
       const { context, page, errors } = await open(browser, 1, "/canvas-capture-raw.html");
@@ -279,6 +296,114 @@ for (const dpr of [1, 2]) {
       } finally { await context.close(); }
     });
 
+    test("a value the author or a framework writes while GPU presents is remembered and restored, absent and empty included", async ({ browser }) => {
+      const { context, call, frames, errors } = await openCore(browser, dpr);
+      try {
+        await call("install", ["2d", "2d-blue", "2d-read-frequently", "webgl"], ["fallback", "fallback", "", "drawable"]);
+        expect(await call("content", 2), "an empty author value is replaced").toBe("drawable");
+        await call("setAttribute", 0, "content", "other");
+        await call("setAttribute", 1, "content", null);
+        await call("setAttribute", 3, "content", "later");
+        await frames(3);
+        await call("settle");
+        for (const index of [0, 1, 2, 3]) expect(await call("content", index), `slot ${index} is marked again`).toBe("drawable");
+        await call("disable");
+        expect(await call("content", 0), "the changed value comes back").toBe("other");
+        expect(await call("content", 1), "a removal: absent").toBe(null);
+        expect(await call("content", 2), "the empty string, exactly").toBe("");
+        expect(await call("content", 3), "an author drawable, then changed").toBe("later");
+        // A canvas that left every layer is forgotten: the author's later write stands.
+        await call("enable");
+        await call("leave", 0);
+        await call("setAttribute", 0, "content", "z");
+        await call("settle");
+        expect(await call("content", 0), "a forgotten canvas keeps the author's write").toBe("z");
+        expect(errors).toEqual([]);
+      } finally { await context.close(); }
+    });
+
+    test("a released layer gives its canvases back; a canvas moved between two layers stays marked; a diagnosed fallback restores", async ({ browser }) => {
+      const { context, call, frames, errors } = await openCore(browser, dpr);
+      try {
+        await call("install", ["2d", "2d-blue"], ["fallback", null]);
+        await call("moveToPlain", 0);
+        expect(await call("content", 0), "moved to another enrolled layer: still marked").toBe("drawable");
+        await call("disable");
+        expect(await call("content", 0), "restored after the move").toBe("fallback");
+        await call("enable");
+        expect(await call("content", 0)).toBe("drawable");
+        // The probe layer is released (its element stays in the DOM): its canvas leaves every layer; the one in the plain layer stays.
+        await call("releaseProbe");
+        await frames(2);
+        await call("settle");
+        expect(await call("content", 1), "a released layer's canvas has no value again").toBe(null);
+        expect(await call("content", 0), "the canvas in the plain layer stays marked").toBe("drawable");
+        await call("enrollProbe");
+        await frames(2);
+        await call("settle");
+        expect(await call("content", 1), "enrolled again: marked").toBe("drawable");
+        // A real diagnosed fallback (z-index on a layer), not disable(): the author's values come back.
+        await call("breakPolicy");
+        await frames(3);
+        const fallen = await call("state");
+        expect(fallen.mode, "diagnosed fallback").toBe("dom");
+        expect(fallen.reason).toMatch(/stacking/);
+        expect(await call("content", 0), "a fallback restores").toBe("fallback");
+        expect(await call("content", 1)).toBe(null);
+        await call("fixPolicy");
+        expect((await call("enable")).mode).toBe("gpu");
+        expect(await call("content", 0)).toBe("drawable");
+        expect(errors).toEqual([]);
+      } finally { await context.close(); }
+    });
+
+    test("dispose with a capture pending restores a canvas appended in the same task", async ({ browser }) => {
+      const { context, call, errors } = await openCore(browser, dpr);
+      try {
+        await call("install", ["2d"], ["fallback"]);
+        await call("appendAndDispose", "2d-blue");
+        expect(await call("content", 0), "disposed").toBe("fallback");
+        expect(await call("content", 1), "appended during disposal").toBe(null);
+        expect(errors).toEqual([]);
+      } finally { await context.close(); }
+    });
+
+    test("not marked: a canvas that hosts drawable children, and (pinned limit) a canvas in a shadow root, which is blank behind other canvases unless the author marks it", async ({ browser }) => {
+      const { context, call, shot, errors } = await openCore(browser, dpr);
+      try {
+        await call("install", ["host", "2d", "shadow"]);
+        const png = await shot();
+        for (const index of [0, 1]) expect(near(centre(png, await call("slot", index), dpr), RED), `slot ${index} is captured`).toBe(true);
+        expect(near(centre(png, await call("slot", 2), dpr), BACKGROUND), "the shadow-root canvas behind them is the layer background, as for any unmarked canvas").toBe(true);
+        // The author can mark it themselves; core leaves that alone.
+        await call("markShadow", 2);
+        expect(near(centre(await shot(), await call("slot", 2), dpr), RED), "marked by the author: captured").toBe(true);
+        expect(await call("content", 0), "a nested HTML-in-Canvas host is left alone").toBe(null);
+        expect(await call("content", 1), "a plain canvas beside it is marked").toBe("drawable");
+        expect(await call("shadowContent", 2), "querySelectorAll does not reach a shadow root: not marked").toBe(null);
+        expect(errors).toEqual([]);
+      } finally { await context.close(); }
+    });
+
+    test("an OffscreenCanvas-transferred canvas stays stale after a redraw until invalidate is called", async ({ browser }) => {
+      const { context, call, shot, frames, errors } = await openCore(browser, dpr);
+      try {
+        await call("install", ["div", "offscreen"]);
+        await call("invalidate");
+        await frames(3);
+        expect(near(centre(await shot(), await call("slot", 1), dpr), RED), "captured after invalidate").toBe(true);
+        await call("offscreenDraw", 1, GREEN);
+        await call("settle");
+        await frames(10);
+        const stale = centre(await shot(), await call("slot", 1), dpr);
+        expect(near(stale, RED), `no paint event for an offscreen commit: still the old pixels (${stale})`).toBe(true);
+        await call("invalidate");
+        await frames(3);
+        expect(near(centre(await shot(), await call("slot", 1), dpr), GREEN), "fresh after invalidate").toBe(true);
+        expect(errors).toEqual([]);
+      } finally { await context.close(); }
+    });
+
     test("a canvas outside every layer is not marked and changes nothing", async ({ browser }) => {
       const { context, call, shot, page, errors } = await openCore(browser, dpr);
       try {
@@ -293,6 +418,42 @@ for (const dpr of [1, 2]) {
         await page.evaluate(() => { document.getElementById("swatch").style.background = "rgb(40, 40, 200)"; });
         await call("settle");
         expect(near(centre(await shot(), await call("box", "swatch"), dpr), BLUE), "fresh pixels after a change").toBe(true);
+        expect(errors).toEqual([]);
+      } finally { await context.close(); }
+    });
+
+    test("React adapter: a content prop React writes while GPU is on is remembered and restored; pixels and a sibling layer stay right", async ({ browser }) => {
+      const { context, page, errors } = await open(browser, dpr, "/core-canvas-content-react.html");
+      try {
+        await page.waitForFunction(() => window.canvasReact, null, { timeout: 60000 });
+        const call = (name, ...args) => page.evaluate(async ({ name, args }) => {
+          const value = window.canvasReact[name];
+          return typeof value === "function" ? value(...args) : value;
+        }, { name, args });
+        expect(await call("attribute", "main"), "React renders the prop").toBe("fallback");
+        const enabled = await call("enable");
+        expect(enabled.mode, enabled.reason).toBe("gpu");
+        expect(await call("attribute", "main"), "marked").toBe("drawable");
+        expect(await call("attribute", "second-canvas"), "the second layer's canvas").toBe("drawable");
+        const png = PNG.sync.read(await page.screenshot());
+        expect(near(centre(png, await call("box", "main"), dpr), RED), "the React-rendered canvas is captured").toBe(true);
+        // React changes the prop: its write replaces the mark, core re-marks and remembers the new value.
+        await call("setContent", "other");
+        expect(await call("attribute", "main"), "re-marked").toBe("drawable");
+        expect((await call("state")).mode).toBe("gpu");
+        await call("disable");
+        expect(await call("attribute", "main"), "React's value is back").toBe("other");
+        // React removes the prop mid-GPU.
+        await call("enable");
+        await call("setContent", undefined);
+        expect(await call("attribute", "main"), "re-marked after the removal").toBe("drawable");
+        await call("disable");
+        expect(await call("attribute", "main"), "absent again").toBe(null);
+        // React unmounts a layer: the other layer's canvas stays marked and GPU stays on.
+        await call("enable");
+        await call("showSecond", false);
+        expect((await call("state")).mode).toBe("gpu");
+        expect(await call("attribute", "main")).toBe("drawable");
         expect(errors).toEqual([]);
       } finally { await context.close(); }
     });

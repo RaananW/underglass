@@ -725,29 +725,46 @@ export class CanvasRuntime {
     }
     return undefined;
   }
-  /** Canvases marked `content="drawable"` for capture, with the author's own `content` attribute (null: none) to give back. */
-  private markedCanvases = new Map<HTMLCanvasElement, string | null>();
+  /** The author's own `content` attribute (null: none) of every canvas core has marked; a WeakMap, so a detached canvas is not kept alive. */
+  private canvasOriginals = new WeakMap<HTMLCanvasElement, string | null>();
+  /** The canvases currently marked, weakly (iteration order is insertion order). */
+  private markedCanvases = new Set<WeakRef<HTMLCanvasElement>>();
+  private canvasRefs = new WeakMap<HTMLCanvasElement, WeakRef<HTMLCanvasElement>>();
   /**
    * HTML-in-Canvas captures a nested `<canvas>` only when the canvas is itself `content="drawable"` (issue #184; otherwise it is the
    * layer background unless it is the first thing in its layer). While GPU presents (`active`, default: the phase is `gpu` or `admitting`)
-   * every `<canvas>` inside an enrolled layer gets the mark, at admission and when one is added later; the author's value is
-   * remembered and restored when GPU ends, or the canvas leaves every layer. The mark changes neither the canvas's layout, context,
-   * bitmap, `toDataURL` nor hits (`tests/browser/core-canvas-content.test.mjs`).
+   * every `<canvas>` inside an enrolled layer gets the mark, at admission, when one is added later and when a layer is registered; the
+   * author's value is remembered and restored when GPU ends or the canvas leaves every layer (a layer released, the canvas moved or
+   * removed). A value the author (or a framework) writes while GPU presents replaces the remembered one and is overwritten by the mark.
+   * Not marked: a canvas that hosts drawable children or sits inside one (nested HTML-in-Canvas draws its own subtree), and canvases in
+   * shadow roots (`querySelectorAll` and the observer do not reach them; the author marks those, `core-canvas-content.test.mjs`). One attribute write per canvas per marking event. The mark changes neither the
+   * canvas's layout, context, bitmap, `toDataURL` nor hits (`tests/browser/core-canvas-content.test.mjs`).
    */
   private markCanvases(active = this.core?.phase() === "gpu" || this.core?.phase() === "admitting") {
     const live = new Set<HTMLCanvasElement>();
     if (active) {
       for (const layer of this.registry.values()) {
         for (const canvas of layer.element.querySelectorAll("canvas")) {
+          const outer = canvas.parentElement?.closest("canvas");
+          if ((outer && layer.element.contains(outer)) || canvas.querySelector("[drawable]")) continue;
           live.add(canvas);
-          if (!this.markedCanvases.has(canvas)) this.markedCanvases.set(canvas, canvas.getAttribute("content"));
-          if (canvas.getAttribute("content") !== "drawable") canvas.setAttribute("content", "drawable");
+          const current = canvas.getAttribute("content");
+          if (current === "drawable" && this.canvasOriginals.has(canvas)) continue;
+          // First mark, or the author changed the value while GPU presents: remember what the author has now.
+          if (current !== "drawable" || !this.canvasOriginals.has(canvas)) this.canvasOriginals.set(canvas, current);
+          if (!this.canvasRefs.has(canvas)) { const ref = new WeakRef(canvas); this.canvasRefs.set(canvas, ref); this.markedCanvases.add(ref); }
+          if (current !== "drawable") canvas.setAttribute("content", "drawable");
         }
       }
     }
-    for (const [canvas, original] of this.markedCanvases) {
+    for (const ref of this.markedCanvases) {
+      const canvas = ref.deref();
+      if (!canvas) { this.markedCanvases.delete(ref); continue; }
       if (live.has(canvas)) continue;
-      this.markedCanvases.delete(canvas);
+      this.markedCanvases.delete(ref);
+      this.canvasRefs.delete(canvas);
+      const original = this.canvasOriginals.get(canvas) ?? null;
+      this.canvasOriginals.delete(canvas);
       if (original === "drawable" || canvas.getAttribute("content") !== "drawable") continue;
       if (original === null) canvas.removeAttribute("content"); else canvas.setAttribute("content", original);
     }
@@ -861,6 +878,7 @@ export class CanvasRuntime {
       this.cancelNativeMotion(definition.id);
       this.resources.enrolledLayers--;
       this.revision++;
+      this.markCanvases();
       this.reconcileMembership();
     };
   }
