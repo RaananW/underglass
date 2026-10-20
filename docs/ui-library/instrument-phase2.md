@@ -152,9 +152,9 @@ captured caps after it ([I0.8](instrument-phase0.md#i08-post-chain-and-reflectio
   less than 0.45 px from its arc.
 - **The layer's box.** An object whose `bounds` leave the layer's own box steps down at once (`containment`, "its bounds
   leave the layer's box"): with the clip covering the layer, no mask would stop its parts covering other content.
-  The box is the one the scene was built for: when the layer's box changes under a scene already judged (core's observer runs
-  before the producer's, issue #156), the scene is not judged against a box it was not built for; its verdict stands, with a
-  `layout:` warning, until the next scene, which is checked against the new box ([api](../api.md#the-instrument-material)).
+  When the layer's box changes under a scene already judged (core's observer runs before the producer's, issue #156), an object that
+  scene passed at the box it was built for and now fails the bounds check alone keeps its verdict, with a `layout:` warning and
+  `layoutHeld`, until the next scene, which is checked against the new box ([api](../api.md#the-instrument-material)).
 - **Fast path.** Per object core keeps the frontier of (orthographic inset, height) over all vertices and steps, kept
   separately above and below the face (a point at `+h` drifts more than one at `−h`, so they never dominate each other).
   Since a point at height `h` drifts at most `r · |h| / (D − h)` from its orthographic position, with `r` the distance

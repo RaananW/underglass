@@ -17,6 +17,12 @@
     @media (prefers-contrast: more) { html[data-media="contrast"] #mc-flow { border-width: 0; } }
     @media (forced-colors: active) { html[data-media="forced"] #mc-flow { border-width: 0; } }
     @media (prefers-color-scheme: dark) { html[data-media="scheme"] #mc-flow { border-width: 0; } html[data-media="scheme"] .mc-panel { background: rgb(42, 45, 52); } }
+    /* `?shift=1`: the panel sits below a sibling in the flow whose height the same preference changes, so the layer's origin moves with its box. */
+    html[data-shift] .mc-panel { position: relative; left: 40px; top: 0; display: flow-root; }
+    #mc-sibling { height: 40px; }
+    @media (prefers-contrast: more) { html[data-media="contrast"] #mc-sibling { height: 20px; } }
+    @media (forced-colors: active) { html[data-media="forced"] #mc-sibling { height: 20px; } }
+    @media (prefers-color-scheme: dark) { html[data-media="scheme"] #mc-sibling { height: 20px; } }
     .mc-panel h2 { margin: 8px 12px; font-size: 14px; line-height: 18px; font-weight: 600; }
     .mc-panel input[type="range"] { appearance: none; position: absolute; margin: 0; padding: 0; background: transparent; outline: none; cursor: pointer; border-radius: 50%; }
     .mc-panel input[type="range"]::-webkit-slider-thumb { appearance: none; width: 1px; height: 1px; background: transparent; }

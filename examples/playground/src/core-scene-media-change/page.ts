@@ -4,7 +4,7 @@
  * removes from an inner box (`?media=contrast|forced|scheme`, default `contrast`), so the panel is 20 px shorter, and a knob at its
  * bottom-right corner whose bounds end on the new box's edge. The scene is rebuilt as the Strata GPU helper rebuilds its own:
  * a `ResizeObserver` on the panel and a `MutationObserver` on the root wake a frame, and the frame rebuilds the scene from the
- * layout it reads then. `?hold=1` never rebuilds (a producer that does not follow the layout); `?sync=1` also rebuilds in the media query's `change` listener, for the ordering experiments.
+ * layout it reads then. `?shift=1` puts the panel below a sibling whose height the preference changes too, so the layer moves as it resizes. `?hold=1` never rebuilds (a producer that does not follow the layout); `?sync=1` also rebuilds in the media query's `change` listener, for the ordering experiments.
  *
  * `window.mediaChange` is the test API (`state`, `instrument`, `scene`, `panel`, `rebuilds`, `settle`, `pixels`).
  */
@@ -14,6 +14,7 @@ import { panelScene, themes } from "../instrument-core/scene.ts";
 const params = new URLSearchParams(location.search);
 const media = params.get("media") ?? "contrast";
 document.documentElement.dataset.media = media;
+if (params.get("shift") === "1") document.documentElement.dataset.shift = "";
 const frame = document.getElementById("frame")!;
 const status = document.getElementById("status")!;
 const stage = () => ({ width: frame.clientWidth, height: frame.clientHeight });
@@ -31,6 +32,7 @@ const controller: CanvasController = mountApplicationModule({ ...hosts, budgets:
     input.setAttribute("aria-label", id); input.dataset.part = "knob";
     panel.append(input);
   }
+  if (params.get("shift") === "1") { const sibling = document.createElement("div"); sibling.id = "mc-sibling"; container.append(sibling); }
   container.append(panel);
   const release = enroll({ id: panel.id, element: panel, layout: {}, transform: {} });
   return () => { release(); container.replaceChildren(); };
@@ -90,10 +92,11 @@ function leave(by: number) {
 }
 window.mediaChange = {
   controller, state, instrument: () => state().instrument, panel: () => panel, scene: () => scene, rebuilds: () => rebuilds, settle, pixels, rebuild, leave,
+  flow: (height: number) => { document.getElementById("mc-flow")!.style.height = `${height}px`; },
   canvas: () => hosts.outputCanvas, query: () => query.matches,
 };
 declare global {
   interface Window { mediaChange: { controller: CanvasController; state(): State; instrument(): State["instrument"]; panel(): HTMLElement; scene(): InstrumentScene; rebuilds(): number;
     settle(): Promise<void>; rebuild(): void; leave(by: number): void; pixels(rect: { x: number; y: number; width: number; height: number }): { width: number; height: number; data: number[] };
-    canvas(): HTMLCanvasElement; query(): boolean } }
+    flow(height: number): void; canvas(): HTMLCanvasElement; query(): boolean } }
 }

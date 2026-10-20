@@ -1291,9 +1291,9 @@ version 4 is geometric and sampled (2D):
       validation error;
     - `light.ambient` defaults to 0 (2D.1 already says so; the design note's table said 0.55);
     - objects whose `bounds` leave the layer's box by more than half a pixel are not contained (core's rule, added to
-      2D.9's check), judged against the box the scene was built for when the layer's box changed under a scene already
-      judged (a layout change reaches core a frame before the scene's producer; the verdict stands with a `layout:`
-      warning until the next scene);
+      2D.9's check), held to the verdict for the box the scene was built for, for an object the scene already passed, when the layer's box
+      changed under it (a layout change reaches core a frame before the scene's producer; a `layout:` warning and
+      `layoutHeld` until the next scene);
     - a `#rrggbb` glass tint (core accepts one) is its channels over 255, not decoded;
     - core draws with its camera at the canvas centre, so a renderer conforms with the layer placed where the canvas
       centre is `camera.vanish`; the suite's cases put the vanishing point where a layer on a 1920 × 1080 stage has it.

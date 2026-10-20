@@ -83,17 +83,18 @@ different from currently failing supported code.
 - **The gallery's panels are counted, not merged.** Every panel of the gallery is under 16 materials, measured by `StrataGpu.diagnostics` in `tests/browser/showcase-instrument.test.mjs` (the notes tab lists them): the Pad and Keypad, the latching forms, the indicator and structural forms, the Select and Tabs forms are all in; none is drawn at Relief to fit.
 - **A GPU stage cannot take its height from its content** (the content lives in the canvas): the gallery sets `--ig-stage-height` from its panels.
 
-- **A layout change under an Instrument scene stepped an edge object down for a frame (#156): resolved.** A media preference (`prefers-contrast`,
-  `forced-colors`, `prefers-color-scheme`) that changes a border changes the layer's box in a frame; core's `ResizeObserver` draws it before the
-  scene's producer (the Strata helper's observer, then its `requestAnimationFrame`) can answer, so the scene built for the old box was checked against
-  the new one and an object at the edge was drawn at Relief for two composited frames. Core now keeps the verdict of a scene it already judged until
-  the next scene, with a `layout:` warning ([api](api.md#the-instrument-material)); the next scene is checked against the new box, and a scene that
-  truly leaves its box still steps down. Measured on `core-scene-media-change.html`, Canary 158.0.8112.0, DPR 1 and 2, headless and headful: 2 stepped-down
-  draws before, 0 after, GPU on throughout. Not covered: a media change that changes an Instrument scene's *structure* (the Lamps at `prefers-contrast:
-  more`: their emitters go off) still draws the layer at Relief with reason `pending` for 3 to 6 frames while the successor scene builds (the documented
-  structure path, not a containment race); the stale scene's parts are one frame behind a moved control, as every scene is behind its layout. Relation to
-  #133 (GPU admission under `forced-colors` fails): not the same path; a `forced-colors` change after admission goes through the path fixed here and the
-  new suite covers it, admission under `forced-colors` is untouched.
+- **A layout change under an Instrument scene stepped an edge object down for a frame (#156): resolved for a layout change that leaves the structure alone.**
+  A media preference (`prefers-contrast`, `forced-colors`, `prefers-color-scheme`) that changes a border changes the layer's box in a frame; core's
+  `ResizeObserver` draws it before the scene's producer (the Strata helper's observer, then its `requestAnimationFrame`) can answer, so the scene built for
+  the old box was checked against the new one and an object at the edge was drawn at Relief for two composited frames. Core now runs the check against the
+  current box and placement, and an object the same scene already passed at the box it was built for, failing only the bounds check, keeps that verdict
+  until the next scene ([api](api.md#the-instrument-material)), with a `layout:` warning and `layers[].layoutHeld`. Covered: the layer in place and moved
+  by a sibling, DPR 1 and 2, the three preferences, headless and headful (`core-scene-media-change.test.mjs`; before: 2 stepped-down draws per case, after: 0).
+  Disclosed, not fixed: a producer that never rebuilds keeps the stale scene, the warning and the count (parts cropped at the new box, none outside it);
+  the stale parts are one frame behind a moved control, as every scene is behind its layout. Not this issue: a media change that changes an Instrument
+  scene's *structure* (the Lamps at `prefers-contrast: more`: their emitters go off) draws the layer at Relief with reason `pending` for 3 to 6 frames while the
+  successor scene builds. Relation to #133 (GPU admission under `forced-colors` fails): a different path; a `forced-colors` change after admission goes
+  through the path fixed here and the new suite covers it, admission under `forced-colors` is untouched.
 - **Same-value mutation records recaptured (#181): resolved.** A same-value `setAttribute` or text write no longer queues a capture
   (`metrics.mutationsIgnored`; [api](api.md#same-value-mutations-are-ignored)); 300 frames of one cost 299 captures before and 0 now. Not covered, by design:
   a custom-property or style write that changes a value, and any write the DOM sees as a change (a different value, an added or removed attribute).

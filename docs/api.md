@@ -648,13 +648,18 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
   box over its bounds).
   A layout change reaches core before it reaches the scene's producer: core's `ResizeObserver` reconciles and draws in the frame
   the box changes (a media preference such as `prefers-contrast` can change a border and so the layer's box), and the producer's
-  own observer answers one frame later. A scene that was already judged is therefore not judged again against a box it was
-  not built for: while the layer's box differs from the scene's `extent` and the scene is the one that was judged (the same
-  `extent` and geometry), its verdict stands and the layer reports the warning `layout: the scene was built for W × H px and the
-  layer is W' × H'; its step-downs stand until the next scene`; the parts are clipped to the layer as always. The next scene,
-  built from the new layout, is judged against the new box. A new scene, or one built for the box it is checked against, whose
-  `bounds` leave that box is stepped down as before, with `containment` and `its bounds leave the layer's box` (nothing is
-  delayed or hidden). A producer that never rebuilds keeps the stale scene and the warning.
+  own observer answers one frame later. The check always runs against the layer's box as it is, and the drift check against the
+  layer's placement; one verdict is held: an object that the same scene (same `extent` and geometry) already passed, at the box it
+  was built for, and that now fails only the *bounds* check, keeps that verdict until the next scene. Where the layer sits on the
+  stage (it moved with a sibling, a stage resize) does not invalidate it. What does: a different scene `extent` or geometry (the
+  next scene, built from the new layout, is checked against the new box), a changed structure (the layer is rebuilt), or an
+  object that was already stepped down. A box that grows, or shrinks with the bounds still inside, holds nothing. While something
+  is held the layer reports the warning `layout: the scene was built for W × H px and the layer is W' × H'; N object held to its
+  containment verdict for that box until the next scene` and `layers[].layoutHeld` (`{ objects, frames }`: the objects held in this frame, and the
+  frames held in all, a counter a consumer can watch). The composite is the layer's current box plus 1 px, so the held parts are
+  cropped at the new box and never cover what lies outside it. A new scene, or one built for the box it is checked against, whose
+  `bounds` leave that box is stepped down as before (`containment`, `its bounds leave the layer's box`); nothing is delayed or
+  hidden. A producer that never rebuilds keeps the stale scene, the warning and the count.
 - **Budgets.** 2,048 parts per layer and 6,000 per stage; above either, the layer is drawn at the Relief level. More
   than 16 part kinds per layer is reported; more than 64 steps the layer down. The format accepts up to 8,192 parts.
 - **Material cap.** A layer draws with at most 16 materials (`INSTRUMENT_MATERIALS`). A scene naming 17 to 64 is valid: the whole

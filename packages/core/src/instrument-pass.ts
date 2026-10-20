@@ -187,6 +187,8 @@ interface LayerState {
   stepped: number[];
   steppedDown: SteppedDown[];
   warnings: string[];
+  /** Objects whose containment verdict was held this frame for a box they were not built for (#156), and the frames it was held in all. */
+  layoutHeld: { objects: number; frames: number };
   /** The materials the scene names, for `state().instrument.layers[].materials` (the cap is `INSTRUMENT_MATERIALS`). */
   materialCount: number;
   parts: number;
@@ -200,7 +202,7 @@ interface LayerState {
   layout?: string;
   kindMap?: Map<string, PartKind>;
   /** The scene and placement the step-downs were last decided for. */
-  checked?: { scene: InstrumentScene; placementKey: string; structure: string; extent: { width: number; height: number } };
+  checked?: { scene: InstrumentScene; placementKey: string; structure: string; extent: { width: number; height: number }; stepped: Set<string> };
   /** The scene as of the last frame, for the custom parts' diagnostics. */
   scene?: InstrumentScene;
   /** The layer's latest input: its placement anchors the capture probe when a scene is built. */
@@ -965,7 +967,9 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           flushThinInstances(plates);
           updateStorageBuffer(engine, boxBuffer, boxData);
         }
-        // The composite's rectangle, the opacity and what it reads this frame.
+        // The composite's rectangle, the opacity and what it reads this frame. It is the layer's box as it is now (`input.extent`) plus
+        // one px, whatever the scene was built for: every part pixel, including those of a scene held to an older, larger box (#156), is
+        // drawn inside it, so a stale scene never covers what lies outside the layer.
         const rect = compositeRect(m, input.extent, stage) ?? [0, 0, 0, 0];
         const next = [...rect, stage.width, stage.height, stage.dpr, 0, input.opacity, blooming ? 1 : 0, capsTarget ? 1 : 0, 0];
         const nextKey = next.join(",");
@@ -1232,7 +1236,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       let state = layers.get(input.id);
       if (state) state.input = input;
       if (!state) {
-        state = { id: input.id, slot: ++slots, status: "pending", stepped: [], steppedDown: [], warnings: [], materialCount: 0, parts: 0, drawnParts: 0, kinds: 0, objects: 0,
+        state = { id: input.id, slot: ++slots, status: "pending", stepped: [], steppedDown: [], warnings: [], layoutHeld: { objects: 0, frames: 0 }, materialCount: 0, parts: 0, drawnParts: 0, kinds: 0, objects: 0,
           frontiers: new Map(), exact: new Map(), gpu: { samples: [], last: null, total: 0 }, input };
         layers.set(input.id, state);
       }
@@ -1287,26 +1291,30 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       // keeps the last verdict.
       const placement = { matrix: matrix!, vanish: [stage.width / 2, stage.height / 2] as [number, number], distance: scene.camera.distance };
       // Which references have their triangles is part of the verdict: a file that arrives is checked in the frame it does.
-      const placementOf = (extent: { width: number; height: number }) => `${matrix!.a},${matrix!.b},${matrix!.c},${matrix!.d},${matrix!.e},${matrix!.f},${stage.width},${stage.height},${scene.camera.distance},${extent.width},${extent.height},${meshReferences(scene).map(reference => (meshReady(reference.shape) ? 1 : 0)).join("")}`;
-      const placementKey = placementOf(input.extent);
-      // The verdict stands while the scene, the placement and the layer's box are the ones it was decided for. When only the
-      // box has changed under a scene already judged (a media preference or any layout change alters the layer a frame before
-      // the scene's producer can answer: core's `ResizeObserver` runs first), the scene is judged again only against the box
-      // it was built for, not the new one; the next scene, built from the new layout, is judged against that. A scene that
-      // left its own box stays stepped down, and a new scene is checked against the layer's box as it is.
+      const placementKey = `${matrix!.a},${matrix!.b},${matrix!.c},${matrix!.d},${matrix!.e},${matrix!.f},${stage.width},${stage.height},${scene.camera.distance},${meshReferences(scene).map(reference => (meshReady(reference.shape) ? 1 : 0)).join("")}`;
+      // The verdict stands while the scene, the placement and the layer's box are the ones it was decided for. Where the
+      // layer sits on the stage (the matrix, the stage, the camera) belongs to the drift check, and the layer's box to the
+      // bounds check; they are judged apart.
       const judged = state.checked && state.checked.structure === structure && sameGeometry(state.checked.scene, scene) ? state.checked : undefined;
-      const inPlace = judged && judged.placementKey === placementKey;
-      const stale = !inPlace && judged && judged.placementKey === placementOf(judged.extent) && staleLayout(judged.scene, scene, judged.extent, input.extent);
-      const reuse = !!(inPlace || stale);
-      if (stale) state.warnings.push(`layout: the scene was built for ${scene.extent.width} × ${scene.extent.height} px and the layer is ${input.extent.width} × ${input.extent.height}; its step-downs stand until the next scene`);
+      const reuse = !!judged && judged.placementKey === placementKey && judged.extent.width === input.extent.width && judged.extent.height === input.extent.height;
+      let held = 0;
+      const stepped: number[] = [], steppedDown: SteppedDown[] = [];
       if (!reuse) {
-        const stepped: number[] = [], steppedDown: SteppedDown[] = [];
+        // A layout change reaches core a frame before the scene's producer can answer (core's `ResizeObserver` runs first), so
+        // the scene may have been built for another box than the layer's. The check runs against the layer's box as it is;
+        // only an object that this scene already passed, at the box the scene was built for, and that now fails the bounds
+        // check alone, keeps its verdict (a box that grows, or shrinks with the bounds inside, never comes here). The next
+        // scene, built from the new layout, is checked against the new box, and the drift check is always made.
+        const builtFor = judged && staleLayout(judged.scene, scene, judged.extent, input.extent);
         scene.objects.forEach((object, index) => {
           // Bounds past the layer's box would let parts cover other content, whatever the clip: never drawn as parts.
           if (!boundsInside(object, input.extent)) {
-            stepped.push(index);
-            steppedDown.push({ object: object.id, reason: "containment", detail: "its bounds leave the layer's box" });
-            return;
+            if (!(builtFor && !judged!.stepped.has(object.id))) {
+              stepped.push(index);
+              steppedDown.push({ object: object.id, reason: "containment", detail: "its bounds leave the layer's box" });
+              return;
+            }
+            held++;
           }
           const result = contain(state!, scene, object, placementKey, placement);
           if (result.contained) return;
@@ -1333,7 +1341,13 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         state.stepped = order.map(at => stepped[at]!);
         state.steppedDown = order.map(at => steppedDown[at]!);
       }
-      state.checked = { scene, placementKey: stale ? judged!.placementKey : placementKey, structure, extent: stale ? judged!.extent : input.extent };
+      // The box the verdict was judged at is kept while it is held, so a second change in the window is still held to it.
+      state.checked = { scene, placementKey, structure, extent: reuse ? judged!.extent : held ? judged!.extent : input.extent, stepped: new Set(state.steppedDown.map(entry => entry.object)) };
+      state.layoutHeld.objects = held;
+      if (held) {
+        state.layoutHeld.frames++;
+        state.warnings.push(`layout: the scene was built for ${scene.extent.width} × ${scene.extent.height} px and the layer is ${input.extent.width} × ${input.extent.height}; ${held} object${held === 1 ? "" : "s"} held to its containment verdict for that box until the next scene`);
+      }
       state.scene = scene;
       const changed = !reuse || state.status !== "ready";
       state.status = "ready";
@@ -1470,7 +1484,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
     active: () => layers.size > 0,
     state: () => ({
       layers: [...layers.values()].map(state => ({ id: state.id, status: state.status, objects: state.objects, parts: state.parts, drawnParts: state.drawnParts,
-        kinds: state.kinds, materials: { count: state.materialCount, cap: INSTRUMENT_MATERIALS }, steppedDown: state.steppedDown.map(entry => ({ ...entry })), warnings: [...state.warnings],
+        kinds: state.kinds, materials: { count: state.materialCount, cap: INSTRUMENT_MATERIALS }, steppedDown: state.steppedDown.map(entry => ({ ...entry })), warnings: [...state.warnings], layoutHeld: { ...state.layoutHeld },
         // Custom parts (core work item 5): each part whose profile is a mesh, and whether its triangles are there.
         customParts: state.scene ? customParts(state.scene).map(({ object, part, profile }) => {
           const shape = state.scene!.profiles[profile] as MeshProfile;
