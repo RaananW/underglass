@@ -1016,9 +1016,11 @@ The JogWheel (anatomy page [jog-wheel.md](components/jog-wheel.md)) is a native 
   Instrument recipe therefore has explicit rules: every object draws a 1 px system-colour border (`CanvasText`;
   `ButtonText` on buttons) on its box and on its moving part; state shows by position and a `Highlight` fill (a thrown
   lever, a latched cap, a lit lamp); focus is a system-colour outline. It also has a `prefers-contrast: more` branch.
-- **Forced colours, the GPU:** core's functional admission marker fails under forced colours, so GPU never starts
-  ([#133](https://github.com/RaananW/underglass/issues/133)). The page is then the CSS presentation, which the rules
-  above keep usable, as the preference table asks.
+- **Forced colours, the GPU:** core's functional admission marker opts out of forced colours (`forced-color-adjust:
+  none`), so GPU is admitted and stays on under `forced-colors: active`
+  ([#133](https://github.com/RaananW/underglass/issues/133)). The captured content is still the browser's own forced
+  paint, so the GPU output shows the flat system-colour presentation the CSS rules above define, as the preference
+  table asks.
 
 ### Invariants
 

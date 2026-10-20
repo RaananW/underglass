@@ -14,8 +14,8 @@
  *   it fades out over `motion.fast` when the pointer leaves, and at once under reduced motion;
  * - the cost of 0 to 256 emitters on one 1920 × 1080 layer (the light pass, tiled and as one loop over every emitter, and
  *   the clustered lights of a mesh scene covering the layer), at DPR 1 and 2, from Lite's per-task GPU timings;
- * - `prefers-contrast: more` turns the emitters off and a lit lens is flat colour; under `forced-colors: active` the page
- *   stays flat DOM (core does not admit GPU presentation) and the native lamps work.
+ * - `prefers-contrast: more` turns the emitters off and a lit lens is flat colour; under `forced-colors: active` GPU
+ *   presentation is admitted and stays on (core's admission marker opts out of forced colours, #133) and the native lamps work.
  * Reports and screenshots go to the `ui-probes` evidence directory.
  */
 import { test, expect } from "../helpers/current-browser.mjs";
@@ -263,24 +263,23 @@ test("I0.3 prefers-contrast more turns emitters off and a lit lens is flat", asy
   }
 });
 
-test("I0.3 forced colors: no emitter light, the native lamps still work", async ({ browser }) => {
-  // Core's functional GPU admission probe reads two marker pixels; under forced colours they are recoloured, so GPU
-  // presentation does not start (a core finding of this probe, not an emitter decision) and the page stays flat DOM:
-  // no emitter, no part. The page reports the refusal; the native lamp still toggles under real pointer input.
-  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, forcedColors: "active" });
-  const page = await context.newPage();
+test("I0.3 forced colors: GPU stays admitted and the native lamps still work", async ({ browser }) => {
+  // Core's functional admission marker opts out of forced colours (#133), so GPU presentation starts under forced
+  // colours and stays on (the content is still presented in forced colours). The native lamp is found by native hit
+  // testing and toggles under real pointer input.
+  const { context, page, call, stillGpu } = await open(browser, { forcedColors: "active" });
   const report = {};
   try {
-    await page.goto("/ui-probe-instrument-emitters.html");
-    await page.waitForFunction(() => window.emitterProbe);
-    report.error = await page.evaluate(async () => { try { await window.emitterProbe.ready; return null; } catch (failure) { return String(failure); } });
     report.forced = await page.evaluate(() => matchMedia("(forced-colors: active)").matches);
     expect(report.forced).toBe(true);
-    expect(report.error, "no GPU presentation under forced colours").toMatch(/GPU presentation unavailable/);
+    report.counts = await stillGpu("forced colors");
     const box = await page.locator("#c-lamp").boundingBox();
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    expect((await call("hits", [point]))[0], "native hit finds the lamp").toBe("c-lamp");
+    await page.mouse.click(point.x, point.y);
     report.checked = await page.evaluate(() => document.getElementById("c-lamp").checked);
     expect(report.checked, "the native lamp toggles").toBe(true);
+    await stillGpu("after the click");
     await page.screenshot({ path: `${directory}/emitters-forced-colors.png` });
   } finally {
     await save("emitters-forced-colors", report);

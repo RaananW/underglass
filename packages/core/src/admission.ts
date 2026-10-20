@@ -22,8 +22,11 @@ export function createAdmissionProbe(host: DrawableCanvas) {
   const half = host.ownerDocument.createElement("div");
   element.setAttribute("drawable", "");
   element.setAttribute("aria-hidden", "true");
-  element.style.cssText = `all:initial;display:block;position:absolute;left:0;top:0;width:${extent}px;height:${extent}px;background:rgb(207,37,83);pointer-events:auto;`;
-  half.style.cssText = `all:initial;display:block;position:absolute;left:35%;top:0;width:35%;height:100%;background:rgb(31,179,113);`;
+  // Forced colours repaint every element that does not opt out, which would recolour the marker pixels read
+  // back below. `forced-color-adjust:none` must follow `all:initial` (which resets it to `auto`) and sits on
+  // both elements. Only this internal probe opts out: user content is captured as painted, in forced colours.
+  element.style.cssText = `all:initial;forced-color-adjust:none;display:block;position:absolute;left:0;top:0;width:${extent}px;height:${extent}px;background:rgb(207,37,83);pointer-events:auto;`;
+  half.style.cssText = `all:initial;forced-color-adjust:none;display:block;position:absolute;left:35%;top:0;width:35%;height:100%;background:rgb(31,179,113);`;
   element.append(half);
   host.append(element);
   // Hit verification needs the probe inside the viewport: place it in the visible
