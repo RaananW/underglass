@@ -646,6 +646,15 @@ The scene is a version 4 `strata-scene` with `kind: "instrument"`:
 - **Containment.** Every vertex of every part, over the whole travel, must project at least 0.5 px inside `bounds`, and
   `bounds` must lie inside the layer's box. An object that does not is drawn as its `relief` primitive (default: a raised
   box over its bounds).
+  A layout change reaches core before it reaches the scene's producer: core's `ResizeObserver` reconciles and draws in the frame
+  the box changes (a media preference such as `prefers-contrast` can change a border and so the layer's box), and the producer's
+  own observer answers one frame later. A scene that was already judged is therefore not judged again against a box it was
+  not built for: while the layer's box differs from the scene's `extent` and the scene is the one that was judged (the same
+  `extent` and geometry), its verdict stands and the layer reports the warning `layout: the scene was built for W × H px and the
+  layer is W' × H'; its step-downs stand until the next scene`; the parts are clipped to the layer as always. The next scene,
+  built from the new layout, is judged against the new box. A new scene, or one built for the box it is checked against, whose
+  `bounds` leave that box is stepped down as before, with `containment` and `its bounds leave the layer's box` (nothing is
+  delayed or hidden). A producer that never rebuilds keeps the stale scene and the warning.
 - **Budgets.** 2,048 parts per layer and 6,000 per stage; above either, the layer is drawn at the Relief level. More
   than 16 part kinds per layer is reported; more than 64 steps the layer down. The format accepts up to 8,192 parts.
 - **Material cap.** A layer draws with at most 16 materials (`INSTRUMENT_MATERIALS`). A scene naming 17 to 64 is valid: the whole

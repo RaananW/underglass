@@ -23,7 +23,7 @@ const { validateMaterial } = await import("../../packages/core/src/effects.ts");
 sourceImports.deregister();
 const {
   validateInstrumentScene, profileGeometry, partMatrix, poseAt, transform, containmentFrontier, checkContainment, boxMargin, cameraDistance,
-  drift, partCaster, partKinds, instrumentStructure, boundsInside, instrumentLayout, sameGeometry, instrumentFaceScene, similarity, roundedBoxDistance, posedVertices,
+  drift, partCaster, partKinds, instrumentStructure, boundsInside, instrumentLayout, sameGeometry, staleLayout, instrumentFaceScene, similarity, roundedBoxDistance, posedVertices,
 } = instrument;
 
 const knobProfile = (radius, height) => ({ type: "lathe", segments: 48,
@@ -348,4 +348,17 @@ test("an object's bounds must lie inside its layer's box", () => {
   assert.notEqual(instrumentStructure(relit), instrumentStructure(value));
   const brighter = validateInstrumentScene(scene({ environment: { source: "studio", strength: 0.4 } }));
   assert.notEqual(instrumentStructure(brighter), instrumentStructure(value));
+});
+
+test("staleLayout: a scene judged at one box is held to it only while the box changed under the same scene", () => {
+  const scene = (width, height) => ({ extent: { width, height } });
+  const judged = scene(320, 224), box = { width: 320, height: 224 }, shorter = { width: 320, height: 204 };
+  // The box changed under the scene that was judged: its verdict stands until a scene for the new box arrives.
+  assert.equal(staleLayout(judged, scene(320, 224), box, shorter), true);
+  assert.equal(staleLayout(judged, scene(320, 224), box, { width: 300, height: 224 }), true);
+  // The box is the one it was judged at: nothing is stale, the verdict is simply current.
+  assert.equal(staleLayout(judged, scene(320, 224), box, box), false);
+  // A scene built for the new box (its extent changed) is judged against that box, as is a scene built for a third one.
+  assert.equal(staleLayout(judged, scene(320, 204), box, shorter), false);
+  assert.equal(staleLayout(judged, scene(300, 224), box, shorter), false);
 });

@@ -43,7 +43,7 @@ import { DEFAULT_FEATHER, EMITTERS_PER_LAYER, GUARD_CELLS, guardCells, layerGuar
 import { createAssetStore } from "./instrument-assets.js";
 import { INSTRUMENT_CUSTOM_TRIANGLES_PER_LAYER, meshGeometry, type MeshProfile } from "./instrument-mesh.js";
 import {
-  boundsInside, checkContainment, containmentFrontier, containmentKey, customParts, instrumentFaceScene, instrumentLayout, instrumentPartCount, instrumentStructure, meshReady, meshReferences,
+  boundsInside, checkContainment, containmentFrontier, containmentKey, customParts, instrumentFaceScene, instrumentLayout, instrumentPartCount, instrumentStructure, meshReady, meshReferences, staleLayout,
   multiply, partCaster, partDrawn, partKindKey, partKinds,
   partMatrix, profileBounds, profileGeometry, sameGeometry, similarity, INSTRUMENT_CASTERS_PER_OBJECT, INSTRUMENT_KINDS_CEILING, INSTRUMENT_KINDS_PER_LAYER, INSTRUMENT_MATERIALS, faceMaterialCount, INSTRUMENT_OBJECTS, INSTRUMENT_PARTS_PER_LAYER,
   INSTRUMENT_PARTS_PER_STAGE, STUDIO_DEFAULTS, type Containment, type ContainmentFrontier, type InstrumentCaster, type InstrumentObject,
@@ -200,7 +200,7 @@ interface LayerState {
   layout?: string;
   kindMap?: Map<string, PartKind>;
   /** The scene and placement the step-downs were last decided for. */
-  checked?: { scene: InstrumentScene; placementKey: string; structure: string };
+  checked?: { scene: InstrumentScene; placementKey: string; structure: string; extent: { width: number; height: number } };
   /** The scene as of the last frame, for the custom parts' diagnostics. */
   scene?: InstrumentScene;
   /** The layer's latest input: its placement anchors the capture probe when a scene is built. */
@@ -1287,8 +1287,18 @@ export function createInstrumentController(options: InstrumentControllerOptions)
       // keeps the last verdict.
       const placement = { matrix: matrix!, vanish: [stage.width / 2, stage.height / 2] as [number, number], distance: scene.camera.distance };
       // Which references have their triangles is part of the verdict: a file that arrives is checked in the frame it does.
-      const placementKey = `${matrix!.a},${matrix!.b},${matrix!.c},${matrix!.d},${matrix!.e},${matrix!.f},${stage.width},${stage.height},${scene.camera.distance},${input.extent.width},${input.extent.height},${meshReferences(scene).map(reference => (meshReady(reference.shape) ? 1 : 0)).join("")}`;
-      const reuse = state.checked && state.checked.placementKey === placementKey && state.checked.structure === structure && sameGeometry(state.checked.scene, scene);
+      const placementOf = (extent: { width: number; height: number }) => `${matrix!.a},${matrix!.b},${matrix!.c},${matrix!.d},${matrix!.e},${matrix!.f},${stage.width},${stage.height},${scene.camera.distance},${extent.width},${extent.height},${meshReferences(scene).map(reference => (meshReady(reference.shape) ? 1 : 0)).join("")}`;
+      const placementKey = placementOf(input.extent);
+      // The verdict stands while the scene, the placement and the layer's box are the ones it was decided for. When only the
+      // box has changed under a scene already judged (a media preference or any layout change alters the layer a frame before
+      // the scene's producer can answer: core's `ResizeObserver` runs first), the scene is judged again only against the box
+      // it was built for, not the new one; the next scene, built from the new layout, is judged against that. A scene that
+      // left its own box stays stepped down, and a new scene is checked against the layer's box as it is.
+      const judged = state.checked && state.checked.structure === structure && sameGeometry(state.checked.scene, scene) ? state.checked : undefined;
+      const inPlace = judged && judged.placementKey === placementKey;
+      const stale = !inPlace && judged && judged.placementKey === placementOf(judged.extent) && staleLayout(judged.scene, scene, judged.extent, input.extent);
+      const reuse = !!(inPlace || stale);
+      if (stale) state.warnings.push(`layout: the scene was built for ${scene.extent.width} × ${scene.extent.height} px and the layer is ${input.extent.width} × ${input.extent.height}; its step-downs stand until the next scene`);
       if (!reuse) {
         const stepped: number[] = [], steppedDown: SteppedDown[] = [];
         scene.objects.forEach((object, index) => {
@@ -1323,7 +1333,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
         state.stepped = order.map(at => stepped[at]!);
         state.steppedDown = order.map(at => steppedDown[at]!);
       }
-      state.checked = { scene, placementKey, structure };
+      state.checked = { scene, placementKey: stale ? judged!.placementKey : placementKey, structure, extent: stale ? judged!.extent : input.extent };
       state.scene = scene;
       const changed = !reuse || state.status !== "ready";
       state.status = "ready";

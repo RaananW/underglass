@@ -1019,6 +1019,16 @@ export function sameGeometry(a: InstrumentScene, b: InstrumentScene): boolean {
   }
   return true;
 }
+/**
+ * Whether the box a layer has now is not the one a scene was judged at, while the scene itself is the one that was judged
+ * there: it declares the same `extent` as `judged` did (same width and height) and the layer's box has changed. Core keeps
+ * such a scene's verdict until a scene built for the new box arrives, because the producer can only answer a layout change
+ * after core's own observer has drawn it.
+ */
+export function staleLayout(judged: InstrumentScene, scene: InstrumentScene, judgedExtent: { width: number; height: number }, extent: { width: number; height: number }): boolean {
+  return (judgedExtent.width !== extent.width || judgedExtent.height !== extent.height)
+    && judged.extent.width === scene.extent.width && judged.extent.height === scene.extent.height;
+}
 /** The number of parts a scene describes. */
 export function instrumentPartCount(scene: InstrumentScene): number {
   return derived.get(scene)?.parts ?? scene.objects.reduce((sum, object) => sum + object.parts.length, 0);
