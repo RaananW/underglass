@@ -375,12 +375,12 @@ for (const dpr of [1, 2]) {
         const png = await shot();
         for (const index of [0, 1]) expect(near(centre(png, await call("slot", index), dpr), RED), `slot ${index} is captured`).toBe(true);
         expect(near(centre(png, await call("slot", 2), dpr), BACKGROUND), "the shadow-root canvas behind them is the layer background, as for any unmarked canvas").toBe(true);
+        expect(await call("shadowContent", 2), "querySelectorAll does not reach a shadow root: not marked").toBe(null);
         // The author can mark it themselves; core leaves that alone.
         await call("markShadow", 2);
         expect(near(centre(await shot(), await call("slot", 2), dpr), RED), "marked by the author: captured").toBe(true);
         expect(await call("content", 0), "a nested HTML-in-Canvas host is left alone").toBe(null);
         expect(await call("content", 1), "a plain canvas beside it is marked").toBe("drawable");
-        expect(await call("shadowContent", 2), "querySelectorAll does not reach a shadow root: not marked").toBe(null);
         expect(errors).toEqual([]);
       } finally { await context.close(); }
     });
