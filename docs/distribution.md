@@ -92,7 +92,7 @@ The checkout's `docs/worker.md` contains the complete setup and measured limits;
 it is not another bundled package member. No CSS speedup is established.
 
 React/React DOM are external matching-major peers (`^18.3.1 || ^19.0.0`),
-not bundled duplicate roots. Actual tested pairs are18.3.1 and19.3.0;
+not bundled duplicate roots. Actual tested pairs are18.3.1 and19.3.1;
 the peer range is not certification of every version. Public Lite1.33.0
 is an exact runtime dependency, not vendored, and its unrelated WebXR
 declaration names require the exact `@types/webxr`0.5.24 dependency/reference.

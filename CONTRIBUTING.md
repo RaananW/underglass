@@ -307,7 +307,7 @@ Do not change main dependency pins to run the isolated React18 fixture.
 Matching React/DOM18.3.1 and types18.3.31/18.3.7 are declared in its own
 manifest/lockfile; ignored copied source resolves these dependencies without
 implementation substitutions. Its fresh services5185/5186 refuse reuse.
-The exact-pinned `@radix-ui/react-dialog`1.2.0 dependency is also declared and
+The exact-pinned `@radix-ui/react-dialog`1.3.1 dependency is also declared and
 resolved in both fixtures; matching types/React do not come from the primary.
 `test:react19` runs the complete primary suite and records actual mounted
 production/development versions; it retains the existing dev5173 ownership.

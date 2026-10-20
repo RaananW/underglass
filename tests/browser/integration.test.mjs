@@ -66,7 +66,7 @@ for (const strict of [false, true]) test(`ref enrollment and original Radix nati
     return window.integrationProbe.state();
   });
   const originalPixels = PNG.sync.read(await page.locator("#frame").screenshot());
-  expect(initial.reactVersion).toBe(process.env.CANVAS_EXPECT_REACT_VERSION ?? "19.3.0");
+  expect(initial.reactVersion).toBe(process.env.CANVAS_EXPECT_REACT_VERSION ?? "19.3.1");
   expect(initial.runtimeResources.enrolledLayers).toBe(3);
   expect(initial.resources.engines).toBe(1);
   expect(initial.metrics.admission.last.nativePixels).toEqual([]);

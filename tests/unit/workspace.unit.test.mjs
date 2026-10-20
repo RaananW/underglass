@@ -55,12 +55,12 @@ test("core sources import no UI framework and the Vue adapter imports no React",
   }
 });
 
-// The root lock pins React 19.3.0 and the React 18 fixture lock pins 18.3.1; each library's own lock entry must match its package.json.
+// The root lock pins React 19.3.1 and the React 18 fixture lock pins 18.3.1; each library's own lock entry must match its package.json.
 test("both committed lock lanes retain distinct actual React peer ownership", async () => {
   const root = JSON.parse(await readFile("package-lock.json", "utf8")).packages;
   const react18 = JSON.parse(await readFile("fixtures/react18/package-lock.json", "utf8")).packages;
-  assert.equal(root["node_modules/react"].version, "19.3.0");
-  assert.equal(root["node_modules/react-dom"].version, "19.3.0");
+  assert.equal(root["node_modules/react"].version, "19.3.1");
+  assert.equal(root["node_modules/react-dom"].version, "19.3.1");
   assert.equal(react18["node_modules/react"].version, "18.3.1");
   assert.equal(react18["node_modules/react-dom"].version, "18.3.1");
   assert.deepEqual(root["node_modules/@underglass/core"], { resolved: "packages/core", link: true });

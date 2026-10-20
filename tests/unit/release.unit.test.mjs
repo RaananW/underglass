@@ -87,8 +87,8 @@ test("release dependency copies are physical and exclude optimizer outputs", asy
 
 test("release peer assertions fail closed including real production ReactDOM18 suffix", () => {
   assertRuntimePeer({ react: "18.3.1", reactDOM: "18.3.1-next-f1338f8080-20240426" }, "18.3.1");
-  assertRuntimePeer({ react: "19.3.0", reactDOM: "19.3.0" }, "19.3.0");
-  assert.throws(() => assertRuntimePeer({ react: "19.3.0", reactDOM: "19.3.0" }, "18.3.1"), /React peer mismatch/);
+  assertRuntimePeer({ react: "19.3.1", reactDOM: "19.3.1" }, "19.3.1");
+  assert.throws(() => assertRuntimePeer({ react: "19.3.1", reactDOM: "19.3.1" }, "18.3.1"), /React peer mismatch/);
   assert.throws(() => assertRuntimePeer({ react: "18.3.1", reactDOM: "18.3.1-other" }, "18.3.1"), /ReactDOM peer mismatch/);
 });
 

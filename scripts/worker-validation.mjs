@@ -5,7 +5,7 @@
  * browser (pixels, native input, rollback, media and DPR changes, refusals, cancellation, disposal),
  * followed by a CSS / main-thread / worker timing comparison.
  *
- * Invoked as `npm run test:worker`. Flags: `--react18` (use the React 18.3.1 peer instead of 19.3.0),
+ * Invoked as `npm run test:worker`. Flags: `--react18` (use the React 18.3.1 peer instead of 19.3.1),
  * `--functional-only` (skip the timing comparison). Environment: `CANVAS_WORKER_EXCLUSIVE=1` (only records
  * that the run was alone on the machine; run it that way for timing), `CANVAS_BROWSER_EXECUTABLE`,
  * `CANVAS_REQUIRE_BROWSER_PIN=1`.
@@ -29,7 +29,7 @@ import { browserLaunchOptions } from "../tests/helpers/browser.mjs";
 import { withPlatform, devNull, tarArgs } from "../tests/helpers/process.mjs";
 
 const root = resolve(".");
-const peer = process.argv.includes("--react18") ? "18.3.1" : "19.3.0";
+const peer = process.argv.includes("--react18") ? "18.3.1" : "19.3.1";
 const functionalOnly = process.argv.includes("--functional-only");
 await assertPhysicalPath(root);
 const parent = join(root, "evidence/worker");

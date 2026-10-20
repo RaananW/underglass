@@ -64,7 +64,7 @@ for (const strict of [false, true]) test(`typed layers: direct native pixels and
   await ready(page, "", strict);
   const initial = await page.evaluate(() => window.runtimeProbe.state());
   // `scripts/react-matrix.mjs` sets the expected version for its React 18 run.
-  expect(initial.reactVersion).toBe(process.env.CANVAS_EXPECT_REACT_VERSION ?? "19.3.0");
+  expect(initial.reactVersion).toBe(process.env.CANVAS_EXPECT_REACT_VERSION ?? "19.3.1");
   // Admission read back its two marker colours from the GPU output only (no native 2D readback), and its
   // native hit probe found both interior points and missed the clipped exterior point.
   expect(initial.metrics.admission.passes).toBe(1);
