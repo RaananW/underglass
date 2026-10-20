@@ -163,7 +163,9 @@ A shifted keypad named with `aria-label`:
 | Home, End | The first and last key of the row |
 | Control+Home, Control+End | The first and last key |
 
-- The group is a `fieldset` (role `group`) named by its `legend`; each key is a `button` named by its printed legends. The
+- The group is a `fieldset` (role `group`) named by its `legend`; each key is a `button` named by its printed legends. An `aria-label` that replaces them must still contain the printed
+  legend (WCAG 2.5.3 Label in Name, which axe 4.11 checks as `label-content-name-mismatch`): `aria-label="5, five"` on a key
+  printing `5`, never `"Five"`. The
   navigation is the Pad's (see [its keyboard section](pad.md#8-keyboard-and-screen-reader)): a roving tabindex applied the first
   time focus enters, the columns read from the laid-out grid, right-to-left swapping left and right. Without script every key
   is a native tab stop.

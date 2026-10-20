@@ -36,7 +36,7 @@ function App() {
           <KeypadKey ref={ref} id="two" shift="ABC" value="2" className="extra" data-testid="two" onClick={() => clicks.push("two")}>2</KeypadKey>
           <KeypadKey id="three" shift="DEF" value="3" onClick={() => clicks.push("three")}>3</KeypadKey>
           <KeypadKey id="four" value="4" disabled>4</KeypadKey>
-          <KeypadKey id="five" value="5" aria-label="Five" onClick={() => clicks.push("five")}>5</KeypadKey>
+          <KeypadKey id="five" value="5" aria-label="5, five" onClick={() => clicks.push("five")}>5</KeypadKey>
         </Keypad>
         <Keypad id="locked" label="Locked" columns={2} disabled size="small">
           <KeypadKey id="locked-a" value="a">A</KeypadKey>

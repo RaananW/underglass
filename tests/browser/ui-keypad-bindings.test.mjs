@@ -50,7 +50,7 @@ for (const binding of ["react", "vue"]) test(`the ${binding} Keypad and KeypadKe
   })).toEqual({ fieldset: true, button: true, className: "ug-keypad extra", style: "--strata-keypad-columns: 3; margin-right: 4px;", testid: "dial", keyClass: "ug-keypad__key extra", value: "2", keyTestid: "two", type: "button", legend: "Dial" });
   await expect(page.getByRole("group", { name: "Dial" })).toHaveCount(1);
   await expect(page.locator("#two")).toHaveAccessibleName("2 ABC");
-  await expect(page.locator("#five")).toHaveAccessibleName("Five");
+  await expect(page.locator("#five")).toHaveAccessibleName("5, five");
   expect(await dial.evaluate(element => getComputedStyle(element.querySelector(".ug-keypad__plinth")).gridTemplateColumns.split(" ").length)).toBe(3);
 
   // A key: held while pressed (after the behaviour attaches on mount), one click.
