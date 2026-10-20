@@ -302,8 +302,8 @@ test("default explicit policy reconciles supported layout without reentry", asyn
 });
 
 // A held `requestAdapter` keeps public engine initialization pending. Layout changes during the wait are
-// absorbed (GPU ends up admitted), while an explicit disable or dispose issued during the wait wins: the output
-// stays hidden, and no GPU is presented afterwards.
+// absorbed (GPU ends up admitted), while an explicit disable or dispose issued during the wait wins at once (the
+// wait is cancelled; a disposed surface has no output): no GPU is presented afterwards and the late engine is disposed.
 for (const operation of ["layout", "disable", "dispose"]) {
   test(`pending public engine initialization respects ${operation}`, async ({ page }) => {
     const metadata = await ready(page); await native(page);
@@ -325,7 +325,13 @@ for (const operation of ["layout", "disable", "dispose"]) {
       if (operation === "disable") window.finalIntent = window.integrationProbe.disable();
       if (operation === "dispose") window.finalIntent = window.integrationProbe.dispose();
     }, operation);
-    expect(await page.locator("#output").evaluate(node => node.hidden)).toBe(true);
+    if (operation === "dispose") {
+      // A pending engine request no longer holds dispose hostage: it settles at once and removes the canvas,
+      // and the late engine is disposed when the held adapter is released.
+      await page.evaluate(() => window.finalIntent);
+      expect(await page.locator("#output").count()).toBe(0);
+      expect((await state(page)).mode).toBe("disposed");
+    } else expect(await page.locator("#output").evaluate(node => node.hidden)).toBe(true);
     await page.evaluate(() => window.releaseAdapter());
     await page.evaluate(() => window.pendingEnable);
     if (operation === "layout") { await settled(page, "gpu"); await continuity(page); }
