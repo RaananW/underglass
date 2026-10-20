@@ -95,3 +95,7 @@ Repository: <https://github.com/WICG/html-in-canvas/issues>
   the explainer state that hit testing uses the same transformed clip shape as painting?
 
 Checked against WICG html-in-canvas at `5fb3df86` (2026-10-09).
+
+## Captured text differs from on-screen paint at DPR 1 (observed, not filed)
+
+Recorded with the #159 work (2026-10-20): WICG html-in-canvas `main` at `5fb3df86d84de598c7f0fcfc5ee53de1df067e7d` (committed 2026-10-09T22:49:17Z), Chrome Canary 158.0.8112.0, Windows 11, RTX 3080. See [open issues](../open-issues.md).

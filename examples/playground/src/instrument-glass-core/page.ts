@@ -11,13 +11,20 @@
  *
  * Query: `?glass=off` (the same parts as plain lacquer, the non-glass look), `?page=off` (no page probe), `?post=off`,
  * `?failProbe=1` and `?failGlass=1` (core's internal test hooks, not public API: the probe or the glass fails to build),
- * `?theme=dark`.
+ * `?theme=dark` (dark faceplate and ink), `?dom=1` (no GPU: the DOM's own rendering, the reference of
+ * `tests/browser/core-layer-exactness.test.mjs`).
  *
  * `window.glassCore.ready` resolves with the test API (see `api` below).
  */
 import { createCanvasHosts, mountApplicationModule, type CanvasController, type InstrumentScene, type InstrumentObject, type InstrumentPart, type InstrumentProfile, type MaterialHandle } from "@underglass/core";
 
 const params = new URLSearchParams(location.search);
+const dark = params.get("theme") === "dark";
+if (dark) {
+  const style = document.createElement("style");
+  style.textContent = `body { background: #1b1d22; } #glass { background: rgb(34, 37, 45); color: rgb(222, 226, 234); } .igc-print { color: rgb(222, 226, 234); }`;
+  document.head.append(style);
+}
 const frame = document.getElementById("frame")!;
 const status = document.getElementById("status")!;
 const options = { glass: params.get("glass") !== "off", page: params.get("page") !== "off", lights: true, casters: true, objects: true,
@@ -27,6 +34,8 @@ const options = { glass: params.get("glass") !== "off", page: params.get("page")
   ior: 1.5,
   /** The faceplate and the display's field are translucent: the capture has texels with alpha below 1 under the window. */
   translucent: false,
+  /** The scene's face primitive: off leaves a layer with no primitives at all (only the capture). */
+  primitives: true,
   post: params.get("post") === "off" ? { smaa: false, bloom: false } as InstrumentScene["post"] : undefined };
 const DISTANCE = 2400;
 const round = (value: number) => Math.round(value * 100) / 100;
@@ -163,11 +172,11 @@ function sceneOf(): InstrumentScene {
     camera: { distance: DISTANCE, vanish: [width / 2, height / 2] },
     environment: { source: "studio", strength: 1, ...(options.page ? {} : { page: { enabled: false } }) },
     extent: { width: panel.offsetWidth, height: panel.offsetHeight }, outset: { top: 16, right: 16, bottom: 16, left: 16 },
-    backdrop: "#e3e5e9", light: { azimuth: 323, elevation: 41 },
+    backdrop: dark ? "#1b1d22" : "#e3e5e9", light: { azimuth: 323, elevation: 41 },
     bevel: { width: 3, gain: 1, profile: "quarter-round" }, shadow: { strength: 0.24 }, interior: { max: 0.04 },
     state: { hoverHeight: 1.6, pressHeight: 0.25, hoverLift: 0.02, pressSink: 0.03 }, focus: { colour: "#2563eb", width: 2, offset: 2 },
     materials: Object.fromEntries(Object.entries(materials).map(([name, recipe]) => [name, recipe.glass ? { ...recipe, glass: { ...recipe.glass, reflection: options.reflection, ior: options.ior } } : recipe])),
-    primitives: [{ face: "raised", rect: [0, 0, panel.offsetWidth, panel.offsetHeight], radius: 14, height: 6, material: "face" }],
+    primitives: !options.primitives ? [] : [{ face: "raised", rect: [0, 0, panel.offsetWidth, panel.offsetHeight], radius: 14, height: 6, material: "face" }],
     profiles, objects: options.objects ? objects : [], emitters: emittersOf(), protected: protectedRects(),
     ...(options.post ? { post: options.post } : {}),
   };
@@ -207,8 +216,9 @@ function pose(id: string) {
 }
 for (const id of ["k1", "k2", "k3", "chrome"]) document.getElementById(id)!.addEventListener("input", () => pose(id));
 document.getElementById("lamp")!.addEventListener("change", () => { const emitters = emittersOf(); scene = { ...scene, emitters }; handle?.setEmitters(emitters); });
-refresh();
-await controller.enable();
+const domOnly = params.get("dom") === "1";
+if (!domOnly) refresh();
+if (!domOnly) await controller.enable();
 
 const nextFrame = () => new Promise<number>(resolve => requestAnimationFrame(resolve));
 type State = ReturnType<CanvasController["state"]> & { instrument: { layers: { id: string; status: string; steppedDown: { object: string; reason: string }[];
@@ -233,7 +243,7 @@ const counts = () => {
   return { mode: value.mode, reason: value.reason, captures: value.metrics.captures, uploads: value.metrics.uploads, gpuFrames: value.metrics.gpuFrames, geometryUpdates: value.metrics.geometryUpdates };
 };
 const client = (element: Element) => { const box = element.getBoundingClientRect(); return { x: box.left, y: box.top, width: box.width, height: box.height }; };
-try { await settle(); } catch (error) { status.textContent = String(error); }
+if (!domOnly) try { await settle(); } catch (error) { status.textContent = String(error); }
 
 const api = {
   dpr: () => devicePixelRatio,

@@ -592,6 +592,26 @@ for (const dpr of [1, 2]) test(`at the Instrument level (DPR ${dpr}) the printed
   console.log(`instrument DPR ${dpr}: needle meters': ${needleMarks.length} numerals, ${exactNeedles.compared} px compared: ${exactNeedles.plain} faceplate px, ${exactNeedles.tinted} not exact; ${exactNeedles.mismatched} differ from the DOM's, by at most ${exactNeedles.max} levels`);
   const layer = compare(glass.png, bare.png, bars), layerNeedles = compare(glass.png, bare.png, needleMarks);
   console.log(`instrument DPR ${dpr}: against the layer without windows and relief (the capture through the layer pass): bars ${layer.mismatched} of ${layer.compared} px differ, at most ${layer.max} levels; needle meters ${layerNeedles.mismatched} of ${layerNeedles.compared}, at most ${layerNeedles.max} levels`);
+  // The comparison box is the numerals' ink only: the glyphs and their anti-aliased edges, i.e. every pixel of the layer without windows that is not the faceplate colour. A numeral's text box
+  // (the line box) is taller than its glyphs, and its last rows reach the window's own bottom bevel, which is glass by design (Rendering Model 2D.6) and not text, so those faceplate pixels
+  // are excluded and only counted (the 243 / 635 px that #159 reported as "up to 22 levels"). Any ink pixel that differs fails the test below; nothing about the ink is merely logged.
+  const ink = (marks, faceplate) => {
+    let compared = 0, mismatched = 0, bevel = 0;
+    for (const mark of marks) {
+      const x0 = Math.floor(mark.x * dpr), x1 = Math.ceil((mark.x + mark.width) * dpr), y0 = Math.floor(mark.y * dpr), y1 = Math.ceil((mark.y + mark.height) * dpr);
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+        const i = (y * glass.png.width + x) * 4, differs = [0, 1, 2].some(channel => glass.png.data[i + channel] !== bare.png.data[i + channel]);
+        if ([0, 1, 2].every(channel => bare.png.data[i + channel] === faceplate[channel])) { if (differs) bevel++; continue; }
+        compared++;
+        if (differs) mismatched++;
+      }
+    }
+    return { compared, mismatched, bevel };
+  };
+  const inkBars = ink(bars, colour);
+  console.log(`instrument DPR ${dpr}: the bars' numerals' ink against the layer without windows: ${inkBars.mismatched} of ${inkBars.compared} px differ; ${inkBars.bevel} faceplate px of their text boxes are the glass's bevel`);
+  expect(inkBars.compared, "there is ink to compare").toBeGreaterThan(300);
+  expect(inkBars.mismatched, "the numerals under the glass are the layer's own pixels: 0 mismatches against the layer without windows").toBe(0);
   expect(exact.glyphs, "there is text to compare").toBeGreaterThan(300);
   expect(exact.plain, "there is faceplate to compare").toBeGreaterThan(1000);
   expect(exact.tinted, "the bars' faceplate under the glass is the capture's colour, to the level").toBe(0);
