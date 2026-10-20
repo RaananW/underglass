@@ -138,7 +138,12 @@ Implementer-verified, not independently accepted.
   dark page stays dark, a runtime theme change shows on the next frame, and a page with no
   background shows the browser's white. There is no stage colour option; set the background on
   the page (or on the frame/canvas element's CSS). A layer that is not fully opaque shows that
-  background through it, as in DOM mode.
+  background through it, as in DOM mode, and light a layer adds that has colour but no coverage (the
+  Instrument level's emitter halo) now adds to the page behind it instead of vanishing on white. The
+  output canvas is no longer opaque, so the compositor blends it with the page (a small cost). Measured
+  on lit panels over a bare page against the same scene over a stage layer of the page colour: no pixel
+  of a panel's edge band is more than 1 level brighter (Relief, Objects and Instrument, dark and light,
+  DPR 1 and 2), so there is no bright ring at rounded edges.
 - **DOM-mode rotation:** declarative transitions with rotation no longer cancel in
   ordinary DOM. GPU viewport-clip geometry is only checked while GPU presents.
 - **`createCanvasHosts(frame)`:** creates the output canvas, ordinary host and overlay host with the required styles. The output canvas is deliberately not `aria-hidden`, because GPU mode moves the original controls inside it.

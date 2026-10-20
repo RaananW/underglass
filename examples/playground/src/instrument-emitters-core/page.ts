@@ -28,6 +28,8 @@ let theme: Theme = themes[params.get("theme") === "dark" ? "dark" : "light"];
 let feather = Math.min(16, Math.max(0, Number(params.get("feather") ?? 4)));
 frame.dataset.level = level;
 document.body.dataset.theme = theme.name;
+// `?bare=1`: the stage layer has no material and no background of its own, so the panels sit on the bare page (#134).
+const bare = params.get("bare") === "1";
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
 
 let stage!: HTMLElement;
@@ -132,6 +134,7 @@ const sceneOf = (layer: HTMLElement) => (layer === stage ? stageScene(stage, the
 const kindOf = (layer: HTMLElement) => (layer === stage || level === "relief" ? "relief" : level === "objects" ? "objects" : "instrument");
 /** Hands a layer's scene to core: `setMaterial` once, then `update` (structure, layout, states). */
 function refresh(layer: HTMLElement) {
+  if (bare && layer === stage) return;
   if (plain) { handles.get(layer.id)?.cancel(); handles.delete(layer.id); return; }
   const scene = sceneOf(layer), handle = handles.get(layer.id);
   if (handle?.state().active) handle.update(scene as never);
@@ -146,6 +149,7 @@ const controller: CanvasController = mountApplicationModule({ ...hosts, budgets:
   onStatusChange: (value: { mode: string; reason: string }) => { status.dataset.core = `${value.mode}: ${value.reason}`; } }, { mount({ container, enroll }) {
   stage = element("section", { id: "stage", "aria-label": "Stage" });
   stage.setAttribute("drawable", "");
+  if (bare) stage.style.background = "transparent";
   container.append(stage);
   for (const [id, name, lamp, key, corner] of [["a", "A · Studio", "Monitor", "Mute"], ["b", "B · Desk", "Record", "Arm"], ["c", "C · Rack", "Power", "Solo", "Standby"]] as const) {
     const panel = element("section", { id, class: "ec-panel", "aria-label": name });
