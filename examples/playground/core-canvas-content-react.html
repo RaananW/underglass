@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Underglass canvas content, React</title>
+  <style>
+    body { font: 16px system-ui; margin: 24px; background: white; color: #17202a; }
+    button, input { font: inherit; }
+    [hidden] { display: none !important; }
+    #frame { position: relative; width: 640px; height: 420px; background: white; }
+    #capture, #output, #ordinary { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #output { pointer-events: none; }
+    #status { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Typed shared runtime and native interaction</h1>
+  <p>Explicit mount boundary; one original control tree and one shared GPU compositor.</p>
+  <p><button id="enable">GPU</button> <button id="disable">Ordinary DOM</button>
+    <button id="move">Independent motion</button> <button id="dispose">Dispose</button></p>
+  <div id="frame"><canvas id="capture" hidden></canvas><canvas id="output" hidden></canvas><div id="ordinary"></div><div id="overlay"></div></div>
+  <pre id="status" role="status"></pre>
+  <script type="module" src="/src/core-canvas-content-react/page.tsx"></script>
+</body>
+</html>

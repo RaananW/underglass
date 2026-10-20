@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Underglass probe: canvas inside a drawable</title>
+  <style>
+    html, body { margin: 0; background: rgb(222, 225, 230); color: rgb(28, 30, 36); font: 14px system-ui; }
+    #out { position: fixed; left: 0; top: 0; width: 640px; height: 240px; }
+    #layer { position: absolute; left: 0; top: 0; width: 640px; height: 240px; background: rgb(233, 235, 239); }
+    #layer .cell { position: absolute; width: 60px; height: 30px; }
+    #layer canvas.v, #layer img.v { display: block; width: 60px; height: 30px; }
+  </style>
+</head>
+<body>
+  <script type="module" src="/src/canvas-capture-raw/page.ts"></script>
+</body>
+</html>

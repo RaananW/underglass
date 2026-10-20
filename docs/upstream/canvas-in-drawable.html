@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>HTML-in-Canvas: a nested canvas is captured blank</title>
+<!--
+  Reproduction for docs/upstream/canvas-in-drawable.md. Serve it from localhost or any https origin and open it in a Chromium with
+  --enable-blink-features=CanvasDrawElement,ElementCanvasTransform --enable-experimental-web-platform-features.
+  One drawable layer holds three 2D canvases filled red. The layer is drawn with drawElementImage and each cell's centre
+  pixel is read back. Expected: red, red, red. Observed on Canary 158.0.8112.0: red, then the layer background (233, 235, 239) twice.
+-->
+<style>
+  body { margin: 0; font: 14px system-ui; }
+  #out { position: absolute; left: 0; top: 0; width: 400px; height: 100px; }
+  #layer { position: absolute; left: 0; top: 0; width: 400px; height: 100px; background: rgb(233, 235, 239); }
+  #layer > * { position: absolute; top: 10px; width: 60px; height: 30px; display: block; }
+  pre { position: absolute; left: 0; top: 120px; margin: 0; }
+</style>
+<canvas id="out" width="400" height="100" content="drawable"><div id="layer" drawable></div></canvas>
+<pre id="result">running</pre>
+<script>
+  const out = document.getElementById("out"), layer = document.getElementById("layer");
+  for (let index = 0; index < 3; index++) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 60; canvas.height = 30; canvas.style.left = `${10 + index * 80}px`;
+    const context = canvas.getContext("2d");
+    context.fillStyle = "rgb(200, 40, 40)"; context.fillRect(0, 0, 60, 30);
+    layer.append(canvas);
+  }
+  const context = out.getContext("2d", { willReadFrequently: true });
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    out.addEventListener("paint", () => {
+      context.drawElementImage(layer, 0, 0);
+      const pixels = [0, 1, 2].map(index => Array.from(context.getImageData(10 + index * 80 + 30, 25, 1, 1).data.slice(0, 3)));
+      document.getElementById("result").textContent = pixels.map((rgb, index) => `canvas ${index + 1}: rgb(${rgb.join(", ")})`).join("\n")
+        + "\nexpected rgb(200, 40, 40) for all three";
+    }, { once: true });
+    out.requestPaint();
+  }));
+</script>
