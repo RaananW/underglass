@@ -24,6 +24,11 @@ off (the job is skipped) until such a runner is registered and the repository va
    gets no GPU.
 4. **Settings → Secrets and variables → Actions → Variables**: add `GPU_RUNNER` = `true`.
 
+A runner is optional for releases: without one, the Release workflow skips its GPU job and the owner runs
+`npm run test:browser` and `npm run test:package` locally on the Version Packages pull request before
+merging it ([releasing](releasing.md#enabling-releases)). With one, the Release workflow runs both before it
+publishes, and a failure blocks the publish.
+
 From then on the suite runs on pushes to `main`, on pull requests from branches of this
 repository, and on demand (**Actions → Browser → Run workflow**).
 
@@ -38,7 +43,7 @@ account without access to anything sensitive.
 
 GitHub's GPU larger runners (Linux with an NVIDIA GPU) can replace the self-hosted machine:
 change `runs-on` to the runner's label. They are billed per minute. The suite takes about
-10 minutes on a desktop GPU, so check current per-minute pricing for a per-run estimate.
+1.5 hours on a development GPU, so check current per-minute pricing for a per-run estimate.
 These runners are untested here, and Canary on Linux must come from Chrome for Testing.
 
 ## Running the same checks locally
@@ -46,7 +51,7 @@ These runners are untested here, and Canary on Linux must come from Chrome for T
 ```sh
 node scripts/ci-gpu-probe.mjs   # WebGPU adapter and HTML-in-Canvas APIs present?
 npm run build && node scripts/ci-gpu-smoke.mjs   # does the runtime admit GPU on this machine?
-npm run test:browser            # the regression suite, as CI runs it (about 30 minutes)
+npm run test:browser            # the regression suite, as CI runs it (about 1.3 to 1.6 hours on a development GPU)
 npm run test:browser:probes     # the probe and prototype evidence suites CI skips (about 25 minutes)
 ```
 

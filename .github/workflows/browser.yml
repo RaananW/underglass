@@ -25,7 +25,9 @@ jobs:
       vars.GPU_RUNNER == 'true' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, gpu]
-    timeout-minutes: 40
+    # The default suite takes about 1.3 to 1.6 hours on a development GPU (it used to take about 30 minutes);
+    # 150 minutes leaves headroom and still ends a hung run.
+    timeout-minutes: 150
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
     steps:

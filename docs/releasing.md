@@ -54,9 +54,12 @@ Once enabled, every push to `main` runs the Release workflow, which picks one mo
    Version Packages pull request merges): it validates, packs and publishes.
    - **Pack** (hosted runner): build, typecheck, unit and compiler tests,
      `release-validation.mjs build-only` for both React peers, then pack the archives.
-   - **GPU** (self-hosted GPU runner): the full browser suite and `test:package`, with React 18
-     and 19, the HTML-in-Canvas flags on and off, at DPR 1 and 2.
-   - **Publish** (`npm` environment): publishes the packed archives with npm trusted publishing and
+   - **GPU** (self-hosted GPU runner, **only when the repository variable `GPU_RUNNER` is `true`**): the
+     full browser suite and `test:package`, with React 18 and 19, the HTML-in-Canvas flags on and off, at DPR
+     1 and 2. The default suite takes about 1.3 to 1.6 hours, so the job's timeout is 150 minutes. With no
+     runner the job is skipped. A failed or cancelled GPU job blocks publishing.
+   - **Publish** (`npm` environment): runs when Pack succeeded and the GPU job passed or was skipped, and
+     publishes the packed archives with npm trusted publishing and
      provenance, then pushes a git tag and a GitHub release per package, such as
      `@underglass/core@0.2.0`.
 3. **Otherwise** it does nothing. This is also the case while every public package's version is already on npm.
@@ -69,7 +72,7 @@ can attest the build (so the first publish passes `--provenance=false`).
 
 These steps are the owner's. They are account and repository settings that no pull request can make.
 
-**Versioning only** (Version Packages pull requests and changelogs; nothing is published until the trusted publishers, the GPU runner and the `npm` environment below are in place):
+**Versioning only** (Version Packages pull requests and changelogs; nothing is published until the trusted publishers and the `npm` environment below are in place):
 
 1. In *Settings → Actions → General*, allow GitHub Actions to create and approve pull requests.
 2. Set the repository variable `RELEASES_ENABLED` to `true`.
@@ -81,8 +84,14 @@ not exist, so the first publish comes first):
    [configure the trusted publisher](#configure-the-trusted-publisher) for each of the five.
 2. Create the GitHub environment `npm` (*Settings → Environments*). Add yourself as a required
    reviewer if every publish should wait for approval.
-3. Keep the self-hosted GPU runner online with `GPU_RUNNER=true` ([ci-gpu-runner.md](ci-gpu-runner.md)).
-   The workflow refuses to publish without it.
+3. **Release gate (required while there is no GPU runner, which is the current state).** Hosted runners
+   cannot run the browser suite, so you run it. When the **Version Packages** pull request is open, check
+   out its branch on a machine with a GPU and Chrome Canary and run `npm ci`, `npm run build`,
+   `npm run test:browser` (about 1.5 hours) and `npm run test:package`
+   ([ci-gpu-runner.md](ci-gpu-runner.md#running-the-same-checks-locally)). Merge the pull request only when
+   both pass. Merging it is what publishes, and CI will not run the GPU suite for you.
+   *Optional, if a runner is added later:* register it and set `GPU_RUNNER=true`; the Release workflow then
+   runs the same suites before publishing and a failure blocks the publish.
 4. Set `RELEASES_ENABLED=true` if it is not already set. The `"private": true` flag is already removed
    from the five public manifests, [distribution.md](distribution.md) is updated and open issue SCOPE-005
    is closed, so the next push to `main` starts the flow in
@@ -185,7 +194,8 @@ The manifests say `0.1.0`, but `0.1.0` was never published, and about 100 change
 1. The first push to `main` after `RELEASES_ENABLED` is set opens the **Version Packages** pull request, which
    bumps `core`, `react`, `vue`, `css-compiler` and `ui` to `0.2.0`, pins core `0.2.0` in the
    dependents and prepends the changesets to each `CHANGELOG.md`.
-2. Merging it makes the workflow pack, run the GPU gate and publish `0.2.0` of the five packages from
+2. Run the local release gate on its branch (see [Enabling releases](#enabling-releases)), then merge it. The
+   workflow then packs, runs the GPU job if a runner exists, and publishes `0.2.0` of the five packages from
    CI with provenance, then tag `@underglass/core@0.2.0` and so on.
 
 The first version on npm is therefore `0.2.0`, not `0.1.0`. If you want `0.1.0` to be the first release,
