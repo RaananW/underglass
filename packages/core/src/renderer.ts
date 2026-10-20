@@ -774,6 +774,8 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   let admissionCancellation: string | undefined;
   // Settles the engine wait of a running admission so an explicit disable/dispose (or a policy recovery) never waits on a slow GPU.
   let abortEngineWait: (() => void) | undefined;
+  // Resolvers of an admission waiting for the document to become visible again; released by `resume`.
+  const resumeWaiters = new Set<() => void>();
   // GPU resources are retained because no fence or device loss confirmed the GPU is idle; reentry is refused.
   let terminalCleanupPending = false;
   /** Runs `operation` after all earlier lifecycle operations settle; a failure does not block later ones. */
@@ -1598,7 +1600,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   async function enable(intent: number) {
     if (intent !== admissionIntent) return state();
     if (mode === "disposed") throw new Error("Surface is disposed");
-    if (initializing || resources.pendingEngines) throw new Error("Previous engine admission has not settled");
+    if (initializing || resources.pendingEngines) throw new Error("Previous engine admission has not settled: an abandoned engine request is still outstanding; enable() is accepted again once it settles");
     if (resources.pendingCleanups) throw new Error("GPU cleanup pending; reentry refused until a confirmed fence or loss");
     if (resources.probeReadbacks) throw new Error("Public admission readback pending; reentry refused until the SDK request settles");
     if (transitioning) throw new Error("Wait for renderer recovery before admission");
@@ -1606,21 +1608,35 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     admissionCancellation = undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let abandoned = false;
+    // Armed for the whole admission: an explicit disable/dispose or a policy recovery settles every wait below
+    // (settle, engine request, visibility) at once instead of waiting on a slow or hung GPU.
+    const cancelled = new Promise<never>((_, reject) => {
+      abortEngineWait = () => { abandoned = true; reject(new Error(admissionCancellation ?? "Admission cancelled during engine initialization")); };
+    });
+    cancelled.catch(() => undefined);
+    const startedPaused = !!options.isPaused?.();
     try {
-      await settle();
+      const settling = settle();
+      settling.catch(() => undefined);
+      await Promise.race([settling, cancelled]);
       if (intent !== admissionIntent) throw new Error("Admission cancelled by explicit disable/disposal");
       if (mode === "gpu") return state();
       const policy = options.policy?.();
       if (policy) throw new Error(policy);
       const budget = options.budgets ?? { layers: 32, pixels: 2_000_000 };
-      const size = options.size();
-      if (![size.width, size.height, size.dpr].every(value => Number.isFinite(value) && value > 0)) throw new Error("Invalid surface dimensions/DPR");
+      const measure = () => {
+        const measured = options.size();
+        if (![measured.width, measured.height, measured.dpr].every(value => Number.isFinite(value) && value > 0)) throw new Error("Invalid surface dimensions/DPR");
+        return measured;
+      };
+      let size = measure();
       const capability = capabilities(output);
       if (!isDrawableCanvas(host)) throw new Error(capability.missing.join("; "));
       drawable = host;
       enableDrawable(nativeHost());
       boundary.assertMovable();
       if (!navigator.gpu) throw new Error("WebGPU unavailable");
+      if (admissionCancellation) throw new Error(admissionCancellation);
       resources.pendingEngines++;
       const engineStarted = performance.now();
       // The engine is adopted whenever it arrives. It is disposed instead only if admission gave up on it
@@ -1641,12 +1657,24 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
         console.warn(reason);
         status();
       }, SLOW_ENGINE_MS);
-      const cancelled = new Promise<never>((_, reject) => { abortEngineWait = () => reject(new Error(admissionCancellation ?? "Admission cancelled during engine initialization")); });
-      cancelled.catch(() => undefined);
-      try { engine = await Promise.race([pending, cancelled]); }
-      finally { abortEngineWait = undefined; }
+      engine = await Promise.race([pending, cancelled]);
       clearTimeout(timer);
       if (!engine) throw new Error("Engine admission was abandoned");
+      // A tab hidden while the engine was initializing must not revoke GPU: ordinary DOM stays presented until it is
+      // visible again (cancellable), then admission continues. An enable() requested while already hidden keeps its
+      // existing behaviour: admission refuses a hidden surface below.
+      if (!startedPaused && options.isPaused?.()) {
+        reason = "WebGPU engine ready; ordinary DOM stays presented until the document is visible, then admission continues.";
+        status();
+        while (options.isPaused?.()) {
+          await Promise.race([new Promise<void>(resolve => { resumeWaiters.add(resolve); }), cancelled]);
+          if (intent !== admissionIntent) throw new Error("Admission cancelled by explicit disable/disposal");
+        }
+      }
+      // The surface may have changed while the engine was pending.
+      const refreshedPolicy = options.policy?.();
+      if (refreshedPolicy) throw new Error(refreshedPolicy);
+      size = measure();
       const deviceQueue = configuredDevice(output).queue;
       if (!isDrawableQueue(deviceQueue)) throw new Error("Current public GPUQueue.drawElementImageToTexture unavailable; WebGL2 direct capture remains unqualified");
       queue = deviceQueue;
@@ -1728,7 +1756,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
         ? `GPU admission failed: device lost (${lostInfo.reason}): ${lostInfo.message}`
         : `GPU admission failed: ${String(error)}`));
       if (!admissionCancellation) console.error(reason);
-    } finally { clearTimeout(timer); initializing = false; scheduleCapture(); status(); }
+    } finally { clearTimeout(timer); abortEngineWait = undefined; resumeWaiters.clear(); initializing = false; scheduleCapture(); status(); }
     return state();
   }
   /** Explicit disable: waits for idle then recovers to ordinary DOM. Caller-owned, so nothing re-enables GPU. */
@@ -1879,7 +1907,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       const shaders = admittedCustom[layers.findIndex(layer => layer.id === id)];
       return material === "relief" ? shaders?.relief === true : shaders?.material === material;
     },
-    phase: () => mode, version: () => generation, resume: scheduleCapture,
+    phase: () => mode, version: () => generation, resume: () => { for (const resolve of [...resumeWaiters]) resolve(); resumeWaiters.clear(); scheduleCapture(); },
     frameBounded: () => frameBounds === "bounded",
     /** Whether admission proved native hits follow a tilted layer's projection. */
     projectiveHits: () => projective === "proven",

@@ -271,7 +271,7 @@ async function gateAdapter(page) {
     const gpu = navigator.gpu;
     const request = gpu.requestAdapter.bind(gpu);
     const gate = new Promise(resolve => { window.__openAdapter = resolve; });
-    gpu.requestAdapter = options => gate.then(() => request(options));
+    gpu.requestAdapter = options => gate.then(() => window.__adapterError ? Promise.reject(new Error(window.__adapterError)) : request(options));
   });
 }
 // Starts `count` `enable()` calls without awaiting them; results land in `window.__results`.
@@ -337,11 +337,37 @@ test("slow GPU initialization stays on DOM, then is adopted and ends on GPU", as
   await writeFile(`${evidence}/slow-init-adopted.json`, JSON.stringify({ slow, adopted, final, disposed }, null, 2));
 });
 
+// A rejected adapter request is a GPU error even after the slow diagnosis: the surface falls back to DOM with the
+// failure as its reason, and the page stays usable.
+test("an adapter rejection after the slow diagnosis falls back with the error", async ({ page }) => {
+  test.setTimeout(60_000);
+  await mkdir(evidence, { recursive: true });
+  await gateAdapter(page);
+  await page.goto("/surface.html?dom");
+  await page.waitForFunction(() => window.surfaceProbe && document.querySelector("#count"));
+  await startEnabling(page);
+  await page.waitForFunction(() => /initialization slow/.test(window.surfaceProbe.state().reason), undefined, { timeout: 20_000 });
+  await page.evaluate(() => { window.__adapterError = "Injected adapter failure"; window.__openAdapter(); });
+  await page.waitForFunction(() => window.__results?.length === 1);
+  const result = await page.evaluate(() => window.surfaceProbe.state());
+  expect(result.mode).toBe("dom");
+  expect(result.reason).toMatch(/GPU admission failed: .*Injected adapter failure/);
+  expect(result.metrics.admission.slowInits).toBe(1);
+  expect(result.resources.pendingEngines).toBe(0);
+  expect(result.resources.engines).toBe(0);
+  await page.locator("#count").click();
+  await expect(page.locator("#count")).toHaveText("Count 1");
+  const final = await page.evaluate(() => window.surfaceProbe.dispose());
+  expect(Object.values(final.resources).every(value => value === 0)).toBe(true);
+});
+
 // A pending (hung) engine request never holds disable() or dispose() hostage: both settle at once and the
 // late engine is disposed when it finally arrives. Re-entry is refused only while that request is outstanding.
 for (const action of ["disable", "dispose"]) {
   test(`pending GPU initialization is cancelled promptly by ${action} and the late engine is disposed`, async ({ page }) => {
     await mkdir(evidence, { recursive: true });
+    const errors = [];
+    page.on("pageerror", error => errors.push(error.message));
     await gateAdapter(page);
     await page.goto("/surface.html?dom");
     await page.waitForFunction(() => window.surfaceProbe && document.querySelector("#count"));
@@ -376,6 +402,8 @@ for (const action of ["disable", "dispose"]) {
       const final = await page.evaluate(() => window.surfaceProbe.dispose());
       expect(Object.values(final.resources).every(value => value === 0)).toBe(true);
     } else expect(Object.values(late.resources).every(value => value === 0)).toBe(true);
+    // The late engine of a disposed surface is created on a removed canvas and then disposed: no page error.
+    expect(errors).toEqual([]);
     await writeFile(`${evidence}/pending-init-cancelled-by-${action}.json`, JSON.stringify({ cancelled, late }, null, 2));
   });
 }
