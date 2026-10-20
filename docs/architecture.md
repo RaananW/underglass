@@ -720,9 +720,29 @@ been safely released. This limitation is explicit, not a claimed zero ledger.
 The healthy held-delivery fixture and destruction-during-readback fixture
 exercise separate outcomes; the latter settles in the observed browser run.
 
-Admission times out after 5000 ms. An abandoned, late-created engine is
-disposed, and new admission is refused while its promise remains outstanding.
-Native paint waits are bounded at 1500 ms. These limits do not guarantee timely
+Engine creation (`requestAdapter` then `requestDevice`, the only awaits in Lite's
+`createEngine`) has **no hard deadline**. A slow initialization is neither a GPU
+error nor a lack of browser support, so the contract forbids falling back to DOM
+for it. After 5000 ms the surface only diagnoses it: `state().reason` becomes
+"WebGPU initialization slow (over 5000 ms); ordinary DOM stays presented and
+admission continues.", `metrics.admission.slowInits` counts it, status is
+published and a `console.warn` is logged. The page is ordinary DOM throughout
+(the output canvas is not revealed until the engine exists), so it stays visible,
+interactive and crawlable. When the engine arrives it is adopted and admission
+continues. `enable()` resolves when admission finishes. A rejected request is a
+GPU error and falls back with a diagnosis as before. Only a caller can end a wait
+that never answers: explicit `disable()`/`dispose()` (or a policy recovery)
+settles the wait at once instead of waiting on the GPU, recovers to DOM and
+disposes the late engine if it ever arrives. A second `enable()` issued while one
+is running queues behind it and sees its result. After a cancellation, new
+admission is refused ("Previous engine admission has not settled") while the
+abandoned request is outstanding. A never-answering GPU therefore leaves the page
+on DOM with the slow reason and `enable()` pending until `disable()`/`dispose()`;
+this is a deliberate choice, not a bounded fallback.
+`metrics.admission.engineMs` is the last engine-creation time and
+`admittingMs` the time from moving the root into the canvas to the first
+complete GPU frame (the window in which the output is not a seamless display, see
+above). Native paint waits are bounded at 1500 ms. These limits do not guarantee timely
 browser/driver recovery from a physical crash.
 
 ## Evidence boundaries

@@ -191,6 +191,8 @@ export interface RendererSample {
   bytes?: number;
 }
 
+/** After this many milliseconds a pending engine request is diagnosed as slow (a transient `reason`); it is never abandoned for being slow. */
+const SLOW_ENGINE_MS = 5000;
 /**
  * Creates the renderer for one surface and mounts the React root in ordinary DOM through
  * `createMountBoundary`. GPU mode starts only on `enable()`. The returned object is driven by `CanvasRuntime`:
@@ -220,7 +222,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   const timing = () => ({ count: 0, totalMs: 0, minMs: null as number | null, maxMs: null as number | null });
   const layerMetrics: Record<string, { captures: number; pixelCopies: number; pixelReadbacks: number; uploads: number; inputCapturesSkipped: number; mutationsIgnored: number }> = Object.create(null);
   const metrics = { captures: 0, inputCapturesSkipped: 0, mutationsIgnored: 0, pixelCopies: 0, pixelReadbacks: 0, reusedUploads: 0, uploads: 0, paintNotifications: 0, deviceLossCount: 0, fenceCount: 0, effectShaderCompilations: 0, incompleteFramesSkipped: 0, shaderSourceGenerations: 0, precompiledShaderSelections: 0,
-    admission: { attempts: 0, passes: 0, captures: 0, pixelCopies: 0, pixelReadbacks: 0, uploads: 0, gpuFrames: 0, gpuReadbacks: 0, geometryChecks: 0,
+    admission: { engineMs: null as number | null, slowInits: 0, admittingMs: null as number | null, attempts: 0, passes: 0, captures: 0, pixelCopies: 0, pixelReadbacks: 0, uploads: 0, gpuFrames: 0, gpuReadbacks: 0, geometryChecks: 0,
       last: undefined as { nativePixels: number[][]; gpuPixels: number[][]; geometry: ReturnType<typeof verifyProbeGeometry>; frameBounds: ReturnType<typeof verifyFrameBounds>; projective?: ReturnType<typeof verifyProjectiveHits> } | undefined },
     timings: { captureMs: timing(), uploadMs: timing(), frameWorkMs: timing(), frameIntervalsMs: timing() },
     paintElements: [] as string[][], perLayer: layerMetrics, lightPassesDisposed: 0, uploadBytes: 0, gpuFrames: 0, geometryUpdates: 0, moves: 0, deviceLosses: [] as { reason: GPUDeviceLostReason; message: string; duringMotion: boolean; duringAdmission: boolean }[], fenceOutcomes: [] as IdleOutcome[], captureMs: [] as number[], uploadMs: [] as number[], frameWorkMs: [] as number[], frameIntervalsMs: [] as number[] };
@@ -770,6 +772,8 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   // Bumped by explicit disable/dispose so an `enable` already queued or running can tell it was cancelled.
   let admissionIntent = 0;
   let admissionCancellation: string | undefined;
+  // Settles the engine wait of a running admission so an explicit disable/dispose (or a policy recovery) never waits on a slow GPU.
+  let abortEngineWait: (() => void) | undefined;
   // GPU resources are retained because no fence or device loss confirmed the GPU is idle; reentry is refused.
   let terminalCleanupPending = false;
   /** Runs `operation` after all earlier lifecycle operations settle; a failure does not block later ones. */
@@ -1586,7 +1590,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       }
     }
   /**
-   * Admission sequence: checks capability and budgets, creates the engine (5000 ms cap), observes device loss,
+   * Admission sequence: checks capability and budgets, creates the engine, observes device loss,
    * moves the root into the canvas, runs functional admission, reconciles, captures and draws once, then
    * sets mode to `gpu`. Any failure or cancellation recovers to ordinary DOM. `intent` is the
    * `admissionIntent` captured when queued, so a later disable cancels it.
@@ -1618,14 +1622,29 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       boundary.assertMovable();
       if (!navigator.gpu) throw new Error("WebGPU unavailable");
       resources.pendingEngines++;
-      // A late engine is disposed instead of adopted if admission already gave up on it.
+      const engineStarted = performance.now();
+      // The engine is adopted whenever it arrives. It is disposed instead only if admission gave up on it
+      // (explicit disable/dispose, policy recovery) or the request itself failed.
       const pending = createEngine(output, { msaaSamples: 1, maxDevicePixelRatio: 1 }).then(value => {
         resources.pendingEngines--;
         if (abandoned) { disposeEngine(value); status(); return undefined; }
+        metrics.admission.engineMs = performance.now() - engineStarted;
         resources.engines++;
         return value;
       }, error => { resources.pendingEngines--; status(); throw error; });
-      engine = await Promise.race([pending, new Promise<never>((_, reject) => { timer = setTimeout(() => { abandoned = true; reject(new Error("WebGPU initialization timed out after 5000 ms; late engine will be disposed")); }, 5000); })]);
+      // A slow initialization is neither a GPU error nor missing support: the deadline only diagnoses it.
+      // Ordinary DOM stays presented (the canvas is not revealed until the engine exists) and admission continues.
+      timer = setTimeout(() => {
+        if (abandoned || intent !== admissionIntent || admissionCancellation) return;
+        metrics.admission.slowInits++;
+        reason = `WebGPU initialization slow (over ${SLOW_ENGINE_MS} ms); ordinary DOM stays presented and admission continues.`;
+        console.warn(reason);
+        status();
+      }, SLOW_ENGINE_MS);
+      const cancelled = new Promise<never>((_, reject) => { abortEngineWait = () => reject(new Error(admissionCancellation ?? "Admission cancelled during engine initialization")); });
+      cancelled.catch(() => undefined);
+      try { engine = await Promise.race([pending, cancelled]); }
+      finally { abortEngineWait = undefined; }
       clearTimeout(timer);
       if (!engine) throw new Error("Engine admission was abandoned");
       const deviceQueue = configuredDevice(output).queue;
@@ -1667,6 +1686,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       options.presentation?.("gpu");
       ordinary.hidden = true;
       mode = "admitting";
+      const admittingStarted = performance.now();
       dx = tint = 0;
       generation++;
       const admissionGeneration = generation;
@@ -1694,6 +1714,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       if (options.isPaused?.()) throw new Error("GPU admission requires a visible surface");
       if (lostInfo) throw new Error("GPU device lost before admission completed");
       mode = "gpu";
+      metrics.admission.admittingMs = performance.now() - admittingStarted;
       output.hidden = false;
       reason = "Current content=drawable owning WebGPU canvas; synchronous native-paint direct public textures; complete same-root GPU successors.";
       if (options.instrumentProbe && !instrumentAttached) {
@@ -1774,7 +1795,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   function recover(message: string) {
     if (mode === "dom" && transitioning) return Promise.resolve();
     if (mode !== "gpu" && mode !== "admitting" && !initializing) return Promise.resolve();
-    if (initializing) admissionCancellation = message;
+    if (initializing) { admissionCancellation = message; abortEngineWait?.(); }
     presentDOM(message);
     return serialize(async () => {
       if (mode !== "disposed" && engine && !terminalCleanupPending) await recoverToDOM(message);
@@ -1828,7 +1849,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   /** Invalidates queued and running admissions, then recovers to DOM. */
   function cancelAdmission(message: string) {
     admissionIntent++;
-    if (initializing) admissionCancellation = message;
+    if (initializing) { admissionCancellation = message; abortEngineWait?.(); }
     void recover(message).catch(reportFailure);
   }
   // Public surface driven by `CanvasRuntime`; see the `createSurfaceRenderer` doc.

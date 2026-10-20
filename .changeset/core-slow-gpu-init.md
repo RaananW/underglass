@@ -1,0 +1,7 @@
+---
+"@underglass/core": patch
+---
+
+A slow WebGPU initialization no longer sends the surface back to DOM for good. The 5000 ms cap on `requestAdapter`/`requestDevice` made a re-enable shortly after a large GPU teardown fall back with "WebGPU initialization timed out", although a slow initialization is neither a GPU error nor a lack of support. The deadline now only diagnoses: after 5 s `state().reason` reads "WebGPU initialization slow (over 5000 ms); ordinary DOM stays presented and admission continues." (counted in `metrics.admission.slowInits`, with a status update and a `console.warn`), the page stays ordinary DOM, the engine is adopted when it arrives and `enable()` resolves once admission finishes. A rejected adapter or device request still falls back with a diagnosis. `disable()`, `dispose()` and policy recoveries now settle a pending engine wait immediately and dispose the late engine if it arrives, instead of waiting on the GPU; a new `enable()` is refused ("Previous engine admission has not settled") only while an abandoned request is outstanding. There is deliberately no hard ceiling: a GPU that never answers leaves the page on DOM with the slow reason and `enable()` pending until `disable()` or `dispose()`. New metrics `metrics.admission.engineMs` (engine creation time) and `admittingMs` (root moved into the canvas to first GPU frame).
+
+Upstream check (AGENTS.md): WICG html-in-canvas SHA <TO FILL AFTER TESTING>, date <TO FILL>; Chromium hotlist access <TO FILL>; browser build tested <TO FILL>.

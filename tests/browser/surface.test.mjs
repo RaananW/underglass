@@ -263,31 +263,121 @@ test("surface runtime capture failure recovers the original root and editing sta
   await writeFile(`${evidence}/runtime-capture-failure.json`, JSON.stringify({ result, final }, null, 2));
 });
 
-// The adapter request completes after the 5 s admission deadline. enable() reports a timeout, a second
-// enable() is refused while the first engine request is pending, and the late engine is disposed.
-test("late GPU admission after timeout is disposed and serial reentry is enforced", async ({ page }) => {
-  await mkdir(evidence, { recursive: true });
+// The adapter request is held open by a test-controlled gate (`window.__openAdapter()` releases it), standing
+// in for a slow or hung GPU process. A slow initialization is neither a GPU error nor missing support, so
+// core only diagnoses it (a transient reason) and keeps ordinary DOM presented until the engine arrives.
+async function gateAdapter(page) {
   await page.addInitScript(() => {
     const gpu = navigator.gpu;
     const request = gpu.requestAdapter.bind(gpu);
-    gpu.requestAdapter = options => new Promise((resolve, reject) => setTimeout(() => request(options).then(resolve, reject), 5200));
+    const gate = new Promise(resolve => { window.__openAdapter = resolve; });
+    gpu.requestAdapter = options => gate.then(() => request(options));
   });
+}
+// Starts `count` `enable()` calls without awaiting them; results land in `window.__results`.
+async function startEnabling(page, count = 1) {
+  await page.evaluate(count => {
+    window.__results = [];
+    for (let index = 0; index < count; index++) window.surfaceProbe.enable().then(state => window.__results.push(state));
+  }, count);
+}
+
+// The 5 s deadline only diagnoses: ordinary DOM stays presented and interactive while the request is pending,
+// the engine is adopted when it arrives, and the surface ends on GPU with fresh pixels and correct native hits.
+// A second enable() queued behind the first resolves with the same GPU surface.
+test("slow GPU initialization stays on DOM, then is adopted and ends on GPU", async ({ page }) => {
+  test.setTimeout(90_000);
+  await mkdir(evidence, { recursive: true });
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await gateAdapter(page);
   await page.goto("/surface.html?dom");
   await page.waitForFunction(() => window.surfaceProbe && document.querySelector("#count"));
-  const timedOut = await page.evaluate(() => window.surfaceProbe.enable());
-  expect(timedOut.mode).toBe("dom");
-  expect(timedOut.reason).toContain("timed out after 5000 ms");
-  expect(timedOut.resources.pendingEngines).toBe(1);
-  await expect(page.evaluate(() => window.surfaceProbe.enable())).rejects.toThrow("Previous engine admission has not settled");
-  await page.waitForFunction(() => window.surfaceProbe.state().resources.pendingEngines === 0);
-  const late = await page.evaluate(() => window.surfaceProbe.state());
-  expect(late.resources.engines).toBe(0);
+  await startEnabling(page, 2);
+  await page.waitForFunction(() => /initialization slow/.test(window.surfaceProbe.state().reason), undefined, { timeout: 20_000 });
+  const slow = await page.evaluate(() => window.surfaceProbe.state());
+  expect(slow.mode).toBe("dom");
+  expect(slow.initializing).toBe(true);
+  expect(slow.reason).toContain("ordinary DOM stays presented and admission continues");
+  expect(slow.resources.pendingEngines).toBe(1);
+  expect(slow.resources.engines).toBe(0);
+  expect(slow.metrics.admission.slowInits).toBe(1);
+  // Ordinary DOM is what the user sees, and it is interactive.
+  const waiting = await screenshot(page, "slow-init-ordinary-DOM");
+  expect(pixel(waiting, 30, 225)).toEqual([30, 100, 220, 255]);
   await page.locator("#count").click();
   await expect(page.locator("#count")).toHaveText("Count 1");
-  const final = await page.evaluate(() => window.surfaceProbe.dispose());
-  expect(Object.values(final.resources).every(value => value === 0)).toBe(true);
-  await writeFile(`${evidence}/late-engine-timeout.json`, JSON.stringify({ timedOut, late, final }, null, 2));
+  await page.evaluate(() => window.__openAdapter());
+  await page.waitForFunction(() => window.__results?.length === 2, undefined, { timeout: 20_000 });
+  const results = await page.evaluate(() => window.__results);
+  for (const result of results) expect(result.mode).toBe("gpu");
+  await page.evaluate(() => window.surfaceProbe.settle());
+  const adopted = await page.evaluate(() => window.surfaceProbe.state());
+  expect(adopted.mode).toBe("gpu");
+  expect(adopted.reason).not.toContain("initialization slow");
+  expect(adopted.resources.engines).toBe(1);
+  expect(adopted.resources.pendingEngines).toBe(0);
+  expect(adopted.metrics.admission.engineMs).toBeGreaterThan(5000);
+  expect(adopted.count).toBe("Count 1");
+  const first = await screenshot(page, "slow-init-gpu");
+  expect(pixel(first, 30, 225)).toEqual([240, 30, 60, 255]);
+  // Native hit on the GPU-presented control commits to the same React state, and the pixels change.
+  await page.locator("#count").click();
+  await expect(page.locator("#count")).toHaveText("Count 2");
+  await page.evaluate(() => window.surfaceProbe.settle());
+  const second = await screenshot(page, "slow-init-gpu-after-click");
+  expect(hash(second)).not.toBe(hash(first));
+  expect(pixel(second, 30, 225)).toEqual([240, 30, 60, 255]);
+  const final = await page.evaluate(() => window.surfaceProbe.state());
+  expect(final.mode).toBe("gpu");
+  expect(final.resources.engines).toBe(1);
+  expect(errors).toEqual([]);
+  const disposed = await page.evaluate(() => window.surfaceProbe.dispose());
+  expect(Object.values(disposed.resources).every(value => value === 0)).toBe(true);
+  await writeFile(`${evidence}/slow-init-adopted.json`, JSON.stringify({ slow, adopted, final, disposed }, null, 2));
 });
+
+// A pending (hung) engine request never holds disable() or dispose() hostage: both settle at once and the
+// late engine is disposed when it finally arrives. Re-entry is refused only while that request is outstanding.
+for (const action of ["disable", "dispose"]) {
+  test(`pending GPU initialization is cancelled promptly by ${action} and the late engine is disposed`, async ({ page }) => {
+    await mkdir(evidence, { recursive: true });
+    await gateAdapter(page);
+    await page.goto("/surface.html?dom");
+    await page.waitForFunction(() => window.surfaceProbe && document.querySelector("#count"));
+    await startEnabling(page);
+    await page.waitForFunction(() => window.surfaceProbe.state().resources.pendingEngines === 1);
+    const cancelled = await page.evaluate(async action => {
+      const started = performance.now();
+      const state = await window.surfaceProbe[action]();
+      return { ms: performance.now() - started, state };
+    }, action);
+    expect(cancelled.ms).toBeLessThan(2000);
+    expect(cancelled.state.mode).toBe(action === "dispose" ? "disposed" : "dom");
+    expect(cancelled.state.initializing).toBe(false);
+    expect(cancelled.state.resources.pendingEngines).toBe(1);
+    await page.waitForFunction(() => window.__results?.length === 1);
+    expect((await page.evaluate(() => window.__results[0])).mode).toBe(action === "dispose" ? "disposed" : "dom");
+    if (action === "disable") {
+      expect(cancelled.state.reason).toMatch(/Explicit disable/);
+      await expect(page.evaluate(() => window.surfaceProbe.enable())).rejects.toThrow("Previous engine admission has not settled");
+      await page.locator("#count").click();
+      await expect(page.locator("#count")).toHaveText("Count 1");
+    }
+    await page.evaluate(() => window.__openAdapter());
+    await page.waitForFunction(() => window.surfaceProbe.state().resources.pendingEngines === 0);
+    const late = await page.evaluate(() => window.surfaceProbe.state());
+    expect(late.resources.engines).toBe(0);
+    expect(late.mode).toBe(action === "dispose" ? "disposed" : "dom");
+    if (action === "disable") {
+      // With the late request settled, a fresh enable() reaches GPU.
+      expect((await page.evaluate(() => window.surfaceProbe.enable())).mode).toBe("gpu");
+      const final = await page.evaluate(() => window.surfaceProbe.dispose());
+      expect(Object.values(final.resources).every(value => value === 0)).toBe(true);
+    } else expect(Object.values(late.resources).every(value => value === 0)).toBe(true);
+    await writeFile(`${evidence}/pending-init-cancelled-by-${action}.json`, JSON.stringify({ cancelled, late }, null, 2));
+  });
+}
 
 // Pixel staging through the owning canvas works on both public GPU backends (WebGPU, WebGL2) in
 // `probe.html`: two real native layers captured, copied and uploaded, with the expected colours.

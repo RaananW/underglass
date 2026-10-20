@@ -59,7 +59,9 @@ test("diagnostics distinguish admission and authored framework boundaries from f
   assert.match(rendererDiagnostic("disposed", "Disposed root, captures, pixel canvases, textures, effect, renderer, engine and owned listeners."), /^lifecycle/);
   assert.match(rendererDiagnostic("dom", "Ordinary DOM startup; admission pending."), /^lifecycle/);
   assert.match(rendererDiagnostic("dom", "GPU admission failed: Error: Unsupported transformed ancestor requires explicit adapter"), /^authored\/framework-boundary/);
-  assert.match(rendererDiagnostic("dom", "GPU admission failed: Error: WebGPU initialization timed out; late engine will be disposed"), /^gpu-error/);
+  // A slow engine request is a transient admission note, not a GPU error.
+  assert.match(rendererDiagnostic("dom", "WebGPU initialization slow (over 5000 ms); ordinary DOM stays presented and admission continues."), /^admission/);
+  assert.match(rendererDiagnostic("dom", "GPU admission failed: Error: requestDevice failed: device error"), /^gpu-error/);
   assert.match(rendererDiagnostic("dom", "Unsupported transformed ancestor"), /^authored\/framework-boundary/);
   assert.match(rendererDiagnostic("dom", "GPU upload failure"), /^gpu-error/);
   assert.match(rendererDiagnostic("gpu", "Complete output"), /^active/);
