@@ -162,7 +162,7 @@ try {
     await mkdir(peer);
     // Sources and configuration for the copy; `node_modules`, `dist` and Vite caches are not copied.
     const copied = ["packages", "examples", "tests", "scripts", ".changeset", "vite.config.ts", "package-lock.json",
-      "README.md", "docs/distribution.md", "docs/showcase.md", ".github/workflows/showcase-pages.yml"];
+      "README.md", "docs/distribution.md", "docs/showcase.md", "docs/ui-library", ".github/workflows/showcase-pages.yml"];
     for (const path of copied) await cp(join(root, path), join(peer, path), {
       recursive: true, filter: path => !["node_modules", "dist", "owned-vite-cache"].includes(basename(path)),
     });
@@ -200,6 +200,8 @@ try {
     await writeFile(join(playground, "source-pilot.html"), (await readFile(join(playground, "todo.html"), "utf8")).replace("/src/demo/todo-demo.tsx", "/source-pilot.tsx"));
     await writeFile(join(peer, "source-pilot.config.mjs"), 'import config from "./examples/playground/vite.config.ts"; import {resolve} from "node:path"; export default {...config,cacheDir:resolve("owned-vite-cache"),build:{...config.build,target:"esnext",rollupOptions:{input:[...config.build.rollupOptions.input,resolve("examples/playground/source-pilot.html")]}}};');
     await command([tsc, "-p", "examples/playground/tsconfig.json"], peer, `react${major}-source-types`);
+    // The copy has no `dist`, and the playground imports Strata's built stylesheet, so write it first.
+    await command(["packages/ui/scripts/build-css.mjs"], peer, `react${major}-ui-css`);
     await command([vite, "build", "--config", "source-pilot.config.mjs"], peer, `react${major}-production`);
     // Pack a library without lifecycle scripts, require the file list (npm's report and the archive's own
     // listing) to match `allowlist` exactly, and return the archive path.
