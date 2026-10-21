@@ -303,7 +303,7 @@ if (LAYER_PASS_FLOATS !== LAYER_HEADER + BLOCK + 4) throw new Error("Per-layer u
 const VERTEX_AND_FRAGMENT = 3;
 /** GPUShaderStage.FRAGMENT. */
 const FRAGMENT = 2;
-/** Straight-alpha source-over onto the opaque output: the GPU equivalent of mix(dst, src, alpha). */
+/** Straight-alpha source-over onto the premultiplied output: the GPU equivalent of mix(dst, src, alpha). */
 export const layerBlend: GPUBlendState = {
   color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha", operation: "add" },
   alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
