@@ -1,6 +1,6 @@
 {
   "name": "@underglass/css-compiler",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Opt-in build-time compiler that turns selected CSS animations into Underglass GPU programs, with Vite and webpack integrations.",
   "keywords": [
     "webgpu",
@@ -50,7 +50,7 @@
     "CHANGELOG.md"
   ],
   "dependencies": {
-    "@underglass/core": "0.1.0",
+    "@underglass/core": "0.2.0",
     "magic-string": "1.4.3",
     "postcss": "8.5.31",
     "postcss-load-config": "6.0.1",
