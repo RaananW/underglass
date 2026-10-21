@@ -38,7 +38,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "vite build && tsc -p tsconfig.json",
-    "prepack": "node ../../scripts/prepack.mjs"
+    "prepack": "npm run build"
   },
   "dependencies": {
     "@underglass/core": "0.2.0"

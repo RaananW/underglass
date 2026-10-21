@@ -82,7 +82,7 @@
   ],
   "scripts": {
     "build": "vite build && tsc -p tsconfig.json && node scripts/build-css.mjs && node scripts/build-astro.mjs",
-    "prepack": "node ../../scripts/prepack.mjs",
+    "prepack": "npm run build",
     "build:conformance": "node scripts/build-conformance.mjs"
   },
   "peerDependencies": {
