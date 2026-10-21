@@ -1,6 +1,6 @@
 {
   "name": "@underglass/vue",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Vue 3 adapter for Underglass: GPU-presented layers over ordinary Vue controls and state.",
   "keywords": [
     "vue",
@@ -41,7 +41,7 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@underglass/core": "0.1.0"
+    "@underglass/core": "0.2.0"
   },
   "peerDependencies": {
     "vue": "^3.5.0"

@@ -1,5 +1,0 @@
----
-"@underglass/core": minor
----
-
-Add the `instrument` material: `setMaterial(id, { kind: "instrument", scene })` takes a Strata scene in version 4 of the rendering model (`kind: "instrument"`, part 2D) and draws each object's parts (lathe, prism and extrude profiles posed by native state through `t`) as Babylon Lite meshes right after the layer's own pass, lit by the key light and a studio generated in code, with captured caps that keep the layer's labels texel for texel, analytic face shadows, the layer's clip and opacity, and no capture, upload or hit-geometry change for poses. Every part is checked over its whole travel; an object that would draw outside its `bounds`, a layer over the part budget (2,048 per layer, 6,000 per stage) and a scene still building are drawn at the Relief level, GPU stays on, and `state().instrument` and `state().materials[].degraded` report them, with per-layer GPU timings (also as `instrumentGpuMs` measurement samples). New exported types: `InstrumentMaterial`, `InstrumentScene`, `InstrumentObject`, `InstrumentPart`, `InstrumentProfile`, `InstrumentPose`, `InstrumentRecipe`, `InstrumentEmitter` and `InstrumentCaster`.
