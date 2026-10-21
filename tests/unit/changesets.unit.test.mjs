@@ -62,15 +62,23 @@ test("every library package carries complete publishing metadata and a shipped c
 });
 
 // The Release workflow publishes every non-private package whose version is not on npm, so which packages
-// are public is a decision, recorded here. `@underglass/ui` stays private until its publication is decided
-// (docs/releasing.md, "Publishing @underglass/ui"); removing its flag must be a deliberate change to this test.
-test("exactly the four public packages are publishable; the Strata package stays private", () => {
+// are public is a decision, recorded here: all five library packages.
+test("all five library packages are publishable and carry full npm metadata", () => {
   const publishable = libraries.filter(({ manifest }) => manifest.private !== true).map(({ manifest }) => manifest.name).sort();
-  assert.deepEqual(publishable, ["@underglass/core", "@underglass/css-compiler", "@underglass/react", "@underglass/vue"]);
-  assert.equal(libraries.find(({ manifest }) => manifest.name === "@underglass/ui").manifest.private, true);
-  for (const { manifest } of libraries.filter(({ manifest }) => manifest.private !== true)) {
+  assert.deepEqual(publishable, ["@underglass/core", "@underglass/css-compiler", "@underglass/react", "@underglass/ui", "@underglass/vue"]);
+  for (const { manifest } of libraries) {
     assert.ok(manifest.author, `${manifest.name} author`);
     assert.ok(manifest.homepage && manifest.bugs?.url, `${manifest.name} homepage and bugs`);
     assert.ok(manifest.keywords?.length, `${manifest.name} keywords`);
+  }
+});
+
+// A published package must not export raw TypeScript or ship TypeScript source for consumers to compile.
+test("no library package exports or ships TypeScript source", () => {
+  const source = /(?<!\.d)\.tsx?$/;
+  for (const { manifest } of libraries) {
+    const targets = JSON.stringify(manifest.exports).match(/"\.\/[^"]+"/g).map(target => target.slice(1, -1));
+    for (const target of targets) assert.doesNotMatch(target, source, `${manifest.name} exports TypeScript source ${target}`);
+    for (const pattern of manifest.files) assert.doesNotMatch(pattern, source, `${manifest.name} ships ${pattern}`);
   }
 });
