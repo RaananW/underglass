@@ -556,8 +556,10 @@ test("functional readback timeout retains healthy probe resources until its publ
   });
   await page.waitForFunction(() => window.admissionReadbackStarted);
   const admitting = await page.evaluate(() => window.runtimeProbe.state());
-  expect(admitting.mode).toBe("admitting");
-  expect(await page.locator("#output").evaluate(canvas => canvas.hidden)).toBe(false);
+  // The ordinary DOM stays presented during the probe (#202): the canvas is displayed but invisible, the root is not in it.
+  expect(admitting.mode).toBe("dom");
+  expect(admitting.initializing).toBe(true);
+  expect(await page.locator("#output").evaluate(canvas => [canvas.hidden, canvas.style.opacity, canvas.contains(document.querySelector(".app-container"))])).toEqual([false, "0", false]);
   await page.evaluate(() => window.admissionAttempt);
   const retained = await page.evaluate(() => window.runtimeProbe.state());
   expect(retained.mode).toBe("dom");
