@@ -60,3 +60,17 @@ test("every library package carries complete publishing metadata and a shipped c
     assert.match(await readFile(`${directory}/CHANGELOG.md`, "utf8"), new RegExp(`^# ${manifest.name.replace("/", "\\/")}\\n`));
   }
 });
+
+// The Release workflow publishes every non-private package whose version is not on npm, so which packages
+// are public is a decision, recorded here. `@underglass/ui` stays private until its publication is decided
+// (docs/releasing.md, "Publishing @underglass/ui"); removing its flag must be a deliberate change to this test.
+test("exactly the four public packages are publishable; the Strata package stays private", () => {
+  const publishable = libraries.filter(({ manifest }) => manifest.private !== true).map(({ manifest }) => manifest.name).sort();
+  assert.deepEqual(publishable, ["@underglass/core", "@underglass/css-compiler", "@underglass/react", "@underglass/vue"]);
+  assert.equal(libraries.find(({ manifest }) => manifest.name === "@underglass/ui").manifest.private, true);
+  for (const { manifest } of libraries.filter(({ manifest }) => manifest.private !== true)) {
+    assert.ok(manifest.author, `${manifest.name} author`);
+    assert.ok(manifest.homepage && manifest.bugs?.url, `${manifest.name} homepage and bugs`);
+    assert.ok(manifest.keywords?.length, `${manifest.name} keywords`);
+  }
+});

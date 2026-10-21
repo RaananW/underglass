@@ -19,6 +19,9 @@ let section: HTMLElement | undefined;
 let material: MaterialHandle | undefined;
 let root!: HTMLElement;
 let origin = { x: 0, y: 0 };
+// The plain white stage the pool light and the outset shadow fall on: the output canvas is transparent (the page shows through,
+// #134), and light multiplies what is on the canvas, so a lit pass past a panel's edge needs a layer of the page colour beneath it.
+let stage: HTMLElement | undefined;
 // The output budget of instrument-core.html: a full 1920 × 1080 stage at DPR 2.
 const controller: CanvasController = mountApplicationModule({ ...createCanvasHosts(frame), budgets: { layers: 8, pixels: 4_000_000 },
   onStatusChange: (value: { mode: string; reason: string }) => { status.textContent = `${value.mode}: ${value.reason}`; } }, { mount({ container }) {
@@ -52,6 +55,13 @@ async function show(entry: InstrumentCase, scene: InstrumentScene = entry.scene)
   material?.cancel();
   release?.();
   section?.remove();
+  if (!stage) {
+    stage = document.createElement("section");
+    stage.id = "stage";
+    Object.assign(stage.style, { position: "absolute", inset: "0", background: "white" });
+    root.append(stage);
+    controller.enroll(stage, { id: "stage" });
+  }
   const { width, height } = scene.extent;
   // The canvas centre is the vanishing point: the layer's origin is the centre less `camera.vanish`.
   origin = { x: frame.clientWidth / 2 - scene.camera.vanish[0], y: frame.clientHeight / 2 - scene.camera.vanish[1] };

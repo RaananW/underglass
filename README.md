@@ -46,9 +46,9 @@ In other browsers the showcase runs as ordinary DOM with the same controls.
 
 ## Status
 
-Experimental (`@underglass/react@0.1.0`, still `private` in npm terms);
-not published to a registry and not production-ready. Licensed under the
-[Apache License 2.0](LICENSE); package publication remains a separate decision. It is for
+Experimental (`@underglass/react@0.1.0`); prepared for npm but not yet
+published to a registry, and not production-ready. Licensed under the
+[Apache License 2.0](LICENSE); the first npm publish is the owner's step ([releasing](docs/releasing.md)). It is for
 deliberately adopted small applications, not for loading arbitrary websites or
 libraries unchanged. GPU mode needs Chrome Canary with experimental flags; plain
 DOM mode works in any browser. History and acceptance records are in
@@ -134,9 +134,9 @@ framework-neutral runtime exported from `packages/core/src/index.ts`.
 
 | Path | Contents |
 | --- | --- |
-| `packages/core` | The framework-neutral runtime (private package `@underglass/core`): GPU engine, mount boundary, enrollment, motion, effects |
-| `packages/react` | The React adapter (private package `@underglass/react`): React bindings over core, ESM entry, declarations, prepack build |
-| `packages/vue` | The Vue 3 adapter (private package `@underglass/vue`): Vue components and composables over core ([guide](docs/guide/frameworks.md)) |
+| `packages/core` | The framework-neutral runtime (package `@underglass/core`): GPU engine, mount boundary, enrollment, motion, effects |
+| `packages/react` | The React adapter (package `@underglass/react`): React bindings over core, ESM entry, declarations, prepack build |
+| `packages/vue` | The Vue 3 adapter (package `@underglass/vue`): Vue components and composables over core ([guide](docs/guide/frameworks.md)) |
 | `packages/css-compiler` | Opt-in build-time CSS compiler with Vite/webpack adapters ([guide](packages/css-compiler/README.md)) |
 | `examples/playground` | Engineering HTML pages, demo apps and probes (Vite root) |
 | `examples/showcase` | Private public-facing React gallery |

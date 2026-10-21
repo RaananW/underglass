@@ -33,7 +33,7 @@ export function Tooltip({ content, children, id, placement = "top", container, c
     <>
       {cloneElement(children, { "aria-describedby": describedBy })}
       {host && createPortal(
-        <div className={classes("ug-tooltip", className)} id={tipId} role="tooltip" popover="manual" data-strata-placement={placement === "bottom" ? "bottom" : undefined}>{content}</div>,
+        <div className={classes("ug-tooltip", className)} id={tipId} role="tooltip" {...{ popover: "manual" }} data-strata-placement={placement === "bottom" ? "bottom" : undefined}>{content}</div>,
         host,
       )}
     </>

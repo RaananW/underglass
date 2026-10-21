@@ -83,14 +83,14 @@ not silent legacy compatibility or property detection alone.
 
 Underglass is open-source software under the [Apache License 2.0](LICENSE)
 (selected 2026-10-14). Contributions are accepted under the same license.
-The package is still an experimental private package, not a published
-library; registry publication and release policy are unresolved. No maintainer or
+The packages are experimental and not yet on npm; the first publish is the owner's one-time step
+and releases then follow [docs/releasing.md](docs/releasing.md). No maintainer or
 security contact is designated here.
 Phase10 private distribution preparation is independently accepted with limits;
 [verdict](evidence/phase10-independent/acceptance-summary.json) and
 [local pack/consumer and browser policy](docs/distribution.md).
-Keep the existing package name/private decisions and the Apache-2.0 license. No npm publication
-is authorized here. A bounded private build-only CI definition and
+Keep the existing package names and the Apache-2.0 license. Never run `npm publish` from a change;
+publishing is the owner's step in [docs/releasing.md](docs/releasing.md). A bounded private build-only CI definition and
 local Phase14 pilot are authorized engineering, not hosted success or release
 qualification; see [private release lanes](docs/archive/private-release.md).
 Historical Phase12 engineering covered opted-in settled

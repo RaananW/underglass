@@ -5,7 +5,7 @@
  *
  * In GPU mode the browser's native `paint` uploads each enrolled layer straight into its own public
  * `DynamicTexture2D` (`GPUQueue.drawElementImageToTexture`), and each layer is drawn as its own blended effect
- * pass after a white background clear. One canonical matrix per layer drives both the native hit geometry
+ * pass after a transparent clear (the page's own background shows through). One canonical matrix per layer drives both the native hit geometry
  * (`updateElementGeometry`) and the shader's inverse sampling. Membership, layout and DPR changes prepare a
  * complete successor composition while the last complete one stays presented; superseded GPU resources are
  * released only after a queue fence or device loss. Lifecycle transitions are serialized on one promise chain.
@@ -245,7 +245,8 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   let mode: "dom" | "admitting" | "gpu" | "disposed" = "dom";
   let reason = "Ordinary DOM startup; admission pending.";
   let engine: EngineContext | undefined;
-  // One blended effect pass per layer, drawn in order after a background clear.
+  // One blended effect pass per layer, drawn in order after a transparent clear. The canvas is premultiplied, so what no
+  // layer covers is the page's own background (the canvas element's CSS background, or the page behind it).
   // `passes` is what is presented now; it is aligned with `layers`.
   let passes: Pass[] = [];
   let background: { effect: EffectWrapper; renderer: ReturnType<typeof createEffectRenderer> } | undefined;
@@ -399,9 +400,9 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     unpresent();
     if (!background) {
       const effect = createEffectWrapper(engine!, { name: "underglass-background",
-        fragmentWGSL: "@fragment fn effectFragment(input: EffectVertexOutput) -> @location(0) vec4f { return vec4f(1.0); }" });
+        fragmentWGSL: "@fragment fn effectFragment(input: EffectVertexOutput) -> @location(0) vec4f { return vec4f(0.0); }" });
       resources.effects++;
-      const renderer = createEffectRenderer(engine!.surfaces[0], effect, { name: "underglass-background", clear: true, clearColor: { r: 1, g: 1, b: 1, a: 1 } });
+      const renderer = createEffectRenderer(engine!.surfaces[0], effect, { name: "underglass-background", clear: true, clearColor: { r: 0, g: 0, b: 0, a: 0 } });
       resources.renderers++;
       background = { effect, renderer };
     }
@@ -1567,9 +1568,9 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
         const clipped = probe.matrix.transformPoint(probe.clipped);
         const clippedOffset = (Math.floor(clipped.y * dpr) * screenshot.width + Math.floor(clipped.x * dpr)) * 4;
         const clippedPixel = Array.from(screenshot.data.subarray(clippedOffset, clippedOffset + 4));
-        // The point outside the clip must be white (the background clear), proving the clip applies to GPU drawing.
-        if (clippedPixel.length !== 4 || clippedPixel.some(value => Math.abs(value - 255) > 2)) {
-          throw new Error("Functional GPU viewport clip probe failed");
+        // The point outside the clip must be untouched (the transparent clear, premultiplied: black; the public readback reports alpha 255), proving the clip applies to GPU drawing.
+        if (clippedPixel.length !== 4 || clippedPixel.slice(0, 3).some(value => value > 2)) {
+          throw new Error(`Functional GPU viewport clip probe failed: the point outside the clip read ${JSON.stringify(clippedPixel)}, expected black (transparent, premultiplied)`);
         }
         metrics.admission.last = { nativePixels: [], gpuPixels, geometry: geometryResult, frameBounds: frameResult, projective: projectiveResult };
         const { outcome } = await waitForTeardown(engine, observer?.lost, 1500, pending.completion);
@@ -1641,7 +1642,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       const engineStarted = performance.now();
       // The engine is adopted whenever it arrives. It is disposed instead only if admission gave up on it
       // (explicit disable/dispose, policy recovery) or the request itself failed.
-      const pending = createEngine(output, { msaaSamples: 1, maxDevicePixelRatio: 1 }).then(value => {
+      const pending = createEngine(output, { msaaSamples: 1, maxDevicePixelRatio: 1, alphaMode: "premultiplied" }).then(value => {
         resources.pendingEngines--;
         if (abandoned) { disposeEngine(value); status(); return undefined; }
         metrics.admission.engineMs = performance.now() - engineStarted;

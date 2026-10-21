@@ -260,8 +260,9 @@ functional proof and benchmark interpretation.
 | `tests/browser/runtime.test.mjs`, `tests/browser/surface.test.mjs` | Current runtime and preserved historical acceptance/fault fixtures |
 
 The renderer has no fixed specimen IDs, dimensions or shader slots. Each layer
-is drawn as its own blended effect pass, ordered after a background clear on the
-one engine; its vertex stage emits one triangle covering the layer's canvas-space
+is drawn as its own blended effect pass, ordered after a transparent clear on the
+one engine (the output canvas is premultiplied, so what no layer covers is the page's own background, theme changes
+included, with nothing read or tracked); its vertex stage emits one triangle covering the layer's canvas-space
 bounding box. Membership changes reuse the passes of unchanged layers, prepare
 passes for new ones in the same engine and fence retired resources;
 they do not restore DOM or create another root. Playground-level native/lifecycle/renderer files are compatibility
@@ -469,7 +470,10 @@ Unsupported transformed chains, RTL/writing-mode/zoom or mixed visible/clip axes
 nested enrollment and unbounded capture overflow remain framework boundaries,
 not demonstrated missing Chrome157 features or unrestricted qualification.
 Synthetic composition listeners do not establish actual OS IME completeness.
-Forced colors refreshes content in GPU; reduced motion uses canonical
+Forced colors refreshes content in GPU, and GPU is also admitted while forced
+colors is already active: the internal admission marker sets
+`forced-color-adjust: none`, user content never does, so it is presented in the
+forced system colors (#133); reduced motion uses canonical
 endpoint/identity behavior. Hidden-state policy pauses scheduling,
 aborts paint waits while retaining dirty work and resumes frame-counted motion
 without elapsed-time catch-up. Actual background-tab and OS IME behavior are
