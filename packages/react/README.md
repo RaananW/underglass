@@ -1,15 +1,15 @@
-# Underglass experimental private package
+# Underglass for React (experimental)
 
-`@underglass/react@0.1.0` is a private ESM library with matching React18.3.1
+`@underglass/react@0.1.0` is an ESM library with matching React18.3.1
 or React19 peers. It is the React adapter over the framework-neutral
 `@underglass/core` runtime (which owns the GPU engine and depends on public
-Babylon Lite). It is not published or release-qualified.
+Babylon Lite). It is experimental and not release-qualified for production.
 
 Import supported runtime APIs from `@underglass/react`; it re-exports the core
 types and helpers React applications need. The separate
 `@underglass/react/build` export is for build tooling, providing compositor
 generation and animation lowering; other internal subpaths are not exported.
-The private `@underglass/css-compiler` package supplies opt-in JSON-configured
+The `@underglass/css-compiler` package supplies opt-in JSON-configured
 Vite/webpack integration and generated `CompiledProgramSet` artifacts.
 Pass one to `mountCanvasApp` and explicitly call `ownCompiledAnimation` after
 original-element enrollment. Existing runtime CSS/WAAPI APIs remain available

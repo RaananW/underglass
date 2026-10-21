@@ -1,9 +1,9 @@
-# Underglass core experimental private package
+# Underglass core (experimental)
 
 `@underglass/core@0.1.0` is the framework-neutral runtime of Underglass: the shared
 GPU engine, the adapter-owned mount boundary, original-element enrollment, motion,
-effects and the typed style compiler. It imports no UI framework. It is private
-and not published or release-qualified.
+effects and the typed style compiler. It imports no UI framework. It is
+experimental and not release-qualified for production.
 
 Most applications use a framework adapter instead:
 

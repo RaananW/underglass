@@ -1,8 +1,8 @@
-# Underglass for Vue experimental private package
+# Underglass for Vue (experimental)
 
 `@underglass/vue@0.1.0` is the Vue 3 adapter over the framework-neutral
-`@underglass/core` runtime, with a `vue@^3.5` peer. It is private and not
-published or release-qualified.
+`@underglass/core` runtime, with a `vue@^3.5` peer. It is experimental and
+not release-qualified for production.
 
 ```ts
 import { createCanvasHosts, mountCanvasApp } from "@underglass/vue";

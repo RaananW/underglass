@@ -1,6 +1,6 @@
 # Underglass build-time CSS compiler
 
-Private, experimental `@underglass/css-compiler@0.0.0`. Explicitly selected
+Experimental `@underglass/css-compiler`. Explicitly selected
 animations compile to literal WebGPU compositor programs and matching numeric
 native-geometry samplers during the application build. Ordinary CSS, browser
 layout, React state and the original controls are retained. This is not a
