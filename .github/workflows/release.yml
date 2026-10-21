@@ -186,3 +186,7 @@ jobs:
         uses: changesets/action/publish@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
           pack-dir-artifact-id: ${{ needs.pack.outputs.pack-dir-artifact-id }}
+      # "Published" from Changesets means npm accepted the upload; a publish held for approval (staged
+      # publishing) is accepted but not installable. Fail the run unless every version is live and on `latest`.
+      - name: Verify the versions are live on npm
+        run: node scripts/verify-published.mjs

@@ -47,6 +47,44 @@ jobs:
         shell: bash
         run: echo "The GPU browser suite runs in the Browser workflow on a self-hosted GPU runner (docs/ci-gpu-runner.md), or locally with 'npm run test:browser'."
 
+  release-dry-run:
+    name: Release archives (dry run)
+    # The Release workflow's validation and pack, run on every pull request, so a change that would break a
+    # publish fails here instead of after the Version Packages pull request merges (docs/releasing.md).
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24.19.0
+      - name: Install locked dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix fixtures/react18 --ignore-scripts --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Exact archives for both React peers
+        run: node scripts/release-validation.mjs build-only
+      # As release.yml: everything is built, so packing runs without lifecycle scripts after react's one
+      # non-build prepack step.
+      - name: Prepare package files
+        working-directory: packages/react
+        run: node scripts/prepare-package.mjs
+      - name: Pack every public package
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/packs"
+          for dir in packages/*/; do
+            if node -e "process.exit(require('./${dir}package.json').private ? 1 : 0)"; then
+              npm pack "./$dir" --ignore-scripts --pack-destination "$RUNNER_TEMP/packs"
+            fi
+          done
+          ls -l "$RUNNER_TEMP/packs"
+
   changeset:
     name: Changeset for changed packages
     # The Version Packages pull request consumes the changesets, so it is the one change exempt from this check.
