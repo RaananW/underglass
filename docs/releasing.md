@@ -1,10 +1,10 @@
 # Releasing
 
 The library packages are versioned and published with [Changesets](https://changesets.dev) and the
-[Release workflow](../.github/workflows/release.yml). The five library packages are no longer
-`"private"`, but nothing is on npm yet and the workflow does nothing until the repository variable
-`RELEASES_ENABLED` is `true`. Nothing reaches npm until the owner completes
-[First publish](#first-publish-one-time-local) and [Enabling releases](#enabling-releases).
+[Release workflow](../.github/workflows/release.yml). Releases are live: the five library packages were
+first published as `0.2.0` on 2026-10-21, from CI with provenance, and every merged **Version Packages**
+pull request publishes the next version ([Making a release](#making-a-release)). The one-time setup that
+made this possible is done and kept below for reference.
 
 ## Versions
 
@@ -64,45 +64,55 @@ Once enabled, every push to `main` runs the Release workflow, which picks one mo
      `@underglass/core@0.2.0`.
 3. **Otherwise** it does nothing. This is also the case while every public package's version is already on npm.
 
-Apart from the one-time [first publish](#first-publish-one-time-local), publishing from a laptop is not
-part of the process. `publishConfig.provenance` makes `npm publish` refuse outside a CI provider that
-can attest the build (so the first publish passes `--provenance=false`).
+**Empty changesets alone do not release.** When every pending changeset is empty (`npm run changeset --
+--empty`), `changesets/action/select-mode` returns `none`: no Version Packages pull request and no publish.
+They are consumed by the next Version Packages pull request that a real changeset opens. So a release-only
+fix that touches `packages/` and lands between a Version Packages merge and its publish must not need a
+changeset, or it stops that publish.
 
-## Enabling releases
+Publishing from a laptop is not part of the process (the one-time [first publish](#first-publish-done-2026-10-21)
+was the exception). `publishConfig.provenance` makes `npm publish` refuse outside a CI provider that can
+attest the build.
 
-These steps are the owner's. They are account and repository settings that no pull request can make.
+## Making a release
 
-**Versioning only** (Version Packages pull requests and changelogs; nothing is published until the trusted publishers and the `npm` environment below are in place):
+1. **Wait for the Version Packages pull request.** The Release workflow opens or updates it on every push to
+   `main` that has pending changesets. Read its changelog entries: they are what users will see.
+2. **Run the release gate on its branch.** No GPU runner is registered, so hosted CI cannot run the browser
+   suite and you run it. On a machine with a GPU and Chrome Canary, check out the pull request's branch
+   (`changeset-release/main`) and run `npm ci`, `npm run build`, `npm run test:browser` (about 1.5 hours) and
+   `npm run test:package` ([ci-gpu-runner.md](ci-gpu-runner.md#running-the-same-checks-locally)). Continue
+   only when both pass, apart from failures already filed as known flakes in [open issues](open-issues.md).
+3. **Merge it.** Merging is the release decision: the workflow validates, packs and publishes every public
+   package, then tags each one and creates its GitHub release. If you are a required reviewer of the `npm`
+   environment, approve the deployment when the Release run asks.
+4. **Check the result:** `npm dist-tag ls @underglass/core` (and the other four) should show `latest` on the
+   new version. A version that the workflow reports as published but that is not installable is held on
+   npm's side (for example a staged publish waiting for approval): check the package on npmjs.com.
 
-1. In *Settings → Actions → General*, allow GitHub Actions to create and approve pull requests.
-2. Set the repository variable `RELEASES_ENABLED` to `true`.
+*If a GPU runner is added later:* register it and set `GPU_RUNNER=true`; the Release workflow then runs the
+same suites before publishing, and a failure blocks the publish.
 
-**Publishing to npm** (in this order: npm cannot attach a trusted publisher to a package name that does
-not exist, so the first publish comes first):
+### Settings this relies on (done 2026-10-21)
 
-1. Do the one-time [first publish](#first-publish-one-time-local) so each package name exists, then
-   [configure the trusted publisher](#configure-the-trusted-publisher) for each of the five.
-2. Create the GitHub environment `npm` (*Settings → Environments*). Add yourself as a required
-   reviewer if every publish should wait for approval.
-3. **Release gate (required while there is no GPU runner, which is the current state).** Hosted runners
-   cannot run the browser suite, so you run it. When the **Version Packages** pull request is open, check
-   out its branch on a machine with a GPU and Chrome Canary and run `npm ci`, `npm run build`,
-   `npm run test:browser` (about 1.5 hours) and `npm run test:package`
-   ([ci-gpu-runner.md](ci-gpu-runner.md#running-the-same-checks-locally)). Merge the pull request only when
-   both pass. Merging it is what publishes, and CI will not run the GPU suite for you.
-   *Optional, if a runner is added later:* register it and set `GPU_RUNNER=true`; the Release workflow then
-   runs the same suites before publishing and a failure blocks the publish.
-4. Set `RELEASES_ENABLED=true` if it is not already set. The `"private": true` flag is already removed
-   from the five public manifests, [distribution.md](distribution.md) is updated and open issue SCOPE-005
-   is closed, so the next push to `main` starts the flow in
-   [What the first real version is](#what-the-first-real-version-is).
+These are account and repository settings that no pull request can make. They are in place; recheck them
+if publishing stops working.
 
-## First publish (one time, local)
+- *Settings → Actions → General*: GitHub Actions may create and approve pull requests.
+- Repository variable `RELEASES_ENABLED` = `true`. Unsetting it makes the Release workflow do nothing.
+- GitHub environment `npm`, optionally with a required reviewer.
+- Each of the five packages on npm has a [trusted publisher](#configure-the-trusted-publisher) for
+  `RaananW/underglass`, workflow `release.yml`, environment `npm`, with permission to publish.
+
+## First publish (done 2026-10-21)
+
+This was done once, on 2026-10-21, for the five packages; it is kept for reference and for **adding a new
+package** later (which needs the same two steps for its name before its first release).
 
 npm trusted publishing cannot be configured for a package that does not exist yet, and the Release
-workflow cannot create one without a trusted publisher or a stored token. So each of the five names is
-claimed once from your machine with a placeholder, and every real release then comes from CI with
-provenance. The placeholder is not built from the repository.
+workflow cannot create one without a trusted publisher or a stored token. So each name was claimed once
+from the owner's machine with a placeholder (`0.0.0-placeholder.0`, deprecated), and every real release
+comes from CI with provenance. The placeholder is not built from the repository.
 
 Requirements: npm **11.5.1 or later** (trusted publishing; the `npm trust` command needs a newer npm,
 check with `npm trust --help`) and an npm account in the `underglass` organization that may create
@@ -212,43 +222,17 @@ foreach ($p in "core","react","vue","css-compiler","ui") {
 Do not add an npm token to the repository: the Release workflow publishes with OIDC only (`id-token:
 write` in the `npm` environment). The workflow installs npm 11.17.0 for that job.
 
-### Alternative: publish the first real version locally
+For a new package, publishing its real first version by hand instead of a placeholder would ship it
+without provenance and without the release gate, and its tag and GitHub release would have to be made by
+hand; use the placeholder.
 
-Instead of placeholders, publish the real first version by hand from the release commit (the merged
-*Version Packages* commit), core first because the others pin it exactly:
+## The first release (history)
 
-```sh
-npm ci
-npm publish --workspace @underglass/core --provenance=false
-npm publish --workspace @underglass/react --provenance=false
-npm publish --workspace @underglass/vue --provenance=false
-npm publish --workspace @underglass/css-compiler --provenance=false
-npm publish --workspace @underglass/ui --provenance=false
-```
-
-`publishConfig.access` is `public` and `prepack` rebuilds each package. The downside: that first
-version has **no provenance attestation** and skips the GPU gate (browser suite and installed-tarball
-consumers), so the version consumers meet first is the least verified one. The Release workflow then
-finds it already on npm and does nothing for it, so its git tags and GitHub releases must be made by
-hand, and the trusted publisher still has to be configured afterwards. Prefer the placeholder.
-
-## What the first real version is
-
-The manifests say `0.1.0`, but `0.1.0` was never published, and about 100 changesets are pending, many of them
-`minor` (a breaking-change bump while the version is 0.x). `npx changeset status --verbose` (read-only, run on
-2026-10-20) reports every package in the fixed group moving **0.1.0 -> 0.2.0**. So:
-
-1. The first push to `main` after `RELEASES_ENABLED` is set opens the **Version Packages** pull request, which
-   bumps `core`, `react`, `vue`, `css-compiler` and `ui` to `0.2.0`, pins core `0.2.0` in the
-   dependents and prepends the changesets to each `CHANGELOG.md`.
-2. Run the local release gate on its branch (see [Enabling releases](#enabling-releases)), then merge it. The
-   workflow then packs, runs the GPU job if a runner exists, and publishes `0.2.0` of the five packages from
-   CI with provenance, then tag `@underglass/core@0.2.0` and so on.
-
-The first version on npm is therefore `0.2.0`, not `0.1.0`. If you want `0.1.0` to be the first release,
-that is a deliberate manual choice (for example, change the pending changesets' bump to `patch`, which
-yields `0.1.1` at the lowest, or edit versions by hand, which this repository forbids); nothing here
-does it. Re-run `npx changeset status --verbose` before the release, since new pull requests change the result.
+The manifests said `0.1.0`, which was never published. About 100 pending changesets, many of them `minor`,
+moved the fixed group to **0.2.0**, the owner accepted that, and `0.2.0` of all five packages was published
+from CI with provenance on 2026-10-21. Two release-only failures had to be fixed on the way (#209: the
+release validation's React peer copy; #210: Changesets packs the workspaces in parallel, so the pack now runs
+without lifecycle scripts after the build).
 
 ## Prereleases
 

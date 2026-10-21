@@ -4,12 +4,11 @@ Phase10 implementation is **prepared, independently accepted with limits**.
 Phase11 engineering is **independently accepted with limits; human/physical
 validation pending**. Full Phase11 remains incomplete; the repository's compact
 Phase11 verdict and adoption checklist preserve the open gates.
-The packages are **not yet published and not production-ready**. The five library packages
+The packages are **published to npm (first release `0.2.0`, 2026-10-21) and not production-ready**. The five library packages
 (`@underglass/core`, `@underglass/react`, `@underglass/vue`, `@underglass/css-compiler` and
 `@underglass/ui`) are no longer `private`, are versioned together and are prepared for npm; the project is licensed under Apache-2.0 (each tarball includes `LICENSE`).
-Nothing is on npm: the owner claims the names and configures trusted publishing first, and the Release
-workflow stays dormant until `RELEASES_ENABLED` is set. Do not publish from a build or change
-visibility except by the steps in [releasing](releasing.md#first-publish-one-time-local).
+Releases come only from the Release workflow, with provenance; do not publish from a local build or
+change visibility except by the steps in [releasing](releasing.md#making-a-release).
 `@underglass/ui` ships JavaScript, declarations, CSS and the conformance JSON only (its Astro entry is
 `.astro` components plus JavaScript helpers); the contract below describes core and the React adapter.
 

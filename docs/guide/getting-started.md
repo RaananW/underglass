@@ -24,8 +24,15 @@ code changes.
 
 ## Install
 
-The packages are not on npm yet. Build the tarballs from this repository and install
-both: `@underglass/react` depends on the framework-neutral runtime `@underglass/core`.
+```sh
+npm install @underglass/react
+```
+
+`@underglass/react` brings the framework-neutral runtime `@underglass/core` with it, pinned to the exact
+version it was released with; React 18.3 or 19 is a peer dependency. For Vue use `@underglass/vue`, for
+the Strata components `@underglass/ui`, and for the build-time CSS compiler `@underglass/css-compiler`.
+
+To try unreleased changes, build the tarballs from this repository and install those instead:
 
 ```sh
 npm ci --ignore-scripts
