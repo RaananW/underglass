@@ -26,7 +26,7 @@ off (the job is skipped) until such a runner is registered and the repository va
 
 A runner is optional for releases: without one, the Release workflow skips its GPU job and the owner runs
 `npm run test:browser` and `npm run test:package` locally on the Version Packages pull request before
-merging it ([releasing](releasing.md#enabling-releases)). With one, the Release workflow runs both before it
+merging it ([releasing](releasing.md#making-a-release)). With one, the Release workflow runs both before it
 publishes, and a failure blocks the publish.
 
 From then on the suite runs on pushes to `main`, on pull requests from branches of this
