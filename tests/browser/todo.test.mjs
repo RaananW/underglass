@@ -232,10 +232,31 @@ test("capture failure and continuous viewport reconciliation preserve TODO edits
   await page.evaluate(() => { GPUQueue.prototype.drawElementImageToTexture = window.originalCapture; });
   await page.getByRole("button", { name: "Enable GPU", exact: true }).click();
   await page.waitForFunction(() => window.todoProbe.state().mode === "gpu");
+  // Record every mode/reason change (and the settle outcome) so an intermittent failure (#71) reports what
+  // actually happened instead of only "expected gpu".
+  await page.evaluate(() => {
+    const history = window.resizeHistory = [];
+    const note = label => {
+      const state = window.todoProbe.state();
+      const last = history[history.length - 1];
+      if (!last || last.mode !== state.mode || last.reason !== state.reason) history.push({ at: Math.round(performance.now()), label, mode: state.mode, reason: state.reason });
+    };
+    note("start");
+    const watch = () => { note("frame"); if (!window.resizeHistoryStop) requestAnimationFrame(watch); };
+    requestAnimationFrame(watch);
+  });
   await page.setViewportSize({ width: 800, height: 980 });
-  await page.evaluate(() => window.todoProbe.controller().settle());
+  const diagnose = label => page.evaluate(({ label }) => {
+    const state = window.todoProbe.state();
+    return { label, mode: state.mode, reason: state.reason, diagnostics: state.diagnostics, metrics: state.metrics,
+      innerWidth, innerHeight, history: window.resizeHistory };
+  }, { label });
+  const settled = await page.evaluate(() => window.todoProbe.controller().settle().then(() => null, error => String(error)));
+  if (settled) throw new Error(`settle() failed after resize: ${settled}
+${JSON.stringify(await diagnose("settle-failed"), null, 2)}`);
   const resized = await page.evaluate(() => window.todoProbe.state());
-  expect(resized.mode).toBe("gpu");
+  expect(resized.mode, JSON.stringify(await diagnose("not-gpu-after-settle"), null, 2)).toBe("gpu");
+  await page.evaluate(() => { window.resizeHistoryStop = true; });
   expect(resized.resources.engines).toBe(1);
   expect(await page.evaluate(() => window.taskInput === document.querySelector('[aria-label="Task 1 title"]')
     && window.taskRoot === window.todoProbe.controller().container)).toBe(true);
