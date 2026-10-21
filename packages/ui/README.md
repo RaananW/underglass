@@ -1,8 +1,8 @@
-# Strata for Underglass experimental private package
+# Strata for Underglass (experimental)
 
 `@underglass/ui@0.1.0` is **Strata**, the 3D design language and component library for Underglass. It is
-private and not published or release-qualified. The design language is specified in
-[docs/ui-library](../../docs/ui-library/design-language.md).
+experimental and not release-qualified for production. The design language is specified in
+[docs/ui-library](https://github.com/RaananW/underglass/blob/main/docs/ui-library/design-language.md).
 
 This version ships the **tokens** layer and the **CSS** for the Tier A components:
 
@@ -257,7 +257,8 @@ import { Button, Panel, RadioGroup, TextField } from "@underglass/ui/astro";
 </Panel>
 ```
 
-The same 19 components, rendered to HTML on the server with no JavaScript. Controls take the Field props themselves,
+The same 19 components, rendered to HTML on the server with no JavaScript. The package ships the `.astro` components
+(which your Astro build compiles) with their helpers as JavaScript; it ships no TypeScript source. Controls take the Field props themselves,
 and RadioGroup renders its radios from `options`. ToggleButton state, `aria-disabled` and checkbox `indeterminate`
 come from `attachStrata` (`@underglass/ui/dom`), which the components load. For plain HTML or other server templates,
 call `attachStrata()` yourself. Astro 7.3 is an optional peer.

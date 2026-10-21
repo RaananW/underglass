@@ -6,10 +6,13 @@ name: Release
 # npm yet, or does nothing. Packages with "private": true are versioned but never published, so this
 # workflow cannot publish anything until a package's "private" flag is removed.
 #
-# Publishing also requires the self-hosted GPU runner (repository variable GPU_RUNNER, see
-# docs/ci-gpu-runner.md): hosted runners cannot run the GPU browser suite, and a release must not ship
-# having passed only ordinary DOM. The publish job runs in the "npm" environment, which can require
-# an approval, and uses npm trusted publishing (no npm token is stored).
+# The GPU browser suite needs a self-hosted GPU runner (repository variable GPU_RUNNER, see
+# docs/ci-gpu-runner.md); hosted runners cannot run it. With a runner, the "gpu" job runs it and a
+# failed or cancelled run blocks publishing. Without one (GPU_RUNNER unset) the job is skipped and the
+# publish proceeds: the owner's release gate is then running `npm run test:browser` and
+# `npm run test:package` locally on the Version Packages pull request before merging it
+# (docs/releasing.md). The publish job runs in the "npm" environment, which can require an approval,
+# and uses npm trusted publishing (no npm token is stored).
 on:
   push:
     branches: [main]
@@ -86,11 +89,6 @@ jobs:
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
     steps:
-      - name: Require the GPU runner
-        if: vars.GPU_RUNNER != 'true'
-        run: |
-          echo "::error::Publishing needs the self-hosted GPU runner for the browser suite (set GPU_RUNNER, see docs/ci-gpu-runner.md)."
-          exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
@@ -122,7 +120,9 @@ jobs:
     needs: select-mode
     if: needs.select-mode.outputs.mode == 'publish' && vars.GPU_RUNNER == 'true'
     runs-on: [self-hosted, gpu]
-    timeout-minutes: 60
+    # The default browser suite takes about 1.3 to 1.6 hours on a development GPU, then test:package runs;
+    # 150 minutes leaves headroom and still ends a hung run well before GitHub's 6 hour default.
+    timeout-minutes: 150
     permissions:
       contents: read
     env:
@@ -150,6 +150,10 @@ jobs:
   publish:
     name: Publish to npm
     needs: [pack, gpu]
+    # A job that needs a skipped job is skipped too, unless an always() status check says otherwise. Publish
+    # when pack succeeded and the GPU suite either passed or was skipped (no runner). A failed or cancelled gpu
+    # job matches neither result, so it blocks publishing; so does a skipped pack (not publish mode).
+    if: always() && needs.pack.result == 'success' && (needs.gpu.result == 'success' || needs.gpu.result == 'skipped')
     runs-on: ubuntu-latest
     # Add required reviewers to this environment to approve each publish.
     environment: npm

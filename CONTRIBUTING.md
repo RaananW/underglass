@@ -28,7 +28,7 @@ and reuses the maintained task component, never package internals. Root
 [the showcase guide](docs/showcase.md). Pages activation and manual workflow
 dispatch are separate owner decisions, not part of local preparation.
 
-The private `packages/css-compiler` workspace owns opt-in build-time CSS
+The `packages/css-compiler` workspace owns opt-in build-time CSS
 analysis and the Vite/webpack adapters. Its [guide](packages/css-compiler/README.md)
 documents the JSON configuration, supported pipeline/subset and isolated
 integration proof. `fixtures/css-compiler` exercises installed npm components

@@ -138,6 +138,7 @@ framework-neutral runtime exported from `packages/core/src/index.ts`.
 | `packages/react` | The React adapter (package `@underglass/react`): React bindings over core, ESM entry, declarations, prepack build |
 | `packages/vue` | The Vue 3 adapter (package `@underglass/vue`): Vue components and composables over core ([guide](docs/guide/frameworks.md)) |
 | `packages/css-compiler` | Opt-in build-time CSS compiler with Vite/webpack adapters ([guide](packages/css-compiler/README.md)) |
+| `packages/ui` | Strata, the 3D design language: tokens, CSS and components for DOM, React, Vue and Astro (package `@underglass/ui`) |
 | `examples/playground` | Engineering HTML pages, demo apps and probes (Vite root) |
 | `examples/showcase` | Private public-facing React gallery |
 | `tests/unit`, `tests/browser`, `tests/helpers`, `tests/compiler` | Test suites and shared helpers |
