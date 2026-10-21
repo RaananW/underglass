@@ -1,0 +1,58 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>HTML-in-Canvas: OffscreenCanvas commits raise no paint event</title>
+<!--
+  Serve from localhost or any https origin and open in a Chromium with
+  --enable-blink-features=CanvasDrawElement,ElementCanvasTransform --enable-experimental-web-platform-features.
+  Two drawable layers, each holding one nested canvas marked content="drawable" (so it is captured):
+  A is an ordinary 2D canvas; B was transferred with transferControlToOffscreen() and is drawn from the main thread.
+  Each is redrawn three times (red, green, blue), eight frames apart, with no requestPaint() and no DOM change.
+  The result lists the paint events raised after each redraw, the nested canvas's pixel at the last of them, and its pixel after
+  an explicit requestPaint(). Expected: B behaves like A (a paint after each redraw, last pixel blue without requestPaint()).
+-->
+<style>
+  body { margin: 0; font: 14px system-ui; }
+  canvas.out { display: block; width: 200px; height: 60px; margin: 8px; }
+  .layer { width: 200px; height: 60px; background: rgb(233, 235, 239); }
+  .layer > canvas { display: block; width: 60px; height: 30px; margin: 10px; }
+  pre { margin: 8px; }
+</style>
+<canvas class="out" id="outA" width="200" height="60" content="drawable"><div class="layer" id="layerA" drawable><canvas id="a" width="60" height="30" content="drawable"></canvas></div></canvas>
+<canvas class="out" id="outB" width="200" height="60" content="drawable"><div class="layer" id="layerB" drawable><canvas id="b" width="60" height="30" content="drawable"></canvas></div></canvas>
+<pre id="result">running</pre>
+<script>
+  const frame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
+  const colours = [[200, 40, 40], [40, 160, 60], [40, 70, 200]];
+  async function run(name, out, layer, fill) {
+    const context = out.getContext("2d", { willReadFrequently: true });
+    const seen = [];
+    out.addEventListener("paint", () => {
+      context.clearRect(0, 0, 200, 60);
+      context.drawElementImage(layer, 0, 0);
+      seen.push(Array.from(context.getImageData(40, 25, 1, 1).data.slice(0, 3)));
+    });
+    for (let i = 0; i < 8; i++) await frame();
+    const paints = [];
+    for (const colour of colours) {
+      const before = seen.length;
+      fill(`rgb(${colour.join(", ")})`);
+      for (let i = 0; i < 8; i++) await frame();
+      paints.push(seen.length - before);
+    }
+    const auto = seen.length ? `rgb(${seen[seen.length - 1].join(", ")})` : "none (no paint event)";
+    out.requestPaint();
+    for (let i = 0; i < 4; i++) await frame();
+    const forced = seen.length ? `rgb(${seen[seen.length - 1].join(", ")})` : "none";
+    return `${name}: paints after each redraw [${paints.join(", ")}], last pixel seen in a paint ${auto}; after requestPaint() ${forced}`;
+  }
+  (async () => {
+    const a = document.getElementById("a").getContext("2d");
+    const b = document.getElementById("b").transferControlToOffscreen().getContext("2d");
+    const fillWith = g => colour => { g.fillStyle = colour; g.fillRect(0, 0, 60, 30); };
+    const lines = [
+      await run("A, 2D canvas", document.getElementById("outA"), document.getElementById("layerA"), fillWith(a)),
+      await run("B, OffscreenCanvas", document.getElementById("outB"), document.getElementById("layerB"), fillWith(b)),
+    ];
+    document.getElementById("result").textContent = lines.join("\n") + "\nexpected: B like A, with a paint after each redraw and the last pixel rgb(40, 70, 200) without requestPaint()";
+  })();
+</script>

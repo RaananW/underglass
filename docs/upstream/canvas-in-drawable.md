@@ -1,7 +1,20 @@
-# A `<canvas>` inside a `drawable` element is captured blank (draft, not filed)
+# A `<canvas>` inside a `drawable` element is captured blank
 
 Found with Underglass issue [#184](https://github.com/RaananW/underglass/issues/184). Core's answer is documented in
 [api.md](../api.md#canvas-inside-a-layer): it sets `content="drawable"` on every canvas in an enrolled layer while GPU presents.
+
+**Filed 2026-10-21:**
+- Chromium [576333009](https://issues.chromium.org/issues/576333009), "HTML-in-Canvas: only the first nested &lt;canvas&gt; attached
+  to a drawable element is captured" (Blink>Canvas), with [`canvas-in-drawable.html`](canvas-in-drawable.html) attached.
+- Chromium [576333010](https://issues.chromium.org/issues/576333010), "HTML-in-Canvas: OffscreenCanvas commits inside a drawable
+  element raise no paint event" (Blink>Canvas), with [`offscreen-canvas-paint.html`](offscreen-canvas-paint.html) attached.
+- WICG [html-in-canvas#187](https://github.com/WICG/html-in-canvas/issues/187), integration feedback that asks the explainer questions
+  below and links both bugs.
+
+Both reproduce on Chrome Canary 158.0.8115.0, headless and headful (re-checked 2026-10-21; `offscreen-canvas-paint.html`: a 2D canvas
+raises one `paint` per redraw, the `OffscreenCanvas` none, and an explicit `requestPaint()` then captures its current pixels). A
+signed-in search of the tracker and of hotlist 6783002 found no duplicate; the nearest were 503420419 ("Nested canvas do not
+invalidate", fixed) and 418089323 ("HIC: Support Offscreen canvas", fixed).
 
 ## What was checked, and what could not be
 
@@ -59,7 +72,7 @@ One gap, also reproducible raw: a marked `OffscreenCanvas`-transferred canvas is
 commits raise **no** `paint` event (0 paints for three redraws; 2D, WebGL, `preserveDrawingBuffer` and `bitmaprenderer` each raise one), so
 an observer that waits for `paint` never sees the new frame.
 
-## Draft issue
+## Draft issue (before filing; the filed texts differ slightly)
 
 **Title:** HTML-in-Canvas: a `<canvas>` descendant of a drawable element is captured as transparent unless it is itself `content="drawable"`
 

@@ -1,7 +1,8 @@
 # Upstream reports
 
 Babylon Lite findings (defects, missing APIs and behaviours found by the Instrument work, not yet filed upstream) are
-collected in [babylon-lite.md](babylon-lite.md). A nested `<canvas>` captured blank (#184, drafted, not filed) is in
+collected in [babylon-lite.md](babylon-lite.md). A nested `<canvas>` captured blank (#184) and the missing
+`paint` for `OffscreenCanvas` commits, filed as Chromium 576333009 and 576333010 and raised in WICG #187, are in
 [canvas-in-drawable.md](canvas-in-drawable.md).
 
 ## canvasClip hit testing uses the bounding box on rotated drawable children
@@ -96,6 +97,9 @@ Repository: <https://github.com/WICG/html-in-canvas/issues>
 
 Checked against WICG html-in-canvas at `5fb3df86` (2026-10-09).
 
-## Captured text differs from on-screen paint at DPR 1 (observed, not filed)
+## Captured text differs from on-screen paint at DPR 1 (observed, not filed in Chromium)
 
 Recorded with the #159 work (2026-10-20): WICG html-in-canvas `main` at `5fb3df86d84de598c7f0fcfc5ee53de1df067e7d` (committed 2026-10-09T22:49:17Z), Chrome Canary 158.0.8112.0, Windows 11, RTX 3080. See [open issues](../open-issues.md).
+Raised as an observation (finding 3) in WICG [html-in-canvas#187](https://github.com/WICG/html-in-canvas/issues/187) on 2026-10-21. A
+Chromium bug needs a raw repro that reads the snapshot back directly (`drawElementImage` into a 2D canvas, then `getImageData`) and
+compares it with on-screen text; the measurement above compares composited output, not the capture.
