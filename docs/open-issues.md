@@ -192,3 +192,16 @@ not shipped package assets or public downloads:
 Keep immutable historical verdicts unchanged. Update this register when a
 separately accepted outcome changes an ID's status; link the exact evidence,
 scope and source rather than marking unrelated manual/historical gates closed.
+
+### ADM-202 - Seamless first admission: unperformed validation
+
+**Bounded and partly unproven.** The first admission holds the last DOM frame with a view transition for the swap (a few
+frames, hard bound 500 ms; [architecture](architecture.md#seamless-first-admission)). Not performed: browsers without
+`document.startViewTransition`/`activeViewTransition` (the swap then has no hold and its first frame can be blank);
+pages with a `style-src` CSP that forbids constructed stylesheets (the hold is then skipped; untested); other GPUs and
+drivers (one Windows 11 machine, Chrome Canary 158.0.8114.0); recordings in CI headed runs (headed was run locally);
+GPU load beyond one synthetic compute load; pages that run their own view transitions during enable (the hold is skipped
+by design, untested here). Known limits: a pointer event wholly inside the hold (about 50 ms) is not delivered (hit
+testing returns the document root during a view transition; a press in progress delays the swap instead); a tab hidden
+while the functional probe runs falls back to DOM with a diagnosis rather than waiting (hidden between the probe and
+the swap waits); the heavy Instrument page still builds its post chain progressively for about 0.5 s after admission.

@@ -191,7 +191,8 @@ for (const dpr of [1, 2]) {
   // Part 1: the `paint` event is swallowed, so a requested capture stays pending. A structural change during
   // the wait must leave the previously presented pixels on screen (no blank frame), upload nothing and skip the
   // incomplete frame. Part 2: during a real admission readback a layout change arrives (injected from the
-  // geometry callback); the barrier must show mode `admitting` and the stale generation must never be revealed.
+  // geometry callback); the barrier must show the still-presented DOM (mode `dom`, initializing) and the stale generation
+  // must never be revealed.
   test(`held capture and queued admission readback never reveal retired generations DPR${dpr}`, async ({ browser }) => {
     const page = await browser.newPage({ deviceScaleFactor: dpr });
     try {
@@ -253,7 +254,9 @@ for (const dpr of [1, 2]) {
         return { admission, before: window.beforeQueued, barrier: window.queuedBarrier, style: document.querySelector("#library").getAttribute("style") };
       });
       expect(result.before.resources.probeReadbacks).toBe(1);
-      expect(result.barrier.state.mode).toBe("admitting");
+      // The probe runs with the ordinary DOM presented (#202), so the mode is still `dom`.
+      expect(result.barrier.state.mode).toBe("dom");
+      expect(result.barrier.state.initializing).toBe(true);
       expect(result.admission.mode, `${result.admission.reason}; ${result.style}`).toBe("gpu");
       await settled(page, "gpu"); await continuity(page);
       expect(await color(page)).toEqual([240, 30, 60, 255]);

@@ -266,8 +266,8 @@ for (const dpr of [1, 2]) {
   });
 
   // Holds the real `GPUBuffer.mapAsync` of the admission readback while reorder, replace x2 and move arrive.
-  // During the wait the mode is `admitting` with the output visible. The stale admission result is not shown;
-  // the newer generation is admitted. Then six extra layers exceed the layer-count admission budget, which
+  // During the wait the ordinary DOM is still presented (mode `dom`, `initializing`; the root is in the ordinary host and the
+  // canvas is displayed but invisible, #202). The stale admission result is not shown; the newer generation is admitted. Then six extra layers exceed the layer-count admission budget, which
   // falls back to DOM with a diagnosed reason, and removing them lets an explicit enable succeed.
   test(`pending admission generation, rapid replacements and layer budget DPR${dpr}`, async ({ browser }) => {
     const page = await browser.newPage({ deviceScaleFactor: dpr });
@@ -288,11 +288,13 @@ for (const dpr of [1, 2]) {
         window.integrationProbe.layout({ left: 50 });
         await Promise.resolve();
         return { state: window.integrationProbe.state(), hidden: document.querySelector("#output").hidden,
-          parent: document.querySelector(".app-container").parentElement.id };
+          opacity: document.querySelector("#output").style.opacity, parent: document.querySelector(".app-container").parentElement.id };
       });
-      expect(barrier.state.mode, barrier.state.reason).toBe("admitting");
+      expect(barrier.state.mode, barrier.state.reason).toBe("dom");
+      expect(barrier.state.initializing).toBe(true);
       expect(barrier.hidden).toBe(false);
-      expect(barrier.parent).toBe("output");
+      expect(barrier.opacity).toBe("0");
+      expect(barrier.parent).not.toBe("output");
       await page.evaluate(() => { window.restoreReadback(); window.releaseReadback(); });
       const stale = await page.evaluate(() => window.attempt);
       expect(stale.mode).toBe("gpu");

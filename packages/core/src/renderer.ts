@@ -31,6 +31,7 @@ import { drawRectangle, layerBlend, layerShader, layerUniforms, passShaders, typ
 import { RELIEF_EMITTER_BASE, RELIEF_VEC4S, reliefUniforms, type ReliefScene } from "./relief.js";
 import { DEFAULT_FEATHER, EMITTER_BLOCK_VEC4S, EMITTERS_PER_LAYER, layerGuard, packEmitters, packPoolHeader, poolBlend, poolWGSL, POOL_HEADER_VEC4S, POOL_VEC4S, selectEmitters,
   type Bounds, type Guard, type LayerEmitters, type SceneLight } from "./emitters.js";
+import { swapUnderCover, type SwapCover } from "./swap-cover.js";
 import { createAdmissionProbe, verifyFrameBounds, verifyProbeGeometry, verifyProbePixels, verifyProjectiveHits, type FrameBounds } from "./admission.js";
 import type { Ripple } from "./ripple.js";
 import { isSceneMaterial, type ApplicationEffect, type EffectDescriptor, type MaterialDescriptor } from "./effects.js";
@@ -222,7 +223,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   const timing = () => ({ count: 0, totalMs: 0, minMs: null as number | null, maxMs: null as number | null });
   const layerMetrics: Record<string, { captures: number; pixelCopies: number; pixelReadbacks: number; uploads: number; inputCapturesSkipped: number; mutationsIgnored: number }> = Object.create(null);
   const metrics = { captures: 0, inputCapturesSkipped: 0, mutationsIgnored: 0, pixelCopies: 0, pixelReadbacks: 0, reusedUploads: 0, uploads: 0, paintNotifications: 0, deviceLossCount: 0, fenceCount: 0, effectShaderCompilations: 0, incompleteFramesSkipped: 0, shaderSourceGenerations: 0, precompiledShaderSelections: 0,
-    admission: { engineMs: null as number | null, slowInits: 0, admittingMs: null as number | null, attempts: 0, passes: 0, captures: 0, pixelCopies: 0, pixelReadbacks: 0, uploads: 0, gpuFrames: 0, gpuReadbacks: 0, geometryChecks: 0,
+    admission: { engineMs: null as number | null, slowInits: 0, admittingMs: null as number | null, swapMs: null as number | null, cover: null as "view-transition" | "none" | null, attempts: 0, passes: 0, captures: 0, pixelCopies: 0, pixelReadbacks: 0, uploads: 0, gpuFrames: 0, gpuReadbacks: 0, geometryChecks: 0,
       last: undefined as { nativePixels: number[][]; gpuPixels: number[][]; geometry: ReturnType<typeof verifyProbeGeometry>; frameBounds: ReturnType<typeof verifyFrameBounds>; projective?: ReturnType<typeof verifyProjectiveHits> } | undefined },
     timings: { captureMs: timing(), uploadMs: timing(), frameWorkMs: timing(), frameIntervalsMs: timing() },
     paintElements: [] as string[][], perLayer: layerMetrics, lightPassesDisposed: 0, uploadBytes: 0, gpuFrames: 0, geometryUpdates: 0, moves: 0, deviceLosses: [] as { reason: GPUDeviceLostReason; message: string; duringMotion: boolean; duringAdmission: boolean }[], fenceOutcomes: [] as IdleOutcome[], captureMs: [] as number[], uploadMs: [] as number[], frameWorkMs: [] as number[], frameIntervalsMs: [] as number[] };
@@ -899,6 +900,50 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     nativeOrder = [];
     if (removeProbe) releaseProbe();
   }
+  // The caller's inline `opacity` on the output canvas, kept while first admission shows the canvas invisibly (see `enable`).
+  // The held DOM frame of the first-admission swap while it lasts; every presentation change back to DOM ends it.
+  let swapCover: SwapCover | undefined;
+  let outputOpacityHeld: { value: string; priority: string; pointer: { value: string; priority: string } } | undefined;
+  /**
+   * Lays the output canvas out but keeps it invisible (`opacity: 0`) while the ordinary DOM stays presented: the canvas must be
+   * displayed to receive native paint records and to present, and `opacity: 0` keeps both while showing nothing
+   * (`display: none` and `visibility: hidden` capture nothing; see docs/architecture.md, "Seamless first admission").
+   */
+  function holdOutputInvisible() {
+    outputOpacityHeld ??= { value: output.style.getPropertyValue("opacity"), priority: output.style.getPropertyPriority("opacity"),
+      pointer: { value: output.style.getPropertyValue("pointer-events"), priority: output.style.getPropertyPriority("pointer-events") } };
+    host.hidden = false;
+    // Invisible and inert: it must neither show nor take the user's pointer events from the ordinary DOM underneath.
+    output.style.setProperty("opacity", "0", "important");
+    output.style.setProperty("pointer-events", "none", "important");
+  }
+  /** Restores the caller's inline `opacity` and `pointer-events`; the first reveals the canvas if it is displayed. */
+  function releaseOutputHold() {
+    const held = outputOpacityHeld;
+    if (!held) return;
+    outputOpacityHeld = undefined;
+    if (held.value) output.style.setProperty("opacity", held.value, held.priority);
+    else output.style.removeProperty("opacity");
+    if (held.pointer.value) output.style.setProperty("pointer-events", held.pointer.value, held.pointer.priority);
+    else output.style.removeProperty("pointer-events");
+  }
+  /**
+   * Runs synchronous native hit checks with the output canvas receiving pointer events and the ordinary host letting them
+   * through, so the probe is hit-tested as it is when the canvas is presented. Nothing renders between the two style writes
+   * and their restoration (one task), so the user sees no change and no pointer event is delivered to either.
+   */
+  function withHitTestingOnOutput<T>(run: () => T): T {
+    const saved = (node: HTMLElement) => ({ value: node.style.getPropertyValue("pointer-events"), priority: node.style.getPropertyPriority("pointer-events") });
+    const restore = (node: HTMLElement, previous: { value: string; priority: string }) => {
+      if (previous.value) node.style.setProperty("pointer-events", previous.value, previous.priority);
+      else node.style.removeProperty("pointer-events");
+    };
+    const outputBefore = saved(output), ordinaryBefore = saved(ordinary);
+    output.style.setProperty("pointer-events", "auto", "important");
+    ordinary.style.setProperty("pointer-events", "none", "important");
+    try { return run(); }
+    finally { restore(output, outputBefore); restore(ordinary, ordinaryBefore); }
+  }
   /**
    * Switches presentation back to ordinary DOM synchronously: hides the canvas, restores pointer events, clears
    * native geometry and moves the React root home. GPU resources are released later by `recoverToDOM`.
@@ -909,6 +954,9 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     generation++;
     cancelScheduled();
     output.hidden = true;
+    releaseOutputHold();
+    swapCover?.release();
+    swapCover = undefined;
     if (output.style.getPropertyValue("pointer-events") === "auto") {
       if (outputPointer.value) output.style.setProperty("pointer-events", outputPointer.value, outputPointer.priority);
       else output.style.removeProperty("pointer-events");
@@ -1191,16 +1239,20 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
    * (when they already cover every layer) or prepares a pending successor that is published once shaders
    * compile and fresh pixels are uploaded. Throws on invalid
    * or over-budget state; the old composition stays presented meanwhile.
+   *
+   * With `prepare` (first admission, before the root moves into the canvas, so the ordinary DOM is still presented) it only
+   * builds the successor: no native geometry is applied (the layers are not canvas children yet), nothing is drawn and no
+   * paint is requested. The first paint after the swap uploads and presents it (`publishPaint`).
    */
-  function reconcile() {
-    if (!engine || mode !== "gpu" && mode !== "admitting" || lostInfo) return;
+  function reconcile(prepare = false) {
+    if (!engine || mode !== "gpu" && mode !== "admitting" && !prepare || lostInfo) return;
     membershipPending = false;
     current = options.layers();
     const ids = new Set(current.map(layer => layer.id));
     for (const id of logicalSlots.keys()) if (!ids.has(id)) logicalSlots.delete(id);
     for (const layer of current) if (!logicalSlots.has(layer.id)) logicalSlots.set(layer.id, ++slotSerial);
     publicationGeneration++;
-    geometry();
+    if (!prepare) geometry();
     const size = options.size();
     const budget = options.budgets ?? { layers: 32, pixels: 2_000_000 };
     if (current.length > budget.layers || ids.size !== current.length) throw new Error("Layer-count/identity budget exceeded");
@@ -1324,9 +1376,9 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     });
     const prepared = Promise.race([Promise.all([device.popErrorScope(), compilation]), preparationTimeout]).then(([error]) => {
       if (error) throw new Error(`Successor composition preparation failed: ${error.message}`);
-      if (pending === successor && mode !== "dom" && mode !== "disposed") {
+      if (pending === successor && (mode === "gpu" || mode === "admitting" || prepare && initializing)) {
         successor.ready = true;
-        if (!publishCached()) requestPaint();
+        if (!prepare && !publishCached()) requestPaint();
       }
     }).catch(error => {
       console.error(error);
@@ -1518,12 +1570,16 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
         abort.signal.throwIfAborted();
         await Promise.resolve();
         abort.signal.throwIfAborted();
-        const geometryResult = verifyProbeGeometry(nativeHost(), probe, options.nativeOrigin?.());
-        metrics.admission.geometryChecks++;
-        const frameResult = verifyFrameBounds(nativeHost(), probe, options.nativeOrigin?.());
-        frameBounds = frameResult.result;
-        const projectiveResult = verifyProjectiveHits(nativeHost(), probe, options.nativeOrigin?.());
-        projective = projectiveResult.result;
+        // The ordinary DOM is still presented over the canvas, so the hit checks run with the canvas on top for this one task.
+        const [geometryResult, frameResult, projectiveResult] = withHitTestingOnOutput(() => {
+          const geometry = verifyProbeGeometry(nativeHost(), probe!, options.nativeOrigin?.());
+          metrics.admission.geometryChecks++;
+          const bounds = verifyFrameBounds(nativeHost(), probe!, options.nativeOrigin?.());
+          frameBounds = bounds.result;
+          const projectiveHits = verifyProjectiveHits(nativeHost(), probe!, options.nativeOrigin?.());
+          projective = projectiveHits.result;
+          return [geometry, bounds, projectiveHits] as const;
+        });
         writeUniforms(0, 0);
         // Public screenshot readback: it needs rendered frames to complete, so frames are drained below.
         const readback = captureScreenshot(engine.surfaces[0]);
@@ -1593,9 +1649,9 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       }
     }
   /**
-   * Admission sequence: checks capability and budgets, creates the engine, observes device loss,
-   * moves the root into the canvas, runs functional admission, reconciles, captures and draws once, then
-   * sets mode to `gpu`. Any failure or cancellation recovers to ordinary DOM. `intent` is the
+   * Admission sequence: checks capability and budgets, creates the engine, observes device loss, runs functional
+   * admission and prepares the composition with the ordinary DOM presented and the canvas invisible, then swaps (moves
+   * the root into the canvas under a held DOM frame), captures and draws the first complete frame and sets mode to `gpu`. Any failure or cancellation recovers to ordinary DOM. `intent` is the
    * `admissionIntent` captured when queued, so a later disable cancels it.
    */
   async function enable(intent: number) {
@@ -1609,6 +1665,15 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     admissionCancellation = undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let abandoned = false;
+    // Pointers pressed during admission: the held DOM frame (a view transition) makes the page's hit testing return the
+    // document root for its few frames, so the swap never starts between a press and its release (a split click).
+    const pressed = new Set<number>();
+    const pointerDown = (event: PointerEvent) => { pressed.add(event.pointerId); };
+    const pointerEnd = (event: PointerEvent) => { pressed.delete(event.pointerId); };
+    const pointerDocument = output.ownerDocument;
+    pointerDocument.addEventListener("pointerdown", pointerDown, true);
+    pointerDocument.addEventListener("pointerup", pointerEnd, true);
+    pointerDocument.addEventListener("pointercancel", pointerEnd, true);
     // Armed for the whole admission: an explicit disable/dispose or a policy recovery settles every wait below
     // (settle, engine request, visibility) at once instead of waiting on a slow or hung GPU.
     const cancelled = new Promise<never>((_, reject) => {
@@ -1642,7 +1707,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       const engineStarted = performance.now();
       // The engine is adopted whenever it arrives. It is disposed instead only if admission gave up on it
       // (explicit disable/dispose, policy recovery) or the request itself failed.
-      const pending = createEngine(output, { msaaSamples: 1, maxDevicePixelRatio: 1, alphaMode: "premultiplied" }).then(value => {
+      const enginePending = createEngine(output, { msaaSamples: 1, maxDevicePixelRatio: 1, alphaMode: "premultiplied" }).then(value => {
         resources.pendingEngines--;
         if (abandoned) { disposeEngine(value); status(); return undefined; }
         metrics.admission.engineMs = performance.now() - engineStarted;
@@ -1658,7 +1723,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
         console.warn(reason);
         status();
       }, SLOW_ENGINE_MS);
-      engine = await Promise.race([pending, cancelled]);
+      engine = await Promise.race([enginePending, cancelled]);
       clearTimeout(timer);
       if (!engine) throw new Error("Engine admission was abandoned");
       // A tab hidden while the engine was initializing must not revoke GPU: ordinary DOM stays presented until it is
@@ -1692,6 +1757,9 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
         cancelScheduled();
         reason = `GPU device lost (${info.reason}): ${info.message}`;
         status();
+        // A loss during admission settles the admission's waits now (its recovery runs in `enable`'s catch) and ends any held DOM frame.
+        swapCover?.release();
+        if (initializing) abortEngineWait?.();
         void serialize(async () => {
           if (engine === admittedEngine && !terminalCleanupPending) await recoverToDOM(`GPU device lost (${info.reason}): ${info.message}; original root recovered to ordinary DOM.`);
         }).catch(reportFailure);
@@ -1709,40 +1777,109 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
         throw new Error("GPU output exceeds the configured device limit or output-pixel safety budget");
       }
       setEngineSize(engine, Math.round(size.width * size.dpr), Math.round(size.height * size.dpr));
-      host.hidden = false;
-      output.style.setProperty("pointer-events", "auto");
-      if (boundary.moveToCapture()) metrics.moves++;
-      options.presentation?.("gpu");
-      ordinary.hidden = true;
-      mode = "admitting";
-      const admittingStarted = performance.now();
+      // Seamless first admission (#202). Until the first complete GPU frame every presented frame must show the content, so the
+      // root stays in the ordinary DOM, which stays presented, while the canvas is displayed but invisible (`opacity: 0`, which
+      // still receives paint records and presents). Functional admission and the composition's preparation (textures, shaders,
+      // pipelines) run in that state; a failure there leaves the DOM untouched. Then one task moves the root into the canvas,
+      // applies the GPU presentation, hides the ordinary host and reveals the canvas, and requests a paint: the paint event of
+      // the very next frame uploads the root's fresh pixels and draws the first complete frame. The tested build presents a
+      // WebGPU draw made in the paint event one frame later, so the swap runs under a held view transition (swap-cover.ts)
+      // that keeps the DOM frame on screen until that frame has been presented.
       dx = tint = 0;
       generation++;
       const admissionGeneration = generation;
-      await functionalAdmission();
-      const assertCurrentAdmission = () => {
+      const admittingStarted = performance.now();
+      // A hidden tab neither revokes GPU nor fails the admission: it waits for the document to be visible (as the engine wait does).
+      const awaitVisible = async () => {
+        if (!options.isPaused?.()) return;
+        reason = "GPU admission paused while the document is hidden; ordinary DOM stays presented until it is visible, then admission continues.";
+        status();
+        while (options.isPaused?.()) {
+          await Promise.race([new Promise<void>(resolve => { resumeWaiters.add(resolve); }), cancelled]);
+          if (intent !== admissionIntent) throw new Error("Admission cancelled by explicit disable/disposal");
+        }
+      };
+      const assertCurrentAdmission = (phase: "dom" | "admitting", allowPaused = false) => {
         if (intent !== admissionIntent) throw new Error("Admission cancelled by explicit disable/disposal");
-        if (generation !== admissionGeneration || mode !== "admitting") throw new Error(`Admission generation retired; fresh admission required: ${reason}`);
+        if (generation !== admissionGeneration || mode !== phase) throw new Error(`Admission generation retired; fresh admission required: ${reason}`);
         const currentPolicy = options.policy?.();
         if (currentPolicy) throw new Error(currentPolicy);
+        if (!allowPaused && options.isPaused?.()) throw new Error("GPU admission requires a visible surface");
+        if (lostInfo) throw new Error("GPU device lost during admission");
       };
-      assertCurrentAdmission();
-      reconcile();
-      await captureLayers();
-      assertCurrentAdmission();
-      if (options.isPaused?.()) throw new Error("GPU admission requires a visible surface");
-      if (lostInfo) throw new Error("GPU device lost during admission");
-      const device = configuredDevice(output);
-      device.pushErrorScope("validation");
-      try { draw(); }
-      finally {
-        const error = await device.popErrorScope();
-        if (error) throw new Error(`Composition validation failed: ${error.message}`);
+      holdOutputInvisible();
+      await functionalAdmission();
+      assertCurrentAdmission("dom", true);
+      // Prepare the successor for the layers as laid out now; layout, membership or DPR may have moved during the probe.
+      const fits = (layer: Layer, extent: ReturnType<typeof required>) => layer.texture.texture.width >= Math.ceil(extent.pixelWidth) && layer.texture.texture.height >= Math.ceil(extent.pixelHeight);
+      let attempts = 0;
+      for (;;) {
+        await awaitVisible();
+        if (pressed.size) {
+          const press = new AbortController();
+          const pressDeadline = setTimeout(() => press.abort(new Error("Pointer still pressed")), 1000);
+          try { while (pressed.size) await admissionFrame(press.signal); }
+          catch { pressed.clear(); /* a release that never arrived (outside the window): go on */ }
+          finally { clearTimeout(pressDeadline); }
+        }
+        reconcile(true);
+        if (preparation) await preparation;
+        assertCurrentAdmission("dom", true);
+        const latest = options.layers(), latestSize = options.size();
+        const stable = !!pending?.ready && latest.length === current.length
+          && latest.every((layer, index) => layer.id === current[index]!.id && layer.element === current[index]!.element
+            && fits(pending!.layers[index]!, required(layer, latestSize)))
+          && Math.round(latestSize.width * latestSize.dpr) === output.width && Math.round(latestSize.height * latestSize.dpr) === output.height;
+        if (stable && !options.isPaused?.()) break;
+        if (!options.isPaused?.() && ++attempts > 4) throw new Error("Layers or layout kept changing during admission; the first GPU frame could not be prepared for the current content");
       }
-      assertCurrentAdmission();
-      if (options.isPaused?.()) throw new Error("GPU admission requires a visible surface");
-      if (lostInfo) throw new Error("GPU device lost before admission completed");
+      assertCurrentAdmission("dom");
+      boundary.assertMovable();
+      const swapStarted = performance.now();
+      const gpuFramesBefore = metrics.gpuFrames;
+      // The DOM frame already presented stays on screen (view transition) from the swap until the first GPU frame has been
+      // presented; see swap-cover.ts. Without the browser feature the swap runs directly and its first frame can be blank.
+      const cover = swapUnderCover(output.ownerDocument, () => {
+        // Runs in the transition's update callback, after the old frame was captured: re-check that nothing retired the admission.
+        if (intent !== admissionIntent || generation !== admissionGeneration || mode !== "dom") throw new Error("Admission was cancelled before the root moved");
+        boundary.assertMovable();
+        mode = "admitting";
+        releaseOutputHold();
+        output.style.setProperty("pointer-events", "auto");
+        if (boundary.moveToCapture()) metrics.moves++;
+        options.presentation?.("gpu");
+        ordinary.hidden = true;
+        // Native hit geometry now, not at the first paint: the canvas takes pointer events from this frame on, so a click on a
+        // transformed layer during the held frames must already hit the control where it is drawn.
+        geometry();
+        status();
+        requestPaint();
+      });
+      swapCover = cover;
+      metrics.admission.cover = cover.kind;
+      try {
+        await cover.swapped;
+        // The paint event of the next frame uploads and draws the first complete frame, which is presented a frame later (a WebGPU
+        // draw in the paint event is presented one frame after it); one more frame passes before the held DOM frame is let go.
+        // Cancellation (disable, dispose, policy) settles this at once; presentDOM has already ended the hold.
+        const capture = captureLayers();
+        capture.catch(() => undefined);
+        await Promise.race([capture, cancelled]);
+        assertCurrentAdmission("admitting");
+        if (!active || pending || metrics.gpuFrames === gpuFramesBefore || !complete()) throw new Error("The first complete GPU frame was not drawn");
+        // The first draw is presented once the GPU has finished it and one more frame has passed.
+        const submitted = queue!.onSubmittedWorkDone();
+        submitted.catch(() => undefined);
+        await Promise.race([submitted, cancelled, new Promise<void>(resolve => setTimeout(resolve, 250))]);
+        const presented = new AbortController();
+        const presentedDeadline = setTimeout(() => presented.abort(new Error("No frame after the first GPU draw")), 250);
+        try { await admissionFrame(presented.signal); }
+        catch { /* no frame (hidden document): the checks below decide */ }
+        finally { clearTimeout(presentedDeadline); }
+        assertCurrentAdmission("admitting");
+      } finally { cover.release(); if (swapCover === cover) swapCover = undefined; }
       mode = "gpu";
+      metrics.admission.swapMs = performance.now() - swapStarted;
       metrics.admission.admittingMs = performance.now() - admittingStarted;
       output.hidden = false;
       reason = "Current content=drawable owning WebGPU canvas; synchronous native-paint direct public textures; complete same-root GPU successors.";
@@ -1757,7 +1894,11 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
         ? `GPU admission failed: device lost (${lostInfo.reason}): ${lostInfo.message}`
         : `GPU admission failed: ${String(error)}`));
       if (!admissionCancellation) console.error(reason);
-    } finally { clearTimeout(timer); abortEngineWait = undefined; resumeWaiters.clear(); initializing = false; scheduleCapture(); status(); }
+    } finally {
+      pointerDocument.removeEventListener("pointerdown", pointerDown, true);
+      pointerDocument.removeEventListener("pointerup", pointerEnd, true);
+      pointerDocument.removeEventListener("pointercancel", pointerEnd, true);
+      clearTimeout(timer); abortEngineWait = undefined; resumeWaiters.clear(); initializing = false; scheduleCapture(); status(); }
     return state();
   }
   /** Explicit disable: waits for idle then recovers to ordinary DOM. Caller-owned, so nothing re-enables GPU. */
@@ -1893,7 +2034,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       cancelAdmission("Runtime disposed: pending admission cancelled.");
       return serialize(dispose);
     }, invalidate: queueCapture, ignoreMutation, draw,
-    reconcile,
+    reconcile: () => reconcile(),
     // The layer set or layout moved: refresh native geometry now and skip drawing until `reconcile` runs.
     reconcileGeometry: () => {
       // Only a real membership change (a layer joined, left, was replaced or moved in order) needs the full
