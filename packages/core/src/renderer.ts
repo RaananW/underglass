@@ -1645,9 +1645,9 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       }
     }
   /**
-   * Admission sequence: checks capability and budgets, creates the engine, observes device loss,
-   * moves the root into the canvas, runs functional admission, reconciles, captures and draws once, then
-   * sets mode to `gpu`. Any failure or cancellation recovers to ordinary DOM. `intent` is the
+   * Admission sequence: checks capability and budgets, creates the engine, observes device loss, runs functional
+   * admission and prepares the composition with the ordinary DOM presented and the canvas invisible, then swaps (moves
+   * the root into the canvas under a held DOM frame), captures and draws the first complete frame and sets mode to `gpu`. Any failure or cancellation recovers to ordinary DOM. `intent` is the
    * `admissionIntent` captured when queued, so a later disable cancels it.
    */
   async function enable(intent: number) {
@@ -1766,8 +1766,9 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       // still receives paint records and presents). Functional admission and the composition's preparation (textures, shaders,
       // pipelines) run in that state; a failure there leaves the DOM untouched. Then one task moves the root into the canvas,
       // applies the GPU presentation, hides the ordinary host and reveals the canvas, and requests a paint: the paint event of
-      // the very next frame uploads the root's fresh pixels and draws the first complete frame, which the browser presents
-      // with that same layout (drawing in the paint event belongs to the current frame, DOM writes in it to the next).
+      // the very next frame uploads the root's fresh pixels and draws the first complete frame. The tested build presents a
+      // WebGPU draw made in the paint event one frame later, so the swap runs under a held view transition (swap-cover.ts)
+      // that keeps the DOM frame on screen until that frame has been presented.
       dx = tint = 0;
       generation++;
       const admissionGeneration = generation;

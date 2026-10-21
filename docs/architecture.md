@@ -482,7 +482,8 @@ not established by synthetic policy tests.
 ## Functional admission, separate from content work
 
 Method presence is only a structural precondition. An admission generation
-enters `admitting`, observes its configured device, and
+(`initializing`, mode still `dom`: the ordinary DOM stays presented, see
+[Seamless first admission](#seamless-first-admission)) observes its configured device, and
 temporarily adds two adapter-owned, noninteractive DIVs directly under the
 native canvas, **outside** the persistent React root. No controls are cloned or
 React descendants mutated. A 4..16 CSS-pixel marker contains opaque RGBA
@@ -490,9 +491,12 @@ React descendants mutated. A 4..16 CSS-pixel marker contains opaque RGBA
 per axis. Its independent colors avoid mistaking transparent application
 content for missing capture support.
 
-The owning native canvas is laid out and visible during this initial probe;
-hidden native owners cannot provide the current capture record. Initial
-admission is not a hidden-output publication guarantee. The marker traverses
+The owning native canvas is laid out during this initial probe;
+hidden native owners (`display: none`, `visibility: hidden`) cannot provide the current
+capture record. It is displayed with `opacity: 0` and `pointer-events: none`, so the
+user sees and clicks the ordinary DOM meanwhile. The native hit checks run in one
+synchronous task with the canvas receiving pointer events and the ordinary host
+letting them through, so the probe is tested as when the canvas is presented. The marker traverses
 owning native paint -> direct public dynamic texture -> generated shared
 compositor, without a 2D owner or staging. Public Lite
 `captureScreenshot(engine.surfaces[0])`, serviced with bounded public
@@ -688,7 +692,7 @@ ordinary-DOM event cannot tear down a subsequently admitted replacement.
 | Transition | Behavior |
 | --- | --- |
 | Initial admission failure | Keep/recover the same usable DOM root with a visible reason; fence any created engine before healthy destruction |
-| Successful admission | Observe device, move container once beneath the visible owning canvas, prove/release temporary native/GPU probe, then capture and publish complete application content; initial admitting output is not a seamless-display guarantee |
+| Successful admission | Observe device; with the ordinary DOM presented and the canvas invisible, prove/release the temporary native/GPU probe and prepare the composition; then, in one task under a held DOM frame, move the container once beneath the owning canvas and reveal it; capture and publish complete application content in the next paint; release the held frame once the first GPU frame is presented ([Seamless first admission](#seamless-first-admission)) |
 | Explicit disable or capture failure | Cancel refresh, clear owned geometry/bitmap, move to DOM, hide obsolete surfaces, synchronize, then destroy |
 | Confirmed device loss | Same DOM transition; actual loss authorizes destruction even if the healthy idle fence rejects or cannot complete |
 | Healthy teardown idle timeout/rejection | Keep DOM usable and **retain** GPU resources, observer and native capture textures; report pending cleanup |
@@ -752,10 +756,88 @@ while the abandoned request is outstanding. A never-answering GPU therefore leav
 on DOM with the slow reason and `enable()` pending until `disable()`/`dispose()`;
 this is a deliberate choice, not a bounded fallback.
 `metrics.admission.engineMs` is the last engine-creation time and
-`admittingMs` the time from moving the root into the canvas to the first
-complete GPU frame (the window in which the output is not a seamless display, see
-above). Native paint waits are bounded at 1500 ms. These limits do not guarantee timely
+`admittingMs` the time from showing the invisible canvas (start of the probe) to the first
+complete GPU frame; `swapMs` the part of it from moving the root into the canvas to
+that frame (the window held under the DOM frame), and `cover` how the swap was
+held (`view-transition`, or `none`). Native paint waits are bounded at 1500 ms. These limits do not guarantee timely
 browser/driver recovery from a physical crash.
+
+## Seamless first admission
+
+From `enable()` to `gpu`, every frame the compositor presents shows the content: the
+ordinary DOM, then (briefly) the browser's own snapshot of that DOM frame, then a complete
+GPU frame of the same content. Never black, white or empty (issue #202; before, the output
+was one black and two to four white frames, 60-85 ms warm, up to about 0.9 s on heavy
+Instrument pages).
+
+**Sequence.**
+
+1. The engine exists. The output canvas is displayed but invisible (`opacity: 0`, the
+   caller's inline value restored later) and inert (`pointer-events: none`); the root is
+   still in the ordinary host, which is presented. Functional admission (probe, readback,
+   geometry and clip checks) runs now, in mode `dom` with `initializing`. Layout, DPR or
+   membership changes keep the DOM correct as in any DOM period.
+2. The successor composition is prepared without native geometry, drawing or paint requests
+   (textures sized from the current layout, shaders, pipelines). If the layers, their
+   sizes or the output size moved meanwhile, it is prepared again (at most four times).
+3. One task (the swap) moves the root into the canvas, applies the GPU presentation,
+   hides the ordinary host, reveals the canvas and requests a paint. It runs inside the update
+   callback of a same-document view transition, so the DOM frame that was presented stays on
+   screen (the transition's pseudo-elements are paused at their start, the live document
+   renders underneath).
+4. The next frame's `paint` event uploads the root's fresh pixels and draws the first
+   complete frame; the browser presents it one frame later. After one more frame the
+   transition is skipped, which shows the live document, whose canvas already holds the
+   first GPU frame. Mode becomes `gpu`.
+
+A failure before step 3 leaves the DOM exactly as it was (the root never moved); a failure
+after it recovers as any admission failure does (same root, same state, `disable`-style
+fences), with the held frame released in the same task.
+
+**Why the cover.** The root's pixels exist only once it is a canvas descendant, and the
+tested build presents a WebGPU draw made in the paint event one frame after it (a 2D draw is
+documented to appear in the same frame; WebGPU does not). Without a cover the swap frame is
+blank. The cover is a snapshot of the frame the user already saw, so no pixel is invented; it
+lasts the swap only (about three frames), never an admission. Pointer events pass through
+it (`::view-transition { pointer-events: none }`). It is skipped (the swap then runs directly,
+and its first frame can be blank) when the browser has no `document.startViewTransition`,
+the document is not visible, or the application's own view transition is running (never
+interrupted); `metrics.admission.cover` is `none` then. A missing cover never revokes GPU.
+
+**Upstream check and proofs** (2026-10-21). WICG html-in-canvas default-branch HEAD
+`5fb3df86d84de598c7f0fcfc5ee53de1df067e7d` (2026-10-09, "Update webGL.html"); the Chromium
+hotlist 6783002 is not readable from a script shell (tracker access limit); tested Chrome
+Canary 158.0.8114.0, Windows 11, headless and headed. The proposal says drawing commands
+made in the `paint` event appear in the current rendering update and DOM changes made in it
+in the next; neither was assumed. Functional pixel probes on the installed build (raw WebGPU
+page, CDP screencast, `drawElementImageToTexture` into a texture read back, frames classified by
+pixel):
+
+| Behaviour | Result |
+| --- | --- |
+| Canvas `display: none` / `visibility: hidden` | `paint` fires, but no paint record: `getElementImageDefaultSize` throws "No cached paint record", capture reads transparent |
+| Canvas `opacity: 0` (also with the ordinary host visible) | `paint` fires, capture exact (`[255,0,0,255]`, size 100x50) |
+| Canvas children outside `drawElementImage` | not painted (a displayed canvas with the root inside and no draw is blank) |
+| WebGPU draw in the `paint` event | presented one frame later: warm buffer green, paint draws blue gives green then blue; a draw in `requestAnimationFrame` is presented in the same frame |
+| DOM write in the `paint` event | takes effect one frame later (reveal in paint: one blank frame) |
+| Swap (move, reveal, hide) with the draw in paint, no cover | a stale or blank frame precedes the GPU frame (also for a canvas never presented: blank only) |
+| The same swap under a held view transition (paused pseudo-elements, skipped after three frames) | old DOM frame, old DOM frame, GPU frame: no blank frame, also for a cold canvas, headless and headed |
+| A view transition whose update callback awaits a paint or frame | rendering is suppressed during the callback and it stalls for 4 s: the callback must return at once |
+
+Screencast frames of the surface page, DPR 1 and 2 (headless and headed) and of the heavy
+Instrument page (`instrument-post-core.html`, 250 controls): before, 4-5 blank frames; after, none
+(`tests/browser/seamless-admission.test.mjs`). The after-swap frames of the heavy page
+keep the pre-existing progressive build of the instrument post chain (a few reference pixels
+still settling for about 0.5 s), unchanged by this work.
+
+**Limits.** The swap relies on the successor being complete when the first paint arrives. If the
+native capture grid of a layer turns out larger than its prepared texture (a fractional grid,
+or a layout that differs between the ordinary host and the canvas), the first paint only
+reconciles and the frame after it draws; the held frame covers that too, and without a cover a blank
+frame is possible. Updates made to the DOM during the held frames (about three) appear when the
+hold ends; this is the ordinary one-frame presentation latency, not a covering of updates with
+older pixels, since the held frame is replaced by a GPU frame captured at the swap. Physical-display
+continuity is still not claimed: screencast frames are compositor frames, not scan-out.
 
 ## Evidence boundaries
 
