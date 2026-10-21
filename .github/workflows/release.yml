@@ -112,6 +112,11 @@ jobs:
       - name: Pack packages
         id: pack
         uses: changesets/action/pack@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        # The Build step above built every workspace. Changesets packs them in parallel, so each package's
+        # prepack rebuild (scripts/prepack.mjs) is skipped: a core rebuild racing the adapters' type checks
+        # failed the pack.
+        env:
+          UNDERGLASS_PREBUILT: "1"
         with:
           publish-plan-artifact-id: ${{ needs.select-mode.outputs.publish-plan-artifact-id }}
 
