@@ -109,9 +109,18 @@ jobs:
         run: node --test tests/compiler/*.test.mjs
       - name: Exact archives for both React peers
         run: node scripts/release-validation.mjs build-only
+      # Changesets packs the workspaces in parallel, and each package's prepack rebuilds it: core's rebuild
+      # (which empties its dist) raced the adapters' type checks against core's declarations and failed the
+      # pack. Everything is already built above, so the pack runs without lifecycle scripts, and the one
+      # prepack step that is not a build (react's copy of docs/distribution.md) runs here first.
+      - name: Prepare package files
+        working-directory: packages/react
+        run: node scripts/prepare-package.mjs
       - name: Pack packages
         id: pack
         uses: changesets/action/pack@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        env:
+          npm_config_ignore_scripts: "true"
         with:
           publish-plan-artifact-id: ${{ needs.select-mode.outputs.publish-plan-artifact-id }}
 
