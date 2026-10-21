@@ -16,85 +16,9 @@
 import { test, expect } from "../helpers/current-browser.mjs";
 import { evidenceDirectory } from "../helpers/evidence.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
-import { PNG } from "pngjs";
-import { referencePoints, scoreFrame, startRecording } from "../helpers/frame-recorder.mjs";
+import { baselines, blank, describe, hash, healthy, heavy, open, recordEnable, surface } from "../helpers/seamless-admission.mjs";
 
 const directory = evidenceDirectory("seamless-admission");
-const healthy = /^Current content=drawable owning WebGPU canvas/;
-// A frame shows the content when this share of the reference pixels holds a DOM or GPU baseline colour.
-const CONTENT = 0.9;
-const hash = bytes => createHash("sha256").update(PNG.sync.read(bytes).data).digest("hex");
-
-const surface = {
-  name: "surface",
-  viewport: { width: 700, height: 600 },
-  open: async page => { await page.goto("/surface.html?dom"); await page.waitForFunction(() => window.surfaceProbe); await page.waitForTimeout(300); },
-  enable: page => page.evaluate(() => window.surfaceProbe.enable().then(() => window.surfaceProbe.settle()).then(() => window.surfaceProbe.state())),
-  disable: page => page.evaluate(() => window.surfaceProbe.disable()),
-  state: page => page.evaluate(() => window.surfaceProbe.state()),
-  /** Whether the DOM is the one presented, for the baselines. */
-  startsInGpu: false,
-};
-const heavy = {
-  name: "instrument-post-core",
-  viewport: { width: 1920, height: 1080 },
-  open: async page => {
-    await page.goto("/instrument-post-core.html");
-    await page.waitForFunction(() => window.postCore, null, { timeout: 60000 });
-    await page.addStyleTag({ content: "#status { display: none !important; }" });
-  },
-  enable: page => page.evaluate(async () => { const api = await window.postCore.ready; await api.enable(); return api.counts(); }),
-  disable: page => page.evaluate(async () => (await window.postCore.ready).disable()),
-  state: page => page.evaluate(async () => (await window.postCore.ready).counts()),
-  startsInGpu: true,
-};
-
-/** Opens the page in a fresh context at the DPR; returns the page and the context's close. */
-async function open(browser, spec, dpr) {
-  const context = await browser.newContext({ viewport: spec.viewport, deviceScaleFactor: dpr });
-  const page = await context.newPage();
-  const errors = [];
-  page.on("pageerror", error => errors.push(String(error)));
-  page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
-  await spec.open(page);
-  return { page, errors, context };
-}
-
-/** The reference pixels of the page: one DOM screenshot and one GPU screenshot of the same layout. */
-async function baselines(browser, spec, dpr) {
-  const { page, context } = await open(browser, spec, dpr);
-  try {
-    let dom, gpu;
-    if (spec.startsInGpu) {
-      await page.waitForTimeout(500); gpu = await page.screenshot();
-      await spec.disable(page); await page.waitForTimeout(500); dom = await page.screenshot();
-    } else {
-      dom = await page.screenshot();
-      await spec.enable(page); await page.waitForTimeout(500); gpu = await page.screenshot();
-    }
-    return { points: referencePoints(dom, gpu), dom, gpu };
-  } finally { await context.close(); }
-}
-
-/**
- * Records the frames from `enable()` until GPU has been active for a while. `prepare(page)` runs once the page is in DOM
- * presentation, before recording. Returns the scored frames, the enable result and the page state.
- */
-async function recordEnable(page, spec, dpr, points, prepare) {
-  if (spec.startsInGpu) { await spec.disable(page); await page.waitForTimeout(500); }
-  await prepare?.(page);
-  const recorder = await startRecording(page, { ...spec.viewport, dpr });
-  await page.waitForTimeout(400);
-  const startedAt = await page.evaluate(() => Date.now());
-  const result = await spec.enable(page).catch(error => ({ enableError: String(error) }));
-  await page.waitForTimeout(600);
-  const frames = (await recorder.stop()).filter(frame => frame.at >= startedAt - 100);
-  const scored = frames.map(frame => ({ at: Math.round(frame.at - startedAt), ...scoreFrame(frame, points) }));
-  return { scored, result, state: await spec.state(page) };
-}
-const blank = scored => scored.filter(frame => frame.match < CONTENT);
-const describe = scored => scored.map(frame => `${frame.match >= CONTENT ? "ok" : frame.white > 0.5 ? "WHITE" : frame.black > 0.5 ? "BLACK" : "BAD"}(${frame.match.toFixed(2)})@${frame.at}`).join(" ");
 
 for (const dpr of [1, 2]) {
   for (const spec of [surface, heavy]) {
@@ -108,9 +32,9 @@ for (const dpr of [1, 2]) {
         const { page, errors, context } = await open(browser, spec, dpr);
         try {
           const { scored, state } = await recordEnable(page, spec, dpr, points);
-          report.runs.push({ frames: describe(scored), mode: state.mode, reason: state.reason, cover: state.metrics?.admission?.cover, swapMs: state.metrics?.admission?.swapMs, admittingMs: state.metrics?.admission?.admittingMs, errors });
-          expect(scored.length, "the screencast delivered frames").toBeGreaterThan(1);
-          expect(blank(scored), `frames lacking the content: ${describe(scored)}`).toEqual([]);
+          report.runs.push({ frames: describe(scored, spec), mode: state.mode, reason: state.reason, cover: state.metrics?.admission?.cover, swapMs: state.metrics?.admission?.swapMs, admittingMs: state.metrics?.admission?.admittingMs, errors });
+          expect(scored.length, "the screencast delivered frames").toBeGreaterThanOrEqual(5);
+          expect(blank(scored, spec), `frames lacking the content: ${describe(scored, spec)}`).toEqual([]);
           // GPU is on afterwards, healthy, covered by the view transition.
           expect(state.mode, state.reason).toBe("gpu");
           expect(state.reason).toMatch(healthy);

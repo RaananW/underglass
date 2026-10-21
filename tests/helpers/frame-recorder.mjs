@@ -52,6 +52,7 @@ export function referencePoints(domPng, gpuPng, { step = 16, tolerance = 6, limi
   const picked = all.filter((_, index) => index % stride === 0);
   // The screencast may deliver frames in CSS pixels at a higher DPR: remember the baseline's width to scale the points.
   picked.baselineWidth = dom.width;
+  picked.baselineHeight = dom.height;
   return picked;
 }
 
@@ -63,11 +64,20 @@ export function scoreFrame(frame, points, { tolerance = 24 } = {}) {
   const png = PNG.sync.read(Buffer.from(frame.data, "base64"));
   let matched = 0, white = 0, black = 0;
   const scale = png.width / (points.baselineWidth ?? png.width);
+  // Regions (a 4 x 3 grid over the baseline): a frame missing one layer or panel fails its region even when the
+  // frame as a whole still matches, so `worst` is the lowest match of any region holding at least 4 reference points.
+  const regions = new Map();
   for (const point of points) {
     const pixel = pixelAt(png, Math.min(Math.round(point.x * scale), png.width - 1), Math.min(Math.round(point.y * scale), png.height - 1));
-    if (point.colors.some(color => near(pixel, color, tolerance))) matched++;
+    const ok = point.colors.some(color => near(pixel, color, tolerance));
+    if (ok) matched++;
     else if (pixel[0] > 238 && pixel[1] > 238 && pixel[2] > 238) white++;
     else if (pixel[3] < 20 || pixel[0] < 14 && pixel[1] < 14 && pixel[2] < 14) black++;
+    const key = `${Math.min(3, Math.floor(point.x * 4 / (points.baselineWidth ?? 1)))}:${Math.min(2, Math.floor(point.y * 3 / (points.baselineHeight ?? 1)))}`;
+    const region = regions.get(key) ?? { total: 0, matched: 0 };
+    region.total++; if (ok) region.matched++;
+    regions.set(key, region);
   }
-  return { match: matched / points.length, white: white / points.length, black: black / points.length, width: png.width, height: png.height };
+  const worst = Math.min(1, ...[...regions.values()].filter(region => region.total >= 4).map(region => region.matched / region.total));
+  return { match: matched / points.length, worst, white: white / points.length, black: black / points.length, width: png.width, height: png.height };
 }

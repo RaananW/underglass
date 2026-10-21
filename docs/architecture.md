@@ -781,7 +781,7 @@ Instrument pages).
    (textures sized from the current layout, shaders, pipelines). If the layers, their
    sizes or the output size moved meanwhile, it is prepared again (at most four times).
 3. One task (the swap) moves the root into the canvas, applies the GPU presentation,
-   hides the ordinary host, reveals the canvas and requests a paint. It runs inside the update
+   hides the ordinary host, applies the native hit geometry, reveals the canvas and requests a paint. It runs inside the update
    callback of a same-document view transition, so the DOM frame that was presented stays on
    screen (the transition's pseudo-elements are paused at their start, the live document
    renders underneath).
@@ -794,15 +794,25 @@ A failure before step 3 leaves the DOM exactly as it was (the root never moved);
 after it recovers as any admission failure does (same root, same state, `disable`-style
 fences), with the held frame released in the same task.
 
-**Why the cover.** The root's pixels exist only once it is a canvas descendant, and the
+**Why the hold, and what it is.** The root's pixels exist only once it is a canvas descendant, and the
 tested build presents a WebGPU draw made in the paint event one frame after it (a 2D draw is
-documented to appear in the same frame; WebGPU does not). Without a cover the swap frame is
-blank. The cover is a snapshot of the frame the user already saw, so no pixel is invented; it
-lasts the swap only (about three frames), never an admission. Pointer events pass through
-it (`::view-transition { pointer-events: none }`). It is skipped (the swap then runs directly,
-and its first frame can be blank) when the browser has no `document.startViewTransition`,
-the document is not visible, or the application's own view transition is running (never
-interrupted); `metrics.admission.cover` is `none` then. A missing cover never revokes GPU.
+documented to appear in the same frame; WebGPU does not). Without a hold the swap frame is
+blank. The hold keeps the **last presented DOM frame** (the browser's snapshot of it) on screen
+across the swap. It is **bounded**: about three frames normally, never an admission; it ends as soon as the
+first GPU frame has been presented (after the GPU finished the draw, `queue.onSubmittedWorkDone()`, and one more
+frame); every failure, cancellation (`disable`, `dispose`, policy, device loss) and recovery ends it at once;
+and a hard bound of 500 ms (`HOLD_MAX_MS`) ends it whatever happens. No pixel is invented or drawn, no control
+cloned. It does not cover updates with older pixels for longer than those frames: a DOM update made inside the hold
+appears when it ends, as ordinary one-frame presentation latency; the first GPU frame is captured at the swap.
+
+Facts of the platform the hold has, all tested: while a view transition runs the browser's hit testing returns the
+document root, so a *pointer* event inside the hold is not delivered to a control (a keypress goes to the focused
+control and is kept). Hence the swap never starts between a pointer press and its release (it waits, bounded at 1 s),
+which cannot split a click; a click or tap that lands wholly inside the hold (about 50 ms) is the one input that is
+lost. The hold style is a constructed stylesheet (no `style-src` allowance needed). The cover is skipped (the swap then
+runs directly, and its first frame can be blank) when the browser has no `document.startViewTransition`, cannot report a
+running transition (`document.activeViewTransition`), the document is not visible, or the application's own view
+transition is running (never interrupted); `metrics.admission.cover` is `none` then. A missing cover never revokes GPU.
 
 **Upstream check and proofs** (2026-10-21). WICG html-in-canvas default-branch HEAD
 `5fb3df86d84de598c7f0fcfc5ee53de1df067e7d` (2026-10-09, "Update webGL.html"); the Chromium
@@ -833,11 +843,12 @@ still settling for about 0.5 s), unchanged by this work.
 **Limits.** The swap relies on the successor being complete when the first paint arrives. If the
 native capture grid of a layer turns out larger than its prepared texture (a fractional grid,
 or a layout that differs between the ordinary host and the canvas), the first paint only
-reconciles and the frame after it draws; the held frame covers that too, and without a cover a blank
-frame is possible. Updates made to the DOM during the held frames (about three) appear when the
-hold ends; this is the ordinary one-frame presentation latency, not a covering of updates with
-older pixels, since the held frame is replaced by a GPU frame captured at the swap. Physical-display
-continuity is still not claimed: screencast frames are compositor frames, not scan-out.
+reconciles and the frame after it draws; the bounded hold covers that too (up to its 500 ms bound), and without a
+hold a blank frame is possible. A tab hidden while the functional probe runs still ends the probe with a
+diagnosed fallback to DOM (a hidden tab between the probe and the swap waits for visibility); the heavy-page post
+chain keeps its progressive build after admission (a few flat reference pixels still settle for about 0.5 s, the same
+as before this change). Physical-display continuity is not claimed: screencast frames are compositor frames, not
+scan-out; the recordings do not cover browsers without view transitions, a `style-src`/CSP variant, or other GPUs.
 
 ## Evidence boundaries
 
