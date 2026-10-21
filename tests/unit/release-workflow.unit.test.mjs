@@ -31,3 +31,19 @@ test("publish needs a successful pack and a gpu job that succeeded or was skippe
   assert.equal(condition, "always() && needs.pack.result == 'success' && (needs.gpu.result == 'success' || needs.gpu.result == 'skipped')");
   assert.doesNotMatch(condition, /failure|cancelled/);
 });
+
+// Changesets packs the workspaces in parallel; a prepack rebuild per package raced core's rebuild against the
+// adapters' type checks (#210). The job builds everything first, so the pack must run without lifecycle scripts.
+test("the pack step runs without lifecycle scripts after react's prepare step", () => {
+  const pack = job("pack");
+  assert.match(pack, /- name: Pack packages[\s\S]*?npm_config_ignore_scripts: "true"/);
+  assert.ok(pack.indexOf("prepare-package.mjs") > -1 && pack.indexOf("prepare-package.mjs") < pack.indexOf("- name: Pack packages"),
+    "react's docs/distribution.md copy runs before the pack");
+});
+
+// "Published" from Changesets means npm accepted the upload, not that the version is installable.
+test("the publish job verifies every version is live on npm after publishing", () => {
+  const publish = job("publish");
+  assert.ok(publish.indexOf("node scripts/verify-published.mjs") > publish.indexOf("changesets/action/publish@"),
+    "verification runs after the publish step");
+});
