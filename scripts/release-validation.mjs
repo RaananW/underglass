@@ -160,12 +160,17 @@ try {
   for (const major of [18, 19]) {
     const peer = join(directory, `react${major}`);
     await mkdir(peer);
-    // Sources and configuration for the copy; `node_modules`, `dist` and Vite caches are not copied.
-    const copied = ["packages", "examples", "tests", "scripts", ".changeset", "vite.config.ts", "package-lock.json",
-      "README.md", "docs/distribution.md", "docs/showcase.md", "docs/ui-library", ".github/workflows/showcase-pages.yml"];
-    for (const path of copied) await cp(join(root, path), join(peer, path), {
-      recursive: true, filter: path => !["node_modules", "dist", "owned-vite-cache"].includes(basename(path)),
-    });
+    // Copy every top-level repository entry except a small exclude list (as scripts/react-matrix.mjs does), so a
+    // unit test that starts reading a new path (docs, .github, README, ...) works in the copy without this script
+    // being edited. `fixtures` gets its own handling below, `evidence` holds this run, and the rest is VCS or tool
+    // state; `node_modules`, `dist` and Vite caches are not copied at any depth.
+    const excluded = new Set([".git", ".claude", "node_modules", "fixtures", "evidence", "dist", "test-results", "playwright-report", "owned-vite-cache"]);
+    for (const entry of await readdir(root)) {
+      if (excluded.has(entry)) continue;
+      await cp(join(root, entry), join(peer, entry), {
+        recursive: true, filter: path => !["node_modules", "dist", "owned-vite-cache"].includes(basename(path)),
+      });
+    }
     await mkdir(join(peer, "fixtures/react18"), { recursive: true });
     for (const path of ["package.json", "package-lock.json"]) {
       await cp(join(root, "fixtures/react18", path), join(peer, "fixtures/react18", path));
