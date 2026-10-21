@@ -97,8 +97,8 @@ different from currently failing supported code.
   Disclosed, not fixed: a producer that never rebuilds keeps the stale scene, the warning and the count (parts cropped at the new box, none outside it);
   the stale parts are one frame behind a moved control, as every scene is behind its layout. Not this issue: a media change that changes an Instrument
   scene's *structure* (the Lamps at `prefers-contrast: more`: their emitters go off) draws the layer at Relief with reason `pending` for 3 to 6 frames while the
-  successor scene builds. Relation to #133 (GPU admission under `forced-colors` fails): a different path; a `forced-colors` change after admission goes
-  through the path fixed here and the new suite covers it, admission under `forced-colors` is untouched.
+  successor scene builds. Relation to #133 (GPU admission under `forced-colors` failed, now fixed: the admission marker opts out with `forced-color-adjust: none`, covered by
+  `forced-colors.test.mjs`): a different path; a `forced-colors` change after admission goes through the path fixed here and the new suite covers it.
 - **Same-value mutation records recaptured (#181): resolved.** A same-value `setAttribute` or text write no longer queues a capture
   (`metrics.mutationsIgnored`; [api](api.md#same-value-mutations-are-ignored)); 300 frames of one cost 299 captures before and 0 now. Not covered, by design:
   a custom-property or style write that changes a value, and any write the DOM sees as a change (a different value, an added or removed attribute).

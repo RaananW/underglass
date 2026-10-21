@@ -469,7 +469,10 @@ Unsupported transformed chains, RTL/writing-mode/zoom or mixed visible/clip axes
 nested enrollment and unbounded capture overflow remain framework boundaries,
 not demonstrated missing Chrome157 features or unrestricted qualification.
 Synthetic composition listeners do not establish actual OS IME completeness.
-Forced colors refreshes content in GPU; reduced motion uses canonical
+Forced colors refreshes content in GPU, and GPU is also admitted while forced
+colors is already active: the internal admission marker sets
+`forced-color-adjust: none`, user content never does, so it is presented in the
+forced system colors (#133); reduced motion uses canonical
 endpoint/identity behavior. Hidden-state policy pauses scheduling,
 aborts paint waits while retaining dirty work and resumes frame-counted motion
 without elapsed-time catch-up. Actual background-tab and OS IME behavior are
