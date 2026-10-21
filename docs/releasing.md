@@ -138,6 +138,41 @@ for name in core react vue css-compiler ui; do
 done
 ```
 
+On Windows, run the same in PowerShell 7 (`pwsh`; Windows PowerShell 5.1 writes `package.json` with a
+byte-order mark) from an empty folder outside the repository:
+
+```powershell
+npm --version                  # 11.5.1 or later
+npm login                      # 2FA; then check with: npm whoami
+$repo = "D:\path\to\underglass"
+$root = Join-Path $HOME "ug-placeholders"
+New-Item -ItemType Directory -Force $root | Out-Null
+
+foreach ($name in "core","react","vue","css-compiler","ui") {
+  $dir = Join-Path $root "placeholder-$name"
+  New-Item -ItemType Directory -Force $dir | Out-Null
+  [ordered]@{
+    name          = "@underglass/$name"
+    version       = "0.0.0-placeholder.0"
+    description   = "Placeholder that reserves the name. Underglass is not released yet: see https://github.com/RaananW/underglass"
+    license       = "Apache-2.0"
+    repository    = [ordered]@{ type = "git"; url = "git+https://github.com/RaananW/underglass.git"; directory = "packages/$name" }
+    homepage      = "https://github.com/RaananW/underglass#readme"
+    publishConfig = @{ access = "public" }
+  } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $dir "package.json") -Encoding utf8
+  "# @underglass/$name`n`nPlaceholder that reserves the package name. Underglass has not been released yet; see https://github.com/RaananW/underglass." |
+    Set-Content (Join-Path $dir "README.md") -Encoding utf8
+  Copy-Item (Join-Path $repo "LICENSE") $dir
+  Push-Location $dir
+  npm publish --access public --provenance=false --tag placeholder   # add --dry-run first to inspect
+  Pop-Location
+}
+
+foreach ($name in "core","react","vue","css-compiler","ui") {
+  npm deprecate "@underglass/$name@0.0.0-placeholder.0" "Placeholder that reserves the name; install a released version once one is published."
+}
+```
+
 Notes on npm's behavior:
 
 - A brand-new package gets the `latest` dist-tag on its first publish even with `--tag placeholder`,
@@ -157,9 +192,21 @@ GitHub Actions and enter the user `RaananW`, the repository `underglass`, the wo
 the options come from `npm trust github --help`) the same can be done from the terminal:
 
 ```sh
-npm trust github @underglass/core --file release.yml --repo RaananW/underglass --env npm --dry-run
-npm trust github @underglass/core --file release.yml --repo RaananW/underglass --env npm -y
+npm trust github @underglass/core --file release.yml --repo RaananW/underglass --env npm --allow-publish --dry-run
+npm trust github @underglass/core --file release.yml --repo RaananW/underglass --env npm --allow-publish -y
 npm trust list @underglass/core      # confirm; repeat both commands for react, vue, css-compiler and ui
+```
+
+npm requires at least one permission flag: `--allow-publish` covers the Release workflow's ordinary
+`npm publish`; `--allow-stage-publish` (npm's staged publishing) is not used.
+
+On Windows (PowerShell 7):
+
+```powershell
+foreach ($p in "core","react","vue","css-compiler","ui") {
+  npm trust github "@underglass/$p" --file release.yml --repo RaananW/underglass --env npm --allow-publish -y
+  npm trust list "@underglass/$p"
+}
 ```
 
 Do not add an npm token to the repository: the Release workflow publishes with OIDC only (`id-token:
