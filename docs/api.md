@@ -144,6 +144,10 @@ Implementer-verified, not independently accepted.
   on lit panels over a bare page against the same scene over a stage layer of the page colour: no pixel
   of a panel's edge band is more than 1 level brighter (Relief, Objects and Instrument, dark and light,
   DPR 1 and 2), so there is no bright ring at rounded edges.
+  **Limit:** light multiplies what is on the canvas, so a lamp's pool past a panel's edge, and on a panel's outset
+  shadow, lights nothing on a bare page (the page is not on the canvas, and in DOM mode there is no such light
+  either). To have the pool fall on the page, enrol a plain layer of the page colour beneath the panels, as the
+  emitters pages do.
 - **DOM-mode rotation:** declarative transitions with rotation no longer cancel in
   ordinary DOM. GPU viewport-clip geometry is only checked while GPU presents.
 - **`createCanvasHosts(frame)`:** creates the output canvas, ordinary host and overlay host with the required styles. The output canvas is deliberately not `aria-hidden`, because GPU mode moves the original controls inside it.
