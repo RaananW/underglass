@@ -31,6 +31,7 @@ the showcase's **Status** line. Then call `enable()` again once the cause is gon
 | `Effects are decorative/inert only` | An effect on a layer that became interactive | Keep effects on decorative layers only |
 | `compilation failed` | A custom WGSL effect did not compile | Fix the WGSL; the message has line and column |
 | `GPU device lost` | The GPU process reset | `enable()` again; this is usually transient |
+| `WebGPU initialization slow` | The GPU process took over 5 s to hand out an adapter or device (for example right after a large teardown). Not an error: the page stays ordinary DOM and GPU starts when the engine arrives | Nothing; `disable()` cancels the wait |
 | `native paint timed out` | The browser stopped painting the canvas (for example a long hidden period or a stuck tab) | `enable()` again |
 
 ## Things that look wrong but are not errors

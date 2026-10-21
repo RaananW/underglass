@@ -302,8 +302,8 @@ test("default explicit policy reconciles supported layout without reentry", asyn
 });
 
 // A held `requestAdapter` keeps public engine initialization pending. Layout changes during the wait are
-// absorbed (GPU ends up admitted), while an explicit disable or dispose issued during the wait wins: the output
-// stays hidden, and no GPU is presented afterwards.
+// absorbed (GPU ends up admitted), while an explicit disable or dispose issued during the wait wins at once (the
+// wait is cancelled; a disposed surface has no output): no GPU is presented afterwards and the late engine is disposed.
 for (const operation of ["layout", "disable", "dispose"]) {
   test(`pending public engine initialization respects ${operation}`, async ({ page }) => {
     const metadata = await ready(page); await native(page);
@@ -325,7 +325,13 @@ for (const operation of ["layout", "disable", "dispose"]) {
       if (operation === "disable") window.finalIntent = window.integrationProbe.disable();
       if (operation === "dispose") window.finalIntent = window.integrationProbe.dispose();
     }, operation);
-    expect(await page.locator("#output").evaluate(node => node.hidden)).toBe(true);
+    if (operation === "dispose") {
+      // A pending engine request no longer holds dispose hostage: it settles at once and removes the canvas,
+      // and the late engine is disposed when the held adapter is released.
+      await page.evaluate(() => window.finalIntent);
+      expect(await page.locator("#output").count()).toBe(0);
+      expect((await state(page)).mode).toBe("disposed");
+    } else expect(await page.locator("#output").evaluate(node => node.hidden)).toBe(true);
     await page.evaluate(() => window.releaseAdapter());
     await page.evaluate(() => window.pendingEnable);
     if (operation === "layout") { await settled(page, "gpu"); await continuity(page); }
@@ -342,6 +348,47 @@ for (const operation of ["layout", "disable", "dispose"]) {
     expect(Object.values((await state(page)).runtimeResources).every(n => n === 0)).toBe(true);
   });
 }
+
+// A tab hidden while a slow engine request is pending must not revoke GPU: ordinary DOM stays presented when the
+// engine lands, and admission continues when the document is visible again, ending on GPU with fresh pixels and
+// the original native controls (synthetic `document.hidden`, not a genuine background tab).
+test("a tab hidden during a slow engine request continues to GPU when visible again", async ({ page }) => {
+  const metadata = await ready(page); await native(page);
+  await page.evaluate(() => window.integrationProbe.disable()); await settled(page, "dom");
+  await page.evaluate(() => {
+    const gpu = navigator.gpu, original = gpu.requestAdapter.bind(gpu);
+    gpu.requestAdapter = async options => {
+      window.adapterWaiting = true;
+      await new Promise(resolve => { window.releaseAdapter = resolve; });
+      gpu.requestAdapter = original;
+      return original(options);
+    };
+    window.pendingEnable = window.integrationProbe.enable();
+  });
+  await page.waitForFunction(() => window.adapterWaiting);
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, value: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    window.releaseAdapter();
+  });
+  await page.waitForFunction(() => /until the document is visible/.test(window.integrationProbe.state().reason));
+  const waiting = await state(page);
+  expect(waiting.mode).toBe("dom");
+  expect(waiting.resources.pendingEngines).toBe(0);
+  expect(await page.locator("#output").evaluate(node => node.hidden)).toBe(true);
+  await page.waitForTimeout(300);
+  expect((await state(page)).mode).toBe("dom");
+  await page.evaluate(() => { delete document.hidden; document.dispatchEvent(new Event("visibilitychange")); });
+  expect((await page.evaluate(() => window.pendingEnable)).mode).toBe("gpu");
+  await settled(page, "gpu");
+  const continued = await state(page);
+  expect(continued.admission.intent).toBe("enabled");
+  expect(await color(page)).toEqual([240, 30, 60, 255]);
+  await continuity(page);
+  await page.locator("#name-label").click();
+  await expect(page.locator("#name")).toBeFocused();
+  await save("hidden-during-slow-init", { metadata, waiting, continued, retired: await zero(page) });
+});
 
 // App code that changes a layer every frame (a requestAnimationFrame loop, as animation libraries and live
 // charts do) re-dirties it after every capture, so a paint is always requested. Admission and settle() must
