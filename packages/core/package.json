@@ -53,7 +53,7 @@
   },
   "dependencies": {
     "@types/webxr": "0.5.24",
-    "@babylonjs/lite": "1.33.0"
+    "@babylonjs/lite": "1.36.0"
   },
   "publishConfig": {
     "access": "public",
