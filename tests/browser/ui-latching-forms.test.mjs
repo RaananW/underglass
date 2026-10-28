@@ -738,7 +738,16 @@ for (const level of levels) test(`a real check and a real selection at ${level} 
   const start0 = await strengths(page);
   expect(Object.values(start0).every(value => value === 0), `all unlit: every emitter dark (${JSON.stringify(start0)})`).toBe(true);
   const boxes = await controlBoxes(page);
-  const before = await frame(page, `${level}-check-before`);
+  // The page's first focus repaints the other keys' CSS-painted edges by up to a few levels in Chrome's own paint (the plain DOM page
+  // too, with no change to the DOM, and a blur does not undo it; #175), so the baseline is taken after one focus and blur, not before the
+  // page has ever had focus. A second focus changes nothing outside the key's reach.
+  await page.evaluate(async () => {
+    const input = document.getElementById("cb-monitor");
+    input.focus({ preventScroll: true });
+    for (let index = 0; index < 2; index++) await new Promise(requestAnimationFrame);
+    input.blur();
+  });
+  const before = await frame(page, `${level}-check-before`, { wait: 400 });
   const start = await counts(page);
   const monitor = boxes.find(box => box.id === "cb-monitor");
   const box = await page.locator("#cb-monitor").boundingBox();
