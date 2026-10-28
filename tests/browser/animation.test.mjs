@@ -763,10 +763,13 @@ test("effect-only reduced motion immediately renders decorative identity", async
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.waitForFunction(frames => window.pairedProbe.state().metrics.gpuFrames > frames, active.metrics.gpuFrames);
   const identity = (await pixels(page, "effect-only-reduced")).png.data;
+  // Every pixel of the region is compared, then asserted once: an expect per pixel (40,000) took most of the test's time (#94).
+  const differing = [];
   for (let y = 60; y < 260; y++) for (let x = 380; x < 580; x++) {
     const offset = (y * 640 + x) * 4;
-    expect([...identity.subarray(offset, offset + 4)]).toEqual([...baseline.subarray(offset, offset + 4)]);
+    if ([0, 1, 2, 3].some(channel => identity[offset + channel] !== baseline[offset + channel])) differing.push({ x, y, reduced: [...identity.subarray(offset, offset + 4)], dom: [...baseline.subarray(offset, offset + 4)] });
   }
+  expect(differing.slice(0, 5), `${differing.length} pixels differ from the DOM baseline`).toEqual([]);
   const disposed = await page.evaluate(() => window.pairedProbe.dispose());
   zero(disposed);
   await save("effect-only-reduced-motion", { active, disposed });
