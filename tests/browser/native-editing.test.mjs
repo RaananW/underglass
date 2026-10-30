@@ -164,7 +164,13 @@ for (const dpr of [1, 2]) {
       expect(reference.meanChannelError).toBeLessThan(8);
       // Only trusted caret navigation changes this image: no React value/geometry update.
       const beforeHome = await state(page);
+      // The caret's internal scroll is painted in a later frame, and `settle()` waits only for work already scheduled (#73): wait
+      // (bounded) for an upload after the element's scroll event, so the counts and the head image below see the scrolled content.
+      // No scroll, or no refresh after it, still fails here.
+      await page.evaluate(selector => { window.homeScroll = new Promise(resolve => document.querySelector(selector).addEventListener("scroll", () => resolve(window.runtimeProbe.state().metrics.uploads), { once: true })); }, selector);
       await page.keyboard.press(kind === "input" ? "Home" : "ControlOrMeta+Home");
+      const uploadsAtScroll = await page.evaluate(() => Promise.race([window.homeScroll, new Promise((_, reject) => setTimeout(() => reject(new Error("no scroll event after Home")), 5000))]));
+      await page.waitForFunction(uploads => window.runtimeProbe.state().metrics.uploads > uploads, uploadsAtScroll, { timeout: 5000 });
       await page.evaluate(() => window.runtimeProbe.settle());
       const start = await observe(page, selector);
       expect(start.state.mode).toBe("gpu"); expect(start.original && start.focused && start.hit).toBe(true);
