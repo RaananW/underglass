@@ -643,21 +643,27 @@ test("environment policies, synthetic visibility pause, real destroyed-device lo
   })).toMatch(/reduced-motion/);
   await page.emulateMedia({ reducedMotion: "no-preference" });
   // Replace `requestPaint` with a no-op so an invalidated layer leaves a paint wait outstanding, then fake
-  // `document.hidden`. Hiding must cancel that wait and stop GPU frames.
-  await page.evaluate(() => {
+  // `document.hidden`. Hiding must cancel that wait and stop GPU frames. The browser can still deliver a paint of its own
+  // while the stub is in place (the media change above restyles the canvas subtree), and that paint ends the wait (#102): so
+  // the layer is invalidated again until a frame begins with the wait outstanding, and the page is hidden in that same task.
+  const attempts = await page.evaluate(async () => {
     const host = document.querySelector("#output");
     window.restorePaint = () => { host.requestPaint = window.realPaint; };
     window.realPaint = host.requestPaint.bind(host);
     host.requestPaint = () => {};
-    window.runtimeProbe.invalidate("primary");
+    for (let attempt = 1; attempt <= 20; attempt++) {
+      window.runtimeProbe.invalidate("primary");
+      await new Promise(requestAnimationFrame);
+      if (window.runtimeProbe.state().resources.paintWaits !== 1) continue;
+      window.hiddenFixture = true;
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => window.hiddenFixture });
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.motion = window.runtimeProbe.animate({ x: 20 }, 30);
+      return attempt;
+    }
+    return 0;
   });
-  await page.waitForFunction(() => window.runtimeProbe.state().resources.paintWaits === 1);
-  await page.evaluate(() => {
-    window.hiddenFixture = true;
-    Object.defineProperty(document, "hidden", { configurable: true, get: () => window.hiddenFixture });
-    document.dispatchEvent(new Event("visibilitychange"));
-    window.motion = window.runtimeProbe.animate({ x: 20 }, 30);
-  });
+  expect(attempts, "a paint wait is outstanding when the page is hidden").toBeGreaterThan(0);
   // Two 150 ms windows: first the wait is cancelled, then no GPU frame advances while hidden.
   await page.waitForTimeout(150);
   const paused = await page.evaluate(() => window.runtimeProbe.state());
