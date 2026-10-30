@@ -701,6 +701,22 @@ function controls() {
       });
     });
 }
+/**
+ * Waits (bounded by `limit` frames) for the fonts and then for `quiet` frames in a row without a capture, so a late layout or
+ * font load after the page opens is not counted as the emitters' (#136). Emitters that capture every frame still use up the bound
+ * and are counted.
+ */
+async function quietCaptures(quiet = 10, limit = 180) {
+  await document.fonts.ready;
+  let last = harness.counts().captures, still = 0;
+  for (let index = 0; index < limit && still < quiet; index++) {
+    await nextFrame();
+    harness.draw();
+    const now = harness.counts().captures;
+    still = now === last ? still + 1 : 0;
+    last = now;
+  }
+}
 /** GPU time of the stage layer's light pass and mesh scene with `count` emitters on it, over `frames` frames. */
 async function cost(count: number, frames = 120, tiles = true) {
   costCount = count;
@@ -714,6 +730,7 @@ async function cost(count: number, frames = 120, tiles = true) {
   const device = (harness.hosts.outputCanvas.getContext("webgpu") as unknown as { getConfiguration(): { device: GPUDevice } }).getConfiguration().device;
   const light: number[] = [], scene: number[] = [], gpu: number[] = [], work: number[] = [];
   let timing = "";
+  await quietCaptures();
   const before = harness.counts();
   // Warm-up frames first, so the GPU clocks settle before the measured ones.
   for (let index = 0; index < 30; index++) { await nextFrame(); harness.draw(); }
