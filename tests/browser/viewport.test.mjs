@@ -19,6 +19,17 @@ async function viewportPixel(page, point) {
   const offset = (Math.floor(point.y * dpr) * image.width + Math.floor(point.x * dpr)) * 4;
   return { pixel: [...image.data.subarray(offset, offset + 4)], bytes };
 }
+// Whole-page screenshot sample 5 px inside the bottom-left corner of a layer that is still moving. The layer's box is read just
+// before and just after the screenshot and the point lies 5 px inside both, so it is on the layer wherever the motion was when
+// the screenshot was taken. A box read earlier (before another screenshot) put the point off a layer that had moved on (#72).
+async function movingLayerPixel(page, selector) {
+  const box = () => page.locator(selector).evaluate(node => { const rect = node.getBoundingClientRect(); return { left: rect.left, bottom: rect.bottom }; });
+  const before = await box(), bytes = await page.screenshot(), after = await box();
+  const point = { x: Math.max(before.left, after.left) + 5, y: Math.min(before.bottom, after.bottom) - 5 };
+  const image = PNG.sync.read(bytes), dpr = await page.evaluate(() => window.devicePixelRatio);
+  const offset = (Math.floor(point.y * dpr) * image.width + Math.floor(point.x * dpr)) * 4;
+  return { pixel: [...image.data.subarray(offset, offset + 4)], point, before, after };
+}
 // Gives the document a scrolled, offset canvas: oversized body, frame moved 200 px right, document
 // scrolled to (40,20). Asserts GPU stayed active. `probe` names the page's probe global.
 async function externalDocumentOffset(page, probe = "runtimeProbe") {
@@ -79,7 +90,6 @@ for (const dpr of [1, 2]) for (const levels of [1, 2]) test(`external bordered v
         const output = document.querySelector("#output").getBoundingClientRect();
         const outer = document.querySelector("#external-outer").getBoundingClientRect();
         const badge = document.querySelector("#badge").getBoundingClientRect();
-        const primary = document.querySelector("#primary").getBoundingClientRect();
         // A point on the green layer, kept 12 px inside the containers' scrollports so it is not clipped. The scrollport's
         // right edge is measured inside the border and any classic scrollbar: a headful window draws one there (#83).
         const scrollport = Math.min(...[...document.querySelectorAll("#external-outer, #external-inner")].map(node => node.getBoundingClientRect().left + node.clientLeft + node.clientWidth));
@@ -88,7 +98,7 @@ for (const dpr of [1, 2]) for (const levels of [1, 2]) test(`external bordered v
         for (const type of ["pointerdown", "pointerup", "click"]) document.addEventListener(type, event =>
           window.externalEvents.push({ type, target: event.target.id, trusted: event.isTrusted,
             path: event.composedPath().filter(node => node instanceof Element).map(node => node.id) }), { once: true });
-        return { green, movingPixel: { x: primary.x + 5, y: primary.bottom - 5 },
+        return { green,
           badge: { x: badge.x + badge.width / 2, y: badge.y + badge.height / 2 },
           state: window.runtimeProbe.state(), clipped: { x: outer.right + 20, y: output.y + 110 },
           original: window.externalOriginalInput === document.querySelector("#controlled")
@@ -101,8 +111,8 @@ for (const dpr of [1, 2]) for (const levels of [1, 2]) test(`external bordered v
       expect(current.original).toBe(true);
       const pixels = await viewportPixel(page, current.green);
       expect(pixels.pixel).toEqual([20, 200, 90, 255]);
-      const movingPixel = (await viewportPixel(page, current.movingPixel)).pixel;
-      expect(movingPixel).toEqual([240, 30, 60, 255]);
+      const moving = await movingLayerPixel(page, "#primary"), movingPixel = moving.pixel;
+      expect(movingPixel, `the moving layer at ${JSON.stringify(moving.point)} (box before ${JSON.stringify(moving.before)}, after ${JSON.stringify(moving.after)})`).toEqual([240, 30, 60, 255]);
       // `clipped` is 20 px beyond the outer container's right edge: the layers must not be hit, the pixel
       // must be white, and a trusted click there must not reach `badge` or `stationary`.
       const clippedHits = await page.evaluate(point => document.elementsFromPoint(point.x, point.y).map(node => node.id), current.clipped);
