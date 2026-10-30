@@ -80,8 +80,10 @@ for (const dpr of [1, 2]) for (const levels of [1, 2]) test(`external bordered v
         const outer = document.querySelector("#external-outer").getBoundingClientRect();
         const badge = document.querySelector("#badge").getBoundingClientRect();
         const primary = document.querySelector("#primary").getBoundingClientRect();
-        // A point on the green layer, kept 12 px inside the outer container's right edge so it is not clipped.
-        const green = { x: Math.min(output.x + 510, outer.right - 12), y: output.y + 145 };
+        // A point on the green layer, kept 12 px inside the containers' scrollports so it is not clipped. The scrollport's
+        // right edge is measured inside the border and any classic scrollbar: a headful window draws one there (#83).
+        const scrollport = Math.min(...[...document.querySelectorAll("#external-outer, #external-inner")].map(node => node.getBoundingClientRect().left + node.clientLeft + node.clientWidth));
+        const green = { x: Math.min(output.x + 510, scrollport - 12), y: output.y + 145 };
         window.externalEvents = [];
         for (const type of ["pointerdown", "pointerup", "click"]) document.addEventListener(type, event =>
           window.externalEvents.push({ type, target: event.target.id, trusted: event.isTrusted,
