@@ -10,6 +10,15 @@ import { validateAppliedGeometry, type DrawableCanvas } from "./native.js";
 const colors = [[207, 37, 83, 255], [31, 179, 113, 255]];
 
 /**
+ * Where native hit testing for `host` is asked: the shadow root it is in, when it is in one (the document retargets every hit
+ * inside a shadow tree to the shadow host, so the probe would never be found), otherwise its document.
+ */
+function hitRoot(host: DrawableCanvas): DocumentOrShadowRoot {
+  const root = host.getRootNode();
+  return root instanceof ShadowRoot ? root : host.ownerDocument;
+}
+
+/**
  * Builds the admission probe: a small two-colour `drawable` element appended to the capture canvas
  * `host`, plus the canvas-space transform and clip used to test it. `points` are two interior marker
  * points (one per colour band, in the element's local space) and `clipped` is a point the clip must
@@ -82,7 +91,7 @@ export function verifyProbeGeometry(host: DrawableCanvas, probe: ReturnType<type
     && point.x < view.innerWidth && point.y < view.innerHeight);
   if (!inViewport) throw new Error("Functional native clipping is unproven: admission deferred until the owning output probe is inside the viewport; explicitly enable again when visible");
   const hits = locations.map(point => {
-    const hit = doc.elementFromPoint(point.x, point.y);
+    const hit = hitRoot(host).elementFromPoint(point.x, point.y);
     return hit === probe.element || !!hit && probe.element.contains(hit);
   });
   if (!hits[0] || !hits[1] || hits[2]) throw new Error("Functional native geometry/clip probe failed interior/clipped hit testing (possibly occluded)");
@@ -136,7 +145,7 @@ export function verifyFrameBounds(host: DrawableCanvas, probe: ReturnType<typeof
   const hits = [{ x: probe.extent * .15, y: half }, { x: probe.extent * .85, y: half }]
     .map(point => matrix.transformPoint(point))
     .map(point => {
-      const hit = host.ownerDocument.elementFromPoint(rect.x + point.x, rect.y + point.y);
+      const hit = hitRoot(host).elementFromPoint(rect.x + point.x, rect.y + point.y);
       return hit === probe.element || !!hit && probe.element.contains(hit);
     });
   return { result: !hits[0] ? "unverifiable" : hits[1] ? "unbounded" : "bounded", edge: candidate.edge, hits };
@@ -176,7 +185,7 @@ export function verifyProjectiveHits(host: DrawableCanvas, probe: ReturnType<typ
   const locations = [inside, beyond].map(point => ({ x: rect.x + point.x, y: rect.y + point.y }));
   if (locations.some(point => point.x < 0 || point.y < 0 || point.x >= view.innerWidth || point.y >= view.innerHeight)) return { result: "unverifiable" };
   const hits = locations.map(point => {
-    const hit = host.ownerDocument.elementFromPoint(point.x, point.y);
+    const hit = hitRoot(host).elementFromPoint(point.x, point.y);
     return hit === probe.element || !!hit && probe.element.contains(hit);
   });
   return { result: hits[0] && !hits[1] ? "proven" : "failed", hits };

@@ -150,7 +150,7 @@ Implementer-verified, not independently accepted.
   emitters pages do.
 - **DOM-mode rotation:** declarative transitions with rotation no longer cancel in
   ordinary DOM. GPU viewport-clip geometry is only checked while GPU presents.
-- **`createCanvasHosts(frame)`:** creates the output canvas, ordinary host and overlay host with the required styles. The output canvas is deliberately not `aria-hidden`, because GPU mode moves the original controls inside it.
+- **`createCanvasHosts(frame)`:** creates the output canvas, ordinary host and overlay host with the required styles. The output canvas is deliberately not `aria-hidden`, because GPU mode moves the original controls inside it. The frame may be inside a shadow root: admission asks that shadow root for its native hit proofs (the document retargets every hit inside it to the shadow host), and the `!important` pre-scan (animation ownership, declarative transitions in ordinary DOM) reads its sheets as well as the document's.
 - **Stylesheet scan:** `!important` pre-scan skips uninspectable sheets/rules instead of throwing.
 - **Admission:** probe sits in the visible part of the output canvas; fully offscreen is still refused.
 - **Status:** new `onStatusChange(status: CanvasStatus)`; `onStatus` (JSON string) is optional and kept for compatibility.
