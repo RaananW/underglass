@@ -226,7 +226,8 @@ test("flush is the markup and the look of before: no form, no lens, the star, th
     forms: document.querySelectorAll("[data-strata-form]").length, lenses: document.querySelectorAll(".ug-rating__lens, .ug-badge__lens, .ug-spinner__lens, .ug-progress__segment, .ug-progress-bar, .ug-spinner__ring").length,
     arcs: document.querySelectorAll(".ug-spinner__arc").length, faces: [...document.querySelectorAll("#b-ok, #p-det, #s-md")].map(element => element.getAttribute("data-strata-face")),
     star: (box => [box.width, box.height])(document.querySelector("#rate .ug-rating__star").getBoundingClientRect()), bar: (box => [box.width > 100, box.height])(document.getElementById("p-det").getBoundingClientRect()),
-    badge: document.getElementById("b-ok").getBoundingClientRect().height, arc: document.querySelector("#s-md .ug-spinner__arc").getBoundingClientRect().width,
+    // The arc turns (800 ms a turn), so its box is read before the transform: a bounding box widens with the angle (#182).
+    badge: document.getElementById("b-ok").getBoundingClientRect().height, arc: document.querySelector("#s-md .ug-spinner__arc").offsetWidth,
   }))).toEqual({ forms: 0, lenses: 0, arcs: 2, faces: ["flat", "groove", "ring"], star: [24, 24], bar: [true, 8], badge: 20.390625, arc: 24 });
   // The same native behaviour as before.
   await page.locator("#rate input[value='5']").click();
