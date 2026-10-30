@@ -44,7 +44,9 @@ cd ../your-app && npm install ../underglass/underglass-core-*.tgz ../underglass/
 
 Underglass needs one sized element **outside every React root**. It adds three hosts
 inside it: the output canvas, the host for ordinary DOM, and an overlay host for
-dialogs and popovers.
+dialogs and popovers. The element may also sit inside a shadow root, for example in
+a web component or on a page that mounts its demos in shadow DOM; put the app's
+styles in that shadow root.
 
 ```html
 <div id="stage" style="position: relative; width: 800px; height: 500px"></div>

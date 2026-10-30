@@ -142,7 +142,10 @@ export function rejectImportantPresentation(element: HTMLElement, includeOrigin 
       else if (rule instanceof CSSGroupingRule) inspect(rule.cssRules, depth + 1, nested);
     }
   };
-  for (const sheet of [...document.styleSheets, ...document.adoptedStyleSheets]) {
+  // Inside a shadow tree the rules that apply come from its shadow root's own sheets.
+  const root = element.getRootNode();
+  const scoped = root instanceof ShadowRoot ? [...root.styleSheets, ...root.adoptedStyleSheets] : [];
+  for (const sheet of [...document.styleSheets, ...document.adoptedStyleSheets, ...scoped]) {
     const rules = readable(sheet);
     if (rules) inspect(rules, 0, false);
   }
