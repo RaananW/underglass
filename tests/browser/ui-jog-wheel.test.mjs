@@ -253,8 +253,15 @@ test("a flick coasts and stops: one native step per input, at most jog.maxRate a
   test.setTimeout(120000);
   const { context, page } = await plain(browser);
   await trace(page);
-  // A flick: 200° in 10 moves of 8 ms, released as it goes.
-  await circle(page, "shuttle", 0, 200, { steps: 10, pause: 8, hold: 0 });
+  // A flick: 200° in 10 moves of 8 ms, released as it goes. No samples between the moves: two round trips to the page after the last
+  // move could take the release past the wheel's 80 ms under load, which is a slow release (it stays where it was let go, below).
+  await page.evaluate(() => {
+    window.flickGap = undefined; let last = 0;
+    const move = event => { last = event.timeStamp; };
+    document.addEventListener("pointermove", move, true);
+    document.addEventListener("pointerup", event => { window.flickGap = event.timeStamp - last; document.removeEventListener("pointermove", move, true); }, { capture: true, once: true });
+  });
+  await circle(page, "shuttle", 0, 200, { steps: 10, pause: 8, hold: 0, sample: false });
   const released = await page.evaluate(() => performance.now());
   await stopped(page);
   // `change` comes when the wheel rests, a little after its last step.
@@ -262,7 +269,7 @@ test("a flick coasts and stops: one native step per input, at most jog.maxRate a
   const flick = await traced(page);
   const inputs = flick.filter(event => event[0] === "input"), changes = flick.filter(event => event[0] === "change");
   const after = inputs.filter(event => event[1] > released);
-  expect(after.length, "the wheel keeps turning after it is let go").toBeGreaterThan(5);
+  expect(after.length, `the wheel keeps turning after it is let go (released ${(await page.evaluate(() => window.flickGap)).toFixed(1)} ms after the last move)`).toBeGreaterThan(5);
   expect(changes.length, "one change, when it comes to rest").toBe(1);
   expect(changes[0][1], "after the last step").toBeGreaterThanOrEqual(inputs.at(-1)[1]);
   expect(changes[0][2]).toBe(await value(page, "shuttle"));
@@ -288,7 +295,9 @@ test("a flick coasts and stops: one native step per input, at most jog.maxRate a
     let previous = performance.now(), lastCount = 0, widest = 0;
     probe.fling("scrub", 20000);
     probe.fling("shuttle", 20000);
-    for (let index = 0; index < 90; index++) { await frame(); const now = performance.now(); frames.push(now - previous); const gained = count - lastCount; widest = Math.max(widest, gained / 2); previous = now; lastCount = count; }
+    // Frames are timed by their animation-frame timestamps, the clock the wheel's allowance runs on: `performance.now()` read after
+    // the wheels' steps of the frame moves with how long those took, and under load measured a 31 ms frame as 19 ms.
+    for (let index = 0; index < 90; index++) { const now = await frame(); frames.push(now - previous); const gained = count - lastCount; widest = Math.max(widest, gained / 2); previous = now; lastCount = count; }
     document.removeEventListener("input", listener, true);
     return { steps: count, widest, slowest: Math.max(...frames), frames: frames.length };
   });
