@@ -1,6 +1,6 @@
 {
   "name": "@underglass/core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Framework-neutral GPU runtime for Underglass: presents original HTML controls through WebGPU while native input, focus and state stay on the elements.",
   "keywords": [
     "webgpu",

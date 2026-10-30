@@ -1,6 +1,6 @@
 {
   "name": "@underglass/react",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "React adapter for Underglass: GPU-presented layers over ordinary React controls and state.",
   "keywords": [
     "react",
@@ -54,7 +54,7 @@
     "prepack": "npm run build && node scripts/prepare-package.mjs"
   },
   "dependencies": {
-    "@underglass/core": "0.2.0"
+    "@underglass/core": "0.2.1"
   },
   "peerDependencies": {
     "react": "^18.3.1 || ^19.0.0",
