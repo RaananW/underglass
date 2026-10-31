@@ -35,3 +35,6 @@ fixtures/worker/app/program.json
 
 # Astro fixture build cache (fixtures/astro-strata builds into its own dist/).
 .astro/
+
+# Vercel CLI project link (vercel link)
+.vercel/

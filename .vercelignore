@@ -1,0 +1,14 @@
+# Vercel uploads (CLI) and builds (Git) only what the showcase build needs: the workspaces, the
+# lockfile, the asset guard and its policy helper. See docs/showcase.md#deployment.
+/*
+!/package.json
+!/package-lock.json
+!/vercel.json
+!/packages
+!/examples
+!/scripts
+/scripts/*
+!/scripts/check-showcase-assets.mjs
+!/scripts/release-policy.mjs
+node_modules
+dist
