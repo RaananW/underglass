@@ -8,7 +8,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
-import { base, description, home, outputFile, repository, rewriteLinks, routes, sidebar, toPage, url } from "../../examples/docs/pages.mjs";
+import { base, description, home, llmsFull, llmsIndex, markdownUrl, outputFile, readPage, repository, rewriteLinks, routes, sidebar, site, toMarkdown, toPage, url } from "../../examples/docs/pages.mjs";
 
 const components = await readdir("docs/ui-library/components");
 const map = routes(components);
@@ -23,6 +23,8 @@ test("docs site publishes every listed page and every component page, each with 
   assert.equal(outputFile(""), "index.md");
   assert.equal(outputFile("guide/concepts"), "guide/concepts.md");
   assert.equal(url(""), "/docs");
+  assert.equal(markdownUrl(""), "/docs/index.md");
+  assert.equal(markdownUrl("guide/concepts"), "/docs/guide/concepts.md");
   assert.equal(base, "/docs/");
 });
 
@@ -42,6 +44,9 @@ test("docs site rewrites relative links to site pages or GitHub, outside code", 
     assert.equal(rewrite(text), text);
   }
   assert.throws(() => rewriteLinks("[Out](../../../x.md)", source, map), /leaves the repository/);
+  // With an origin, site links become absolute; GitHub links are already.
+  assert.equal(rewriteLinks("[Concepts](concepts.md) [Readme](../../README.md)", source, map, site),
+    `[Concepts](${site}/docs/guide/concepts) [Readme](${repository}/blob/main/README.md)`);
 });
 
 test("docs site page frontmatter comes from the title and first paragraph", () => {
@@ -51,6 +56,7 @@ test("docs site page frontmatter comes from the title and first paragraph", () =
     'title: "Title: with \\"quotes\\""',
     'description: "See concepts and code."',
     `editUrl: "${repository}/edit/main/docs/guide/motion.md"`,
+    'head: [{"tag":"link","attrs":{"rel":"alternate","type":"text/markdown","href":"/docs/guide/motion.md"}}]',
     "---",
     "",
     "See [concepts](/docs/guide/concepts) and `code`.",
@@ -79,3 +85,28 @@ test("showcase anatomy links name headings that exist", async () => {
     if (anchor) assert.ok([...markdown.matchAll(/^#{2,6} (.+)$/gm)].some(match => slug(match[1]) === anchor), `${page}#${anchor}`);
   }
 });
+
+test("docs site writes Markdown copies, llms.txt and llms-full.txt for agents", () => {
+  const page = readPage("# Motion\r\n\r\nSee [concepts](concepts.md).\r\n", "guide/motion.md", map, site);
+  assert.deepEqual(page, { title: "Motion", description: "See concepts.", body: `\nSee [concepts](${site}/docs/guide/concepts).\n` });
+  assert.equal(toMarkdown(page), `# Motion\n\nSee [concepts](${site}/docs/guide/concepts).\n`);
+
+  const pages = new Map([...map.values()].map(route => [route, { title: `T ${route}`, description: route === "guide/motion" ? undefined : `D ${route}`, body: "\nBody.\n" }]));
+  const index = llmsIndex(map, pages);
+  assert.match(index, /^# Underglass\n\n> Underglass is a GPU-first React framework/);
+  assert.ok(index.includes(`- [T guide/getting-started](${site}/docs/guide/getting-started.md): D guide/getting-started\n`));
+  assert.ok(index.includes(`- [T guide/motion](${site}/docs/guide/motion.md)\n`), "no description, no colon");
+  assert.ok(index.includes(`[llms-full.txt](${site}/docs/llms-full.txt)`));
+  const headings = [...index.matchAll(/^## (.+)$/gm)].map(match => match[1]);
+  assert.deepEqual(headings, [...sidebar.map(group => group.label), "Strata components", "Optional"]);
+  // Every published page but the home page is listed once.
+  const listed = [...index.matchAll(/\]\(https:\/\/underglass\.dev\/docs\/(.+)\.md\)/g)].map(match => match[1]);
+  assert.deepEqual(new Set(listed), new Set([...map.values()].filter(Boolean)));
+  assert.equal(listed.length, map.size - 1);
+
+  // The full file holds the Guide and Reference pages only, in sidebar order, each with its URL.
+  const full = llmsFull(map, pages);
+  const titles = [...full.matchAll(/^# (.+)\n\nURL: (.+)$/gm)].map(match => [match[1], match[2]]);
+  assert.deepEqual(titles, sidebar.slice(0, 2).flatMap(group => group.pages).map(([, route]) => [`T ${route}`, `${site}/docs/${route}`]));
+});
+
