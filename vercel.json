@@ -4,7 +4,6 @@
   "installCommand": "npm ci --ignore-scripts --no-audit --no-fund",
   "buildCommand": "CANVAS_SHOWCASE_BASE=/ npm run build:showcase",
   "outputDirectory": "examples/showcase/dist",
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- examples packages scripts/check-showcase-assets.mjs scripts/release-policy.mjs package.json package-lock.json vercel.json .vercelignore",
   "cleanUrls": true,
   "trailingSlash": false,
   "headers": [
