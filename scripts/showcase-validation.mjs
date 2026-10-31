@@ -531,6 +531,8 @@ try {
       await page.goto(`${url}#/effects`);
       await studioButton("Apply chromatic effect").waitFor();
       assert.equal(await page.evaluate(() => location.pathname + location.hash), "/underglass/examples/effects");
+      assert.equal(await page.title(), "Shader lab | Underglass examples");
+      assert.equal(await page.locator('link[rel="canonical"]').getAttribute("href"), "https://underglass.dev/examples/effects");
       await page.goto("about:blank");
       await page.goto(`${url}examples/effects`);
       await studioButton("Apply chromatic effect").waitFor();

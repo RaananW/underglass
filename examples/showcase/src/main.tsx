@@ -30,7 +30,6 @@ const pageURL = (id?: ExampleId) => id ? `${base}${examplePath(id)}` : base;
 function upgradeHashLink() {
   if (location.hash.startsWith("#/")) history.replaceState(null, "", pageURL(route(location.hash)));
 }
-upgradeHashLink();
 /** Keeps the title, description and canonical URL in step with the page in the URL. */
 function applyHead(id?: ExampleId) {
   const meta = pageMeta(id);
@@ -38,6 +37,9 @@ function applyHead(id?: ExampleId) {
   document.querySelector('meta[name="description"]')?.setAttribute("content", meta.description);
   document.querySelector('link[rel="canonical"]')?.setAttribute("href", `${site.origin}/${meta.path}`);
 }
+// An old hash link loads the home page's HTML, so its head is set for the example it moved to.
+upgradeHashLink();
+applyHead(pageExample());
 /** True for a click the browser should handle itself: another button, or a modifier that opens a new tab or window. */
 const ownClick = (event: MouseEvent) => event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
 startAnalytics();
