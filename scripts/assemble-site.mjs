@@ -7,12 +7,15 @@
  * text files, and every link to a page under `/docs` (with its `#anchor`, and same-page anchors) resolves to a
  * built page and heading. The links checked are the HTML pages' `href`s and the Markdown links of the pages'
  * Markdown copies, `llms.txt` and `llms-full.txt`; a link to a file under `/docs` must name a built file.
- * Then replaces `examples/showcase/dist/docs` with a copy of `examples/docs/dist`, and copies `llms.txt` to the
- * site root, where agents look for it. A failed check exits non-zero and so fails the build. Writes only
- * `examples/showcase/dist/docs` and `examples/showcase/dist/llms.txt`.
+ * Every URL in the documentation's sitemap must be a built page.
+ *
+ * Then replaces `examples/showcase/dist/docs` with a copy of `examples/docs/dist`, copies `llms.txt` to the site
+ * root, where agents look for it, and adds the documentation pages to the showcase's `sitemap.xml`, so the one
+ * sitemap `robots.txt` names lists the whole site. A failed check exits non-zero and so fails the build. Writes
+ * only `examples/showcase/dist/docs`, `examples/showcase/dist/llms.txt` and `examples/showcase/dist/sitemap.xml`.
  */
 import assert from "node:assert/strict";
-import { cp, lstat, readdir, readFile, rm } from "node:fs/promises";
+import { cp, lstat, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 import { assertPhysicalPath } from "./release-policy.mjs";
 
@@ -79,8 +82,31 @@ assert.deepEqual(broken, [], `Broken documentation links:\n${broken.join("\n")}`
 assert.ok(pages.has("index.html"), "The documentation site requires its home page");
 assert.ok(markdown.has("llms.txt") && markdown.has("llms-full.txt"), "The documentation site requires llms.txt and llms-full.txt");
 
+/** The `<loc>` URLs of a sitemap or sitemap index. */
+const locs = xml => [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => match[1]);
+// Starlight's sitemap lists the home page as `/docs/`, which redirects to `/docs`: the canonical URL has no slash.
+const docsHome = [`<loc>${origin}${base}/</loc>`, `<loc>${origin}${base}</loc>`];
+const sitemaps = locs(await readFile(join(docs, "sitemap-index.xml"), "utf8")).map(url => {
+  assert.ok(url.startsWith(`${origin}${base}/`) && built.has(url.slice(origin.length + base.length + 1)), `Documentation sitemap missing: ${url}`);
+  return url.slice(origin.length + base.length + 1);
+});
+const docsUrls = [];
+for (const name of sitemaps) {
+  for (const url of locs((await readFile(join(docs, name), "utf8")).replace(...docsHome))) {
+    assert.ok(url.startsWith(`${origin}${base}`) && pages.has(pageFile(url.slice(origin.length))), `Documentation sitemap URL is not a page: ${url}`);
+    docsUrls.push(url);
+  }
+}
+assert.equal(docsUrls.length, pages.size, "The documentation sitemap lists every page");
+
 const output = join(showcase, "docs");
 await rm(output, { recursive: true, force: true });
 await cp(docs, output, { recursive: true });
+for (const name of sitemaps) await writeFile(join(output, name), (await readFile(join(docs, name), "utf8")).replace(...docsHome));
 await cp(join(docs, "llms.txt"), join(showcase, "llms.txt"));
-console.log(`Documentation site: ${pages.size} pages, ${all.length} files copied to ${relative(".", output)}, and llms.txt to the site root`);
+// The showcase's own URLs (any `/docs` ones from an earlier run dropped), then the documentation pages.
+const sitemap = join(showcase, "sitemap.xml");
+const urls = [...locs(await readFile(sitemap, "utf8")).filter(url => !url.startsWith(`${origin}${base}`)), ...docsUrls];
+await writeFile(sitemap, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${
+  urls.map(url => `  <url><loc>${url}</loc></url>`).join("\n")}\n</urlset>\n`);
+console.log(`Documentation site: ${pages.size} pages, ${all.length} files copied to ${relative(".", output)}; llms.txt at the site root; sitemap.xml lists ${urls.length} URLs`);

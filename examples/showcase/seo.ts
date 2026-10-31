@@ -89,15 +89,15 @@ export function noscriptBody(id: ExampleId | undefined, base: string) {
     + `<h2>Examples</h2><ul>${links.join("")}</ul></main></noscript>`;
 }
 
-/** `sitemap.xml`: the home page and every example page. */
+/** `sitemap.xml`: the home page and every example page. `npm run build:site` adds the documentation pages. */
 export function sitemap() {
   const urls = [canonical(), ...examples.map(example => canonical(example.id))];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${
     urls.map(url => `  <url><loc>${url}</loc></url>`).join("\n")}\n</urlset>\n`;
 }
 
-/** `robots.txt`: everything may be crawled; names the showcase's sitemap and the documentation site's (`examples/docs`). */
-export const robots = () => `User-agent: *\nAllow: /\n\nSitemap: ${site.origin}/sitemap.xml\nSitemap: ${site.docs}/sitemap-index.xml\n`;
+/** `robots.txt`: everything may be crawled; names the one sitemap, which lists the documentation pages too. */
+export const robots = () => `User-agent: *\nAllow: /\n\nSitemap: ${site.origin}/sitemap.xml\n`;
 
 /** `404.html`: a small static page, not indexed, with links back into the site. */
 export function notFoundPage(base: string) {
