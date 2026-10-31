@@ -1,13 +1,22 @@
 # Underglass core (experimental)
 
-`@underglass/core@0.1.0` is the framework-neutral runtime of Underglass: the shared
+`@underglass/core` is the framework-neutral runtime of Underglass: the shared
 GPU engine, the adapter-owned mount boundary, original-element enrollment, motion,
 effects and the typed style compiler. It imports no UI framework. It is
 experimental and not release-qualified for production.
 
-Most applications use a framework adapter instead:
+Live examples: [underglass.dev](https://underglass.dev/) · Source, guide and API: [github.com/RaananW/underglass](https://github.com/RaananW/underglass)
 
-- `@underglass/react` for React 18.3.1 or 19.
+Most applications use a framework adapter instead, which installs this package with it:
+
+- [`@underglass/react`](https://www.npmjs.com/package/@underglass/react) for React 18.3 or 19.
+- [`@underglass/vue`](https://www.npmjs.com/package/@underglass/vue) for Vue 3.5.
+
+A plain-DOM application or a new adapter installs it directly:
+
+```sh
+npm install @underglass/core
+```
 
 An adapter (or a plain-DOM application) builds on two pieces:
 
@@ -29,7 +38,8 @@ the bounded experimental worker compositor.
 
 GPU admission requires functional native capture, current hit geometry and the
 qualified browser contract; useful default DOM is not proof of GPU support. The
-repository's architecture guide states the full GPU-first contract.
+repository's [architecture guide](https://github.com/RaananW/underglass/blob/main/docs/architecture.md#gpu-first-contract)
+states the full GPU-first contract.
 
 ## License
 

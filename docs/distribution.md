@@ -52,7 +52,7 @@ npm pack --workspace @underglass/core --workspace @underglass/react --dry-run --
 npm run pack:library -- --pack-destination fixtures/package-consumer/workspaces
 # In a separate React application, install both generated .tgz files (the
 # React package depends on the framework-neutral core runtime):
-npm install /path/to/underglass-core-0.1.0.tgz /path/to/underglass-react-0.1.0.tgz
+npm install /path/to/underglass-core-<version>.tgz /path/to/underglass-react-<version>.tgz
 ```
 
 Create the pack destination first. `prepack` rebuilds the intentional
@@ -258,7 +258,8 @@ rerun full benchmarks or certify all UI semantics.
 | --- | --- |
 | Independent Phase10 and Phase11 engineering acceptance | Accepted with limits; full Phase11 human/physical validation remains pending |
 | Local pack/install/type/browser checks | Implemented reproducible runner; inspect its fresh results |
-| Final package name, public visibility, npm publication | Separate user decisions; no publish authorization (license: Apache-2.0, selected 2026-10-14) |
+| Final package name, public visibility, npm publication | Decided: public `@underglass/*` packages on npm since `0.2.0` (2026-10-21), released only by the Release workflow with provenance ([releasing](releasing.md)); license Apache-2.0 |
 | Human/device/accessibility and exact154/provenance gates | Open; see limits above and repository adoption checklist |
 | Phase12 opt-in settled structural readmission | Engineering independently accepted with limits; full Phase12 production application/hardware and numeric budgets remain open |
-| Release CI, broad framework/browser support | Outside current scope |
+| Release CI | In place: the Release workflow versions and publishes ([releasing](releasing.md)) |
+| Broad framework/browser support | Outside current scope |

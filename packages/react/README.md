@@ -1,9 +1,19 @@
 # Underglass for React (experimental)
 
-`@underglass/react@0.1.0` is an ESM library with matching React18.3.1
-or React19 peers. It is the React adapter over the framework-neutral
-`@underglass/core` runtime (which owns the GPU engine and depends on public
-Babylon Lite). It is experimental and not release-qualified for production.
+`@underglass/react` is the React adapter of Underglass, an ESM library with React 18.3 or
+React 19 peers, over the framework-neutral `@underglass/core` runtime (which owns the GPU
+engine and depends on public Babylon Lite). It is experimental and not release-qualified for
+production.
+
+Live examples: [underglass.dev](https://underglass.dev/) · Source, guide and API: [github.com/RaananW/underglass](https://github.com/RaananW/underglass)
+
+```sh
+npm install @underglass/react react react-dom
+```
+
+The [getting-started guide](https://github.com/RaananW/underglass/blob/main/docs/guide/getting-started.md)
+walks through a first app, and the [API reference](https://github.com/RaananW/underglass/blob/main/docs/api.md)
+lists every export.
 
 Import supported runtime APIs from `@underglass/react`; it re-exports the core
 types and helpers React applications need. The separate
@@ -27,11 +37,11 @@ React retains the original controls and state. GPU admission requires
 functional native capture, current hit geometry and the qualified browser
 contract; useful default DOM is not proof of GPU support.
 
-See the bundled [distribution contract](docs/distribution.md) for bootstrap,
-peer requirements, browser limits and explicit disable/disposal.
-Repository examples, tooling and historical evidence are not package contents.
-Whole-release, manual, performance-budget and publication decisions
-remain open.
+See the [distribution contract](https://github.com/RaananW/underglass/blob/main/docs/distribution.md)
+(also bundled as `docs/distribution.md`) for bootstrap, peer requirements, browser limits
+and explicit disable/disposal. Repository examples, tooling and historical evidence are
+not package contents. Manual (screen reader, physical device) and performance-budget
+qualification remain open.
 
 ## License
 

@@ -1,8 +1,14 @@
 # Underglass for Vue (experimental)
 
-`@underglass/vue@0.1.0` is the Vue 3 adapter over the framework-neutral
+`@underglass/vue` is the Vue 3 adapter of Underglass, over the framework-neutral
 `@underglass/core` runtime, with a `vue@^3.5` peer. It is experimental and
 not release-qualified for production.
+
+Live examples: [underglass.dev](https://underglass.dev/) · Source, guide and API: [github.com/RaananW/underglass](https://github.com/RaananW/underglass)
+
+```sh
+npm install @underglass/vue vue
+```
 
 ```ts
 import { createCanvasHosts, mountCanvasApp } from "@underglass/vue";
@@ -31,7 +37,9 @@ mounts. Inside it:
 Vue keeps the original controls and state; the runtime moves its container
 between the page and the GPU canvas without remounting. GPU admission requires
 functional native capture, current hit geometry and the qualified browser
-contract; useful default DOM is not proof of GPU support.
+contract; useful default DOM is not proof of GPU support. The
+[frameworks guide](https://github.com/RaananW/underglass/blob/main/docs/guide/frameworks.md) covers Vue in
+more depth.
 
 ## License
 

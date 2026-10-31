@@ -1,7 +1,7 @@
 # Underglass
 
-Underglass is an experimental React layer that presents your **original React DOM
-controls** through Chrome's HTML-in-Canvas API and WebGPU (via `@babylonjs/lite`)
+Underglass is an experimental UI layer for React and Vue that presents your **original
+DOM controls** through Chrome's HTML-in-Canvas API and WebGPU (via `@babylonjs/lite`)
 while keeping native interaction: real inputs, focus, selection, forms and
 hit-testing keep working on the same elements React created. The GPU draws
 those elements with transforms, motion and decorative effects; it does not
@@ -46,18 +46,38 @@ In other browsers the showcase runs as ordinary DOM with the same controls.
 
 ## Status
 
-Experimental (`@underglass/react@0.1.0`); prepared for npm but not yet
-published to a registry, and not production-ready. Licensed under the
-[Apache License 2.0](LICENSE); the first npm publish is the owner's step ([releasing](docs/releasing.md)). It is for
-deliberately adopted small applications, not for loading arbitrary websites or
-libraries unchanged. GPU mode needs Chrome Canary with experimental flags; plain
-DOM mode works in any browser. History and acceptance records are in
-[docs/history.md](docs/archive/history.md).
+Experimental and not production-ready. The packages are on npm, released together
+under one version (see each package's `CHANGELOG.md` and [releasing](docs/releasing.md)):
+
+| Package | What it is |
+| --- | --- |
+| [`@underglass/react`](https://www.npmjs.com/package/@underglass/react) | The React adapter (React 18.3 or 19) |
+| [`@underglass/vue`](https://www.npmjs.com/package/@underglass/vue) | The Vue 3 adapter (Vue 3.5) |
+| [`@underglass/core`](https://www.npmjs.com/package/@underglass/core) | The framework-neutral runtime both adapters build on |
+| [`@underglass/ui`](https://www.npmjs.com/package/@underglass/ui) | Strata, the 3D design language and component library |
+| [`@underglass/css-compiler`](https://www.npmjs.com/package/@underglass/css-compiler) | The opt-in build-time CSS compiler (Vite and webpack) |
+
+It is for deliberately adopted small applications, not for loading arbitrary
+websites or libraries unchanged. GPU mode needs Chrome Canary with experimental
+flags; plain DOM mode works in any browser. Licensed under the
+[Apache License 2.0](LICENSE). History and acceptance records are in
+[docs/archive/history.md](docs/archive/history.md).
+
+## Install
+
+```sh
+npm install @underglass/react react react-dom   # React 18.3 or 19
+npm install @underglass/vue vue                 # Vue 3.5
+```
+
+Each adapter brings `@underglass/core` with it. Add `@underglass/ui` for the Strata
+components, and `@underglass/css-compiler` only for its build-time route.
 
 ## Requirements
 
-- Node 24 (validated with Node 24.19.0 / npm 11.17.0). Dependencies are exact-pinned.
-- For GPU mode: Chrome Canary (most recently tested: 157.0.8102.0 on Windows 11)
+- To work on this repository: Node 24 (validated with Node 24.19.0 / npm 11.17.0).
+  Dependencies are exact-pinned.
+- For GPU mode: Chrome Canary (most recently tested: 159.0.8134.0 on Windows 11)
   with the HTML-in-Canvas features enabled. Either launch with
 
   ```sh
@@ -76,9 +96,10 @@ npm run dev            # playground at http://127.0.0.1:5173/ (plain DOM landing
 npm run dev:showcase   # React example gallery
 ```
 
-The [showcase](docs/showcase.md) is a separate private React gallery of native
-layers, motion, effects and the task app. **GPU demos require Chrome Canary with
-HTML-in-Canvas enabled**; ordinary DOM mode works without flags. It deploys to
+The [showcase](docs/showcase.md) is the public gallery: ten live examples, from native
+forms, motion and shader effects to stock Fluent UI components, a GPU-versus-CSS
+comparison and the Strata and Instrument component galleries. **GPU demos require
+Chrome Canary with HTML-in-Canvas enabled**; ordinary DOM mode works without flags. It deploys to
 <https://underglass.dev/> on Vercel, and to GitHub Pages at
 <https://raananw.github.io/underglass/>, from `main`.
 
@@ -141,7 +162,7 @@ framework-neutral runtime exported from `packages/core/src/index.ts`.
 | `packages/css-compiler` | Opt-in build-time CSS compiler with Vite/webpack adapters ([guide](packages/css-compiler/README.md)) |
 | `packages/ui` | Strata, the 3D design language: tokens, CSS and components for DOM, React, Vue and Astro (package `@underglass/ui`) |
 | `examples/playground` | Engineering HTML pages, demo apps and probes (Vite root) |
-| `examples/showcase` | Private public-facing React gallery |
+| `examples/showcase` | The public gallery at [underglass.dev](https://underglass.dev/) |
 | `tests/unit`, `tests/browser`, `tests/helpers`, `tests/compiler` | Test suites and shared helpers |
 | `fixtures/` | Installed-consumer, exact React 18, compiler and worker fixtures |
 | `docs/` | Architecture, API, adoption, verification, open issues, history |
@@ -158,9 +179,12 @@ Run from the repository root.
 | `npm run dev` | Playground dev server on 127.0.0.1 (use `-- --port 5173 --strictPort`) |
 | `npm run dev:showcase` | Build the library, then run the showcase dev server |
 | `npm run build` | Build library and playground |
+| `npm run build:showcase` | Build the library, then the showcase |
 | `npm run typecheck` | Type-check library, playground and showcase |
 | `npm run test:unit` | Node unit tests |
 | `npm run test:browser` | Build, then Playwright browser tests (Chrome Canary) |
+| `npm run test:browser:probes` | Build, then the `ui-probe-*`/`ui-proto-*` evidence suites the default run skips |
+| `npm run test:showcase` | Build the showcase in an isolated copy and drive it in Canary, in DOM and GPU |
 | `npm test` | Unit tests, build, then the browser suite |
 | `npm run test:compiler` | Build the library and run CSS compiler validation |
 | `npm run test:worker` | Experimental worker compositor validation |
@@ -197,7 +221,6 @@ Not qualified (see [open issues](docs/open-issues.md), SCOPE entries):
   shared elements, springs, virtualization.
 - SSR and hydration (mounting creates a client root).
 - A WebGL2 direct-capture runtime route (the supported route is public WebGPU).
-- Release and registry publication decisions.
 - Manual and physical gates: OS IME, screen readers, physical display/DPR moves,
   everyday browser profiles, hardware device loss, numeric performance budgets.
   No speedup or production qualification is claimed.

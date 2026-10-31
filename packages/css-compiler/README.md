@@ -1,10 +1,16 @@
 # Underglass build-time CSS compiler
 
-Experimental `@underglass/css-compiler`. Explicitly selected
-animations compile to literal WebGPU compositor programs and matching numeric
+Experimental `@underglass/css-compiler`, the opt-in build-time route of Underglass. Explicitly
+selected animations compile to literal WebGPU compositor programs and matching numeric
 native-geometry samplers during the application build. Ordinary CSS, browser
 layout, React state and the original controls are retained. This is not a
 general CSS translator or a custom React renderer.
+
+Live examples: [underglass.dev](https://underglass.dev/) · Source, guide and API: [github.com/RaananW/underglass](https://github.com/RaananW/underglass)
+
+```sh
+npm install --save-dev @underglass/css-compiler   # beside @underglass/react, with Vite 8 or webpack 5
+```
 
 ## Configuration
 
