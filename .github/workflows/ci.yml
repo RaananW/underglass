@@ -39,9 +39,9 @@ jobs:
         run: npm run test:unit
       - name: CSS compiler tests
         run: node --test tests/compiler/*.test.mjs
-      - name: Build showcase
+      - name: Build showcase and documentation site
         if: matrix.os == 'ubuntu-latest'
-        run: npm run build:showcase
+        run: npm run build:site
       - name: GPU browser suite
         if: always()
         shell: bash

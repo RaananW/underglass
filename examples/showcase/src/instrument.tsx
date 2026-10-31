@@ -23,6 +23,7 @@ import {
 } from "@underglass/ui/react";
 import { pointerLight, type PointerLight } from "./pointer-light";
 import { attachCssLevel } from "./css-level";
+import { site } from "./catalog";
 import { strataScene } from "@underglass/ui/gpu";
 import { stageOf } from "@underglass/ui/dom";
 
@@ -47,8 +48,8 @@ function useCompact() {
   }, () => matchMedia("(max-width: 480px)").matches, () => false);
 }
 
-/** The anatomy pages, on the repository (the showcase is a public site; the docs live next to the code). */
-const docs = (page: string) => { const [name, anchor] = page.split("#"); return `https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/${name}.md${anchor ? `#${anchor}` : ""}`; };
+/** The anatomy pages on the documentation site (`docs/ui-library/components/` in the repository). */
+const docs = (page: string) => { const [name, anchor] = page.split("#"); return `${site.docs}/strata/components/${name}${anchor ? `#${anchor}` : ""}`; };
 
 /** One catalogue entry: its name, one line, the native control it is, its anatomy page and a live instance. */
 function Entry({ id, name, summary, native, page, children }: { id: string; name: string; summary: string; native: ReactNode; page: string; children: ReactNode }) {
@@ -341,7 +342,7 @@ function Everyday({ onDialog, onDrawer }: { onDialog(): void; onDrawer(): void }
     <Unit id="e-sliders" tab="everyday" title="Sliders, ratings and badges">
       <div className="ig-grid">
         <Entry id="slider" name="Slider forms" summary="The Slider as the Knob's or the Fader's object over its own native input: the premium default is the fader, a knob is one prop away."
-          native={<code>&lt;input type="range"&gt;</code>} page="slider#11-hardware-forms-knob-and-fader">
+          native={<code>&lt;input type="range"&gt;</code>} page="slider#11-hardware-forms-knob-fader-and-wheel">
           <div className="ig-row">
             <Slider form="knob" id="ig-slider-knob" aria-label="Drive" marks={[0, 50, 100]} defaultValue={40} unit="%" />
             <Slider form="fader" id="ig-slider-fader" aria-label="Mix" travel={compact ? 70 : undefined} min={0} max={10} defaultValue={6} />
@@ -407,7 +408,7 @@ function InputForms() {
           </div>
         </Entry>
         <Entry id="radio" name="Radio bank" summary="A preset bank: the radios as interlocking latching buttons on one plinth, one down at a time, each label printed on its cap."
-          native={<><code>&lt;input type="radio"&gt;</code> in a <code>&lt;fieldset&gt;</code></>} page="radio#11-latching-form-the-preset-bank-bank">
+          native={<><code>&lt;input type="radio"&gt;</code> in a <code>&lt;fieldset&gt;</code></>} page="radio#11-hardware-forms-the-preset-bank-bank-and-the-rotary-selector-selector">
           <RadioGroup form="bank" legend="Preset" name="ig-bank" defaultValue="b" id="ig-bank">
             <Radio value="a">A</Radio>
             <Radio value="b">B</Radio>

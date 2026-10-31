@@ -180,7 +180,7 @@ function App() {
     <a className="skip-link" href="#studio">Skip to live example</a>
     <div className="hero-shell">
       <header className="site-header"><a className="brand" href={base} onClick={event => follow(event)}><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>Underglass<span className="tag">EXPERIMENTAL</span></a>
-        <nav aria-label="Site"><a href="#examples">Examples</a><a href="#about">About the experiment</a>
+        <nav aria-label="Site"><a href="#examples">Examples</a><a href="#about">About the experiment</a><a href={site.docs}>Docs</a>
           <a href={site.repository} onClick={() => track("Outbound Link", { target: "github" })}>GitHub <span aria-hidden="true">&#8599;</span></a></nav></header>
       <section className="hero" aria-labelledby="hero-title">
         <div className="hero-text">
@@ -274,7 +274,7 @@ function App() {
       </section>
     </main>
     <footer><span><span className="brand-mark small" aria-hidden="true"><i /><i /><i /></span>Underglass / Example studio</span>
-      <span><a href={site.repository} onClick={() => track("Outbound Link", { target: "github" })}>Source on GitHub</a> · <a href={site.npm}
+      <span><a href={site.docs}>Documentation</a> · <a href={site.repository} onClick={() => track("Outbound Link", { target: "github" })}>Source on GitHub</a> · <a href={site.npm}
         onClick={() => track("Outbound Link", { target: "npm" })}>@underglass/react on npm</a> · Apache-2.0.{analyticsEnabled && " Anonymous visit counts by Vercel Web Analytics, no cookies."}</span></footer>
   </>;
 }

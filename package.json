@@ -11,7 +11,8 @@
     "packages/css-compiler",
     "packages/ui",
     "examples/playground",
-    "examples/showcase"
+    "examples/showcase",
+    "examples/docs"
   ],
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -20,6 +21,10 @@
     "dev:showcase": "npm run build:library && npm run dev --workspace @underglass/showcase",
     "build:showcase": "npm run build:library && npm run build --workspace @underglass/showcase",
     "preview:showcase": "npm run preview --workspace @underglass/showcase",
+    "dev:docs": "npm run dev --workspace @underglass/docs",
+    "build:docs": "npm run build --workspace @underglass/docs",
+    "preview:docs": "npm run preview --workspace @underglass/docs",
+    "build:site": "npm run build:showcase && npm run build:docs && node scripts/assemble-site.mjs",
     "test:showcase": "node scripts/showcase-validation.mjs",
     "pack:library": "npm pack --workspace @underglass/core --workspace @underglass/react --workspace @underglass/vue",
     "prepack": "node -e \"throw new Error('Tooling root is not the release package; use npm run pack:library')\"",

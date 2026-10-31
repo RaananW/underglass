@@ -80,7 +80,7 @@ export async function copyDependencies(source, destination) {
       if (excludedDependencies.has(basename(path))) return false;
       // npm workspace aliases (package name -> repository directory) that may legitimately be symlinks.
       const workspace = { "@underglass/core": "packages/core", "@underglass/react": "packages/react", "@underglass/vue": "packages/vue", "@underglass/playground": "examples/playground",
-        "@underglass/showcase": "examples/showcase", "@underglass/css-compiler": "packages/css-compiler", "@underglass/ui": "packages/ui" };
+        "@underglass/showcase": "examples/showcase", "@underglass/docs": "examples/docs", "@underglass/css-compiler": "packages/css-compiler", "@underglass/ui": "packages/ui" };
       for (const [name, target] of Object.entries(workspace)) {
         if (path === join(source, name) && (await lstat(path)).isSymbolicLink()) {
           assert.equal(await realpath(path), join(dirname(source), target), `Unexpected workspace alias: ${path}`);

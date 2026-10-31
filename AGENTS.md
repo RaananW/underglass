@@ -12,7 +12,8 @@ User-facing behaviour is described in [docs/guide](docs/guide/getting-started.md
 - `packages/react`: the React adapter (`@underglass/react`), which depends on core. Core and the
   adapters are the only packages that are packed.
 - `packages/css-compiler`: the opt-in build-time CSS compiler.
-- `examples/playground`: engineering pages and probes; `examples/showcase`: the public gallery.
+- `examples/playground`: engineering pages and probes; `examples/showcase`: the public gallery;
+  `examples/docs`: the documentation site (Astro Starlight), generated from `docs/` at build time.
 - `tests/unit`, `tests/browser`, `tests/compiler`, `tests/helpers`. The React 18 fixture is separately locked.
 - Keep root script names and page URLs stable. `docs/archive` and `evidence/` are history.
 

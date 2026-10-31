@@ -1,0 +1,18 @@
+/* The showcase's palette (examples/showcase/src/style.css): violet accent on the showcase's night background. */
+:root {
+  --sl-font: "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --sl-font-mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+}
+
+:root:not([data-theme="light"]) {
+  --sl-color-accent-low: #241a4d;
+  --sl-color-accent: #8b6dff;
+  --sl-color-accent-high: #d9d0ff;
+  --sl-color-black: #0d0b1a;
+}
+
+:root[data-theme="light"] {
+  --sl-color-accent-low: #e3dcff;
+  --sl-color-accent: #6d4aff;
+  --sl-color-accent-high: #2d1a80;
+}

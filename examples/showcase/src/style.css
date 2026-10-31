@@ -418,7 +418,8 @@ footer { display: flex; justify-content: space-between; align-items: center; gap
 @media (max-width: 600px) {
   .site-header, .hero, main, footer { padding-inline: 18px; }
   .site-header { flex-wrap: wrap; padding-block: 18px; gap: 12px; min-height: 0; }
-  .site-header nav { gap: 16px; }
+  .site-header nav { gap: 6px 16px; flex-wrap: wrap; }
+  .site-header nav a { white-space: nowrap; }
   .tag { display: none; }
   .hero { padding-block: 16px 48px; gap: 26px; }
   h1 { letter-spacing: -.035em; }

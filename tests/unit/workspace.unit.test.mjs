@@ -18,7 +18,7 @@ test("the release identity belongs only to the library workspaces, not the tooli
   assert.equal(root.devDependencies["@radix-ui/react-dialog"], undefined);
   assert.equal(root.devDependencies["@babylonjs/lite-gl"], undefined);
   assert.match(root.scripts.prepack, /Tooling root is not the release package/);
-  assert.deepEqual(root.workspaces, ["packages/core", "packages/react", "packages/vue", "packages/css-compiler", "packages/ui", "examples/playground", "examples/showcase"]);
+  assert.deepEqual(root.workspaces, ["packages/core", "packages/react", "packages/vue", "packages/css-compiler", "packages/ui", "examples/playground", "examples/showcase", "examples/docs"]);
   assert.equal(core.name, "@underglass/core");
   assert.deepEqual(Object.keys(core.exports), [".", "./build", "./experimental-worker", "./experimental-worker/thread"]);
   assert.equal(library.name, "@underglass/react");
