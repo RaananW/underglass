@@ -22,7 +22,11 @@ export default defineConfig({
   // for it, the library and this app.
   resolve: { dedupe: ["react", "react-dom"] },
   // No source maps in the public build; the asset check refuses source-map references.
-  build: { sourcemap: false, outDir: "dist", rolldownOptions: {
+  // The page loads with only React and the catalog; Underglass and each example are chunks loaded on demand
+  // (`examples.ts`). Two of those are single libraries over Vite's default 500 kB warning: Fluent UI (about
+  // 535 kB, only for the Fluent example) and the Underglass runtime with Babylon Lite (about 525 kB, after the
+  // page has rendered). The limit sits just above them, so a new oversized chunk still warns.
+  build: { sourcemap: false, outDir: "dist", chunkSizeWarningLimit: 600, rolldownOptions: {
     // Fluent UI and Radix mark their modules "use client" (a React Server Components directive), and the
     // bundler warns once per module (about 950 warnings) that it drops it. This is a browser-only bundle, so
     // dropping it changes nothing; every other warning still prints.

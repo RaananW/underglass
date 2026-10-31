@@ -95,6 +95,18 @@ browser guess), `GPU Lost` (GPU mode ended without the visitor asking), `Studio 
 Canary link) and `Outbound Link` (GitHub, npm). No event carries anything a visitor
 typed, searched or filmed. The footer says when analytics is on.
 
+## Loading
+
+The page loads with only React, the page chrome and the catalog (about 260 kB, 82 kB
+gzipped). Its effect then loads Underglass, `demos.tsx` and the opening example as
+separate chunks and mounts the Underglass root; the lifecycle buttons wait for it.
+Each example is its own chunk (`src/examples.ts`), loaded the first time it is
+opened, so Fluent UI, Strata and Babylon Lite only download for the examples that
+use them. Switching examples loads the next one before `Demo` swaps it in: nothing
+inside the root suspends, and the current example stays on stage, GPU-presented,
+until the next one is ready. Vite's chunk-size warning limit is 600 kB, just above
+the two largest chunks (Fluent UI and the Underglass runtime with Babylon Lite).
+
 The surrounding responsive chrome uses ordinary CSS; its hero motion stops
 under `prefers-reduced-motion`. Enrolled example surfaces
 use typed layout and appearance that compile to browser CSS, not a replacement
