@@ -81,6 +81,10 @@ try {
   await mkdir(join(tree, "fixtures/react18"), { recursive: true });
   for (const path of ["package.json", "package-lock.json"]) await cp(join(root, "fixtures/react18", path), join(tree, "fixtures/react18", path));
   await copyDependencies(join(root, "node_modules"), join(tree, "node_modules"));
+  // npm keeps a dependency only one workspace uses in that workspace's own `node_modules` (the showcase's
+  // `@vercel/analytics`).
+  try { await copyDependencies(join(root, "examples/showcase/node_modules"), join(tree, "examples/showcase/node_modules")); }
+  catch (error) { if (error.code !== "ENOENT") throw error; }
   await assertPhysicalTree(tree);
   const vite = join(tree, "node_modules/vite/bin/vite.js");
   const tsc = join(tree, "node_modules/typescript/bin/tsc");
@@ -119,12 +123,15 @@ try {
   async function checkAssets(directory, prefix = "") {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const path = join(directory, entry.name), name = `${prefix}${entry.name}`;
-      if (entry.isDirectory()) { assert.equal(name, "assets"); await checkAssets(path, "assets/"); }
+      if (entry.isDirectory()) { assert.ok(name === "assets" || name === "examples", name); await checkAssets(path, `${name}/`); }
       else {
-        // Hashed JS/CSS plus the JPEG previews of GPU mode shown to browsers that cannot run it.
-        assert.ok(name === "index.html" || /^assets\/[\w.-]+\.(js|css|jpg)$/.test(name), `Unexpected public asset: ${name}`);
+        // The pages and site files `seo.ts` writes, the icons and social card, hashed JS/CSS and the JPEG
+        // previews of GPU mode shown to browsers that cannot run it.
+        assert.ok(/^(?:(?:index|404)\.html|robots\.txt|sitemap\.xml|favicon\.svg|og\.jpg|apple-touch-icon\.png|examples\/[\w-]+\.html|assets\/[\w.-]+\.(?:js|css|jpg))$/.test(name),
+          `Unexpected public asset: ${name}`);
         const bytes = await readFile(path);
         if (name.endsWith(".jpg")) assert.ok(bytes[0] === 0xff && bytes[1] === 0xd8, `Public image is not a JPEG: ${name}`);
+        else if (name.endsWith(".png")) assert.equal(bytes.readUInt32BE(0), 0x89504e47, `Public image is not a PNG: ${name}`);
         else assert.ok(!/\/Users\/|session-state|evidence\/phase|PRIVATE KEY|sourceMappingURL/.test(bytes.toString()), `Private asset leak: ${name}`);
         assets.push({ path: name, bytes: bytes.length, sha256: sha(bytes) });
       }
