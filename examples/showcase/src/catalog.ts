@@ -1,6 +1,6 @@
 /**
  * The showcase catalog: the copy for each example card, the studio heading and the "Why the GPU
- * here" panel, plus hash routing and search. Pure data with no Underglass imports, so it is shared by
+ * here" panel, plus routing, page metadata (`seo.ts` builds each page's head from it) and search. Pure data with no Underglass imports, so it is shared by
  * `main.tsx` (the page chrome outside the Underglass root), `demos.tsx` and the unit tests.
  */
 
@@ -11,7 +11,7 @@
 export interface GPUReason { headline: string; points: readonly string[]; css: string }
 
 /**
- * Every example, in catalog order. `id` is also the hash route (`#/layers`) and selects the demo in
+ * Every example, in catalog order. `id` names the example's page (`examples/layers`) and selects the demo in
  * `demos.tsx`; `accent` picks the card's CSS colour class. `as const` keeps the ids as literal types
  * for `ExampleId`, and `satisfies` checks that each entry has a complete `gpu` explanation.
  */
@@ -153,6 +153,43 @@ export type ExampleId = typeof examples[number]["id"];
 export function route(hash: string): ExampleId {
   const id = hash.replace(/^#\/?/, "");
   return examples.find(example => example.id === id)?.id ?? "layers";
+}
+/** An example's page path, relative to the site base: `examples/motion`. */
+export function examplePath(id: ExampleId) { return `examples/${id}`; }
+/**
+ * Maps a pathname under `base` (`/underglass/examples/motion`, with an optional `.html` or trailing
+ * slash) to its example id. The home page, other paths and unknown ids give `undefined`.
+ */
+export function exampleFromPath(pathname: string, base: string): ExampleId | undefined {
+  if (!pathname.startsWith(base)) return undefined;
+  const id = /^examples\/([\w-]+?)(?:\.html|\/)?$/.exec(pathname.slice(base.length))?.[1];
+  return examples.find(example => example.id === id)?.id;
+}
+
+/** The canonical site: every page's canonical URL, sitemap entry and social card points here. */
+export const site = {
+  origin: "https://underglass.dev",
+  name: "Underglass",
+  title: "Underglass: real React controls, painted by the GPU",
+  description: "Underglass draws your original React DOM into one shared WebGPU compositor with Chrome's HTML-in-Canvas API, while inputs, focus and clicks stay native.",
+  repository: "https://github.com/RaananW/underglass",
+  npm: "https://www.npmjs.com/package/@underglass/react",
+  author: { name: "Raanan Weber", url: "https://github.com/RaananW" },
+} as const;
+
+/**
+ * GPU-mode screenshots (Chrome Canary) in `src/previews/<name>.jpg`, 1041x700: shown to visitors whose
+ * browser cannot run GPU mode, and the example page's social card.
+ */
+export const previews: Partial<Record<ExampleId, string>> = {
+  layers: "postcard-studio", motion: "card-deck", effects: "shader-lab", presence: "notification-stack", pond: "webcam-pond",
+};
+
+/** The title, description and canonical path (relative to the site root) of the home page or an example page. */
+export function pageMeta(id?: ExampleId) {
+  if (!id) return { title: site.title, description: site.description, path: "" };
+  const example = examples.find(entry => entry.id === id)!;
+  return { title: `${example.title} | Underglass examples`, description: example.summary, path: examplePath(id) };
 }
 /**
  * Filters the catalog by category (`"All"` keeps every category) and by a case-insensitive substring

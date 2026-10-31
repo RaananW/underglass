@@ -104,5 +104,5 @@ if (state.mode !== "gpu") console.info("Staying in DOM:", state.reason);
 - [Building components](components.md): the standard for components that work here.
 - [Troubleshooting](troubleshooting.md): what each fallback reason means.
 - [API reference](../api.md) for every option.
-- The [live showcase](https://raananw.github.io/underglass/) and its source in
+- The [live showcase](https://underglass.dev/) and its source in
   `examples/showcase`.
