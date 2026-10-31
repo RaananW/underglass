@@ -136,8 +136,9 @@ pull request (previews are not indexed: Vercel sends `X-Robots-Tag: noindex` on 
 `CANVAS_SHOWCASE_BASE=/ npm run build:showcase`, publishing `examples/showcase/dist`
 with clean URLs, no trailing slash, a one-year immutable cache on the hashed
 `/assets/` and security headers (`nosniff`, a referrer policy, same-origin framing and
-a permissions policy that allows only this site's camera, for the pond). Its
-`ignoreCommand` skips a build when the commit touches nothing the site is built from.
+a permissions policy that allows only this site's camera, for the pond). It has no
+`ignoreCommand`: `.vercelignore` removes `.git` before such a command would run, so every
+push builds (about a minute).
 `.vercelignore` limits what Vercel uploads and builds to the workspaces, the lockfile
 and the two scripts the build runs. The `www` host redirects to the apex domain.
 
