@@ -59,9 +59,9 @@ test("docs site page frontmatter comes from the title and first paragraph", () =
     "",
   ].join("\n"));
   assert.throws(() => toPage("No title\n", "x.md", map), /must start with a # title/);
-  // A byte order mark is dropped, and the sidebar's title and description replace working titles and notes.
-  assert.match(toPage("﻿# Initial typed API\n\n**Evidence storage:** notes.\n", "api.md", map),
-    /^---\ntitle: "API reference"\ndescription: "Every export, option and contract of Underglass."\n/);
+  // A leading byte order mark (U+FEFF) is dropped.
+  assert.match(toPage(`${String.fromCharCode(0xfeff)}# API reference\n\nEvery export.\n`, "api.md", map),
+    /^---\ntitle: "API reference"\ndescription: "Every export."\n/);
   assert.equal(description("\n## Heading\n\n- list\n\n```js\ncode\n```\n"), undefined);
   const long = description(`${"word ".repeat(60)}\n`);
   assert.ok(long.length <= 160 && long.endsWith("…"), long);

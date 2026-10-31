@@ -1,39 +1,25 @@
-# Initial typed API
+# API reference
 
-**Evidence storage:** historical raw paths named below refer to the verified
-external local archive, not files in this checkout. Only compact verdicts
-remain tracked; [archive access, hashes and reproduction](archive/archive-catalog.md).
+Every export, option and contract of Underglass. React applications import from
+`@underglass/react` and Vue 3 applications from `@underglass/vue`; both re-export the
+framework-neutral helpers and types of `@underglass/core`, which plain-DOM applications
+and new adapters use directly. Only the package entries named on this page are public:
+do not import internal modules or renderer classes. Underglass is experimental (0.x) and
+not production-ready; each package's `CHANGELOG.md` records what changed, and
+[distribution](distribution.md) covers installing, peers and browser requirements.
 
-The intentional source entry point is `packages/react/src/index.ts`, the
-React adapter; it re-exports the framework-neutral helpers and types of
-`@underglass/core` (`packages/core/src/index.ts`). This private
-experimental package has no published package name or stability promise.
-Do not import demo facades or internal renderer classes into application code.
-The private prepared tarball now exports the same API at
-`@underglass/react` with declarations, independently accepted with Phase10
-limits. See [distribution](distribution.md) for actual install commands,
-host CSS, public dependency/type boundaries and the bounded browser contract.
-
-For an actual bounded application using these exports, see the
-[TODO pilot](archive/todo-pilot.md) and `examples/playground/src/apps/todo/`. Its numeric layout/appearance
-compile to browser CSS; real task events invoke public `setRipple` on a separate
-decorative surface. No additional TODO-specific renderer API is introduced.
-The [Phase13 task workspace](archive/task-workspace.md) extends that original application
-to list/detail and native overlays without new core exports or a second tree;
-its bounded source and exact-package engineering is qualified-accepted at
-`12f13661`, including the three-file diagnostic repair and explicit generated
-metadata integrity exception. See the [current register](open-issues.md) for
-remaining limits and inherited workflow versus fresh repair proof.
-The [bounded effects contract](effects.md) documents `setEffects`, effect
-handles and trusted `defineEffect` authoring; `/effects.html` composes these
-with motion while keeping essential native controls separate.
+The [guide](guide/getting-started.md) walks through the same API step by step, and the
+[effects contract](effects.md) covers `setEffects`, effect handles and trusted
+`defineEffect` authoring in detail. For complete applications built on these exports, see
+the playground's task app (`examples/playground/src/apps/todo/`), whose numeric
+layout and appearance compile to browser CSS and whose task events ripple a separate
+decorative surface, and `/effects.html`, which composes effects with motion while keeping
+essential native controls separate. [Open issues](open-issues.md) lists the known limits.
 
 ## Build-time CSS and worker exports (experimental)
 
-These additions have implementer verification, not independent acceptance or
-the historical Phase10 verdict. They are separate opt-in routes; neither
-automatically adapts arbitrary components or integrates the compiler with the
-worker backend.
+These are separate opt-in routes; neither automatically adapts arbitrary components
+or integrates the compiler with the worker backend.
 
 | Public entry or API | Contract |
 | --- | --- |
@@ -56,7 +42,7 @@ handling, not forced DOM restoration before worker acknowledgement.
 
 See the [compiler configuration/enrollment/subset guide](../packages/css-compiler/README.md),
 [worker setup/lifecycle guide](worker.md) and
-[current evidence and measurement limits](archive/verification.md#experimental-worker-compositor).
+[measurement limits](archive/verification.md#experimental-worker-compositor).
 Chrome Canary with HTML-in-Canvas enabled is required for GPU operation;
 ordinary DOM remains the initial/fallback presentation.
 
@@ -77,117 +63,25 @@ geometry still run every frame. Paint events upload only layers listed in
 `changedElements`, plus stale ones (new slot, extent/grid change, invalidated,
 or after a hidden-document pause); unchanged layers are not re-uploaded.
 
-## Changes 2026-10-14
-
-- **Per-layer drawing:** each layer is now its own blended effect pass (one triangle
-  covering its canvas-space bounding box) drawn in DOM order after a background
-  clear, all on the same engine and in one frame submission. The 8-layer cap is
-  gone: the default layer budget is 32 and `budgets.layers` accepts 1..64 (the
-  pixel budget still applies). Adding, removing or reordering layers reuses the
-  passes of unchanged layers instead of regenerating a shader for the new count,
-  and small layers only shade their own pixels. `resources.effects`/`renderers`
-  count these passes (layers + 1). Compiled CSS program sets are now version 2 with
-  one per-layer program; version 1 modules are refused with a rebuild message.
-- **Ownership while GPU presents:** `ownAnimation`, `ownCSSAnimation`,
-  `ownCompiledAnimation` and `createMotion` (and its `own()`) now also work while
-  GPU is active, with no DOM round-trip or readmission. The runtime lifts the
-  layer's GPU declarations only for the synchronous source verification and
-  writes them back before any rendering opportunity; a refused acquisition
-  restores them atomically.
-- **`release({ freeze: true })`:** ends one layer's ownership and keeps GPU
-  active. The layer keeps its last sampled transform and the source animation is
-  handed back and cancelled (a `createMotion` source is disposed). Supported for
-  WAAPI (`ownAnimation`) and typed-motion sources; CSS-provenance ownership still
-  uses `release()`, which returns the whole surface to ordinary DOM.
-- **Transform origin:** new static per-layer pivot, `origin?: TransformOrigin` on
-  `Surface`, `useSurfaceRef`/`enroll` options and `LayerDefinition`, plus
-  `setOrigin(id, origin)`. `TransformOrigin` is `"top-left"` (default), `"center"` or
-  `{ x, y }` fractions of the layer's layout size. See [Authoring](#authoring-and-controller).
-- **Rotated layers at the frame edge:** a rotated or skewed layer may now cross the
-  output frame's edge and stay on the GPU. Functional admission rotates its probe
-  across a visible canvas content edge and checks that the inner half is hit and
-  the outer half is not (`state().metrics.admission.last.frameBounds`:
-  `bounded`/`unbounded`/`unverifiable`). Only `bounded`, with the canvas content
-  box equal to the frame, drops the frame clip for such layers; otherwise the old
-  refusal stands. Rotated layers inside a clipping ancestor still use ordinary DOM.
-
-**Upstream check (AGENTS.md):** WICG html-in-canvas proposal unchanged since
-`5fb3df86d84de598c7f0fcfc5ee53de1df067e7d` (2026-10-09), checked 2026-10-14.
-Chromium hotlist 6783002 still requires sign-in; no issue data was read. Tested
-browser: Chrome Canary 157.0.8102.0 on Windows 11.
-
-## Changes 2026-10-13
-
-Implementer-verified, not independently accepted.
-
-- **Policy:** boundary-only animation revocation and cached structural checks, as above.
-- **Reconciliation:** React commits coalesce into one microtask; new public
-  `CanvasRuntime.requestReconcile()`; one GPU frame per commit instead of N+1.
-- **Uploads:** paint events upload only changed or stale layers.
-- **Transforms:** Surface transform/layout updates during a declarative
-  transition or ownership no longer throw; they become the resting/base transform.
-- **Transitions:** pause while the document is hidden and resume with the same progress.
-- **Presence:** starts motion in a layout effect.
-- **`animate`:** accepts `{ duration }` (ms); a number is still a frame count.
-- **Rendering quality:** the compositor filters captures bilinearly in premultiplied
-  space and antialiases layer/clip edges analytically. Pixel-aligned, untransformed
-  layers still sample exact texels (verified identical to ordinary DOM at a 50%
-  alpha probe); rotated or scaled layers no longer alias or show dark edge fringes.
-- **Stage background:** the output canvas is premultiplied and cleared to transparent, so the
-  area no layer covers shows the page's own background in GPU mode exactly as in DOM mode: a
-  dark page stays dark, a runtime theme change shows on the next frame, and a page with no
-  background shows the browser's white. There is no stage colour option; set the background on
-  the page (or on the frame/canvas element's CSS). A layer that is not fully opaque shows that
-  background through it, as in DOM mode, and light a layer adds that has colour but no coverage (the
-  Instrument level's emitter halo) now adds to the page behind it instead of vanishing on white. The
-  output canvas is no longer opaque, so the compositor blends it with the page (a small cost). Measured
-  on lit panels over a bare page against the same scene over a stage layer of the page colour: no pixel
-  of a panel's edge band is more than 1 level brighter (Relief, Objects and Instrument, dark and light,
-  DPR 1 and 2), so there is no bright ring at rounded edges.
-  **Limit:** light multiplies what is on the canvas, so a lamp's pool past a panel's edge, and on a panel's outset
-  shadow, lights nothing on a bare page (the page is not on the canvas, and in DOM mode there is no such light
-  either). To have the pool fall on the page, enrol a plain layer of the page colour beneath the panels, as the
-  emitters pages do.
-- **DOM-mode rotation:** declarative transitions with rotation no longer cancel in
-  ordinary DOM. GPU viewport-clip geometry is only checked while GPU presents.
-- **`createCanvasHosts(frame)`:** creates the output canvas, ordinary host and overlay host with the required styles. The output canvas is deliberately not `aria-hidden`, because GPU mode moves the original controls inside it. The frame may be inside a shadow root: admission asks that shadow root for its native hit proofs (the document retargets every hit inside it to the shadow host), and the `!important` pre-scan (animation ownership, declarative transitions in ordinary DOM) reads its sheets as well as the document's.
-- **Stylesheet scan:** `!important` pre-scan skips uninspectable sheets/rules instead of throwing.
-- **Admission:** probe sits in the visible part of the output canvas; fully offscreen is still refused.
-- **Status:** new `onStatusChange(status: CanvasStatus)`; `onStatus` (JSON string) is optional and kept for compatibility.
-- **Options:** `captureHost` optional and deprecated; `admissionPolicy: "automatic"` is compatibility-only (same as `"explicit"`).
-- **Unchanged:** `playback.release()` without options returns the shared surface to DOM (see 2026-10-14 for `{ freeze: true }`).
-- **CSS compiler:** numeric easing comparison, selector-boundary overlap check,
-  shorthand resets longhands, whole-token CSS-wide keyword guards, `-webkit-`
-  animation aliases rejected clearly, inline PostCSS plugins no longer duplicated in Vite.
-- **Worker:** load failures terminate cleanly and return a diagnosed DOM state;
-  backing DPR is clamped to its pixel budget instead of revoking GPU; the clock wraps.
-
-**Upstream check (AGENTS.md):** WICG html-in-canvas proposal checked at commit
-`5fb3df86d84de598c7f0fcfc5ee53de1df067e7d` (2026-10-09). Chromium hotlist 6783002
-requires sign-in and was not accessible, so no issue data was read. Tested
-browser: Chrome Canary 157.0.8102.0 on Windows 11 (the descendant-animation
-check above used build 157.0.8102.0). These are implementer checks, not
-independent acceptance.
-
 ## Explicit bootstrap
 
-**Required target versus current API:** follow the
+The runtime follows the
 [GPU-first contract and capability matrix](architecture.md#gpu-first-contract).
 After enabling GPU, normal structure/layout/DPR changes, visibility pauses and
-reduced motion must not revoke GPU. Only GPU errors or factual missing required
+reduced motion do not revoke GPU. Only GPU errors or factual missing required
 GPU/capture/geometry support justify diagnosed fallback; explicit disable and
-disposal are caller lifecycle. The persisted bounded current-spec correction
-reconciles membership and geometry in the same renderer/output owner
-(`cfa9df73`, `ab598c00`, independently accepted with limits); historical
-readmission acceptance is separate from the selected Phase13 qualification.
+disposal are caller lifecycle. Membership and geometry changes are reconciled in
+the same renderer and output owner.
 
 Create an empty output canvas and ordinary/overlay hosts as connected,
 same-document siblings **outside all React roots**. Put them inside a sized,
 positioned frame. The output canvas must fill that frame at the same
 origin (`captureHost` is optional and deprecated: native capture happens on
 `outputCanvas`, and the legacy element was only removed on dispose); the GPU output owns original native hit testing when enabled. Supply the ordinary host at the
-same layout origin. See `runtime.html` for the minimal host scaffolding.
-Those styles are host integration, not layer authoring.
+same layout origin. `createCanvasHosts(frame)` creates all three with the required
+styles ([Getting started](guide/getting-started.md#your-first-layer)); the playground's
+`runtime.html` shows the same scaffolding by hand. Those styles are host integration,
+not layer authoring.
 
 ```tsx
 import { useState } from "react";
@@ -233,20 +127,20 @@ outside-root setup, not JSX refs whose descendants the runtime may move.
 Admission failure resolves to a state with `mode: "dom"` and an explicit reason;
 invalid topology/API/lifecycle calls throw before unsafe mutation.
 
-Historical Phase9/12 acceptance concerns the former recovery route. Current
-normal commits synchronously register current-original native geometry and
+Normal commits synchronously register current-original native geometry and
 reconcile logical capture slots. Complete cached coverage may recompose; new
 slots or extent/density growth retain the last complete GPU output until prepared
 textures receive fresh native-paint uploads. Old resources await healthy queue
 fences or confirmed loss. Initial `enable()` remains explicit by default.
 
-## Opt-in settled readmission (Phase12 engineering)
+<a id="opt-in-settled-readmission-phase12-engineering"></a>
 
-The option `admissionPolicy: "automatic"` is documented as compatibility-only:
-it behaves like `"explicit"`. It remains source-compatible, but no
-structural DOM retirement/readmission loop runs in the corrected core. Both
-policies preserve GPU after supported updates; neither enables it at startup
-or retries factual errors. The heading preserves historical inbound links.
+## Membership updates and the admission policy
+
+The option `admissionPolicy: "automatic"` is compatibility-only: it behaves like
+`"explicit"`. It remains source-compatible, but no structural DOM
+retirement/readmission loop runs. Both policies preserve GPU after supported
+updates; neither enables it at startup or retries factual errors.
 
 ```tsx
 const controller = mountCanvasApp({
@@ -277,20 +171,19 @@ content without revoking healthy ownership. Explicit disable/dispose, factual
 unsupported native/effect boundaries and GPU errors diagnose useful DOM.
 There is no error retry loop.
 
-The [historical accepted verdict](../evidence/phase12-independent/acceptance-summary.json)
-is immutable and not acceptance of this correction. Fresh independent acceptance,
-physical-display/text/accessibility and application performance budgets remain open.
+Physical-display, text and accessibility validation and application performance
+budgets are still open ([open issues](open-issues.md)).
 
 `GPUHost` is the context boundary, **not** a JSX-only canvas/reparenting
 component. Its runtime is established by the explicit adapter. Do not wrap a
 framework-owned existing root and assume unchanged-app compatibility.
 Optional `createRoot` injection is for a supported React root factory. Supply
 the matching optional `flushSync` from the same renderer entry point:
-React18's standard flush does not flush its separate profiling root.
+React 18's standard flush does not flush its separate profiling root.
 The demos pair public `react-dom/profiling` exports in production and ordinary
 client/flush exports in actual development. The default adapter remains
 ordinary `react-dom/client` plus standard flush, without demo profiling.
-Matching React18/19 types/builds and actual mounted behavior are recorded in
+Matching React 18 and 19 types/builds and actual mounted behavior are recorded in
 [the compatibility matrix](archive/measurements.md#actual-react-major-behavior-and-types).
 
 ## Authoring and controller
@@ -305,7 +198,7 @@ Matching React18/19 types/builds and actual mounted behavior are recorded in
 | `useSurfaceRef<T>({id, decorative?, origin?})` / `enroll(element, options)` | Enroll an original direct-root element, preserve authored layout/CSS; callback stable for stable options, release on replacement/null; imperative form returns an idempotent release |
 | `useNativeOverlayHost()` | Fixed external native host for a library's public portal-container prop |
 | `transition(id, descriptor)` | Bounded declarative numeric motion; explicit completion/cancellation handle, no separate native animation source |
-| `transitionGroup(items, stagger?)` | Prepare 1..8 distinct boundaries, one start epoch, index-based0..1000ms stagger; invalid descriptors/groups have no enrollment/motion side effects |
+| `transitionGroup(items, stagger?)` | Prepare 1..8 distinct boundaries, one start epoch, index-based 0..1000 ms stagger; invalid descriptors/groups have no enrollment/motion side effects |
 | `Presence` | Retain one React child subtree through enter/exit inside a stable enrolled boundary; no wrapper, clone or portal relocation |
 | `setMaterial(id, descriptor)` | Validate and install a persistent colour-only material on any enrolled layer, replacing the previous one; content stays interactive, and the change is one brightness factor within `interior.max` ([effects](effects.md#materials)); `update`/`setEmitters` ([emitters](#emitters-and-the-pointer-light))/cancel/dispose handle |
 | `setEffects(id, descriptors)` | Atomically validate 1..3 ripple/chromatic/dissolve/custom operations before replacing ownership. `interaction: "decorative"` needs decorative enrollment; `interaction: "inert"` runs a transition effect on an interactive layer whose content is held inert meanwhile ([effects](effects.md#contract)); explicit seconds/playback/`update`/cancel/dispose handles; static original DOM fallback |
@@ -358,7 +251,7 @@ changes use scoped observers; unrelated scrolling does not trigger this route.
 LTR horizontal writing mode and unit CSS zoom are required.
 Owner borders/padding separate native border-box geometry from GPU bitmap content
 coordinates. Owner overflow clipping uses matching local native/GPU clips.
-Actual Chrome157 treats the replaced owning canvas as non-scrollable:
+Chrome 157 treats the replaced owning canvas as non-scrollable:
 `overflow:auto` clips but its actual scroll offsets remain zero. No speculative
 owning-canvas scroll subtraction is applied or future-browser behavior promised.
 Functional native clip admission needs an onscreen, unoccluded probe before GPU
@@ -463,7 +356,7 @@ App CSS must still size/position/style these elements. Neutral authored
 transform/opacity and existing stacking/clipping/bounds restrictions apply
 at GPU admission; arbitrary CSS/animation-library roots are not certified.
 Use the library's **public** container API before its portal mounts; never
-move existing library DOM. Only Radix Dialog1.3.1 Root/Trigger/Portal/Overlay/
+move existing library DOM. Only Radix Dialog 1.3.1 Root/Trigger/Portal/Overlay/
 Content/Title/Description/Close in this pilot are verified. See [integration](archive/integration.md).
 
 ### Declarative numeric motion and presence
@@ -536,7 +429,7 @@ from the sampled state without remounting that subtree. True after removal
 mounts one new React subtree and enters. A parent unmount cancels motion and
 suppresses stale completion callbacks. Keep its ID/runtime stable; changing
 descriptors alone does not restart a transition. Content remains native
-interactive DOM until React removes it; opacity0 does not disable focus/hits.
+interactive DOM until React removes it; opacity 0 does not disable focus/hits.
 Presence animates the enrolled boundary, so place only the intended subtree
 inside it and do not run a second transition owner on that same boundary.
 
@@ -555,7 +448,7 @@ No controls are hidden or duplicated to simulate exit retention.
 (`admission` or `content`) and optional `layerId`/RGBA `bytes`.
 Kinds are `captureMs`, `readbackCompareMs`, `uploadMs`, `frameWorkMs` and
 `frameIntervalsMs`. The runtime retains no extra event array; its normal
-last256 histories/cumulative counters remain bounded.
+last 256 histories/cumulative counters remain bounded.
 
 Use a cheap, nonthrowing callback and bound any external collection. Throwing
 is not silently swallowed and can trigger the renderer's explicit failure
@@ -916,7 +809,7 @@ can keep reentry/final disposal blocked; no unsafe forced cleanup is exposed.
 See [architecture.md](architecture.md) for ordering and
 [verification.md](archive/verification.md) for tested versus untested behavior.
 
-## Transactional animation ownership (Phase 4)
+## Transactional animation ownership
 
 Prepare ownership in **idle DOM** or while **GPU is active** (not while admitting,
 recovering or with pending cleanup). In GPU mode the layer's GPU declarations are
@@ -1099,7 +992,7 @@ Other existing styles are not normalized. Nonneutral existing presentation
 requires supported explicit ownership, not silent duplication. Layout,
 stacking, clipping and capture-budget policies still apply.
 
-## Decorative ripple (Phase 5)
+## Decorative ripple
 
 `Surface decorative` supplies inert, aria-hidden and pointer-transparent
 semantics. Local-module enrollment instead sets `decorative: true` and must
@@ -1115,3 +1008,86 @@ eligibility uses diagnosed DOM recovery. Essential controls must be separate
 unenhanced layers. Effects/resources clear on DOM return/disposal. Reduced
 motion uses identity and pauses effect time. This is one bounded demonstration,
 not an arbitrary postprocessing or motion toolkit.
+
+## Earlier changes
+
+Changes made before releases were versioned with Changesets; since then, each package's
+`CHANGELOG.md` records them.
+
+### Changes 2026-10-14
+
+- **Per-layer drawing:** each layer is now its own blended effect pass (one triangle
+  covering its canvas-space bounding box) drawn in DOM order after a background
+  clear, all on the same engine and in one frame submission. The 8-layer cap is
+  gone: the default layer budget is 32 and `budgets.layers` accepts 1..64 (the
+  pixel budget still applies). Adding, removing or reordering layers reuses the
+  passes of unchanged layers instead of regenerating a shader for the new count,
+  and small layers only shade their own pixels. `resources.effects`/`renderers`
+  count these passes (layers + 1). Compiled CSS program sets are now version 2 with
+  one per-layer program; version 1 modules are refused with a rebuild message.
+- **Ownership while GPU presents:** `ownAnimation`, `ownCSSAnimation`,
+  `ownCompiledAnimation` and `createMotion` (and its `own()`) now also work while
+  GPU is active, with no DOM round-trip or readmission. The runtime lifts the
+  layer's GPU declarations only for the synchronous source verification and
+  writes them back before any rendering opportunity; a refused acquisition
+  restores them atomically.
+- **`release({ freeze: true })`:** ends one layer's ownership and keeps GPU
+  active. The layer keeps its last sampled transform and the source animation is
+  handed back and cancelled (a `createMotion` source is disposed). Supported for
+  WAAPI (`ownAnimation`) and typed-motion sources; CSS-provenance ownership still
+  uses `release()`, which returns the whole surface to ordinary DOM.
+- **Transform origin:** new static per-layer pivot, `origin?: TransformOrigin` on
+  `Surface`, `useSurfaceRef`/`enroll` options and `LayerDefinition`, plus
+  `setOrigin(id, origin)`. `TransformOrigin` is `"top-left"` (default), `"center"` or
+  `{ x, y }` fractions of the layer's layout size. See [Authoring](#authoring-and-controller).
+- **Rotated layers at the frame edge:** a rotated or skewed layer may now cross the
+  output frame's edge and stay on the GPU. Functional admission rotates its probe
+  across a visible canvas content edge and checks that the inner half is hit and
+  the outer half is not (`state().metrics.admission.last.frameBounds`:
+  `bounded`/`unbounded`/`unverifiable`). Only `bounded`, with the canvas content
+  box equal to the frame, drops the frame clip for such layers; otherwise the old
+  refusal stands. Rotated layers inside a clipping ancestor still use ordinary DOM.
+
+### Changes 2026-10-13
+
+- **Policy:** boundary-only animation revocation and cached structural checks, as above.
+- **Reconciliation:** React commits coalesce into one microtask; new public
+  `CanvasRuntime.requestReconcile()`; one GPU frame per commit instead of N+1.
+- **Uploads:** paint events upload only changed or stale layers.
+- **Transforms:** Surface transform/layout updates during a declarative
+  transition or ownership no longer throw; they become the resting/base transform.
+- **Transitions:** pause while the document is hidden and resume with the same progress.
+- **Presence:** starts motion in a layout effect.
+- **`animate`:** accepts `{ duration }` (ms); a number is still a frame count.
+- **Rendering quality:** the compositor filters captures bilinearly in premultiplied
+  space and antialiases layer/clip edges analytically. Pixel-aligned, untransformed
+  layers still sample exact texels (verified identical to ordinary DOM at a 50%
+  alpha probe); rotated or scaled layers no longer alias or show dark edge fringes.
+- **Stage background:** the output canvas is premultiplied and cleared to transparent, so the
+  area no layer covers shows the page's own background in GPU mode exactly as in DOM mode: a
+  dark page stays dark, a runtime theme change shows on the next frame, and a page with no
+  background shows the browser's white. There is no stage colour option; set the background on
+  the page (or on the frame/canvas element's CSS). A layer that is not fully opaque shows that
+  background through it, as in DOM mode, and light a layer adds that has colour but no coverage (the
+  Instrument level's emitter halo) now adds to the page behind it instead of vanishing on white. The
+  output canvas is no longer opaque, so the compositor blends it with the page (a small cost). Measured
+  on lit panels over a bare page against the same scene over a stage layer of the page colour: no pixel
+  of a panel's edge band is more than 1 level brighter (Relief, Objects and Instrument, dark and light,
+  DPR 1 and 2), so there is no bright ring at rounded edges.
+  **Limit:** light multiplies what is on the canvas, so a lamp's pool past a panel's edge, and on a panel's outset
+  shadow, lights nothing on a bare page (the page is not on the canvas, and in DOM mode there is no such light
+  either). To have the pool fall on the page, enrol a plain layer of the page colour beneath the panels, as the
+  emitters pages do.
+- **DOM-mode rotation:** declarative transitions with rotation no longer cancel in
+  ordinary DOM. GPU viewport-clip geometry is only checked while GPU presents.
+- **`createCanvasHosts(frame)`:** creates the output canvas, ordinary host and overlay host with the required styles. The output canvas is deliberately not `aria-hidden`, because GPU mode moves the original controls inside it. The frame may be inside a shadow root: admission asks that shadow root for its native hit proofs (the document retargets every hit inside it to the shadow host), and the `!important` pre-scan (animation ownership, declarative transitions in ordinary DOM) reads its sheets as well as the document's.
+- **Stylesheet scan:** `!important` pre-scan skips uninspectable sheets/rules instead of throwing.
+- **Admission:** probe sits in the visible part of the output canvas; fully offscreen is still refused.
+- **Status:** new `onStatusChange(status: CanvasStatus)`; `onStatus` (JSON string) is optional and kept for compatibility.
+- **Options:** `captureHost` optional and deprecated; `admissionPolicy: "automatic"` is compatibility-only (same as `"explicit"`).
+- **Unchanged:** `playback.release()` without options returns the shared surface to DOM (see 2026-10-14 for `{ freeze: true }`).
+- **CSS compiler:** numeric easing comparison, selector-boundary overlap check,
+  shorthand resets longhands, whole-token CSS-wide keyword guards, `-webkit-`
+  animation aliases rejected clearly, inline PostCSS plugins no longer duplicated in Vite.
+- **Worker:** load failures terminate cleanly and return a diagnosed DOM state;
+  backing DPR is clamped to its pixel budget instead of revoking GPU; the clock wraps.
