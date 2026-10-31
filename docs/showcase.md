@@ -82,7 +82,8 @@ renders that card and `public/apple-touch-icon.png`; run it by hand after a bran
 headline change and commit the images. `main.tsx` keeps the title, description and
 canonical URL in step when examples switch in place.
 
-`robots.txt` also names the documentation site's sitemap (below).
+`npm run build:site` adds the documentation pages to `sitemap.xml` (below), so the one
+sitemap `robots.txt` names lists the whole site.
 
 ## Documentation site
 
@@ -119,7 +120,10 @@ npm run build:site     # showcase, then docs, copied to examples/showcase/dist/d
 `scripts/assemble-site.mjs`, the last step of `build:site`, refuses symlinks, local paths,
 private keys and source-map references in the docs build, fails on any link to a missing
 `/docs` page, heading or file (in the HTML pages and in the Markdown files), and then copies
-the docs build into the showcase output and `llms.txt` to its root. To
+the docs build into the showcase output and `llms.txt` to its root. It also adds every URL
+of the documentation's sitemap to the root `sitemap.xml`, after checking that each one is a
+built page, and gives the docs home as `/docs`, its canonical URL (Starlight's sitemap says
+`/docs/`, which redirects). To
 publish another file, add it to `pages.mjs`; a new component page is picked up by itself.
 `tests/unit/docs-site.unit.test.mjs` checks the page rules and that the Instrument
 gallery's anatomy-page links name headings that exist.
