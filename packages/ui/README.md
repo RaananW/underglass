@@ -1,10 +1,27 @@
 # Strata for Underglass (experimental)
 
-`@underglass/ui@0.1.0` is **Strata**, the 3D design language and component library for Underglass. It is
+`@underglass/ui` is **Strata**, the 3D design language and component library for Underglass. It is
 experimental and not release-qualified for production. The design language is specified in
 [docs/ui-library](https://github.com/RaananW/underglass/blob/main/docs/ui-library/design-language.md).
 
-This version ships the **tokens** layer and the **CSS** for the Tier A components:
+Live examples: [underglass.dev](https://underglass.dev/examples/strata) (Strata) and
+[the Instrument gallery](https://underglass.dev/examples/instrument) · Source: [github.com/RaananW/underglass](https://github.com/RaananW/underglass)
+
+```sh
+npm install @underglass/ui   # plus @underglass/react or @underglass/vue for GPU presentation
+```
+
+It ships:
+
+- **Tokens** (`/tokens`, `/tokens.json`) and the **CSS** for every component (`/css`), which work on their own as a
+  flat design system in any page.
+- **Components** for React (`/react`), Vue (`/vue`) and Astro (`/astro`), each rendering the same markup, and the
+  DOM behaviour they share (`/dom`).
+- **GPU presentation** through Underglass (`/gpu`), in four levels: Relief, Objects, Scene and Instrument.
+- The **rendering model**: the scene format (`/scene.schema.json`), a reference implementation and its conformance
+  suites (`/conformance/*`).
+
+The tokens and the stylesheet:
 
 ```ts
 import { strataTokens, resolve, validateTokens } from "@underglass/ui/tokens";
@@ -37,8 +54,8 @@ The stylesheet sits in the `strata.tokens` cascade layer, so unlayered applicati
 validates the tokens against the design language's invariants (contrast on lit faces in every theme, non-text
 contrast, elevation order, the taper rule) and fails on any broken rule.
 
-`@underglass/ui/css` is the whole stylesheet: tokens plus the Tier A components, in the `strata.components` layer.
-The markup for each component is its [anatomy page](../../docs/ui-library/components/README.md); the relief comes
+`@underglass/ui/css` is the whole stylesheet: tokens plus every component, in the `strata.components` layer.
+The markup for each component is its [anatomy page](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/README.md); the relief comes
 from `data-strata-face` on that markup, lit from the configured light. `@underglass/ui/css/tokens.css` and
 `@underglass/ui/css/components.css` are the two halves.
 
@@ -88,7 +105,7 @@ Components have no outer margin. Two classes put the design language's gaps betw
 ## Rendering model
 
 The Relief and Objects looks are specified independently of any engine in the
-[Strata Rendering Model](../../docs/ui-library/rendering-model.md). This package ships its scene format, a reference
+[Strata Rendering Model](https://github.com/RaananW/underglass/blob/main/docs/ui-library/rendering-model.md). This package ships its scene format, a reference
 implementation and its conformance suite:
 
 ```ts
@@ -125,7 +142,7 @@ strata.detach();                               // back to the CSS presentation
 
 - **React and Vue:** `useStrataGpu(controller)` from `@underglass/ui/react` or `@underglass/ui/vue` attaches for the
   component's lifetime. It attaches in a microtask, so it works in a component of `mountCanvasApp`'s first render (the
-  showcase's [Strata gallery](../../docs/showcase.md) is one).
+  showcase's [Strata gallery](https://github.com/RaananW/underglass/blob/main/docs/showcase.md) is one).
 - **Astro:** call `attachStrataGpu` from a client `<script>` once Underglass is mounted.
 - **What it reads:**
   - token values from each panel's resolved `--strata-*` custom properties, so depth, themes and scopes apply as
@@ -195,7 +212,7 @@ On the GPU the parts are Relief primitives or Objects-level slabs and domes, eve
 helper's `instrument` level each form is an object of parts (`gpu/instrument-switch.ts`: the block, paddle or lever and
 ball, with the bezel, plate, nut and bushing and the lit flags), posed by the same CSS throw, its shadows kept inside the
 input's box. A detented Knob plays `tick` as its pointer passes a detent when feedback is on (off by default).
-[Anatomy](../../docs/ui-library/components/switch.md#11-forms).
+[Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/switch.md#11-forms).
 
 **Feedback** is opt-in and off by default: `createStrataTheme({ feedback: { sound: true, haptics: true } })`, a
 scope's `feedback`, or `attachStrataFeedback({ sound, haptics, muted })`. Sounds (click, tick, thunk, snap) are
@@ -220,10 +237,10 @@ import { Button, Field, StrataProvider, StrataScope, TextField } from "@undergla
 </StrataProvider>
 ```
 
-Every Tier A component: `Button`, `IconButton`, `ToggleButton`, `ButtonGroup`, `Link`, `Field`, `TextField`,
+Every component in this README has a React binding (Toast is the `toast` function). The Tier A ones are `Button`, `IconButton`, `ToggleButton`, `ButtonGroup`, `Link`, `Field`, `TextField`,
 `TextArea`, `Checkbox`, `RadioGroup` with `Radio`, `Switch`, `Select`, `Slider`, `Card`, `Panel`, `Divider`, `Badge`,
-`Spinner` and `ProgressBar`. Each renders exactly
-the markup on its [anatomy page](../../docs/ui-library/components/README.md), forwards a ref to its native element,
+`Spinner` and `ProgressBar`; the sections below add the rest. Each renders exactly
+the markup on its [anatomy page](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/README.md), forwards a ref to its native element,
 and passes `className`, `style` and native attributes through. `size`, `material` and `level` become the Strata
 attributes. React 18.3 and 19 are optional peers.
 
@@ -238,7 +255,7 @@ h(Field, { label: "Email", error: error.value }, () => h(TextField, { type: "ema
 h(Button, { variant: "accent", onClick: save }, () => "Save");
 ```
 
-All 19 Tier A components, with `v-model` on TextField, TextArea, Select and Slider (`modelValue`), Checkbox and Switch
+Every component, as for React, with `v-model` on TextField, TextArea, Select and Slider (`modelValue`), Checkbox and Switch
 (a boolean), RadioGroup (the selected value), and ToggleButton (`v-model:pressed`). Attributes and listeners fall
 through to the native element; Checkbox, Switch and Radio send `class` and `style` to the label row and the rest to the
 input. Vue 3.5 is an optional peer.
@@ -257,7 +274,7 @@ import { Button, Panel, RadioGroup, TextField } from "@underglass/ui/astro";
 </Panel>
 ```
 
-The same 19 components, rendered to HTML on the server with no JavaScript. The package ships the `.astro` components
+The same components, rendered to HTML on the server with no JavaScript. The package ships the `.astro` components
 (which your Astro build compiles) with their helpers as JavaScript; it ships no TypeScript source. Controls take the Field props themselves,
 and RadioGroup renders its radios from `options`. ToggleButton state, `aria-disabled` and checkbox `indeterminate`
 come from `attachStrata` (`@underglass/ui/dom`), which the components load. For plain HTML or other server templates,
@@ -297,11 +314,11 @@ value restored exactly), moves focus to `initialFocus`, the `[autofocus]` descen
 returns it to the opener, closes on Escape (only the topmost of nested dialogs), and runs the panel motion. A click on the
 scrim, outside the panel, closes it only with `closeOnScrim` (a prop in React, Vue and Astro;
 `data-strata-close-on-scrim` in plain HTML), as a native `<dialog>` does; drawers often turn it on. In plain HTML, `data-strata-open="id"` opens a panel and
-`data-strata-close` inside it closes it (`attachStrata`). Anatomy: [Dialog](../../docs/ui-library/components/dialog.md),
-[Drawer](../../docs/ui-library/components/drawer.md).
+`data-strata-close` inside it closes it (`attachStrata`). Anatomy: [Dialog](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/dialog.md),
+[Drawer](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/drawer.md).
 
 Next: the GPU presentation (`/gpu`), as the
-[plan](../../docs/ui-library/plan.md) describes.
+[plan](https://github.com/RaananW/underglass/blob/main/docs/ui-library/plan.md) describes.
 
 ## Tabs
 
@@ -328,7 +345,7 @@ import { Tab, TabList, TabPanel, Tabs } from "@underglass/ui/react";
 - **Options:** `orientation="vertical"`; `activation="manual"` makes the arrows move focus only, until Enter or Space.
 - **Astro:** `<Tabs label="Account" tabs={[{ value: "profile", label: "Profile" }]} value="profile">` with one slot per
   panel, named by its value; it selects the first enabled tab by default.
-- **Plain HTML:** the markup on the [anatomy page](../../docs/ui-library/components/tabs.md), wired by `attachStrata`,
+- **Plain HTML:** the markup on the [anatomy page](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/tabs.md), wired by `attachStrata`,
   which dispatches `strata-tab-change` with `{ tab, panel }`.
 
 ## Accordion
@@ -349,7 +366,7 @@ import { Accordion, AccordionItem } from "@underglass/ui/react";
 - **Open state:** `defaultOpen`, or `open` with `onOpenChange` (`v-model:open` in Vue), from the native `toggle` event.
 - **Exclusive:** `exclusive` generates a shared `name`; or give your own `name`. In Astro, put the same `name` on each
   `AccordionItem`.
-- [Anatomy](../../docs/ui-library/components/accordion.md).
+- [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/accordion.md).
 
 ## List
 
@@ -368,7 +385,7 @@ import { List, ListItem } from "@underglass/ui/react";
 
 - A row with `href` is a link (`current` sets `aria-current`); with `onClick` (React), a click listener or `button`
   (Vue, Astro) it is a button (`disabled` disables it); otherwise it is static.
-- `start` is decorative (`aria-hidden`); `end` is read. [Anatomy](../../docs/ui-library/components/list.md).
+- `start` is decorative (`aria-hidden`); `end` is read. [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/list.md).
 
 ## Table
 
@@ -386,7 +403,7 @@ import { Table } from "@underglass/ui/react";
 - **Sorting:** controlled with `sort` and `onSortChange` (`v-model:sort` in Vue), or by the component with
   `defaultSort` (numbers by value, text with `localeCompare`). Astro renders `sort` as `aria-sort`, without buttons.
 - **Cells:** values by default; `renderCell(row, column)` in React and the `cell` slot in Vue render your own.
-- [Anatomy](../../docs/ui-library/components/table.md).
+- [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/table.md).
 
 ## Breadcrumb
 
@@ -397,13 +414,13 @@ page (`aria-current="page"`). The separators are drawn by CSS and are not read.
 <Breadcrumb items={[{ label: "Home", href: "/" }, { label: "Settings", href: "/settings" }, { label: "Profile", href: "/settings/profile" }]} />
 ```
 
-[Anatomy](../../docs/ui-library/components/breadcrumb.md).
+[Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/breadcrumb.md).
 
 ## Avatar
 
 `Avatar` is a raised coin with initials or a picture: `<Avatar name="Ada Lovelace" />` shows "AL" and is read as
 "Ada Lovelace"; `src` shows a picture whose `alt` is the name; `decorative` hides it, for an avatar beside the
-name in text. It is 1.6 × the indicator size across (`size`). [Anatomy](../../docs/ui-library/components/avatar.md).
+name in text. It is 1.6 × the indicator size across (`size`). [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/avatar.md).
 
 ## Chip and Tag
 
@@ -411,14 +428,14 @@ name in text. It is 1.6 × the indicator size across (`size`). [Anatomy](../../d
 ToggleButton (`pressed` or `defaultPressed` with `onPressedChange`; `v-model:pressed` in Vue) and a removable chip
 (`onRemove`; a `remove` listener in Vue) whose remove button is named "Remove {label}". In plain HTML and Astro,
 `attachStrata` toggles filter chips and dispatches `strata-remove` from a chip whose remove button is pressed.
-[Anatomy](../../docs/ui-library/components/chip.md).
+[Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/chip.md).
 
 ## Skeleton
 
 `Skeleton` holds the place of loading content: `<Skeleton lines={3} />`, `<Skeleton shape="circle" />` or
 `<Skeleton shape="rect" width="100%" height={120} />`. Placeholders are flat, shimmer (still under reduced motion) and
 are hidden from assistive technology; put `aria-busy="true"` and a status on the region that is loading.
-[Anatomy](../../docs/ui-library/components/skeleton.md).
+[Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/skeleton.md).
 
 ## MessageBar
 
@@ -431,7 +448,7 @@ render it when the message appears. `actions` holds buttons; `onDismiss` (a `dis
 <MessageBar intent="warning" title="Storage almost full" actions={<Button>Upgrade</Button>} onDismiss={hide}>You have used 95% of your space.</MessageBar>
 ```
 
-[Anatomy](../../docs/ui-library/components/message-bar.md).
+[Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/message-bar.md).
 
 ## Pagination
 
@@ -443,7 +460,7 @@ current page and `siblings` (1) either side, with ellipses for the gaps; the cur
 <Pagination page={page} count={12} onPageChange={setPage} />
 ```
 
-[Anatomy](../../docs/ui-library/components/pagination.md).
+[Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/pagination.md).
 
 ## Toolbar
 
@@ -455,12 +472,12 @@ same with and without script; `attachStrata` does it for plain HTML and Astro.
 <Toolbar label="Formatting"><ToggleButton>Bold</ToggleButton><ToggleButton>Italic</ToggleButton><Divider orientation="vertical" /><Button>Undo</Button></Toolbar>
 ```
 
-[Anatomy](../../docs/ui-library/components/toolbar.md).
+[Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/toolbar.md).
 
 ## AppBar
 
 `AppBar` is the application's top bar: a `<header>` (the banner landmark at the top level) on a raised slab, with
-`start` and `end` controls and a `title` between them that truncates. [Anatomy](../../docs/ui-library/components/app-bar.md).
+`start` and `end` controls and a `title` between them that truncates. [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/app-bar.md).
 
 ```tsx
 <AppBar title="Underglass" start={<IconButton label="Menu" icon={<MenuIcon />} />} end={<Button>Sign in</Button>} />
@@ -477,7 +494,7 @@ the top layer, portalled to `<body>` (`container` in React, `to` in Vue), never 
 ```
 
 In plain HTML and Astro, give the trigger `aria-describedby` and put the `.ug-tooltip` at the end of the page;
-`attachStrata` runs it. [Anatomy](../../docs/ui-library/components/tooltip.md).
+`attachStrata` runs it. [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/tooltip.md).
 
 ## Toast
 
@@ -489,7 +506,7 @@ const handle = toast({ message: "Message sent.", intent: "success", action: { la
 ```
 
 A toast is a MessageBar at `elevation.overlay`. It goes after `duration` (5000 ms; `Infinity` to keep it); the time
-stops while the pointer or focus is in the region. At most three are shown. [Anatomy](../../docs/ui-library/components/toast.md).
+stops while the pointer or focus is in the region. At most three are shown. [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/toast.md).
 
 ## Combobox
 
@@ -501,7 +518,7 @@ and any other text may still be typed. Use a Select when only the listed values 
 ```
 
 Vue uses `v-model`; Astro takes `options` and the Field props. The list is the browser's own, never drawn by the GPU.
-[Anatomy](../../docs/ui-library/components/combobox.md).
+[Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/combobox.md).
 
 ## DatePicker
 
@@ -513,7 +530,7 @@ calendar. The value is `YYYY-MM-DD`, whatever the display language; `min` and `m
 ```
 
 Vue uses `v-model`; Astro takes the Field props. The calendar is the browser's own, never drawn by the GPU.
-[Anatomy](../../docs/ui-library/components/date-picker.md).
+[Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/date-picker.md).
 
 ## Carousel
 
@@ -525,7 +542,7 @@ picker key per slide (the current one held down, `aria-current`), and a polite l
 ```
 
 Vue takes one slide per element of its default slot (`v-model:index`); Astro takes `count` and the named slots
-`slide-1`, `slide-2`… and `attachStrata` reports `strata-slide`. [Anatomy](../../docs/ui-library/components/carousel.md).
+`slide-1`, `slide-2`… and `attachStrata` reports `strata-slide`. [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/carousel.md).
 
 ## TreeView
 
@@ -538,7 +555,7 @@ move, open and close, and Enter, Space or a click to select. Items are data:
 ```
 
 Vue uses `v-model:expanded` and `v-model:selected`. In plain HTML and Astro, `attachStrata` runs it from the markup and
-reports `strata-expand` and `strata-select` from the item. [Anatomy](../../docs/ui-library/components/tree-view.md).
+reports `strata-expand` and `strata-select` from the item. [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/tree-view.md).
 
 ## Popover
 
@@ -553,7 +570,7 @@ below the button, flipped above when there is no room. It is portalled to `<body
 ```
 
 Vue takes the trigger in its `trigger` slot and emits `toggle`; in Astro any button with `popovertarget` set to the
-popover's `id` opens it. [Anatomy](../../docs/ui-library/components/popover.md).
+popover's `id` opens it. [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/popover.md).
 
 ## Menu
 
@@ -566,7 +583,7 @@ menu and returns focus, and a disabled item does nothing:
 ```
 
 In Astro the trigger is any button with `popovertarget` and `aria-haspopup="menu"`; `attachStrata` reports
-`strata-select` from the chosen item. [Anatomy](../../docs/ui-library/components/menu.md).
+`strata-select` from the chosen item. [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/menu.md).
 
 ## NavigationRail
 
@@ -578,7 +595,7 @@ the current one `aria-current="page"` and its key held down. A click reaches `on
 <NavigationRail label="Main" items={[{ label: "Inbox", href: "/inbox", icon: <InboxIcon /> }]} current={path} onNavigate={(href, event) => { event.preventDefault(); navigate(href); }} />
 ```
 
-In Astro an item's `icon` is SVG markup. [Anatomy](../../docs/ui-library/components/navigation-rail.md).
+In Astro an item's `icon` is SVG markup. [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/navigation-rail.md).
 
 ## Stepper
 
@@ -590,7 +607,7 @@ move `current`.
 <Stepper label="Checkout progress" steps={["Cart", "Shipping", "Payment"]} current={1} />
 ```
 
-`orientation="vertical"` stacks the steps. [Anatomy](../../docs/ui-library/components/stepper.md).
+`orientation="vertical"` stacks the steps. [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/stepper.md).
 
 ## Rating
 
@@ -604,7 +621,7 @@ fractions included, as one image named "4.5 out of 5 stars":
 ```
 
 Vue uses `v-model`; Astro takes `value` and `name`. The stars are captured content on the GPU, not relief.
-[Anatomy](../../docs/ui-library/components/rating.md).
+[Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/rating.md).
 
 ## Indicator forms: Rating, Badge, ProgressBar and Spinner
 
@@ -627,8 +644,8 @@ Vue takes the same props (`v-model` on the Rating); Astro takes `value`, `name` 
 of its diameter, a segment 260), lit by `--strata-lit`, so a score, a value and a chase are uniform writes: 300 frames of a chasing ring cause 0 captures, 0 uploads and 0
 hit-geometry updates. The chase runs at `chase.spinner` (900 ms) and `chase.bar` (1,600 ms), never under 334 ms, and is a steady comet or pattern under reduced motion. Relief draws each lens as a ring
 face, Objects as a dome, the Instrument level as a glass LED lens (`gpu/indicator-forms.ts`); every part and shadow is inside the native control's box. Anatomy:
-[Rating](../../docs/ui-library/components/rating.md#11-indicator-form-lamps), [Badge](../../docs/ui-library/components/badge.md#11-indicator-form-led),
-[ProgressBar](../../docs/ui-library/components/progress-bar.md#11-indicator-form-meter), [Spinner](../../docs/ui-library/components/spinner.md#11-indicator-form-ring).
+[Rating](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/rating.md#11-indicator-form-lamps), [Badge](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/badge.md#11-indicator-form-led),
+[ProgressBar](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/progress-bar.md#11-indicator-form-meter), [Spinner](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/spinner.md#11-indicator-form-ring).
 
 ## SegmentedControl
 
@@ -639,7 +656,7 @@ forms work natively. The selected key is held down.
 <SegmentedControl label="View" options={[{ value: "day", label: "Day" }, { value: "week", label: "Week" }]} value={view} onChange={setView} />
 ```
 
-Vue uses `v-model`; Astro takes `value` and `name`. `hideLabel` hides the legend visually. [Anatomy](../../docs/ui-library/components/segmented-control.md).
+Vue uses `v-model`; Astro takes `value` and `name`. `hideLabel` hides the legend visually. [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/segmented-control.md).
 
 ## Latching forms: Checkbox, RadioGroup and SegmentedControl
 
@@ -664,9 +681,9 @@ checking or selecting is a uniform write. Relief draws the bezel, the plinth and
 Instrument level a Checkbox is the push button's object (a polished bezel, a glass ring, a body and a captured cap travelling 4 px), a bank
 a plinth object and, for each key, a body, a captured cap and an LED lens standing on it (`gpu/instrument-push.ts`). Every part and shadow
 is inside the native input's box (a bank's plinth inside its fieldset's). Feedback plays the opt-in `click` once per real `change` (an arrow key's
-included, a script's assignment never). Anatomy: [Checkbox](../../docs/ui-library/components/checkbox.md#11-latching-form-latching),
-[RadioGroup](../../docs/ui-library/components/radio.md#11-hardware-forms-the-preset-bank-bank-and-the-rotary-selector-selector),
-[SegmentedControl](../../docs/ui-library/components/segmented-control.md#11-latching-form-latching).
+included, a script's assignment never). Anatomy: [Checkbox](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/checkbox.md#11-latching-form-latching),
+[RadioGroup](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/radio.md#11-hardware-forms-the-preset-bank-bank-and-the-rotary-selector-selector),
+[SegmentedControl](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/segmented-control.md#11-latching-form-latching).
 
 A **RadioGroup** also takes `form="selector"`: the RotarySelector's dial over the same native radios, one detent per radio, each label printed round it at its position and the radio an invisible overlay on the print
 (a click on a position is a click on that radio; the arrows are the group's; the dial is `aria-hidden`). Up to 8 radios of at most 12 characters; any other group asked as a selector is drawn as a `bank`, and
@@ -680,7 +697,7 @@ in place under the value (`wheel.sweep`, `wheel.ridges`; `travel` and `sweep` pr
 <Display segments label="Clock">12:34</Display>
 ```
 
-Anatomy: [Slider](../../docs/ui-library/components/slider.md#11-hardware-forms-knob-fader-and-wheel), [RadioGroup](../../docs/ui-library/components/radio.md#the-rotary-selector-selector), [Display](../../docs/ui-library/components/display.md#11-the-segments-look-a-seven-segment-face).
+Anatomy: [Slider](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/slider.md#11-hardware-forms-knob-fader-and-wheel), [RadioGroup](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/radio.md#the-rotary-selector-selector), [Display](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/display.md#11-the-segments-look-a-seven-segment-face).
 
 ## Knob
 
@@ -699,7 +716,7 @@ Vue uses `v-model`; Astro takes `value` and `unit`. The ref is the `.ug-knob` ro
 pointer is captured content. At the Instrument level (`level: "instrument"`) the panel takes core's `instrument`
 material: the knob is a skirt, a brushed cap, a polished chamfer and an engraved pointer that turns on a spring, and
 buttons become keys with captured caps.
-[Anatomy](../../docs/ui-library/components/knob.md).
+[Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/knob.md).
 
 ## Fader
 
@@ -719,7 +736,7 @@ Vue uses `v-model`; Astro takes `value` and `unit`. The ref is the `.ug-fader` r
 `input`, is the input). On the GPU the slot is a groove and the carriage a raised face at Relief and a slab at Objects.
 At the Instrument level (`level: "instrument"`) the carriage is a chamfered brushed carriage with a grip, sliding on
 `spring.fader` (`gpu/instrument-fader.ts`), its shadow kept inside the input's box at every depth. A detented fader
-plays `tick` as it passes a detent when feedback is on (off by default). [Anatomy](../../docs/ui-library/components/fader.md).
+plays `tick` as it passes a detent when feedback is on (off by default). [Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/fader.md).
 
 ## JogWheel
 
@@ -742,7 +759,7 @@ Vue uses `v-model`; Astro takes `value` and `unit`. The ref is the `.ug-jog-whee
 after a script wrote its value. On the GPU the recess is a well and the wheel a raised disc (Relief) or a round slab (Objects), with the
 dimple a well on it placed from the angle, so a turning frame recaptures nothing (core captures each native `input` event); at the Instrument level (`level: "instrument"`) it is a polished
 collar, a brushed cap with a polished chamfer and a graphite dimple (`gpu/instrument-jog.ts`) that turns on the accumulated angle.
-[Anatomy](../../docs/ui-library/components/jog-wheel.md).
+[Anatomy](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/jog-wheel.md).
 
 ## PatchPoint and PatchBay
 
@@ -764,7 +781,7 @@ Vue uses `v-model` on a checkbox jack; Astro takes `checked` and `connected`. At
 plug a knob face; at Objects a round slab, a pit and a dome; at the Instrument level (`level: "instrument"`) a brushed washer, a polished
 barrel, a dark floor, a polished plug and a rubber cable (`gpu/instrument-patch.ts`) whose plug rises out of the hole on `spring.patch`, sunk out of sight
 while unplugged, so no state changes the parts. The cable is contained: the box (the washer + 20) does not grow when a jack is connected.
-Anatomy: [PatchPoint and PatchBay](../../docs/ui-library/components/patch-point.md).
+Anatomy: [PatchPoint and PatchBay](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/patch-point.md).
 ## RotarySelector and the push-button forms
 
 The third part of the Instrument level's second wave. A **RotarySelector** is a native `<select>` over a printed dial: a knob with
@@ -791,9 +808,9 @@ latching button's LED another; `emitter.pushButton.*`, `emitter.led.*`): a panel
 write. Relief draws the bezel and the cap as raised faces, Objects as a slab and a key (`gpu/push-forms.ts`); at the Instrument level
 each button is a polished bezel, a glass ring, and a body with a captured cap travelling 4 px on the CSS throw (`gpu/instrument-push.ts`).
 Every part and shadow is inside the button's box. The selector plays the opt-in `tick` as its pointer moves to another option, a push
-button the opt-in `click` as it goes down. Anatomy: [RotarySelector](../../docs/ui-library/components/rotary-selector.md),
-[Button](../../docs/ui-library/components/button.md#11-push-button-form-momentary),
-[ToggleButton](../../docs/ui-library/components/toggle-button.md#11-push-button-form-latching).
+button the opt-in `click` as it goes down. Anatomy: [RotarySelector](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/rotary-selector.md),
+[Button](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/button.md#11-push-button-form-momentary),
+[ToggleButton](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/toggle-button.md#11-push-button-form-latching).
 
 ## Structural forms: Slider, Card, Panel, Dialog and Drawer
 
@@ -818,9 +835,9 @@ vertex is at least 0.5 px inside its box over the whole rise: the closest is 1.9
 outside the element's box changes). A Dialog's and a Drawer's motion drive the rise as one scene number (a uniform update), and the Drawer's layer slides through core's panel
 transition (`x`, `y`). The first build of an Instrument layer shows its parts about 0.1 s after it is enrolled. A value change on a Slider form is the Knob's and Fader's: 4 captures
 for 8 native changes, none in the frames the springs turn, 0 hit-geometry updates. A moving layer's boxes carry float noise, so the plate's mesh, the knob's diameters and the
-keys' bodies are quantised (a quarter or half px) and the layer is not rebuilt as it moves. Anatomy: [Slider](../../docs/ui-library/components/slider.md#11-hardware-forms-knob-fader-and-wheel),
-[Card](../../docs/ui-library/components/card.md#11-plate-and-tray-forms), [Panel](../../docs/ui-library/components/panel.md#11-plate-and-tray-forms),
-[Dialog](../../docs/ui-library/components/dialog.md#11-plate-form), [Drawer](../../docs/ui-library/components/drawer.md#11-tray-form).
+keys' bodies are quantised (a quarter or half px) and the layer is not rebuilt as it moves. Anatomy: [Slider](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/slider.md#11-hardware-forms-knob-fader-and-wheel),
+[Card](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/card.md#11-plate-and-tray-forms), [Panel](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/panel.md#11-plate-and-tray-forms),
+[Dialog](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/dialog.md#11-plate-form), [Drawer](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/drawer.md#11-tray-form).
 
 ## Select and Tabs forms
 
@@ -844,7 +861,7 @@ cap travelling on the CSS throw and a glass LED lens with its emitter (the bank'
 tablist) and none outside; native hits are the DOM's (8,216 and 12,671 grid points, 0 differ); a backlight or an LED changes pixels only within the emitters' reach and the labels stay within the guard (0 levels); a
 selection or a step is a pose and an emitter: at the Instrument level 1 capture for a selector snap, a text change or a tab selection, none in the 38 to 66 frames the pointer or the key then moves, and 40 held frames of a
 step button or a key are 0 captures, 0 uploads and 0 hit-geometry updates (Relief and Objects capture the CSS transitions: 8 captures for a selector's snap, 23 for a tab selection). Anatomy:
-[Select](../../docs/ui-library/components/select.md#11-hardware-forms-selector-and-display), [Tabs](../../docs/ui-library/components/tabs.md#11-rail-form-rail).
+[Select](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/select.md#11-hardware-forms-selector-and-display), [Tabs](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/tabs.md#11-rail-form-rail).
 
 ## Lamp and StatusLight
 
@@ -872,8 +889,8 @@ core's face pool lights the page around it within the contrast guard (`emitter.*
 uniform write with no capture. Relief draws the lens as a disc and Objects as a dome in its own colour; at the Instrument level
 (`level: "instrument"`) it is a polished bezel and a glass lens (`gpu/instrument-lamp.ts`) over a socket printed on the
 face, with bloom. Past 64 emitters in a layer core draws the 64 with the most reach and reports the rest. A lamp plays the
-opt-in `click` feedback. Anatomy: [Lamp](../../docs/ui-library/components/lamp.md),
-[StatusLight](../../docs/ui-library/components/status-light.md).
+opt-in `click` feedback. Anatomy: [Lamp](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/lamp.md),
+[StatusLight](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/status-light.md).
 
 ## Pad and Keypad
 
@@ -908,7 +925,7 @@ draws the caps as raised faces and a keypad's plinth as one; Objects as keys and
 a pad is a glass rim with its emitter, a lacquer body and a captured cap (`gpu/instrument-pad.ts`), a keypad a polished plinth object
 and, per key, a body with a captured cap, each travelling on the CSS throw with no capture and no hit-geometry update. Every part and
 shadow is inside its control's box. The soft cap is a satin lacquer: core's recipe has no subsurface layer yet. Anatomy:
-[Pad](../../docs/ui-library/components/pad.md), [Keypad](../../docs/ui-library/components/keypad.md).
+[Pad](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/pad.md), [Keypad](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/keypad.md).
 
 ## Meter and Gauge
 
@@ -936,8 +953,8 @@ update follows (300 frames: 0 of each), and the native `value` follows at a low 
 emitter in its zone's colour (`emitter.segment.*`) at every level; a needle meter's bezel, window and hub are Relief and Objects
 primitives with the needle as captured content on `spring.meter` (a gauge's on `spring.gauge`, `linear()` curves in the CSS); at the
 Instrument level (`level: "instrument"`) the needle is a part on its spring, a gauge has a polished bezel, and a glass window keeps
-the printed scale under it exact (`gpu/instrument-meter.ts`). Anatomy: [Meter](../../docs/ui-library/components/meter.md),
-[Gauge](../../docs/ui-library/components/gauge.md).
+the printed scale under it exact (`gpu/instrument-meter.ts`). Anatomy: [Meter](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/meter.md),
+[Gauge](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/gauge.md).
 
 ## Display
 
@@ -959,8 +976,8 @@ Vue uses `v-model` on the TextField and a slot for `Display`'s value; Astro take
 write, a keystroke), and the backlight is an emitter, so toggling it costs only its attribute's write. For a value that changes faster than it
 can be read, `driveStrataDisplay(element, text, { interval })` from `@underglass/ui/dom` writes the latest text at most once an interval
 (100 ms by default) and skips a text already shown (`releaseStrataDisplay` writes it now); a number that must move every frame is a
-[Meter](../../docs/ui-library/components/meter.md) or a Gauge. On the GPU the bezel is a groove (Relief) or a slab (Objects) and the window a flat face;
+[Meter](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/meter.md) or a Gauge. On the GPU the bezel is a groove (Relief) or a slab (Objects) and the window a flat face;
 at the Instrument level (`level: "instrument"`) the bezel is a polished part and the window a glass pane whose flat region is the capture itself, so the text under it
 is the DOM's own pixels (`gpu/instrument-display.ts`), and the backlight is a few emitters along the window (`emitter.display.*`, `gpu/index.ts`), held within
 the contrast guard over the text, which is a protected rect (the native element's content box, an output's text runs too). Anatomy:
-[Display](../../docs/ui-library/components/display.md), [TextField, section 11](../../docs/ui-library/components/text-field.md#11-the-display-form).
+[Display](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/display.md), [TextField, section 11](https://github.com/RaananW/underglass/blob/main/docs/ui-library/components/text-field.md#11-the-display-form).
