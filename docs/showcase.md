@@ -98,6 +98,17 @@ becomes a `/docs/...` URL when the target is published, and a GitHub URL when it
 light and dark themes and `docs/sitemap-index.xml`. The site has no 404 page of its own;
 the showcase's root `404.html` serves.
 
+For AI agents and other tools that read Markdown, `sync.mjs` also writes into
+`examples/docs/public/` (git-ignored except the favicon):
+
+- a Markdown copy of every page, with absolute links, at the page URL plus `.md`
+  (`/docs/guide/concepts.md`, `/docs/index.md` for the home page). Each HTML page names it
+  in a `<link rel="alternate" type="text/markdown">`;
+- [`llms.txt`](https://llmstxt.org) at `/docs/llms.txt` and, copied by the build, at
+  `/llms.txt`: a summary and a link to every page's Markdown copy with its description;
+- `llms-full.txt`: the Guide and Reference pages in one file. The Strata pages are left out;
+  at about 700 KB they are four times the rest, more than an agent reads in one fetch.
+
 ```sh
 npm run dev:docs       # localhost:5192/docs
 npm run build:docs     # examples/docs/dist only
@@ -107,7 +118,8 @@ npm run build:site     # showcase, then docs, copied to examples/showcase/dist/d
 
 `scripts/assemble-site.mjs`, the last step of `build:site`, refuses symlinks, local paths,
 private keys and source-map references in the docs build, fails on any link to a missing
-`/docs` page or heading, and then copies the docs build into the showcase output. To
+`/docs` page, heading or file (in the HTML pages and in the Markdown files), and then copies
+the docs build into the showcase output and `llms.txt` to its root. To
 publish another file, add it to `pages.mjs`; a new component page is picked up by itself.
 `tests/unit/docs-site.unit.test.mjs` checks the page rules and that the Instrument
 gallery's anatomy-page links name headings that exist.
