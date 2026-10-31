@@ -15,11 +15,7 @@ export const site = "https://underglass.dev";
 export const base = "/docs/";
 export const repository = "https://github.com/RaananW/underglass";
 
-/**
- * The sidebar: each group lists `docs/`-relative sources and the route each one gets. A third element sets the
- * page's `title` and `description` where the file's own H1 and first paragraph are working titles and notes
- * (the names follow `docs/README.md`).
- */
+/** The sidebar: each group lists `docs/`-relative sources and the route each one gets. */
 export const sidebar = [
   { label: "Guide", pages: [
     ["guide/getting-started.md", "guide/getting-started"],
@@ -31,10 +27,10 @@ export const sidebar = [
     ["guide/frameworks.md", "guide/frameworks"],
   ] },
   { label: "Reference", pages: [
-    ["api.md", "reference/api", { title: "API reference", description: "Every export, option and contract of Underglass." }],
-    ["effects.md", "reference/effects", { title: "Effects contract", description: "Effect validation, time and fallback rules in detail." }],
+    ["api.md", "reference/api"],
+    ["effects.md", "reference/effects"],
     ["worker.md", "reference/worker"],
-    ["distribution.md", "reference/distribution", { title: "Distribution", description: "Packing and installing the Underglass packages." }],
+    ["distribution.md", "reference/distribution"],
   ] },
   { label: "Strata UI", pages: [
     ["ui-library/design-language.md", "strata/design-language"],
@@ -50,15 +46,12 @@ const componentDirectory = "ui-library/components/";
 
 /** Maps each published `docs/`-relative source to its route (no base, no leading slash; `""` is the home). */
 export function routes(componentFiles) {
-  const map = new Map([home, ...sidebar.flatMap(group => group.pages.map(([source, route]) => [source, route]))]);
+  const map = new Map([home, ...sidebar.flatMap(group => group.pages)]);
   for (const file of componentFiles) {
     if (file !== "README.md" && file.endsWith(".md")) map.set(`${componentDirectory}${file}`, `strata/components/${file.slice(0, -3)}`);
   }
   return map;
 }
-
-/** The `title` and `description` set in `sidebar`, by source. */
-export const overrides = new Map(sidebar.flatMap(group => group.pages.filter(page => page[2]).map(([source, , override]) => [source, override])));
 
 /** The site URL of a route, under the base path. */
 export const url = route => `${base}${route}`.replace(/\/$/, "") || "/";
@@ -102,19 +95,17 @@ export function description(body) {
   return text.length <= 160 ? text : `${text.slice(0, 157).replace(/\s+\S*$/, "")}…`;
 }
 
-/**
- * Turns a `docs/` file into a Starlight page: frontmatter from its H1 and first paragraph (or `override`, by
- * default the source's entry in `overrides`), links rewritten.
- */
-export function toPage(markdown, source, map, override = overrides.get(source)) {
-  const text = markdown.replace(/^﻿/, "").replace(/\r\n/g, "\n");
+/** Turns a `docs/` file into a Starlight page: frontmatter from its H1 and first paragraph, links rewritten. */
+export function toPage(markdown, source, map) {
+  // A leading byte order mark (U+FEFF) is dropped.
+  const text = (markdown.charCodeAt(0) === 0xfeff ? markdown.slice(1) : markdown).replace(/\r\n/g, "\n");
   const match = text.match(/^# (.+)\n/);
   if (!match) throw new Error(`${source}: a published page must start with a # title`);
   const body = rewriteLinks(text.slice(match[0].length), source, map);
-  const summary = override?.description ?? description(body);
+  const summary = description(body);
   // JSON strings are valid YAML scalars, so titles with colons or quotes need no further escaping.
   const frontmatter = [
-    `title: ${JSON.stringify(override?.title ?? match[1].trim())}`,
+    `title: ${JSON.stringify(match[1].trim())}`,
     ...(summary ? [`description: ${JSON.stringify(summary)}`] : []),
     `editUrl: ${JSON.stringify(`${repository}/edit/main/docs/${source}`)}`,
   ];
