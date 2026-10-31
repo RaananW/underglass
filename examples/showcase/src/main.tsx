@@ -1,14 +1,15 @@
 /**
  * Entry point of the showcase site. `App` is ordinary React page chrome (hero, catalog, status,
- * browser help) that lives outside the Underglass root. Its effect creates the canvas hosts and mounts
- * a second tree with `mountCanvasApp`, which renders `Demo` from `demos.tsx`. The two sides talk
- * through the controller (enable, disable, dispose), `onStatusChange` and the URL path.
+ * browser help) that lives outside the Underglass root. Its effect loads Underglass, `demos.tsx` and the
+ * opening example (separate chunks, so the page itself loads with only React and the catalog), then creates
+ * the canvas hosts and mounts a second tree with `mountCanvasApp`, which renders `Demo`. The two sides
+ * talk through the controller (enable, disable, dispose), `onStatusChange` and the URL path.
  */
 import { useCallback, useEffect, useRef, useState, version, type MouseEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { version as reactDOMVersion } from "react-dom";
-import { createCanvasHosts, mountCanvasApp, type CanvasController } from "@underglass/react";
-import { Demo } from "./demos";
+import type { CanvasController } from "@underglass/react";
+import { loadExample } from "./examples";
 import { examplePath, exampleFromPath, examples, pageMeta, previews as previewNames, route, searchExamples, site, type ExampleId } from "./catalog";
 import { detectSupport, explain, flags, type Support } from "./support";
 import { analyticsEnabled, startAnalytics, track } from "./analytics";
@@ -57,6 +58,8 @@ function App() {
   // `busy` disables the buttons while an action is in flight. `disposed` lasts until reload.
   const [busy, setBusy] = useState(false);
   const [disposed, setDisposed] = useState(false);
+  // False until the Underglass root is mounted: the lifecycle buttons wait for it.
+  const [mounted, setMounted] = useState(false);
   // Set when the runtime is disposed or the page is going away; URL changes are then ignored.
   const retired = useRef(false);
   // Reads the URL and shows its example (set by the effect; `go` calls it after `pushState`).
@@ -69,27 +72,26 @@ function App() {
   // The studio section, scrolled into view when a catalog card is chosen.
   const studio = useRef<HTMLElement>(null);
   const controller = useRef<CanvasController>(undefined);
-  // Setter registered by `Demo` (through `onReady`) to switch examples inside the running root.
+  // The example in the URL, kept by the effect below.
+  const shown = useRef<ExampleId>(selected);
+  // Setter registered by `Demo` (through `onReady`) to switch examples inside the running root. It is
+  // called once on registration too, in case the URL changed while the root was loading.
   const change = useRef<(id: ExampleId) => void>(undefined);
-  const ready = useCallback((update: (id: ExampleId) => void) => { change.current = update; }, []);
+  const ready = useCallback((update: (id: ExampleId) => void) => { change.current = update; update(shown.current); }, []);
   const current = examples.find(example => example.id === selected)!;
   useEffect(() => {
     const host = frame.current!;
-    // The output canvas must not be aria-hidden: GPU mode moves the original controls inside it.
-    const { outputCanvas, ordinaryHost, overlayHost } = createCanvasHosts(host);
-    outputCanvas.className = "output"; ordinaryHost.className = "ordinary"; overlayHost.className = "overlay";
     let app: CanvasController | undefined;
     let cancelled = false;
     // The URL's example is selected in the page chrome and in the running `Demo`. Page anchors such as
     // `#examples` also fire `popstate`; they leave the path, and so the example, as it is.
-    let shown = pageExample() ?? "layers";
     const show = () => {
       if (retired.current) return;
       upgradeHashLink();
       const page = pageExample(), id = page ?? "layers";
       applyHead(page);
-      if (id === shown) return;
-      shown = id; setSelected(id); change.current?.(id);
+      if (id === shown.current) return;
+      shown.current = id; setSelected(id); change.current?.(id);
     };
     navigate.current = show;
     // Marks the app retired and disposes the runtime (page hide, or unmount of this effect).
@@ -102,22 +104,32 @@ function App() {
     const restore = (event: PageTransitionEvent) => {
       if (event.persisted) { setDisposed(true); setMode("disposed"); setBusy(false); setDiagnostic("Restored a retired page. Reload to start a fresh session."); }
     };
-    // Mount outside this effect's React commit: the adapter flushes its own root synchronously.
+    // Mount after the Underglass chunks and the opening example have loaded, which also keeps the mount
+    // outside this effect's React commit (the adapter flushes its own root synchronously).
     // The captured-pixel budget is raised from 2M to 4M CSS px for the Strata gallery: at its Scene level with a dialog
     // open, the stage holds three full-stage layers (the backdrop, Strata's lit backdrop and the dialog's scrim) and two
     // panels, about 3.1M px with their shadows. It is 6M for the Instrument gallery: its stage is a wall of the stage's size under four or five
     // panels, and an open dialog adds a scrim the stage's size, about 5M px on the tallest tab (the everyday forms) at a 1090 px stage.
-    queueMicrotask(() => {
+    const opening = shown.current;
+    Promise.all([import("@underglass/react"), import("./demos"), loadExample(opening)]).then(([{ createCanvasHosts, mountCanvasApp }, { Demo }]) => {
       if (cancelled) return;
+      // The output canvas must not be aria-hidden: GPU mode moves the original controls inside it.
+      const { outputCanvas, ordinaryHost, overlayHost } = createCanvasHosts(host);
+      outputCanvas.className = "output"; ordinaryHost.className = "ordinary"; overlayHost.className = "overlay";
       app = mountCanvasApp({ outputCanvas, ordinaryHost, overlayHost, budgets: { layers: 32, pixels: 6_000_000 },
         onStatusChange(status) {
           setDiagnostic(status.reason); setMode(status.mode);
-          if (lastMode.current === "gpu" && status.mode !== "gpu" && !leaving.current && !retired.current) track("GPU Lost", { example: shown, status: explain(status.reason).title });
+          if (lastMode.current === "gpu" && status.mode !== "gpu" && !leaving.current && !retired.current) track("GPU Lost", { example: shown.current, status: explain(status.reason).title });
           lastMode.current = status.mode;
-        } }, <Demo id={shown} onReady={ready} />);
+        } }, <Demo id={opening} onReady={ready} />);
       controller.current = app;
+      setMounted(true);
       // Handle for inspecting the running example from the console.
       window.showcase = { state: () => app!.state(), controller: app, react: version, reactDOM: reactDOMVersion };
+    }, error => {
+      if (cancelled) return;
+      setDiagnostic(`The live example failed to load: ${String(error)}`);
+      console.error("Showcase failed to load", error);
     });
     // `hashchange` catches a `#/motion` typed into the address bar of an open page.
     window.addEventListener("popstate", show);
@@ -226,9 +238,9 @@ function App() {
         <p className="studio-detail">{current.detail}</p>
         <div className="control-bar">
           <p className="stage-note" id="gpu-requirement"><strong>GPU demos require Chrome Canary with HTML-in-Canvas enabled.</strong> Ordinary DOM mode works without experimental flags.</p>
-          <div className="toolbar"><button aria-describedby="gpu-requirement" disabled={busy || disposed} onClick={() => void action("enable")}>Enable experimental GPU</button>
-            <button disabled={busy || disposed} onClick={() => void action("disable")}>Use ordinary DOM</button>
-            <button disabled={busy || disposed} onClick={() => void action("dispose")}>Dispose example</button></div>
+          <div className="toolbar"><button aria-describedby="gpu-requirement" disabled={busy || disposed || !mounted} onClick={() => void action("enable")}>Enable experimental GPU</button>
+            <button disabled={busy || disposed || !mounted} onClick={() => void action("disable")}>Use ordinary DOM</button>
+            <button disabled={busy || disposed || !mounted} onClick={() => void action("dispose")}>Dispose example</button></div>
         </div>
         {!gpu && !disposed && support !== "likely" && <GpuHelp support={support} preview={previews[selected]} title={current.title} example={selected} />}
         <Status reason={diagnostic} />
