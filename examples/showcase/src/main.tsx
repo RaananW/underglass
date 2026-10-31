@@ -2,28 +2,51 @@
  * Entry point of the showcase site. `App` is ordinary React page chrome (hero, catalog, status,
  * browser help) that lives outside the Underglass root. Its effect creates the canvas hosts and mounts
  * a second tree with `mountCanvasApp`, which renders `Demo` from `demos.tsx`. The two sides talk
- * through the controller (enable, disable, dispose), `onStatusChange` and the URL hash.
+ * through the controller (enable, disable, dispose), `onStatusChange` and the URL path.
  */
-import { useCallback, useEffect, useRef, useState, version } from "react";
+import { useCallback, useEffect, useRef, useState, version, type MouseEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { version as reactDOMVersion } from "react-dom";
 import { createCanvasHosts, mountCanvasApp, type CanvasController } from "@underglass/react";
 import { Demo } from "./demos";
-import { examples, route, searchExamples, type ExampleId } from "./catalog";
+import { examplePath, exampleFromPath, examples, pageMeta, previews as previewNames, route, searchExamples, site, type ExampleId } from "./catalog";
 import { detectSupport, explain, flags, type Support } from "./support";
-import postcardPreview from "./previews/postcard-studio.jpg";
-import deckPreview from "./previews/card-deck.jpg";
-import labPreview from "./previews/shader-lab.jpg";
-import noticesPreview from "./previews/notification-stack.jpg";
-import pondPreview from "./previews/webcam-pond.jpg";
-
-/** GPU-mode screenshots (Chrome Canary) shown to visitors whose browser cannot run it. */
-const previews: Partial<Record<ExampleId, string>> = { layers: postcardPreview, motion: deckPreview, effects: labPreview, presence: noticesPreview, pond: pondPreview };
+import { analyticsEnabled, startAnalytics, track } from "./analytics";
 import "./style.css";
+
+/** GPU-mode screenshots (Chrome Canary) shown to visitors whose browser cannot run it, by example. */
+const previewFiles = import.meta.glob<string>("./previews/*.jpg", { eager: true, import: "default" });
+const previews = Object.fromEntries(Object.entries(previewNames).map(([id, name]) => [id, previewFiles[`./previews/${name}.jpg`]])) as Partial<Record<ExampleId, string>>;
+
+// Routing: the home page is the site base and opens the first example; each example has its own page,
+// `<base>examples/<id>`, which the build writes as static HTML with its own metadata (`seo.ts`). Links
+// switch examples in place with `history.pushState`, so the running runtime and its GPU mode survive.
+const base = import.meta.env.BASE_URL;
+/** The example the current URL names, or `undefined` on the home page. */
+const pageExample = () => exampleFromPath(location.pathname, base);
+/** The URL of the home page (no id) or an example's page. */
+const pageURL = (id?: ExampleId) => id ? `${base}${examplePath(id)}` : base;
+/** Moves an old `#/motion` link (the site's first URLs) to the example's own page, keeping history clean. */
+function upgradeHashLink() {
+  if (location.hash.startsWith("#/")) history.replaceState(null, "", pageURL(route(location.hash)));
+}
+/** Keeps the title, description and canonical URL in step with the page in the URL. */
+function applyHead(id?: ExampleId) {
+  const meta = pageMeta(id);
+  document.title = meta.title;
+  document.querySelector('meta[name="description"]')?.setAttribute("content", meta.description);
+  document.querySelector('link[rel="canonical"]')?.setAttribute("href", `${site.origin}/${meta.path}`);
+}
+// An old hash link loads the home page's HTML, so its head is set for the example it moved to.
+upgradeHashLink();
+applyHead(pageExample());
+/** True for a click the browser should handle itself: another button, or a modifier that opens a new tab or window. */
+const ownClick = (event: MouseEvent) => event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+startAnalytics();
 
 /** The whole page: marketing sections, the example catalog and the live studio with its stage. */
 function App() {
-  const [selected, setSelected] = useState<ExampleId>(route(location.hash));
+  const [selected, setSelected] = useState<ExampleId>(() => pageExample() ?? "layers");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   // `mode` and `diagnostic` mirror the runtime: `onStatusChange` and the result of each action.
@@ -34,8 +57,13 @@ function App() {
   // `busy` disables the buttons while an action is in flight. `disposed` lasts until reload.
   const [busy, setBusy] = useState(false);
   const [disposed, setDisposed] = useState(false);
-  // Set when the runtime is disposed or the page is going away; hash changes are then ignored.
+  // Set when the runtime is disposed or the page is going away; URL changes are then ignored.
   const retired = useRef(false);
+  // Reads the URL and shows its example (set by the effect; `go` calls it after `pushState`).
+  const navigate = useRef<() => void>(undefined);
+  // The runtime's last reported mode, and whether the visitor asked to leave GPU mode: for `GPU Lost`.
+  const lastMode = useRef("dom");
+  const leaving = useRef(false);
   // The `.stage` element that the canvas and DOM hosts are created in.
   const frame = useRef<HTMLDivElement>(null);
   // The studio section, scrolled into view when a catalog card is chosen.
@@ -52,16 +80,21 @@ function App() {
     outputCanvas.className = "output"; ordinaryHost.className = "ordinary"; overlayHost.className = "overlay";
     let app: CanvasController | undefined;
     let cancelled = false;
-    // Hash routing: `#/id` selects an example in the page chrome and in the running `Demo`. Other
-    // hashes (page anchors such as `#examples`) are left alone.
-    const navigate = () => {
+    // The URL's example is selected in the page chrome and in the running `Demo`. Page anchors such as
+    // `#examples` also fire `popstate`; they leave the path, and so the example, as it is.
+    let shown = pageExample() ?? "layers";
+    const show = () => {
       if (retired.current) return;
-      if (location.hash && !location.hash.startsWith("#/")) return;
-      const id = route(location.hash); setSelected(id); change.current?.(id);
+      upgradeHashLink();
+      const page = pageExample(), id = page ?? "layers";
+      applyHead(page);
+      if (id === shown) return;
+      shown = id; setSelected(id); change.current?.(id);
     };
+    navigate.current = show;
     // Marks the app retired and disposes the runtime (page hide, or unmount of this effect).
     const close = () => {
-      retired.current = true;
+      retired.current = true; leaving.current = true;
       void app?.dispose().catch(error => console.error("Showcase disposal failed", error));
     };
     // A page restored from the back/forward cache comes back after `pagehide` disposed its runtime,
@@ -77,31 +110,55 @@ function App() {
     queueMicrotask(() => {
       if (cancelled) return;
       app = mountCanvasApp({ outputCanvas, ordinaryHost, overlayHost, budgets: { layers: 32, pixels: 6_000_000 },
-        onStatusChange(status) { setDiagnostic(status.reason); setMode(status.mode); } }, <Demo id={route(location.hash)} onReady={ready} />);
+        onStatusChange(status) {
+          setDiagnostic(status.reason); setMode(status.mode);
+          if (lastMode.current === "gpu" && status.mode !== "gpu" && !leaving.current && !retired.current) track("GPU Lost", { example: shown, status: explain(status.reason).title });
+          lastMode.current = status.mode;
+        } }, <Demo id={shown} onReady={ready} />);
       controller.current = app;
       // Handle for inspecting the running example from the console.
       window.showcase = { state: () => app!.state(), controller: app, react: version, reactDOM: reactDOMVersion };
     });
-    window.addEventListener("hashchange", navigate);
+    // `hashchange` catches a `#/motion` typed into the address bar of an open page.
+    window.addEventListener("popstate", show);
+    window.addEventListener("hashchange", show);
     window.addEventListener("pagehide", close);
     window.addEventListener("pageshow", restore);
-    return () => { cancelled = true; window.removeEventListener("hashchange", navigate); window.removeEventListener("pagehide", close);
-      window.removeEventListener("pageshow", restore); close(); };
+    return () => { cancelled = true; window.removeEventListener("popstate", show); window.removeEventListener("hashchange", show);
+      window.removeEventListener("pagehide", close); window.removeEventListener("pageshow", restore); close(); };
   }, [ready]);
+  // Opens the home page (no id) or an example's page in place.
+  function go(id?: ExampleId) {
+    history.pushState(null, "", pageURL(id));
+    navigate.current?.();
+  }
+  // A plain click on an in-site link switches in place; modified clicks open the page's own URL.
+  function follow(event: MouseEvent<HTMLAnchorElement>, id?: ExampleId) {
+    if (disposed) { event.preventDefault(); return; }
+    if (ownClick(event)) return;
+    event.preventDefault();
+    go(id);
+    if (id) requestAnimationFrame(() => studio.current?.scrollIntoView({ block: "start" }));
+  }
   // Runs a caller-owned lifecycle action on the controller, then shows the resulting mode and
   // reason. A rejection is shown in the status line.
   async function action(operation: "enable" | "disable" | "dispose") {
     setBusy(true);
+    leaving.current = operation !== "enable";
     try {
       await controller.current![operation]();
       const state = controller.current!.state();
       setMode(state.mode);
       setDiagnostic(state.reason);
+      lastMode.current = state.mode;
+      if (operation === "enable") track("GPU Enable", { example: selected, result: state.mode, status: explain(state.reason).title, support });
+      else track("Studio Action", { example: selected, action: operation });
       if (operation === "dispose") { retired.current = true; setDisposed(true); }
     } catch (error) {
       setDiagnostic(`Action rejected: ${String(error)}`);
       console.error("Showcase action rejected", error);
-    } finally { setBusy(false); }
+      if (operation === "enable") track("GPU Enable", { example: selected, result: "rejected", status: String(error), support });
+    } finally { setBusy(false); leaving.current = false; }
   }
   const filtered = searchExamples(query, category);
   // The page reflects the runtime's actual mode, not what was requested.
@@ -109,8 +166,9 @@ function App() {
   return <>
     <a className="skip-link" href="#studio">Skip to live example</a>
     <div className="hero-shell">
-      <header className="site-header"><a className="brand" href="#/layers"><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>Underglass<span className="tag">EXPERIMENTAL</span></a>
-        <nav aria-label="Site"><a href="#examples">Examples</a><a href="#about">About the experiment <span aria-hidden="true">&#8599;</span></a></nav></header>
+      <header className="site-header"><a className="brand" href={base} onClick={event => follow(event)}><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>Underglass<span className="tag">EXPERIMENTAL</span></a>
+        <nav aria-label="Site"><a href="#examples">Examples</a><a href="#about">About the experiment</a>
+          <a href={site.repository} onClick={() => track("Outbound Link", { target: "github" })}>GitHub <span aria-hidden="true">&#8599;</span></a></nav></header>
       <section className="hero" aria-labelledby="hero-title">
         <div className="hero-text">
           <p className="hero-badge"><span className="pulse" aria-hidden="true" />HTML-in-Canvas · WebGPU · React</p>
@@ -144,8 +202,7 @@ function App() {
             {["All", ...new Set(examples.map(example => example.category))].map(value => <option key={value}>{value}</option>)}
           </select></label></div>
         <div className="example-grid">{filtered.map(example => <a key={example.id} className={`example-card accent-${example.accent}`}
-          href={`#/${example.id}`} aria-current={selected === example.id ? "page" : undefined}
-          onClick={event => { if (disposed) event.preventDefault(); else requestAnimationFrame(() => studio.current?.scrollIntoView({ block: "start" })); }}>
+          href={pageURL(example.id)} aria-current={selected === example.id ? "page" : undefined} onClick={event => follow(event, example.id)}>
           <span className={`card-art art-${example.id}`} aria-hidden="true"><i /><i /><i /><i /></span>
           <span className="card-top"><span>{example.category}</span><span>{example.number}</span></span>
           <h3>{example.title}</h3><p>{example.summary}</p>
@@ -158,9 +215,9 @@ function App() {
         <div className="studio-head">
           <div><p className="eyebrow">LIVE STUDIO · {current.number}</p><h2 id="studio-title-heading">{current.title}</h2></div>
           <div className="studio-actions">
-            {/* Switches examples without scrolling back to the catalog; the hash change does the rest. */}
+            {/* Switches examples without scrolling back to the catalog. */}
             <label className="example-switch">Example
-              <select aria-label="Example" value={selected} disabled={disposed} onChange={event => { location.hash = `#/${event.target.value}`; }}>
+              <select aria-label="Example" value={selected} disabled={disposed} onChange={event => go(event.target.value as ExampleId)}>
                 {examples.map(example => <option key={example.id} value={example.id}>{example.number} · {example.title}</option>)}
               </select></label>
             <span className={`mode-pill ${gpu ? "active" : ""}`}><span className="dot" aria-hidden="true" />{gpu ? "GPU active" : disposed ? "Disposed" : "Ordinary DOM"}</span>
@@ -173,7 +230,7 @@ function App() {
             <button disabled={busy || disposed} onClick={() => void action("disable")}>Use ordinary DOM</button>
             <button disabled={busy || disposed} onClick={() => void action("dispose")}>Dispose example</button></div>
         </div>
-        {!gpu && !disposed && support !== "likely" && <GpuHelp support={support} preview={previews[selected]} title={current.title} />}
+        {!gpu && !disposed && support !== "likely" && <GpuHelp support={support} preview={previews[selected]} title={current.title} example={selected} />}
         <Status reason={diagnostic} />
         {disposed && <p className="disposed-note">The example is disposed. Reload this page to start a fresh session.</p>}
         <div className="stage-frame">
@@ -193,17 +250,19 @@ function App() {
             <p>{current.gpu.css}</p>
           </div>
         </section>
-        <p className="stage-note">Same original controls in DOM and GPU. {selected === "instrument" ? "This example reflows to the width of your screen." : "On smaller screens, scroll the studio horizontally."} No data is sent or stored.</p>
+        <p className="stage-note">Same original controls in DOM and GPU. {selected === "instrument" ? "This example reflows to the width of your screen." : "On smaller screens, scroll the studio horizontally."} Nothing you type or film leaves your browser.</p>
       </section>
       <section className="about" id="about"><p className="eyebrow">AN HONEST EXPERIMENT</p><h2>Progressive presentation, not pretend compatibility.</h2>
         <div className="about-grid">
           <div><h3>What it is</h3><p>Underglass layers GPU presentation over React's original controls. The examples use the public Surface, Box, Presence, motion and effect APIs. Typed layout and appearance compile to browser CSS; the browser still owns layout and editing.</p></div>
           <div><h3>What it needs</h3><p>Ordinary DOM works by default. Experimental GPU needs a compatible browser with HTML-in-Canvas and native geometry support. Missing capabilities are diagnosed, not disguised. Decorative shaders never replace essential controls.</p></div>
-          <div><h3>What it is not</h3><p>This is a prepared showcase, not a production certification or a published library. Accessibility, physical-device and broader browser qualification remain open. Your reduced-motion preference is respected.</p></div>
+          <div><h3>What it is not</h3><p>This is a prepared showcase, not a production certification. Accessibility, physical-device and broader browser qualification remain open. Your reduced-motion preference is respected.</p></div>
         </div>
       </section>
     </main>
-    <footer><span><span className="brand-mark small" aria-hidden="true"><i /><i /><i /></span>Underglass / Example studio</span><span>Built with React. Still an experiment.</span></footer>
+    <footer><span><span className="brand-mark small" aria-hidden="true"><i /><i /><i /></span>Underglass / Example studio</span>
+      <span><a href={site.repository} onClick={() => track("Outbound Link", { target: "github" })}>Source on GitHub</a> · <a href={site.npm}
+        onClick={() => track("Outbound Link", { target: "npm" })}>@underglass/react on npm</a> · Apache-2.0.{analyticsEnabled && " Anonymous visit counts by Vercel Web Analytics, no cookies."}</span></footer>
   </>;
 }
 
@@ -239,10 +298,10 @@ function Status({ reason }: { reason: string }) {
 }
 
 /** Shown when this browser cannot run GPU mode: how to get it, and what it looks like. */
-function GpuHelp({ support, preview, title }: { support: Support; preview?: string; title: string }) {
+function GpuHelp({ support, preview, title, example }: { support: Support; preview?: string; title: string; example: ExampleId }) {
   const [copied, setCopied] = useState<string>();
   const [showPreview, setShowPreview] = useState(false);
-  const copy = (url: string) => { void navigator.clipboard?.writeText(url).then(() => setCopied(url), () => setCopied(undefined)); };
+  const copy = (url: string) => { track("GPU Help", { example, action: "copy-flag" }); void navigator.clipboard?.writeText(url).then(() => setCopied(url), () => setCopied(undefined)); };
   return <section className="gpu-help" aria-labelledby="gpu-help-title">
     <div className="gpu-help-text">
       <h3 id="gpu-help-title">{support === "chrome-flags" ? "Turn on GPU mode in Chrome Canary" : "You're seeing the ordinary DOM version"}</h3>
@@ -250,7 +309,7 @@ function GpuHelp({ support, preview, title }: { support: Support; preview?: stri
         ? "This browser doesn't have HTML-in-Canvas turned on. Everything below works as ordinary DOM; GPU mode adds the effects described under the stage."
         : "GPU mode needs Chrome Canary's experimental HTML-in-Canvas. Every example below still works here as plain DOM, with the same controls."}</p>
       <ol>
-        <li>Install <a href="https://www.google.com/chrome/canary/" target="_blank" rel="noreferrer">Chrome Canary</a>.</li>
+        <li>Install <a href="https://www.google.com/chrome/canary/" target="_blank" rel="noreferrer" onClick={() => track("GPU Help", { example, action: "canary" })}>Chrome Canary</a>.</li>
         {flags.map(flag => <li key={flag.url}>Open <code>{flag.url}</code>
           <button type="button" className="copy" onClick={() => copy(flag.url)}>{copied === flag.url ? "Copied" : "Copy"}</button>
           and set it to <strong>Enabled</strong>.</li>)}
@@ -258,7 +317,7 @@ function GpuHelp({ support, preview, title }: { support: Support; preview?: stri
       </ol>
     </div>
     {preview && <div className="gpu-help-preview">
-      <button type="button" className="preview-toggle" aria-expanded={showPreview} onClick={() => setShowPreview(value => !value)}>
+      <button type="button" className="preview-toggle" aria-expanded={showPreview} onClick={() => { if (!showPreview) track("GPU Help", { example, action: "preview" }); setShowPreview(value => !value); }}>
         {showPreview ? "Hide GPU preview" : "Show what GPU mode looks like"}</button>
       {showPreview && <img src={preview} alt={`${title} in GPU mode, captured in Chrome Canary`} width={1040} height={700} />}
     </div>}

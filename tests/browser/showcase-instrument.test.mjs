@@ -1,5 +1,5 @@
 /**
- * Browser suite for the showcase's Instrument gallery and showpiece (`#/instrument`, `examples/showcase/src/instrument.tsx`), DPR 1 and 2.
+ * Browser suite for the showcase's Instrument gallery and showpiece (`examples/instrument`, `examples/showcase/src/instrument.tsx`), DPR 1 and 2.
  * The showcase is served by a Vite dev server this suite starts (and closes) on a free port, under the `/underglass/` base.
  * - **Every component at every level:** each tab (the synthesiser, wave 1, wave 2, wave 3, the everyday forms, the input forms, the notes) at the CSS,
  *   Relief, Objects and Instrument levels with GPU on throughout; at the Instrument level every layer is built from parts with nothing
@@ -40,7 +40,7 @@ async function open(browser, { dpr = 1, width = 1280, height = 900, gpu = true, 
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
-  await page.goto(`${base}#/instrument`);
+  await page.goto(`${base}examples/instrument`);
   await page.waitForFunction(() => window.showcase && window.instrumentGallery);
   if (gpu) {
     await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
@@ -460,7 +460,7 @@ test("reduced motion and more contrast are respected: GPU stays, the pointer lig
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
   await page.emulateMedia({ contrast: "more" });
-  await page.goto(`${base}#/instrument`);
+  await page.goto(`${base}examples/instrument`);
   await page.waitForFunction(() => window.showcase && window.instrumentGallery);
   await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
   await page.waitForFunction(() => !window.showcase.state().initializing && window.showcase.state().mode !== "admitting", null, { timeout: 60000 });

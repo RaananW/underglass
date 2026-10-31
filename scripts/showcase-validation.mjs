@@ -81,6 +81,10 @@ try {
   await mkdir(join(tree, "fixtures/react18"), { recursive: true });
   for (const path of ["package.json", "package-lock.json"]) await cp(join(root, "fixtures/react18", path), join(tree, "fixtures/react18", path));
   await copyDependencies(join(root, "node_modules"), join(tree, "node_modules"));
+  // npm keeps a dependency only one workspace uses in that workspace's own `node_modules` (the showcase's
+  // `@vercel/analytics`).
+  try { await copyDependencies(join(root, "examples/showcase/node_modules"), join(tree, "examples/showcase/node_modules")); }
+  catch (error) { if (error.code !== "ENOENT") throw error; }
   await assertPhysicalTree(tree);
   const vite = join(tree, "node_modules/vite/bin/vite.js");
   const tsc = join(tree, "node_modules/typescript/bin/tsc");
@@ -103,7 +107,7 @@ try {
   await command([vite, "build"], library, "library-build");
   await command([tsc, "-p", "tsconfig.json"], library, "library-declarations");
   await publish(library, "@underglass/react");
-  // The Strata gallery (`#/strata`) uses `@underglass/ui`: its JavaScript, declarations and stylesheets.
+  // The Strata gallery (`examples/strata`) uses `@underglass/ui`: its JavaScript, declarations and stylesheets.
   const ui = join(tree, "packages/ui");
   await command([vite, "build"], ui, "ui-build");
   await command([tsc, "-p", "tsconfig.json"], ui, "ui-declarations");
@@ -119,12 +123,15 @@ try {
   async function checkAssets(directory, prefix = "") {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const path = join(directory, entry.name), name = `${prefix}${entry.name}`;
-      if (entry.isDirectory()) { assert.equal(name, "assets"); await checkAssets(path, "assets/"); }
+      if (entry.isDirectory()) { assert.ok(name === "assets" || name === "examples", name); await checkAssets(path, `${name}/`); }
       else {
-        // Hashed JS/CSS plus the JPEG previews of GPU mode shown to browsers that cannot run it.
-        assert.ok(name === "index.html" || /^assets\/[\w.-]+\.(js|css|jpg)$/.test(name), `Unexpected public asset: ${name}`);
+        // The pages and site files `seo.ts` writes, the icons and social card, hashed JS/CSS and the JPEG
+        // previews of GPU mode shown to browsers that cannot run it.
+        assert.ok(/^(?:(?:index|404)\.html|robots\.txt|sitemap\.xml|favicon\.svg|og\.jpg|apple-touch-icon\.png|examples\/[\w-]+\.html|assets\/[\w.-]+\.(?:js|css|jpg))$/.test(name),
+          `Unexpected public asset: ${name}`);
         const bytes = await readFile(path);
         if (name.endsWith(".jpg")) assert.ok(bytes[0] === 0xff && bytes[1] === 0xd8, `Public image is not a JPEG: ${name}`);
+        else if (name.endsWith(".png")) assert.equal(bytes.readUInt32BE(0), 0x89504e47, `Public image is not a PNG: ${name}`);
         else assert.ok(!/\/Users\/|session-state|evidence\/phase|PRIVATE KEY|sourceMappingURL/.test(bytes.toString()), `Private asset leak: ${name}`);
         assets.push({ path: name, bytes: bytes.length, sha256: sha(bytes) });
       }
@@ -149,6 +156,13 @@ try {
     try { assert.equal((await fetch(url)).status, 200); break; }
     catch (error) { if (attempt === 99 || server.exitCode !== null) throw error; await new Promise(done => setTimeout(done, 100)); }
   }
+  // Each example has its own page with its own title and canonical URL, and the site files are served.
+  for (const example of ["motion", "strata"]) {
+    const response = await fetch(`${url}examples/${example}`);
+    assert.equal(response.status, 200);
+    assert.match(await response.text(), new RegExp(`<link rel="canonical" href="https://underglass.dev/examples/${example}">`));
+  }
+  for (const file of ["sitemap.xml", "robots.txt", "favicon.svg", "og.jpg", "apple-touch-icon.png"]) assert.equal((await fetch(`${url}${file}`)).status, 200, file);
   // Every script and stylesheet the page references must be served.
   for (const asset of html.matchAll(/(?:src|href)="(\/underglass\/assets\/[^"]+)"/g)) {
     assert.equal((await fetch(`http://127.0.0.1:${port}${asset[1]}`)).status, 200);
@@ -172,7 +186,7 @@ try {
       const errors = [];
       page.on("pageerror", error => errors.push(String(error)));
       // The page exposes a `window.showcase` test hook (state, controller, React versions).
-      await page.goto(`${url}#/layers`);
+      await page.goto(`${url}examples/layers`);
       await page.waitForFunction(() => window.showcase);
       record.peer = await page.evaluate(() => ({ react: window.showcase.react, reactDOM: window.showcase.reactDOM }));
       assertRuntimePeer(record.peer, "19.3.1");
@@ -230,7 +244,7 @@ try {
         focused: document.activeElement === node, selection: [node.selectionStart, node.selectionEnd] })),
       { original: true, value: narrowTitle, focused: true, selection: [1, 3] });
       if (lane === "native") { await page.evaluate(() => window.showcase.controller.enable()); assert.equal((await state()).mode, "gpu"); }
-      await page.locator('.example-card[href="#/motion"]').click();
+      await page.locator('.example-card[href$="/examples/motion"]').click();
       await studioButton("Play layer journey").waitFor();
       await settle();
       // Motion: compare the canvas before and after starting the journey, then over a 250 ms window require
@@ -272,7 +286,7 @@ try {
       }
       // Let the journey finish before moving to the next example.
       await page.waitForTimeout(1700);
-      await page.locator('.example-card[href="#/effects"]').click();
+      await page.locator('.example-card[href$="/examples/effects"]').click();
       await studioButton("Apply chromatic effect").waitFor();
       await settle();
       // Effects: the decorative layer must be inert and hidden from assistive tech, the original title input
@@ -307,7 +321,7 @@ try {
         assert.ok(changed > 50, `Real decorative shader changed pixels: ${changed}`);
         record.changedEffectPixels = changed;
       }
-      await page.locator('.example-card[href="#/tasks"]').click();
+      await page.locator('.example-card[href$="/examples/tasks"]').click();
       await page.getByLabel("New task", { exact: true }).waitFor();
       await settle();
       await page.getByLabel("New task", { exact: true }).fill("Showcase task");
@@ -321,7 +335,7 @@ try {
       assert.match(await page.locator("#task-message").innerText(), /Saved/);
       if (lane === "native") await output.screenshot({ path: join(run, "native-tasks.png") });
       // Fluent release board: stock Fluent UI v9 controls, springs and transition effects on live layers.
-      await page.locator('.example-card[href="#/fluent"]').click();
+      await page.locator('.example-card[href$="/examples/fluent"]').click();
       await page.getByRole("button", { name: "Add item", exact: true }).waitFor();
       const springTo = (id, x, y) => page.waitForFunction(([id, x, y]) => {
         const transform = window.showcase.state().layers.find(layer => layer.id === id)?.transform;
@@ -426,7 +440,7 @@ try {
       record.fluent.released = await fluentMode("released");
       // GPU or CSS?: every comparison keeps the lane's mode. The colour map is the shader's work: the Underglass
       // pane is the raw grey capture in DOM and coloured on the GPU, frozen while paused and fresh while running.
-      await page.locator('.example-card[href="#/compare"]').click();
+      await page.locator('.example-card[href$="/examples/compare"]').click();
       const comparisonInputs = page.locator(".stage input[name=compare-scene]");
       await comparisonInputs.first().waitFor();
       const comparisons = await comparisonInputs.evaluateAll(inputs => inputs.map(input => input.value));
@@ -511,30 +525,37 @@ try {
       record.disposed = await state();
       assert.ok(Object.values(record.disposed.resources).every(value => value === 0));
       assert.ok(Object.values(record.disposed.runtimeResources).every(value => value === 0));
-      // Deep links: opening `#/effects` and reloading must show that example in DOM mode (GPU is opt-in).
+      // Deep links: opening `examples/effects` and reloading must show that example in DOM mode (GPU is opt-in).
+      // An old `#/effects` link opens the same page and moves to its path.
       await page.goto("about:blank");
       await page.goto(`${url}#/effects`);
+      await studioButton("Apply chromatic effect").waitFor();
+      assert.equal(await page.evaluate(() => location.pathname + location.hash), "/underglass/examples/effects");
+      assert.equal(await page.title(), "Shader lab | Underglass examples");
+      assert.equal(await page.locator('link[rel="canonical"]').getAttribute("href"), "https://underglass.dev/examples/effects");
+      await page.goto("about:blank");
+      await page.goto(`${url}examples/effects`);
       await studioButton("Apply chromatic effect").waitFor();
       await page.reload();
       await studioButton("Apply chromatic effect").waitFor();
       assert.equal((await state()).mode, "dom");
       await page.locator('a[href="#about"]').click();
-      assert.equal(await page.locator(".example-card[aria-current]").getAttribute("href"), "#/effects");
-      await page.locator('a[href="#/motion"].example-card').focus();
+      assert.equal(await page.locator(".example-card[aria-current]").getAttribute("href"), "/underglass/examples/effects");
+      await page.locator('a[href$="/examples/motion"].example-card').focus();
       await page.keyboard.press("Enter");
       await studioButton("Play layer journey").waitFor();
       // The studio's own picker switches examples in place, through the same hash route.
       assert.equal(await page.getByLabel("Example", { exact: true }).inputValue(), "motion");
       await page.getByLabel("Example", { exact: true }).selectOption("effects");
       await studioButton("Apply chromatic effect").waitFor();
-      assert.equal(await page.evaluate(() => location.hash), "#/effects");
-      assert.equal(await page.locator(".example-card[aria-current]").getAttribute("href"), "#/effects");
+      assert.equal(await page.evaluate(() => location.pathname), "/underglass/examples/effects");
+      assert.equal(await page.locator(".example-card[aria-current]").getAttribute("href"), "/underglass/examples/effects");
       await page.evaluate(() => scrollTo(0, 0));
       await page.screenshot({ path: join(run, `${lane}-desktop.png`) });
       // Mobile viewport: no horizontal overflow and a single site header.
       const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
       const mobile = await mobileContext.newPage();
-      await mobile.goto(`${url}#/motion`);
+      await mobile.goto(`${url}examples/motion`);
       await mobile.waitForFunction(() => window.showcase);
       await mobile.waitForTimeout(300);
       assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -551,7 +572,7 @@ try {
       const strataContext = await browser.newContext({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: 1 });
       const strata = await strataContext.newPage();
       strata.on("pageerror", error => errors.push(String(error)));
-      await strata.goto(`${url}#/strata`);
+      await strata.goto(`${url}examples/strata`);
       await strata.waitForFunction(() => window.showcase && window.strataShowcase);
       await strata.locator(".stage").scrollIntoViewIfNeeded();
       const strataMode = async label => {

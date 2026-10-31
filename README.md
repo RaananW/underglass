@@ -23,11 +23,11 @@ Principles (the [GPU-first contract](docs/architecture.md#gpu-first-contract)):
 
 ## Gallery
 
-Screenshots from the [live showcase](https://raananw.github.io/underglass/), taken in Chrome
+Screenshots from the [live showcase](https://underglass.dev/), taken in Chrome
 Canary with GPU presentation on. Every button, input and like counter in them is the
 original React element; the GPU only draws it.
 
-[![Webcam pond: plain HTML koi refracted by a WGSL water shader](examples/showcase/src/previews/webcam-pond.jpg)](https://raananw.github.io/underglass/#/pond)
+[![Webcam pond: plain HTML koi refracted by a WGSL water shader](examples/showcase/src/previews/webcam-pond.jpg)](https://underglass.dev/examples/pond)
 
 **Webcam pond.** The koi are plain `<span>`s, the text on the pond floor is a `<p>` you
 type into, and the optional camera image is a `<video>`. A ripple refracts all of it and
@@ -36,9 +36,9 @@ The camera image never leaves the page.
 
 | | |
 | --- | --- |
-| [![Postcard studio](examples/showcase/src/previews/postcard-studio.jpg)](https://raananw.github.io/underglass/#/layers) | [![Card deck](examples/showcase/src/previews/card-deck.jpg)](https://raananw.github.io/underglass/#/motion) |
+| [![Postcard studio](examples/showcase/src/previews/postcard-studio.jpg)](https://underglass.dev/examples/layers) | [![Card deck](examples/showcase/src/previews/card-deck.jpg)](https://underglass.dev/examples/motion) |
 | **Postcard studio.** A native form edits a GPU-presented card; *Riso print* shifts the artwork's colour channels apart, which no CSS filter can do to rendered HTML. | **Card deck.** Cards with native Like buttons fan, stack and shuffle as GPU layers, and the felt table ripples when they land. |
-| [![Shader lab](examples/showcase/src/previews/shader-lab.jpg)](https://raananw.github.io/underglass/#/effects) | [![Notification stack](examples/showcase/src/previews/notification-stack.jpg)](https://raananw.github.io/underglass/#/presence) |
+| [![Shader lab](examples/showcase/src/previews/shader-lab.jpg)](https://underglass.dev/examples/effects) | [![Notification stack](examples/showcase/src/previews/notification-stack.jpg)](https://underglass.dev/examples/presence) |
 | **Shader lab.** Ripple, chromatic split, noise dissolve and application-written WGSL chained on live DOM artwork. | **Notification stack.** `Presence` keeps each toast's React subtree, with its real Dismiss button, through its exit. |
 
 GPU mode needs Chrome Canary with HTML-in-Canvas enabled (see [Requirements](#requirements)).
@@ -79,7 +79,8 @@ npm run dev:showcase   # React example gallery
 The [showcase](docs/showcase.md) is a separate private React gallery of native
 layers, motion, effects and the task app. **GPU demos require Chrome Canary with
 HTML-in-Canvas enabled**; ordinary DOM mode works without flags. It deploys to
-GitHub Pages at <https://raananw.github.io/underglass/> from `main`.
+<https://underglass.dev/> on Vercel, and to GitHub Pages at
+<https://raananw.github.io/underglass/>, from `main`.
 
 ## Minimal usage
 
