@@ -87,8 +87,10 @@ canonical URL in step when examples switch in place.
 Builds made on Vercel (`VERCEL=1`) load Vercel Web Analytics (`src/analytics.ts`);
 other builds, GitHub Pages included, load nothing and send nothing. It sets no
 cookies. Page views count each example's page. The custom events (a Pro plan feature)
-are `GPU Enable` (result mode, the status line's headline and the up-front browser
-guess), `GPU Lost` (GPU mode ended without the visitor asking), `Studio Action`
+are `Browser Support` (once per visit, kept to one by a `sessionStorage` flag: the
+up-front guess of whether this browser can run GPU mode, `likely`, `chrome-flags` or
+`unsupported`), `GPU Enable` (result mode, the status line's headline and the up-front
+browser guess), `GPU Lost` (GPU mode ended without the visitor asking), `Studio Action`
 (**Use ordinary DOM**, **Dispose example**), `GPU Help` (preview, copied flag,
 Canary link) and `Outbound Link` (GitHub, npm). No event carries anything a visitor
 typed, searched or filmed. The footer says when analytics is on.

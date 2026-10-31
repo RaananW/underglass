@@ -11,7 +11,7 @@ import { createCanvasHosts, mountCanvasApp, type CanvasController } from "@under
 import { Demo } from "./demos";
 import { examplePath, exampleFromPath, examples, pageMeta, previews as previewNames, route, searchExamples, site, type ExampleId } from "./catalog";
 import { detectSupport, explain, flags, type Support } from "./support";
-import { analyticsEnabled, startAnalytics, track } from "./analytics";
+import { analyticsEnabled, startAnalytics, track, trackSupport } from "./analytics";
 import "./style.css";
 
 /** GPU-mode screenshots (Chrome Canary) shown to visitors whose browser cannot run it, by example. */
@@ -43,6 +43,7 @@ applyHead(pageExample());
 /** True for a click the browser should handle itself: another button, or a modifier that opens a new tab or window. */
 const ownClick = (event: MouseEvent) => event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
 startAnalytics();
+trackSupport(detectSupport());
 
 /** The whole page: marketing sections, the example catalog and the live studio with its stage. */
 function App() {
