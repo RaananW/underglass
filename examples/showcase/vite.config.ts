@@ -22,5 +22,13 @@ export default defineConfig({
   // for it, the library and this app.
   resolve: { dedupe: ["react", "react-dom"] },
   // No source maps in the public build; the asset check refuses source-map references.
-  build: { sourcemap: false, outDir: "dist" },
+  build: { sourcemap: false, outDir: "dist", rolldownOptions: {
+    // Fluent UI and Radix mark their modules "use client" (a React Server Components directive), and the
+    // bundler warns once per module (about 950 warnings) that it drops it. This is a browser-only bundle, so
+    // dropping it changes nothing; every other warning still prints.
+    onLog(level, log, handler) {
+      if (log.code === "MODULE_LEVEL_DIRECTIVE" && log.message.includes('"use client"')) return;
+      handler(level, log);
+    },
+  } },
 });
