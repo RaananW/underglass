@@ -38,3 +38,6 @@ fixtures/worker/app/program.json
 
 # Vercel CLI project link (vercel link)
 .vercel/
+
+# Documentation site pages, generated from docs/ by examples/docs/sync.mjs.
+/examples/docs/src/content/docs/

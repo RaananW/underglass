@@ -82,6 +82,36 @@ renders that card and `public/apple-touch-icon.png`; run it by hand after a bran
 headline change and commit the images. `main.tsx` keeps the title, description and
 canonical URL in step when examples switch in place.
 
+`robots.txt` also names the documentation site's sitemap (below).
+
+## Documentation site
+
+<https://underglass.dev/docs> is the private `examples/docs` workspace, an
+[Astro Starlight](https://starlight.astro.build/) site. `docs/` stays the only source:
+`examples/docs/pages.mjs` lists the published files (the guide, the reference, the Strata
+design language and every page in `docs/ui-library/components/`), and `sync.mjs`
+generates `src/content/docs/` from them before each dev or build run (git-ignored). A
+page's `# H1` becomes its title and its first paragraph its description; a relative link
+becomes a `/docs/...` URL when the target is published, and a GitHub URL when it is not
+(contributor docs, the archive, source files). Every page has an edit link to its file in
+`docs/`. Starlight adds the sidebar, Pagefind search (built at build time, no service),
+light and dark themes and `docs/sitemap-index.xml`. The site has no 404 page of its own;
+the showcase's root `404.html` serves.
+
+```sh
+npm run dev:docs       # localhost:5192/docs
+npm run build:docs     # examples/docs/dist only
+npm run preview:docs   # localhost:5193/docs
+npm run build:site     # showcase, then docs, copied to examples/showcase/dist/docs
+```
+
+`scripts/assemble-site.mjs`, the last step of `build:site`, refuses symlinks, local paths,
+private keys and source-map references in the docs build, fails on any link to a missing
+`/docs` page or heading, and then copies the docs build into the showcase output. To
+publish another file, add it to `pages.mjs`; a new component page is picked up by itself.
+`tests/unit/docs-site.unit.test.mjs` checks the page rules and that the Instrument
+gallery's anatomy-page links name headings that exist.
+
 ## Analytics
 
 Builds made on Vercel (`VERCEL=1`) load Vercel Web Analytics (`src/analytics.ts`);
@@ -93,7 +123,9 @@ up-front guess of whether this browser can run GPU mode, `likely`, `chrome-flags
 browser guess), `GPU Lost` (GPU mode ended without the visitor asking), `Studio Action`
 (**Use ordinary DOM**, **Dispose example**), `GPU Help` (preview, copied flag,
 Canary link) and `Outbound Link` (GitHub, npm). No event carries anything a visitor
-typed, searched or filmed. The footer says when analytics is on.
+typed, searched or filmed. The footer says when analytics is on. The documentation
+site's Vercel builds load the same script in each page's head and count page views
+only, with no custom events.
 
 ## Loading
 
@@ -147,14 +179,14 @@ The canonical site is <https://underglass.dev/>, the Vercel project `underglass`
 Weber Tech team. Vercel builds from Git: production from `main`, a preview for each
 pull request (previews are not indexed: Vercel sends `X-Robots-Tag: noindex` on them).
 `vercel.json` holds the whole build: `npm ci --ignore-scripts`, then
-`CANVAS_SHOWCASE_BASE=/ npm run build:showcase`, publishing `examples/showcase/dist`
-with clean URLs, no trailing slash, a one-year immutable cache on the hashed
+`CANVAS_SHOWCASE_BASE=/ npm run build:site` (the showcase with the documentation site in
+its `docs/` folder), publishing `examples/showcase/dist` with clean URLs, no trailing slash, a one-year immutable cache on the hashed
 `/assets/` and security headers (`nosniff`, a referrer policy, same-origin framing and
 a permissions policy that allows only this site's camera, for the pond). It has no
 `ignoreCommand`: `.vercelignore` removes `.git` before such a command would run, so every
 push builds (about a minute).
-`.vercelignore` limits what Vercel uploads and builds to the workspaces, the lockfile
-and the two scripts the build runs. The `www` host redirects to the apex domain.
+`.vercelignore` limits what Vercel uploads and builds to the workspaces, the lockfile,
+`docs/` without its archive, and the three scripts the build runs. The `www` host redirects to the apex domain.
 
 `.github/workflows/showcase-pages.yml` builds and deploys the showcase to GitHub
 Pages (<https://raananw.github.io/underglass/>) on every push to `main` that touches

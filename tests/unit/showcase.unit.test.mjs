@@ -61,6 +61,7 @@ test("every page has its own title, description, canonical URL and structured da
   const urls = [...sitemap().matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => match[1]);
   assert.deepEqual(urls, [`${site.origin}/`, ...examples.map(example => `${site.origin}/examples/${example.id}`)]);
   assert.match(robots(), new RegExp(`Sitemap: ${site.origin}/sitemap.xml`));
+  assert.match(robots(), new RegExp(`Sitemap: ${site.origin}/docs/sitemap-index.xml`));
   assert.match(notFoundPage("/"), /<meta name="robots" content="noindex">/);
 });
 test("Pages workflow deploys only main, uses immutable pins and confines deployment permissions", async () => {

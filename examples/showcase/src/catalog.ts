@@ -173,6 +173,8 @@ export const site = {
   title: "Underglass: real React controls, painted by the GPU",
   description: "Underglass draws your original React DOM into one shared WebGPU compositor with Chrome's HTML-in-Canvas API, while inputs, focus and clicks stay native.",
   repository: "https://github.com/RaananW/underglass",
+  /** The documentation site (`examples/docs`), served beside the showcase on the canonical domain. */
+  docs: "https://underglass.dev/docs",
   npm: "https://www.npmjs.com/package/@underglass/react",
   author: { name: "Raanan Weber", url: "https://github.com/RaananW" },
 } as const;

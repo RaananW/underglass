@@ -85,7 +85,7 @@ export function noscriptBody(id: ExampleId | undefined, base: string) {
   const { description } = pageMeta(id);
   const links = examples.map(example => `<li><a href="${base}examples/${example.id}">${html(example.title)}</a>: ${html(example.summary)}</li>`);
   return `<noscript><main><h1>${html(id ? examples.find(example => example.id === id)!.title : site.title)}</h1><p>${html(description)}</p>`
-    + `<p>The live examples need JavaScript. <a href="${base}">Underglass home</a> · <a href="${site.repository}">Source on GitHub</a></p>`
+    + `<p>The live examples need JavaScript. <a href="${base}">Underglass home</a> · <a href="${site.docs}">Documentation</a> · <a href="${site.repository}">Source on GitHub</a></p>`
     + `<h2>Examples</h2><ul>${links.join("")}</ul></main></noscript>`;
 }
 
@@ -96,8 +96,8 @@ export function sitemap() {
     urls.map(url => `  <url><loc>${url}</loc></url>`).join("\n")}\n</urlset>\n`;
 }
 
-/** `robots.txt`: everything may be crawled; names the sitemap. */
-export const robots = () => `User-agent: *\nAllow: /\n\nSitemap: ${site.origin}/sitemap.xml\n`;
+/** `robots.txt`: everything may be crawled; names the showcase's sitemap and the documentation site's (`examples/docs`). */
+export const robots = () => `User-agent: *\nAllow: /\n\nSitemap: ${site.origin}/sitemap.xml\nSitemap: ${site.docs}/sitemap-index.xml\n`;
 
 /** `404.html`: a small static page, not indexed, with links back into the site. */
 export function notFoundPage(base: string) {

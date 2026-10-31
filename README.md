@@ -163,6 +163,7 @@ framework-neutral runtime exported from `packages/core/src/index.ts`.
 | `packages/ui` | Strata, the 3D design language: tokens, CSS and components for DOM, React, Vue and Astro (package `@underglass/ui`) |
 | `examples/playground` | Engineering HTML pages, demo apps and probes (Vite root) |
 | `examples/showcase` | The public gallery at [underglass.dev](https://underglass.dev/) |
+| `examples/docs` | The documentation site at [underglass.dev/docs](https://underglass.dev/docs), built from `docs/` |
 | `tests/unit`, `tests/browser`, `tests/helpers`, `tests/compiler` | Test suites and shared helpers |
 | `fixtures/` | Installed-consumer, exact React 18, compiler and worker fixtures |
 | `docs/` | Architecture, API, adoption, verification, open issues, history |
@@ -180,6 +181,8 @@ Run from the repository root.
 | `npm run dev:showcase` | Build the library, then run the showcase dev server |
 | `npm run build` | Build library and playground |
 | `npm run build:showcase` | Build the library, then the showcase |
+| `npm run dev:docs` | Run the documentation site's dev server |
+| `npm run build:site` | Build the showcase and the documentation site into one output, as Vercel deploys it |
 | `npm run typecheck` | Type-check library, playground and showcase |
 | `npm run test:unit` | Node unit tests |
 | `npm run test:browser` | Build, then Playwright browser tests (Chrome Canary) |
@@ -226,6 +229,9 @@ Not qualified (see [open issues](docs/open-issues.md), SCOPE entries):
   No speedup or production qualification is claimed.
 
 ## Documentation
+
+The guide, the reference and the Strata pages are also published at
+<https://underglass.dev/docs>, built from this repository's `docs/` folder.
 
 - **Guide:** [getting started](docs/guide/getting-started.md), [concepts](docs/guide/concepts.md),
   [motion](docs/guide/motion.md), [effects](docs/guide/effects.md),
