@@ -4,7 +4,22 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { capabilities, waitForPaint, validateGeometry, nativeEditingControl, nativeScrollKind } from "../../packages/core/src/native.ts";
+import { capabilities, htmlInCanvasImplementation, waitForPaint, validateGeometry, nativeEditingControl, nativeScrollKind } from "../../packages/core/src/native.ts";
+
+// The polyfill is named only when its own status says it is active; its mere presence (installed where the browser is
+// native, or uninstalled again) means the browser's implementation.
+test("the HTML-in-Canvas implementation is read from the polyfill's published status", () => {
+  assert.equal(htmlInCanvasImplementation(undefined), "native");
+  assert.equal(htmlInCanvasImplementation({}), "native");
+  assert.equal(htmlInCanvasImplementation({ HTMLInCanvasPolyfill: { polyfilled: true, getStatus: () => ({ polyfilled: true }) } }), "polyfill");
+  assert.equal(htmlInCanvasImplementation({ HTMLInCanvasPolyfill: { polyfilled: false, getStatus: () => ({ polyfilled: false }) } }), "native");
+  // getStatus is the live answer; the copied property is the fallback when it is missing or throws.
+  assert.equal(htmlInCanvasImplementation({ HTMLInCanvasPolyfill: { polyfilled: true, getStatus: () => ({ polyfilled: false }) } }), "native");
+  assert.equal(htmlInCanvasImplementation({ HTMLInCanvasPolyfill: { polyfilled: true } }), "polyfill");
+  assert.equal(htmlInCanvasImplementation({ HTMLInCanvasPolyfill: { polyfilled: true, getStatus() { throw new Error("broken"); } } }), "polyfill");
+  // Only a literal true counts.
+  assert.equal(htmlInCanvasImplementation({ HTMLInCanvasPolyfill: { polyfilled: "yes" } }), "native");
+});
 
 test("native editing eligibility distinguishes original text controls from viewport targets", () => {
   class Input { type = "text"; disabled = false; isConnected = true; }

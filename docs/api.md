@@ -212,7 +212,7 @@ Matching React 18 and 19 types/builds and actual mounted behavior are recorded i
 | `createMotion(id, descriptor)` | Numeric keyframes/timing for new applications; creates one managed native source in idle DOM or active GPU and returns explicit ownership/playback/disposal controls |
 | `invalidate(id?)` | Explicit dirty enrollment(s), with normal native paint/input/mutation invalidation still enabled |
 | `settle()` | Bounded completion of already scheduled capture/draw work; not a promise that future browser paint cannot occur. Content that keeps changing (a `requestAnimationFrame` loop, a video) does not hold it: once a paint it waited for completes, a newer paint request is not awaited |
-| `state()` | Current capability/mode/reason, registry matrices, bounded telemetry and owned-resource ledgers |
+| `state()` | Current capability/mode/reason, registry matrices, bounded telemetry and owned-resource ledgers. `htmlInCanvas` names the HTML-in-Canvas implementation the latest admission tested: `"native"` (the browser's own), `"polyfill"` ([`@underglass/html-in-canvas-polyfill`](https://github.com/RaananW/html-in-canvas-polyfill), read from its `HTMLInCanvasPolyfill` global, never imported) or `null` before the first admission |
 | `dispose()` | Serialized final unmount/observer/listener/canvas release; refuses while healthy GPU cleanup remains pending |
 
 Editable and top-layer admission checks include the enrolled element itself,
