@@ -42,7 +42,8 @@ The camera image never leaves the page.
 | **Shader lab.** Ripple, chromatic split, noise dissolve and application-written WGSL chained on live DOM artwork. | **Notification stack.** `Presence` keeps each toast's React subtree, with its real Dismiss button, through its exit. |
 
 GPU mode needs Chrome Canary with HTML-in-Canvas enabled (see [Requirements](#requirements)).
-In other browsers the showcase runs as ordinary DOM with the same controls.
+In Chrome and Edge without the flags, the showcase offers to run it on an opt-in polyfill;
+in other browsers it runs as ordinary DOM with the same controls.
 
 ## Status
 
@@ -59,7 +60,8 @@ under one version (see each package's `CHANGELOG.md` and [releasing](docs/releas
 
 It is for deliberately adopted small applications, not for loading arbitrary
 websites or libraries unchanged. GPU mode needs Chrome Canary with experimental
-flags; plain DOM mode works in any browser. Licensed under the
+flags, or the opt-in HTML-in-Canvas polyfill in other Chromium browsers; plain DOM
+mode works in any browser. Licensed under the
 [Apache License 2.0](LICENSE). History and acceptance records are in
 [docs/archive/history.md](docs/archive/history.md).
 
@@ -87,6 +89,12 @@ components, and `@underglass/css-compiler` only for its build-time route.
   or enable `chrome://flags/#canvas-draw-element` and
   `chrome://flags/#enable-experimental-web-platform-features`. Support is
   verified functionally at runtime (admission), not inferred from API presence.
+- Without HTML-in-Canvas: GPU mode can run on the opt-in
+  [`@underglass/html-in-canvas-polyfill`](https://github.com/RaananW/html-in-canvas-polyfill)
+  in browsers that have WebGPU and `Element.moveBefore` (Chrome and Edge today, not
+  Safari). Admission tests it like the browser's own API, and `state().htmlInCanvas`
+  reports which one it tested. Changes reach the GPU a few frames late, and large
+  layers cost more: see [Browsers without HTML-in-Canvas](docs/guide/polyfill.md).
 
 ## Quick start
 
