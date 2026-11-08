@@ -195,7 +195,7 @@ Underglass checks working capture and geometry and reports refusal reasons.
 Visitors without native HTML-in-Canvas can run GPU mode through
 [`@underglass/html-in-canvas-polyfill`](https://github.com/RaananW/html-in-canvas-polyfill)
 (`src/polyfill.ts`). The site never loads it on its own: the help panel offers
-**Run GPU mode on the polyfill**, which downloads it (its own chunk, about 50 kB),
+**Run GPU mode on the polyfill**, which downloads it (its own chunk, about 70 kB),
 installs it and requests admission. Admission tests the polyfill with the same
 functional pixel and hit probes it runs against a browser; if it refuses, the
 polyfill is removed again and the reason stays in the status line. While GPU mode
@@ -206,41 +206,45 @@ to the polyfill's limitations.
 The offer appears only where it can work: no native support, and both WebGPU and
 `Element.moveBefore`, which Underglass needs and the polyfill does not provide
 (Safari has no `moveBefore` yet, so it gets no offer). Examples that don't run well
-on it are listed in `polyfillExcluded` with the reason shown to visitors; with the
+on it can be listed in `polyfillExcluded` with the reason shown to visitors; with the
 polyfill installed, **Enable experimental GPU** is disabled on them, and switching
-to one from polyfilled GPU mode returns to ordinary DOM first.
+to one from polyfilled GPU mode returns to ordinary DOM first. None is listed today.
 
-Measured on 2026-11-08 with polyfill 0.3.0, Chrome 156.0.8078.80 stable (no flags)
+Measured on 2026-11-08 with polyfill 0.4.0, Chrome 156.0.8078.80 stable (no flags)
 against Canary 159.0.8150.0 with the flags, at 1400×1000, headless on Windows. The
 frame rate is taken while the pointer moves over the stage, so hovers cause captures;
 input to paint is the median of six key presses or clicks:
 
 | Example | Polyfill fps | Hits | Input to paint (polyfill / native) | Offered |
 |---|---|---|---|---|
-| layers, motion, effects, presence, tasks, pond, compare | 58–60 | all correct | 48–84 ms / 9–16 ms | yes |
-| instrument | 49–59 | all correct | 37 ms / – | yes |
-| fluent | 55–57 | all correct | 87 ms / 12 ms | yes |
-| strata | 28–36 | all correct | 291 ms / 16 ms (a click in the gallery) | no |
+| layers, motion, effects, presence, tasks, pond, compare | 59–60 | all correct | 28–102 ms / 10–17 ms | yes |
+| instrument | 58 | all correct | 38 ms / – | yes |
+| fluent | 58 | all correct | 78 ms / 19 ms | yes |
+| strata | 40 | all correct | 109 ms / 16 ms (a click in the gallery) | yes, since 0.4.0 |
 
 0.1.0 put every Fluent card's hit region on the last card, and an endless spinner
 held Strata at 6 fps; 0.1.1 fixed both. 0.2.0 recaptures on hover only when a
 `:hover` rule matches different elements, which took Strata from 12 to about 30 fps
-while the pointer moves (0.2.0 and 0.3.0 measured 27 and 30–36 fps back to back).
-Strata stays excluded because its gallery is one layer of about 500 elements: every
-click still re-serializes all of it.
+while the pointer moves. Until 0.4.0 every click in Strata's gallery, one layer of
+about 500 elements, re-serialized all of it and took about 0.3 s to reach the GPU,
+so Strata was not offered. 0.4.0 reuses the styles of elements that can't have
+changed, which brought that click to 109 ms (291 ms on 0.3.0) and the frame rate to
+about 40 fps, still the lowest of the examples.
 
 0.2.0 also drew Strata wrongly: no GPU relief on any component, square radios, a grey
 disabled field, markers in the tree, a table taller than its card and a wrapped icon
-button. 0.3.0 fixes all of them; every Strata tab and the Objects level now match
-native to within 0.1% of their pixels once the screenshots are aligned (the page sits
-2 px lower in Chrome than in Canary). The one difference left is the invoice table's
-header, which the polyfill draws a little lighter.
+button. 0.3.0 fixed all of them. On 0.4.0 every Strata tab and the Objects level
+match native to within 0.1% of their pixels once the screenshots are aligned (the
+page sits 2 px lower in Chrome than in Canary), and so do the frames 300 ms after a
+checkbox, a radio, typing, a theme switch and a level switch, before the polyfill's
+idle re-check of reused styles could repair a stale frame. The one difference left is
+the invoice table's header, which the polyfill draws a little lighter.
 
 Playwright's WebKit refused admission (no `Element.moveBefore`) and its Firefox has
 no WebGPU adapter, so neither was measured; a real Firefox build has both and is
-untested. `npm run test:showcase` runs the layers and Fluent scenarios on the
-polyfill, and checks that Strata is kept off it, in Canary with HTML-in-Canvas
-switched off.
+untested. `npm run test:showcase` runs the layers, Fluent and Strata scenarios on the
+polyfill in Canary with HTML-in-Canvas switched off; for Strata it checks the relief
+and a real click on a gallery tab.
 
 ## Deployment
 
