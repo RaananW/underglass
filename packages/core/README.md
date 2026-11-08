@@ -41,6 +41,14 @@ qualified browser contract; useful default DOM is not proof of GPU support. The
 repository's [architecture guide](https://github.com/RaananW/underglass/blob/main/docs/architecture.md#gpu-first-contract)
 states the full GPU-first contract.
 
+Browsers without native HTML-in-Canvas can run GPU mode on the opt-in
+[`@underglass/html-in-canvas-polyfill`](https://www.npmjs.com/package/@underglass/html-in-canvas-polyfill),
+as long as they have WebGPU and `Element.moveBefore` (Chrome and Edge today, not
+Safari). This package never imports it: install it before `enable()`, and admission
+tests it with the same probes. `state().htmlInCanvas` then reads `"polyfill"`.
+Changes reach the GPU a few frames late; the
+[guide](https://underglass.dev/docs/guide/polyfill) covers setup and costs.
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE).
