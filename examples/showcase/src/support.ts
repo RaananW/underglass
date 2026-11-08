@@ -36,6 +36,8 @@ const known: [RegExp, Explanation][] = [
   [/^Current content=drawable/, { title: "GPU mode is on.", hint: "Every control is still the original React element." }],
   [/Ordinary DOM startup/, { title: "Ordinary DOM is ready.", hint: "GPU mode is experimental and starts only when you enable it." }],
   [/Explicit disable/, { title: "Back in ordinary DOM.", hint: "Same controls, same state. Enable GPU again whenever you like." }],
+  [/moveBefore/, { title: "This browser can't move the controls without resetting them.",
+    hint: "GPU mode needs Element.moveBefore, which this browser doesn't have yet. The examples keep working as ordinary DOM." }],
   [/canvas\.content|requestPaint|updateElementGeometry|drawElementImageToTexture unavailable|getElementImageDefaultSize/, {
     title: "This browser doesn't have HTML-in-Canvas.", hint: "GPU mode needs Chrome Canary with the two flags in the steps above. The examples keep working as ordinary DOM." }],
   [/WebGPU unavailable|WebGPU adapter unavailable|requestAdapter|No WebGPU/, { title: "WebGPU isn't available.", hint: "Check chrome://gpu and make sure hardware acceleration is on." }],
