@@ -41,9 +41,13 @@ test("private packages are versioned but not tagged, and the example apps are ne
     const manifest = JSON.parse(await readFile(`${directory}/package.json`, "utf8"));
     assert.ok(config.ignore.includes(manifest.name), `${manifest.name} must be ignored`);
     assert.equal(manifest.private, true);
-    // A pinned version would stop resolving to the workspace once the libraries are versioned.
+    // A pinned version would stop resolving to the workspace once the libraries are versioned. Packages of the
+    // scope published from other repositories (the showcase's html-in-canvas-polyfill) are pinned like any
+    // other registry dependency.
+    const workspace = new Set(libraries.map(({ manifest }) => manifest.name));
     for (const [name, range] of Object.entries(manifest.dependencies ?? {})) {
-      if (name.startsWith("@underglass/")) assert.equal(range, "*", `${manifest.name} -> ${name}`);
+      if (workspace.has(name)) assert.equal(range, "*", `${manifest.name} -> ${name}`);
+      else if (name.startsWith("@underglass/")) assert.match(range, /^\d+\.\d+\.\d+$/, `${manifest.name} -> ${name}`);
     }
   }
 });
