@@ -19,19 +19,25 @@ export const analyticsEnabled = __VERCEL_ANALYTICS__;
  *   mode (`detectSupport`): `likely`, `chrome-flags` or `unsupported`. Against `GPU Enable` it shows how
  *   many visitors could run GPU mode, how many tried and how many got it. It is a guess: only admission
  *   (pressing Enable) proves GPU mode works, and the site never starts it on its own.
- * - `GPU Enable`: a press of **Enable experimental GPU** and what admission decided (`result` is the
- *   resulting mode, `status` the status line's headline), with the up-front browser guess (`support`).
- * - `GPU Lost`: GPU mode ended without the visitor asking (a revocation or fallback), with its headline.
+ * - `GPU Enable`: a press of **Enable experimental GPU** (or **Run GPU mode on the polyfill**) and what
+ *   admission decided (`result` is the resulting mode, `status` the status line's headline), with the
+ *   up-front browser guess (`support`) and whether the browser's own API or the polyfill was admitted
+ *   (`api`), so polyfilled runs never count as native ones.
+ * - `GPU Lost`: GPU mode ended without the visitor asking (a revocation or fallback), with its headline and `api`.
  * - `Studio Action`: **Use ordinary DOM** or **Dispose example**.
- * - `GPU Help`: the help panel was used (`action`: the preview image, a copied flag or the Canary link).
+ * - `GPU Help`: the help panel was used (`action`: the preview image, a copied flag, the Canary link or the
+ *   polyfill button).
  * - `Outbound Link`: a link to the source or the npm package (`target`).
  */
+/** Which HTML-in-Canvas implementation GPU mode ran on: the browser's own, or the opt-in polyfill. */
+export type Api = "native" | "polyfill";
+
 export interface Events {
   "Browser Support": { support: Support };
-  "GPU Enable": { example: ExampleId; result: string; status: string; support: string };
-  "GPU Lost": { example: ExampleId; status: string };
+  "GPU Enable": { example: ExampleId; result: string; status: string; support: string; api: Api };
+  "GPU Lost": { example: ExampleId; status: string; api: Api };
   "Studio Action": { example: ExampleId; action: "disable" | "dispose" };
-  "GPU Help": { example: ExampleId; action: "preview" | "copy-flag" | "canary" };
+  "GPU Help": { example: ExampleId; action: "preview" | "copy-flag" | "canary" | "polyfill" };
   "Outbound Link": { target: "github" | "npm" };
 }
 

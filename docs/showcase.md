@@ -135,10 +135,11 @@ other builds, GitHub Pages included, load nothing and send nothing. It sets no
 cookies. Page views count each example's page. The custom events (a Pro plan feature)
 are `Browser Support` (once per visit, kept to one by a `sessionStorage` flag: the
 up-front guess of whether this browser can run GPU mode, `likely`, `chrome-flags` or
-`unsupported`), `GPU Enable` (result mode, the status line's headline and the up-front
-browser guess), `GPU Lost` (GPU mode ended without the visitor asking), `Studio Action`
-(**Use ordinary DOM**, **Dispose example**), `GPU Help` (preview, copied flag,
-Canary link) and `Outbound Link` (GitHub, npm). No event carries anything a visitor
+`unsupported`), `GPU Enable` (result mode, the status line's headline, the up-front
+browser guess and `api`: `native` or `polyfill`), `GPU Lost` (GPU mode ended without
+the visitor asking, with `api`), `Studio Action` (**Use ordinary DOM**, **Dispose
+example**), `GPU Help` (preview, copied flag, Canary link, polyfill button) and
+`Outbound Link` (GitHub, npm). `api` keeps polyfilled runs out of the native numbers. No event carries anything a visitor
 typed, searched or filmed. The footer says when analytics is on. The documentation
 site's Vercel builds load the same script in each page's head and count page views
 only, with no custom events.
@@ -188,6 +189,41 @@ support:
 After opening the page in that configured Canary session, choose **Enable
 experimental GPU**. Flags alone do not guarantee support in every Canary build;
 Underglass checks working capture and geometry and reports refusal reasons.
+
+## The opt-in polyfill
+
+Visitors without native HTML-in-Canvas can run GPU mode through
+[`@underglass/html-in-canvas-polyfill`](https://github.com/RaananW/html-in-canvas-polyfill)
+(`src/polyfill.ts`). The site never loads it on its own: the help panel offers
+**Run GPU mode on the polyfill**, which downloads it (its own chunk, about 50 kB),
+installs it and requests admission. Admission tests the polyfill with the same
+functional pixel and hit probes it runs against a browser; if it refuses, the
+polyfill is removed again and the reason stays in the status line. While GPU mode
+runs on it, the mode pill reads **GPU active · polyfill**, the stage chrome names
+it, and a note says changes reach the GPU about a tenth of a second late and links
+to the polyfill's limitations.
+
+The offer appears only where it can work: no native support, and both WebGPU and
+`Element.moveBefore`, which Underglass needs and the polyfill does not provide
+(Safari has no `moveBefore` yet, so it gets no offer). Examples that don't run well
+on it are listed in `polyfillExcluded` with the reason shown to visitors; with the
+polyfill installed, **Enable experimental GPU** is disabled on them, and switching
+to one from polyfilled GPU mode returns to ordinary DOM first.
+
+Measured on 2026-11-07 with polyfill 0.1.0, Chrome 156 stable (no flags) against
+Canary 159 with the flags, at 1400×1000, headless on Windows:
+
+| Example | Polyfill fps | Hits | Input to paint (polyfill / native) | Offered |
+|---|---|---|---|---|
+| layers, motion, effects, presence, tasks, pond, compare | 58–60 | all correct | 77–125 ms / 11–14 ms | yes |
+| instrument | 55 | all correct | about 100 ms / – | yes |
+| fluent | 55 | 3 of 12 wrong (hit regions attached to other cards) | 242 ms / 17 ms | no |
+| strata | 6 | correct | no paint within 3 s / 14 ms | no |
+
+Playwright's WebKit refused admission (no `Element.moveBefore`) and its Firefox has
+no WebGPU adapter, so neither was measured; a real Firefox build has both and is
+untested. `npm run test:showcase` runs the layers and Fluent scenario on the polyfill
+in Canary with HTML-in-Canvas switched off.
 
 ## Deployment
 

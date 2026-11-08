@@ -500,6 +500,14 @@ footer { display: flex; justify-content: space-between; align-items: center; gap
 .gpu-help .copy { margin: 0 6px; padding: 2px 9px; border-radius: 7px; border: 1px solid #d9c09a; background: white; font-size: 12px; font-weight: 700; }
 .preview-toggle { padding: 9px 14px; border-radius: 11px; border: 1.5px solid #d7cfdc; background: white; font-weight: 750; font-size: 13px; }
 .gpu-help-preview img { display: block; width: 100%; height: auto; margin-top: 12px; border-radius: 14px; box-shadow: 0 12px 30px #2a183d22; }
+/* The opt-in polyfill: the offer in the help panel, and the note shown while GPU mode runs on it. */
+.polyfill-offer { margin-top: 16px; padding-top: 14px; border-top: 1px dashed #e6cfa6; display: grid; gap: 8px; justify-items: start; }
+.polyfill-offer h4 { margin: 0; font-size: 15px; }
+.polyfill-offer button { padding: 9px 14px; border-radius: 11px; border: 1.5px solid #c9a86f; background: white; font-weight: 750; font-size: 13px; }
+.polyfill-offer button:not(:disabled):hover { background: #fff3dc; }
+.polyfill-off { font-style: italic; }
+.polyfill-note { margin: 14px 0 0; padding: 12px 16px; border-radius: 14px; background: #eef4ff; border: 1px solid #c9d8f6; color: #23365c; font-size: 13.5px; line-height: 1.6; }
+.polyfill-note a { color: inherit; font-weight: 700; }
 .diagnostic-text details { margin-top: 4px; font-size: 12px; color: var(--muted); }
 .diagnostic-text details code { display: block; margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
 

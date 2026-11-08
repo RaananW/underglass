@@ -12,7 +12,8 @@ import type { CanvasController } from "@underglass/react";
 import { loadExample } from "./examples";
 import { examplePath, exampleFromPath, examples, pageMeta, previews as previewNames, route, searchExamples, site, type ExampleId } from "./catalog";
 import { detectSupport, explain, flags, type Support } from "./support";
-import { analyticsEnabled, startAnalytics, track, trackSupport } from "./analytics";
+import { analyticsEnabled, startAnalytics, track, trackSupport, type Api } from "./analytics";
+import { installPolyfill, polyfillExcluded, polyfillLinks, polyfillOffers, polyfillPossible, removePolyfill } from "./polyfill";
 import "./style.css";
 
 /** GPU-mode screenshots (Chrome Canary) shown to visitors whose browser cannot run it, by example. */
@@ -56,6 +57,12 @@ function App() {
   const [diagnostic, setDiagnostic] = useState("Ordinary DOM startup; admission pending.");
   // A guess made once at load; see `detectSupport`. Admission still decides.
   const [support] = useState<Support>(detectSupport);
+  // Whether the help panel offers the HTML-in-Canvas polyfill (see `polyfill.ts`), and whether it is
+  // installed. The ref mirrors the state for the effect's callbacks and for analytics.
+  const [offerPolyfill] = useState(() => support !== "likely" && polyfillPossible());
+  const [polyfilled, setPolyfilled] = useState(false);
+  const polyfillActive = useRef(false);
+  const api = (): Api => polyfillActive.current ? "polyfill" : "native";
   // `busy` disables the buttons while an action is in flight. `disposed` lasts until reload.
   const [busy, setBusy] = useState(false);
   const [disposed, setDisposed] = useState(false);
@@ -92,7 +99,17 @@ function App() {
       const page = pageExample(), id = page ?? "layers";
       applyHead(page);
       if (id === shown.current) return;
-      shown.current = id; setSelected(id); change.current?.(id);
+      shown.current = id; setSelected(id);
+      // An example not offered on the polyfill is never shown GPU-presented by it: GPU mode is left first
+      // (a caller-owned disable), then the example switches in ordinary DOM.
+      if (polyfillActive.current && lastMode.current === "gpu" && !polyfillOffers(id) && app) {
+        leaving.current = true; setBusy(true);
+        void app.disable().then(state => { setMode(state.mode); setDiagnostic(state.reason); lastMode.current = state.mode; },
+          error => console.error("Showcase disable failed", error))
+          .finally(() => { leaving.current = false; setBusy(false); change.current?.(shown.current); });
+        return;
+      }
+      change.current?.(id);
     };
     navigate.current = show;
     // Marks the app retired and disposes the runtime (page hide, or unmount of this effect).
@@ -120,7 +137,7 @@ function App() {
       app = mountCanvasApp({ outputCanvas, ordinaryHost, overlayHost, budgets: { layers: 32, pixels: 6_000_000 },
         onStatusChange(status) {
           setDiagnostic(status.reason); setMode(status.mode);
-          if (lastMode.current === "gpu" && status.mode !== "gpu" && !leaving.current && !retired.current) track("GPU Lost", { example: shown.current, status: explain(status.reason).title });
+          if (lastMode.current === "gpu" && status.mode !== "gpu" && !leaving.current && !retired.current) track("GPU Lost", { example: shown.current, status: explain(status.reason).title, api: polyfillActive.current ? "polyfill" : "native" });
           lastMode.current = status.mode;
         } }, <Demo id={opening} onReady={ready} />);
       controller.current = app;
@@ -154,7 +171,7 @@ function App() {
     if (id) requestAnimationFrame(() => studio.current?.scrollIntoView({ block: "start" }));
   }
   // Runs a caller-owned lifecycle action on the controller, then shows the resulting mode and
-  // reason. A rejection is shown in the status line.
+  // reason, and resolves with that mode. A rejection is shown in the status line.
   async function action(operation: "enable" | "disable" | "dispose") {
     setBusy(true);
     leaving.current = operation !== "enable";
@@ -164,18 +181,40 @@ function App() {
       setMode(state.mode);
       setDiagnostic(state.reason);
       lastMode.current = state.mode;
-      if (operation === "enable") track("GPU Enable", { example: selected, result: state.mode, status: explain(state.reason).title, support });
+      if (operation === "enable") track("GPU Enable", { example: selected, result: state.mode, status: explain(state.reason).title, support, api: api() });
       else track("Studio Action", { example: selected, action: operation });
       if (operation === "dispose") { retired.current = true; setDisposed(true); }
+      return state.mode;
     } catch (error) {
       setDiagnostic(`Action rejected: ${String(error)}`);
       console.error("Showcase action rejected", error);
-      if (operation === "enable") track("GPU Enable", { example: selected, result: "rejected", status: String(error), support });
+      if (operation === "enable") track("GPU Enable", { example: selected, result: "rejected", status: String(error), support, api: api() });
+      return undefined;
     } finally { setBusy(false); leaving.current = false; }
+  }
+  // The help panel's polyfill button: downloads and installs the polyfill, then requests GPU admission, which
+  // tests the polyfill like any browser. If admission refuses, the polyfill is removed again.
+  async function tryPolyfill() {
+    track("GPU Help", { example: selected, action: "polyfill" });
+    setBusy(true);
+    try {
+      polyfillActive.current = (await installPolyfill()).polyfilled;
+      setPolyfilled(polyfillActive.current);
+    } catch (error) {
+      setDiagnostic(`The polyfill failed to load: ${String(error)}`);
+      console.error("Showcase polyfill failed to load", error);
+      setBusy(false);
+      return;
+    }
+    if (await action("enable") === "gpu" || !polyfillActive.current) return;
+    await removePolyfill().catch(error => console.error("Showcase polyfill removal failed", error));
+    polyfillActive.current = false; setPolyfilled(false);
   }
   const filtered = searchExamples(query, category);
   // The page reflects the runtime's actual mode, not what was requested.
   const gpu = mode === "gpu";
+  // With the polyfill installed, examples it doesn't run well are not offered GPU mode at all.
+  const polyfillRefused = polyfilled ? polyfillExcluded[selected] : undefined;
   return <>
     <a className="skip-link" href="#studio">Skip to live example</a>
     <div className="hero-shell">
@@ -233,21 +272,26 @@ function App() {
               <select aria-label="Example" value={selected} disabled={disposed} onChange={event => go(event.target.value as ExampleId)}>
                 {examples.map(example => <option key={example.id} value={example.id}>{example.number} · {example.title}</option>)}
               </select></label>
-            <span className={`mode-pill ${gpu ? "active" : ""}`}><span className="dot" aria-hidden="true" />{gpu ? "GPU active" : disposed ? "Disposed" : "Ordinary DOM"}</span>
+            <span className={`mode-pill ${gpu ? "active" : ""}`}><span className="dot" aria-hidden="true" />{gpu ? polyfilled ? "GPU active · polyfill" : "GPU active" : disposed ? "Disposed" : "Ordinary DOM"}</span>
           </div>
         </div>
         <p className="studio-detail">{current.detail}</p>
         <div className="control-bar">
-          <p className="stage-note" id="gpu-requirement"><strong>GPU demos require Chrome Canary with HTML-in-Canvas enabled.</strong> Ordinary DOM mode works without experimental flags.</p>
-          <div className="toolbar"><button aria-describedby="gpu-requirement" disabled={busy || disposed || !mounted} onClick={() => void action("enable")}>Enable experimental GPU</button>
+          <p className="stage-note" id="gpu-requirement"><strong>GPU demos require Chrome Canary with HTML-in-Canvas enabled{offerPolyfill && ", or the polyfill offered below"}.</strong> Ordinary DOM mode works without experimental flags.</p>
+          <div className="toolbar"><button aria-describedby="gpu-requirement" disabled={busy || disposed || !mounted || !!polyfillRefused} onClick={() => void action("enable")}>Enable experimental GPU</button>
             <button disabled={busy || disposed || !mounted} onClick={() => void action("disable")}>Use ordinary DOM</button>
             <button disabled={busy || disposed || !mounted} onClick={() => void action("dispose")}>Dispose example</button></div>
         </div>
-        {!gpu && !disposed && support !== "likely" && <GpuHelp support={support} preview={previews[selected]} title={current.title} example={selected} />}
+        {!gpu && !disposed && support !== "likely" && <GpuHelp support={support} preview={previews[selected]} title={current.title} example={selected}
+          polyfill={offerPolyfill ? { excluded: polyfillExcluded[selected], ready: mounted && !busy, run: () => void tryPolyfill() } : undefined} />}
+        {gpu && polyfilled && <p className="polyfill-note" role="note"><strong>Running on the HTML-in-Canvas polyfill.</strong> GPU mode here uses
+          a JavaScript stand-in for the browser API, not Chrome's own HTML-in-Canvas: changes reach the GPU about a tenth of a second late,
+          and some details differ. Chrome Canary with HTML-in-Canvas shows the real thing. <a href={polyfillLinks.limitations} target="_blank" rel="noreferrer">What
+          the polyfill can't do <span aria-hidden="true">&#8599;</span></a></p>}
         <Status reason={diagnostic} />
         {disposed && <p className="disposed-note">The example is disposed. Reload this page to start a fresh session.</p>}
         <div className="stage-frame">
-          <div className="stage-chrome" aria-hidden="true"><i /><i /><i /><span>{gpu ? "webgpu · shared compositor" : "ordinary dom"}</span></div>
+          <div className="stage-chrome" aria-hidden="true"><i /><i /><i /><span>{gpu ? polyfilled ? "webgpu · html-in-canvas polyfill" : "webgpu · shared compositor" : "ordinary dom"}</span></div>
           <div className="stage-scroll" role="region" aria-label="Live example canvas; scroll horizontally on small screens" tabIndex={0}>
             <div className={selected === "instrument" ? "stage stage-fluid" : "stage"} ref={frame} /></div>
         </div>
@@ -268,7 +312,7 @@ function App() {
       <section className="about" id="about"><p className="eyebrow">AN HONEST EXPERIMENT</p><h2>Progressive presentation, not pretend compatibility.</h2>
         <div className="about-grid">
           <div><h3>What it is</h3><p>Underglass layers GPU presentation over React's original controls. The examples use the public Surface, Box, Presence, motion and effect APIs. Typed layout and appearance compile to browser CSS; the browser still owns layout and editing.</p></div>
-          <div><h3>What it needs</h3><p>Ordinary DOM works by default. Experimental GPU needs a compatible browser with HTML-in-Canvas and native geometry support. Missing capabilities are diagnosed, not disguised. Decorative shaders never replace essential controls.</p></div>
+          <div><h3>What it needs</h3><p>Ordinary DOM works by default. Experimental GPU needs a compatible browser with HTML-in-Canvas and native geometry support. In other Chromium browsers, an opt-in polyfill can stand in for that API, and the page says so while it does. Missing capabilities are diagnosed, not disguised. Decorative shaders never replace essential controls.</p></div>
           <div><h3>What it is not</h3><p>This is a prepared showcase, not a production certification. Accessibility, physical-device and broader browser qualification remain open. Your reduced-motion preference is respected.</p></div>
         </div>
       </section>
@@ -310,8 +354,11 @@ function Status({ reason }: { reason: string }) {
   </div>;
 }
 
-/** Shown when this browser cannot run GPU mode: how to get it, and what it looks like. */
-function GpuHelp({ support, preview, title, example }: { support: Support; preview?: string; title: string; example: ExampleId }) {
+/** What the help panel's polyfill offer needs: why this example is excluded, if it is, and the button's action. */
+interface PolyfillOffer { excluded?: string; ready: boolean; run(): void }
+
+/** Shown when this browser cannot run GPU mode: how to get it, what it looks like, and the polyfill where it can work. */
+function GpuHelp({ support, preview, title, example, polyfill }: { support: Support; preview?: string; title: string; example: ExampleId; polyfill?: PolyfillOffer }) {
   const [copied, setCopied] = useState<string>();
   const [showPreview, setShowPreview] = useState(false);
   const copy = (url: string) => { track("GPU Help", { example, action: "copy-flag" }); void navigator.clipboard?.writeText(url).then(() => setCopied(url), () => setCopied(undefined)); };
@@ -328,6 +375,15 @@ function GpuHelp({ support, preview, title, example }: { support: Support; previ
           and set it to <strong>Enabled</strong>.</li>)}
         <li>Restart Canary, come back here and press <strong>Enable experimental GPU</strong>.</li>
       </ol>
+      {polyfill && <div className="polyfill-offer">
+        <h4>Or try GPU mode here, through a polyfill</h4>
+        <p>The <a href={polyfillLinks.repository} target="_blank" rel="noreferrer">HTML-in-Canvas polyfill</a> imitates the browser API in
+          JavaScript, so this browser can run GPU mode without Canary. It is slower than the real thing: changes reach the GPU about a tenth of
+          a second late, and some details differ.</p>
+        {polyfill.excluded
+          ? <p className="polyfill-off">{title} isn't offered on the polyfill: {polyfill.excluded}.</p>
+          : <button type="button" disabled={!polyfill.ready} onClick={polyfill.run}>Run GPU mode on the polyfill</button>}
+      </div>}
     </div>
     {preview && <div className="gpu-help-preview">
       <button type="button" className="preview-toggle" aria-expanded={showPreview} onClick={() => { if (!showPreview) track("GPU Help", { example, action: "preview" }); setShowPreview(value => !value); }}>

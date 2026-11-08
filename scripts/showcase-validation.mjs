@@ -1,7 +1,8 @@
 /**
  * End-to-end validation of the public showcase (`examples/showcase`) as it would be published: builds it in
  * an isolated copy of the repository, checks the output files, serves the build under the `/underglass/`
- * base path and drives the gallery in a real browser in a DOM lane and a native (GPU) lane.
+ * base path and drives the gallery in a real browser in a DOM lane and a native (GPU) lane, then runs the
+ * opt-in polyfill (`src/polyfill.ts`) in a polyfill lane with HTML-in-Canvas switched off.
  *
  * Invoked as `npm run test:showcase`. Environment: `CANVAS_BROWSER_EXECUTABLE` (default Chrome Canary) and
  * `CANVAS_REQUIRE_BROWSER_PIN=1` (see `release-policy.mjs`). The native lane requires GPU admission to
@@ -689,6 +690,78 @@ try {
         assert.equal(await fallback.locator("#studio-title").inputValue(), "Retained fallback");
         await unsupported.close();
       }
+      assert.deepEqual(errors, []);
+      record.status = "passed";
+    } finally { await browser.close(); record.closed = true; }
+  }
+  // `polyfill`: HTML-in-Canvas switched off, so the help panel offers the opt-in polyfill (src/polyfill.ts). Its
+  // button must download it only on the press, admit GPU on it with fresh pixels and real hits, say so on the
+  // page, and keep an excluded example (Fluent) off it: switching there returns to DOM and Enable is disabled.
+  {
+    const browser = await chromium.launch(browserLaunchOptions({ native: false }));
+    const record = { lane: "polyfill", status: "running" };
+    result.browsers.push(record);
+    try {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: 1 });
+      const page = await context.newPage();
+      const cdp = await context.newCDPSession(page);
+      record.actual = await cdp.send("Browser.getVersion");
+      assertBrowserIdentity(record.actual);
+      const errors = [];
+      page.on("pageerror", error => errors.push(String(error)));
+      const scripts = [];
+      page.on("request", request => { if (request.resourceType() === "script") scripts.push(request.url()); });
+      const state = () => page.evaluate(() => window.showcase.state());
+      await page.goto(`${url}examples/layers`);
+      await page.waitForFunction(() => window.showcase);
+      assert.equal(await page.evaluate(() => typeof HTMLCanvasElement.prototype.requestPaint), "undefined", "HTML-in-Canvas must be off in this lane");
+      const before = scripts.length;
+      await page.locator(".stage").scrollIntoViewIfNeeded();
+      const startup = (await state()).reason;
+      await page.getByRole("button", { name: "Run GPU mode on the polyfill", exact: true }).click();
+      // The page stays in DOM while the polyfill chunk downloads, so wait for admission to report a new reason.
+      await page.waitForFunction(startup => { const current = window.showcase.state();
+        return current.reason !== startup && !current.initializing && current.mode !== "admitting"; }, startup);
+      record.initial = await state();
+      assert.equal(record.initial.mode, "gpu", record.initial.reason);
+      assert.ok(scripts.length > before, "The polyfill chunk loads on the press");
+      assert.equal(await page.locator(".mode-pill").innerText(), "GPU active · polyfill");
+      await page.locator(".polyfill-note").getByText("Running on the HTML-in-Canvas polyfill.").waitFor();
+      // Fresh pixels: the polyfill lags a few frames, so each screenshot waits for the saved title and then 600 ms.
+      // The polyfill mirrors the canvas's class onto its host element, so the canvas is named by its tag.
+      const output = page.locator(".stage canvas.output");
+      const save = async text => {
+        await page.locator("#studio-title").fill(text);
+        // A real click at the button's centre must land on the original button through the polyfill's hit regions.
+        const box = await page.locator(".stage button").filter({ hasText: /^Save postcard$/ }).boundingBox();
+        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+        await page.locator("#saved-title").filter({ hasText: text }).waitFor();
+        await page.evaluate(() => window.showcase.controller.settle());
+        await page.waitForTimeout(600);
+        return PNG.sync.read(await output.screenshot({ path: join(run, `polyfill-title-${text[0]}.png`) }));
+      };
+      const first = await save("W".repeat(32)), second = await save("I".repeat(32));
+      let changed = 0;
+      for (let y = 92; y < 160; y++) for (let x = 406; x < 700; x++) {
+        const offset = (y * second.width + x) * 4;
+        if (first.data.subarray(offset, offset + 4).some((v, i) => v !== second.data[offset + i])) changed++;
+      }
+      assert.ok(changed > 100, `Polyfill changed title pixels: ${changed}`);
+      record.changedTitlePixels = changed;
+      assert.equal((await state()).mode, "gpu");
+      // Fluent is excluded: switching to it leaves GPU first, and Enable stays disabled there.
+      await page.getByLabel("Example", { exact: true }).selectOption("fluent");
+      await page.waitForFunction(() => window.showcase.state().mode === "dom");
+      await page.locator(".polyfill-off").getByText("isn't offered on the polyfill").waitFor();
+      assert.equal(await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).isDisabled(), true);
+      record.excluded = await state();
+      // Back on an offered example, the ordinary Enable button runs on the installed polyfill.
+      await page.getByLabel("Example", { exact: true }).selectOption("layers");
+      await page.locator("#studio-title").waitFor();
+      await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
+      await page.waitForFunction(() => !window.showcase.state().initializing && window.showcase.state().mode !== "admitting");
+      record.reenabled = await state();
+      assert.equal(record.reenabled.mode, "gpu", record.reenabled.reason);
       assert.deepEqual(errors, []);
       record.status = "passed";
     } finally { await browser.close(); record.closed = true; }
