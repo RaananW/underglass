@@ -1,5 +1,12 @@
 # @underglass/core
 
+## 0.2.3
+
+### Patch Changes
+
+- d920425: `state().htmlInCanvas` names the HTML-in-Canvas implementation the latest admission tested: `"native"` for the browser's own, `"polyfill"` when `@underglass/html-in-canvas-polyfill` stands in for it (read from the global it publishes; core does not import it), or `null` before the first admission. Diagnoses and bug reports from a polyfilled page no longer look like native ones.
+- 55f7c0b: When the browser exposes WebGPU but has no usable adapter (for example Firefox on a machine without a WebGPU adapter), `enable()` now stays in DOM mode with the reason `GPU admission failed: WebGPU adapter unavailable (navigator.gpu.requestAdapter() resolved no adapter): ...` instead of the opaque `GPU admission failed: Error: #47` from the underlying engine. Behaviour is unchanged: this is a factual lack of browser support, so the surface remains ordinary DOM.
+
 ## 0.2.2
 
 ### Patch Changes
