@@ -361,6 +361,24 @@ test("an adapter rejection after the slow diagnosis falls back with the error", 
   expect(Object.values(final.resources).every(value => value === 0)).toBe(true);
 });
 
+// `navigator.gpu` exists but no adapter is available (Firefox without a WebGPU adapter): the engine throws the opaque
+// code `#47`. That is a factual lack of support, so enable() ends in DOM with a plain reason, and the page stays usable.
+test("a missing WebGPU adapter falls back to DOM with a plain reason", async ({ page }) => {
+  await page.addInitScript(() => { navigator.gpu.requestAdapter = () => Promise.resolve(null); });
+  await page.goto("/surface.html?dom");
+  await page.waitForFunction(() => window.surfaceProbe && document.querySelector("#count"));
+  const result = await page.evaluate(() => window.surfaceProbe.enable());
+  expect(result.mode).toBe("dom");
+  expect(result.reason).toMatch(/^GPU admission failed: WebGPU adapter unavailable/);
+  expect(result.reason).not.toMatch(/#47/);
+  expect(result.resources.pendingEngines).toBe(0);
+  expect(result.resources.engines).toBe(0);
+  await page.locator("#count").click();
+  await expect(page.locator("#count")).toHaveText("Count 1");
+  const final = await page.evaluate(() => window.surfaceProbe.dispose());
+  expect(Object.values(final.resources).every(value => value === 0)).toBe(true);
+});
+
 // A pending (hung) engine request never holds disable() or dispose() hostage: both settle at once and the
 // late engine is disposed when it finally arrives. Re-entry is refused only while that request is outstanding.
 for (const action of ["disable", "dispose"]) {

@@ -9,7 +9,7 @@ the showcase's **Status** line. Then call `enable()` again once the cause is gon
 | Reason contains | Meaning | What to do |
 | --- | --- | --- |
 | `canvas.content` / `requestPaint` / `drawElementImageToTexture` unavailable | The browser lacks HTML-in-Canvas | Use Chrome Canary with the flags in [Getting started](getting-started.md#requirements) |
-| `WebGPU unavailable` | No WebGPU adapter | Check `chrome://gpu`; enable hardware acceleration |
+| `WebGPU unavailable` / `WebGPU adapter unavailable` | The browser has no usable WebGPU adapter (`navigator.gpu` is missing, or `requestAdapter()` found nothing, as in Firefox without a GPU adapter) | Check `chrome://gpu` or `about:support`; enable hardware acceleration |
 | `inside the viewport; explicitly enable again when visible` | The output canvas was off screen during admission | Scroll the stage into view, then `enable()` again |
 | `probe failed interior/clipped hit testing (possibly occluded)` | Something covered the probe, or hit testing disagrees with drawing | Make sure no overlay covers the stage's top-left area during `enable()`; report it with your browser build. Up to 0.2.0 a stage inside a shadow root also failed here: update |
 | `Layer-count admission budget exceeded` | More layers than `budgets.layers` | Merge layers or raise the budget (up to 64) |
