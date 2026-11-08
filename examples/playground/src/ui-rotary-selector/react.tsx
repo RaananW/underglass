@@ -7,6 +7,7 @@
  */
 import "@underglass/ui/css";
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { Field, RotarySelector } from "@underglass/ui/react";
 
@@ -18,7 +19,7 @@ function App() {
   const [mode, setMode] = useState("low");
   const root = useRef<HTMLDivElement>(null), select = useRef<HTMLSelectElement>(null);
   useEffect(() => {
-    window.strataRotaryBinding = { mode: () => mode, setMode, changes: () => [...changes], refs: { root: root.current!, select: select.current! } };
+    window.strataRotaryBinding = { mode: () => mode, setMode: (value: string) => flushSync(() => setMode(value)), changes: () => [...changes], refs: { root: root.current!, select: select.current! } };
   });
   return (
     <main>
