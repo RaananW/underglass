@@ -696,7 +696,8 @@ try {
   }
   // `polyfill`: HTML-in-Canvas switched off, so the help panel offers the opt-in polyfill (src/polyfill.ts). Its
   // button must download it only on the press, admit GPU on it with fresh pixels and real hits, say so on the
-  // page, and keep an excluded example (Fluent) off it: switching there returns to DOM and Enable is disabled.
+  // page, run Fluent with every card hit where it is drawn, and keep an excluded example (Strata) off it: switching
+  // there returns to DOM and Enable is disabled.
   {
     const browser = await chromium.launch(browserLaunchOptions({ native: false }));
     const record = { lane: "polyfill", status: "running" };
@@ -749,8 +750,34 @@ try {
       assert.ok(changed > 100, `Polyfill changed title pixels: ${changed}`);
       record.changedTitlePixels = changed;
       assert.equal((await state()).mode, "gpu");
-      // Fluent is excluded: switching to it leaves GPU first, and Enable stays disabled there.
+      // Fluent runs on it too. Its six cards share one layout box and are drawn in a grid; core locks each layer's
+      // transform inline, which polyfill 0.1.0 couldn't override, so every click went to the last card. Each card's
+      // title must be hit at its own centre, and a real click must open that card.
       await page.getByLabel("Example", { exact: true }).selectOption("fluent");
+      await page.locator("#fluent-title").waitFor();
+      await page.locator(".stage").scrollIntoViewIfNeeded();
+      await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
+      await page.waitForFunction(() => !window.showcase.state().initializing && window.showcase.state().mode !== "admitting");
+      record.fluent = await state();
+      assert.equal(record.fluent.mode, "gpu", record.fluent.reason);
+      await page.evaluate(() => window.showcase.controller.settle());
+      const cardTitles = page.locator(".stage .fl-card-title");
+      assert.ok(await cardTitles.count() >= 6, "The Fluent board shows its cards");
+      const misses = await page.evaluate(() => [...document.querySelectorAll(".stage .fl-card-title")].filter(button => {
+        const box = button.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+        return !hit || !(hit === button || button.contains(hit));
+      }).map(button => button.getAttribute("aria-label")));
+      assert.deepEqual(misses, [], "Every Fluent card title is hit where it is drawn");
+      const firstCard = cardTitles.first();
+      const cardName = (await firstCard.getAttribute("aria-label")).slice("Edit ".length);
+      const cardBox = await firstCard.boundingBox();
+      await page.mouse.click(cardBox.x + cardBox.width / 2, cardBox.y + cardBox.height / 2);
+      await page.locator("#fluent-editor").waitFor();
+      assert.equal(await page.locator("#fluent-edit-title").inputValue(), cardName);
+      assert.equal((await state()).mode, "gpu");
+      // Strata is excluded: switching to it leaves GPU first, and Enable stays disabled there.
+      await page.getByLabel("Example", { exact: true }).selectOption("strata");
       await page.waitForFunction(() => window.showcase.state().mode === "dom");
       await page.locator(".polyfill-off").getByText("isn't offered on the polyfill").waitFor();
       assert.equal(await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).isDisabled(), true);

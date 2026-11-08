@@ -54,20 +54,24 @@ polyfill keeps the elements Underglass moves into the canvas; you don't need its
 ## What to expect
 
 - **Lag.** The polyfill paints a few frames after a change. In the
-  [showcase](https://underglass.dev), typing reached the GPU in 77–125 ms on the
-  polyfill in Chrome 156, against 11–17 ms natively in Canary.
-- **Cost per change.** Serializing an element takes about 5–50 ms. Small layers that
-  change on input are fine. A large layer that changes every frame (a spinner or
-  another animation inside it) keeps the polyfill busy: the showcase's Strata gallery
-  dropped to about 6 fps for that reason. Keep animated parts in their own small
-  layers, or animate with Underglass's [motion](motion.md), which moves layers
-  without new captures.
+  [showcase](https://underglass.dev), typing reached the GPU in 62–123 ms on the
+  polyfill in Chrome 156, against 13–18 ms natively in Canary.
+- **Cost per change.** Every change re-serializes the whole layer it is in, at about
+  1 ms per element in Chromium. Small layers that change on input are fine. In the
+  showcase's Strata gallery, one layer of about 500 elements, each hover or click
+  takes about a third of a second to reach the GPU and the page drops to about
+  12 fps while the pointer moves over it. Keep layers small, and give animated parts
+  their own layer, or animate with Underglass's [motion](motion.md), which moves
+  layers without new captures. Since 0.1.1 the polyfill redraws a layer that only a
+  running animation changes at a reduced rate, so a spinner no longer holds the page
+  at a few frames a second.
 - **Hit regions.** They are close, but not always exact: positions round to whole
   CSS pixels, and the polyfill's own
   [limitations](https://github.com/RaananW/html-in-canvas-polyfill/blob/main/docs/LIMITATIONS.md)
-  list the cases it doesn't handle. Version 0.1.0 put some hit regions on the wrong
-  layer in the showcase's Fluent board, so test the clicks of your own app before
-  you rely on it.
+  list the cases it doesn't handle. Use 0.1.1 or later: 0.1.0 put every hit region
+  of the showcase's Fluent cards on the last card, because it couldn't override the
+  `transform` Underglass sets on layers. Test the clicks of your own app before you
+  rely on it.
 - **Browsers.** Underglass needs WebGPU and `Element.moveBefore`, which the polyfill
   does not provide. Chromium browsers without the flags (Chrome, Edge) have both.
   Safari has no `moveBefore` yet, so admission refuses there. Firefox has both but
