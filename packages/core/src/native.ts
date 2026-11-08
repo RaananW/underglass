@@ -59,6 +59,30 @@ export function capabilities(canvas: HTMLCanvasElement): CapabilityResult {
   return { available: missing.length === 0, missing, dialect };
 }
 
+/**
+ * Which HTML-in-Canvas implementation admission tested: the browser's own, or
+ * `@underglass/html-in-canvas-polyfill`, which emulates the API in JavaScript and paints a few frames late. Reported as `state().htmlInCanvas` so a diagnosis or bug report names it.
+ */
+export type HtmlInCanvasImplementation = "native" | "polyfill";
+
+/** The polyfill's page global: its current status, published on every install and uninstall. */
+interface PolyfillGlobal { polyfilled?: unknown; getStatus?(): { polyfilled?: unknown } }
+
+/**
+ * Reads whether `view` runs the HTML-in-Canvas polyfill, from the `HTMLInCanvasPolyfill` global it publishes; core
+ * never imports it. Only a status that says `polyfilled: true` counts: the polyfill does nothing where the browser
+ * supports the API, and then reports `false`. Like `capabilities`, this names the implementation; admission still
+ * proves its behaviour.
+ */
+export function htmlInCanvasImplementation(view: object | null | undefined): HtmlInCanvasImplementation {
+  const polyfill = view ? Reflect.get(view, "HTMLInCanvasPolyfill") as PolyfillGlobal | undefined : undefined;
+  if (!polyfill) return "native";
+  let status: { polyfilled?: unknown } = polyfill;
+  try { if (typeof polyfill.getStatus === "function") status = polyfill.getStatus(); }
+  catch { /* A throwing getStatus leaves the status the global itself carries. */ }
+  return status?.polyfilled === true ? "polyfill" : "native";
+}
+
 /** Switches `canvas` into drawable mode by setting `content="drawable"`. Throws if the reflection is missing or ignored. */
 export function enableDrawable(canvas: DrawableCanvas): void {
   if (!("content" in canvas)) throw new Error("Current canvas.content reflection unavailable");

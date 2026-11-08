@@ -23,7 +23,7 @@ import {
   getRenderTaskGpuTimings, isGpuTimingSupported, setRenderTaskGpuTimingEnabled,
   type EngineContext, type DynamicTexture2D, type EffectWrapper, type RenderingContext, type FrameGraphContext, type Task,
 } from "@babylonjs/lite";
-import { capabilities, enableDrawable, homography, invertRows, isDrawableCanvas, isDrawableQueue, validateGeometry, validateAppliedGeometry, type DrawableCanvas, type DrawableQueue } from "./native.js";
+import { capabilities, enableDrawable, homography, htmlInCanvasImplementation, invertRows, isDrawableCanvas, isDrawableQueue, validateGeometry, validateAppliedGeometry, type DrawableCanvas, type DrawableQueue, type HtmlInCanvasImplementation } from "./native.js";
 import { completeCoverage, type CaptureCoverage } from "./publication.js";
 import { createMountBoundary, type MountBoundaryOptions } from "./mount-boundary.js";
 import { configuredDevice, observeConfiguredDevice, waitForTeardown, type IdleOutcome } from "./device-lifecycle.js";
@@ -245,6 +245,8 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   }
   let mode: "dom" | "admitting" | "gpu" | "disposed" = "dom";
   let reason = "Ordinary DOM startup; admission pending.";
+  // The HTML-in-Canvas implementation the latest admission tested (`state().htmlInCanvas`); null before the first one.
+  let htmlInCanvas: HtmlInCanvasImplementation | null = null;
   let engine: EngineContext | undefined;
   // One blended effect pass per layer, drawn in order after a transparent clear. The canvas is premultiplied, so what no
   // layer covers is the page's own background (the canvas element's CSS background, or the page behind it).
@@ -806,7 +808,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
    */
   function state() {
     return {
-      mode, reason, initializing, transitioning, moving, clearedGeometry: [...clearedGeometry], resources: { ...resources }, metrics: structuredClone(metrics),
+      mode, reason, htmlInCanvas, initializing, transitioning, moving, clearedGeometry: [...clearedGeometry], resources: { ...resources }, metrics: structuredClone(metrics),
       publication: { generation: publicationGeneration, submittedGeneration, pending: membershipPending || !!pending || paintRequested,
         captures: layers.map(layer => ({ id: layer.id, ...layer.coverage, textureWidth: layer.texture.texture.width, textureHeight: layer.texture.texture.height })) },
       rootContainer: container.parentElement?.id,
@@ -1697,6 +1699,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       };
       let size = measure();
       const capability = capabilities(output);
+      htmlInCanvas = htmlInCanvasImplementation(output.ownerDocument.defaultView);
       if (!isDrawableCanvas(host)) throw new Error(capability.missing.join("; "));
       drawable = host;
       enableDrawable(nativeHost());
