@@ -1,5 +1,11 @@
 # @underglass/react
 
+## 0.2.4
+
+### Patch Changes
+
+- @underglass/core@0.2.4
+
 ## 0.2.3
 
 ### Patch Changes
