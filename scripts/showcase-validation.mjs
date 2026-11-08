@@ -723,8 +723,7 @@ try {
   }
   // `polyfill`: HTML-in-Canvas switched off, so the help panel offers the opt-in polyfill (src/polyfill.ts). Its
   // button must download it only on the press, admit GPU on it with fresh pixels and real hits, say so on the
-  // page, run Fluent with every card hit where it is drawn, and keep an excluded example (Strata) off it: switching
-  // there returns to DOM and Enable is disabled.
+  // page, run Fluent with every card hit where it is drawn, and run Strata with its relief and a real tab click.
   {
     const browser = await chromium.launch(browserLaunchOptions({ native: false }));
     const record = { lane: "polyfill", status: "running" };
@@ -803,12 +802,26 @@ try {
       await page.locator("#fluent-editor").waitFor();
       assert.equal(await page.locator("#fluent-edit-title").inputValue(), cardName);
       assert.equal((await state()).mode, "gpu");
-      // Strata is excluded: switching to it leaves GPU first, and Enable stays disabled there.
+      // Strata runs on it from polyfill 0.4.0. Up to 0.2.0 the polyfill's host hid every drawn element from
+      // `checkVisibility`, so Strata built no relief; each surface must have relief primitives, and a real click on
+      // a gallery tab must select it.
       await page.getByLabel("Example", { exact: true }).selectOption("strata");
-      await page.waitForFunction(() => window.showcase.state().mode === "dom");
-      await page.locator(".polyfill-off").getByText("isn't offered on the polyfill").waitFor();
-      assert.equal(await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).isDisabled(), true);
-      record.excluded = await state();
+      await page.locator("#strata-gallery").waitFor();
+      await page.locator(".stage").scrollIntoViewIfNeeded();
+      await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
+      await page.waitForFunction(() => !window.showcase.state().initializing && window.showcase.state().mode !== "admitting");
+      record.strata = await state();
+      assert.equal(record.strata.mode, "gpu", record.strata.reason);
+      await page.evaluate(() => window.showcase.controller.settle());
+      const relief = Object.fromEntries((await state()).materials.map(material => [material.id, material.primitives]));
+      assert.ok(relief["strata-bar"] > 0 && relief["strata-gallery"] > 0, `Strata builds relief on the polyfill: ${JSON.stringify(relief)}`);
+      record.strataRelief = relief;
+      const choices = page.locator("#strata-gallery [role=tab]").filter({ hasText: /^Choices$/ });
+      const tabBox = await choices.boundingBox();
+      await page.mouse.click(tabBox.x + tabBox.width / 2, tabBox.y + tabBox.height / 2);
+      await page.waitForFunction(() => [...document.querySelectorAll("#strata-gallery [role=tab]")]
+        .some(tab => tab.textContent.trim() === "Choices" && tab.getAttribute("aria-selected") === "true"));
+      assert.equal((await state()).mode, "gpu");
       // Back on an offered example, the ordinary Enable button runs on the installed polyfill.
       await page.getByLabel("Example", { exact: true }).selectOption("layers");
       await page.locator("#studio-title").waitFor();

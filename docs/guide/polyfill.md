@@ -54,18 +54,27 @@ polyfill keeps the elements Underglass moves into the canvas; you don't need its
 ## What to expect
 
 - **Lag.** The polyfill paints a few frames after a change. In the
-  [showcase](https://underglass.dev), input reached the GPU in 37–87 ms on the
-  polyfill 0.3.0 in Chrome 156, against 9–16 ms natively in Canary.
-- **Cost per change.** Every change re-serializes the whole layer it is in, at about
-  1 ms per element in Chromium. Small layers that change on input are fine. In the
-  showcase's Strata gallery, one layer of about 500 elements, each click takes about
-  0.3 seconds to reach the GPU, and the page runs at about 30 fps while the
-  pointer moves over it. Keep layers small, and give animated parts their own layer,
-  or animate with Underglass's [motion](motion.md), which moves layers without new
+  [showcase](https://underglass.dev), input reached the GPU in 28–109 ms on the
+  polyfill 0.4.0 in Chrome 156, against 10–19 ms natively in Canary.
+- **Cost per change.** Every change re-serializes the layer it is in. Since 0.4.0
+  the polyfill reuses the styles of elements that can't have changed, so the cost
+  follows the size of the change more than the size of the layer. In the showcase's
+  Strata gallery, one layer of about 500 elements, a click reaches the GPU in about
+  110 ms (about 0.3 s on 0.3.0), and the page runs at about 40 fps while the pointer
+  moves over it. Changes that touch everything, such as a theme switch, still cost
+  about a full layer. Keep layers small, and give animated parts their own layer, or
+  animate with Underglass's [motion](motion.md), which moves layers without new
   captures. Since 0.1.1 the polyfill redraws a layer that only a running animation
   changes at a reduced rate, so a spinner no longer holds the page at a few frames a
   second, and since 0.2.0 a pointer move only causes a capture when a `:hover` rule
   then matches different elements.
+- **Stale frames.** A few changes take no snapshot of their own on the polyfill: a
+  stylesheet edited in place through the CSSOM, a media query that flips without a
+  resize (`prefers-color-scheme`), and a change to an ancestor's sibling that a
+  selector depends on. They are drawn when something else takes a snapshot. Since
+  0.4.0 the polyfill re-reads reused styles in idle time, which usually catches a
+  stylesheet edited in place within a second, and `install({ incremental: false })`
+  turns style reuse off if a drawing looks stale.
 - **Workers.** Since 0.2.0 an `ElementImage` can be transferred to a worker that
   imports the polyfill's worker entry. Underglass's experimental worker compositor
   has not been tested on it.
