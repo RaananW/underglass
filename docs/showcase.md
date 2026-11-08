@@ -210,20 +210,26 @@ on it are listed in `polyfillExcluded` with the reason shown to visitors; with t
 polyfill installed, **Enable experimental GPU** is disabled on them, and switching
 to one from polyfilled GPU mode returns to ordinary DOM first.
 
-Measured on 2026-11-07 with polyfill 0.1.0, Chrome 156 stable (no flags) against
-Canary 159 with the flags, at 1400×1000, headless on Windows:
+Measured on 2026-11-08 with polyfill 0.1.1, Chrome 156.0.8078.80 stable (no flags)
+against Canary 159.0.8149.0 with the flags, at 1400×1000, headless on Windows. The
+frame rate is taken while the pointer moves over the stage, so hovers cause captures:
 
 | Example | Polyfill fps | Hits | Input to paint (polyfill / native) | Offered |
 |---|---|---|---|---|
-| layers, motion, effects, presence, tasks, pond, compare | 58–60 | all correct | 77–125 ms / 11–14 ms | yes |
-| instrument | 55 | all correct | about 100 ms / – | yes |
-| fluent | 55 | 3 of 12 wrong (hit regions attached to other cards) | 242 ms / 17 ms | no |
-| strata | 6 | correct | no paint within 3 s / 14 ms | no |
+| layers, motion, effects, presence, tasks, pond, compare | 57–60 | all correct | 62–123 ms / 13–18 ms | yes |
+| instrument | 59 | all correct | 78 ms / – | yes |
+| fluent | 55 | all correct | 123 ms / 16 ms | yes |
+| strata | 12 (45 with the pointer still) | all correct | 336 ms / 16 ms (a click in the gallery) | no |
+
+0.1.0 put every Fluent card's hit region on the last card, and an endless spinner
+held Strata at 6 fps; 0.1.1 fixed both. Strata stays excluded because its gallery
+is one layer of about 500 elements: every hover or click re-serializes all of it.
 
 Playwright's WebKit refused admission (no `Element.moveBefore`) and its Firefox has
 no WebGPU adapter, so neither was measured; a real Firefox build has both and is
-untested. `npm run test:showcase` runs the layers and Fluent scenario on the polyfill
-in Canary with HTML-in-Canvas switched off.
+untested. `npm run test:showcase` runs the layers and Fluent scenarios on the
+polyfill, and checks that Strata is kept off it, in Canary with HTML-in-Canvas
+switched off.
 
 ## Deployment
 
