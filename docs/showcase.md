@@ -210,20 +210,26 @@ on it are listed in `polyfillExcluded` with the reason shown to visitors; with t
 polyfill installed, **Enable experimental GPU** is disabled on them, and switching
 to one from polyfilled GPU mode returns to ordinary DOM first.
 
-Measured on 2026-11-08 with polyfill 0.1.1, Chrome 156.0.8078.80 stable (no flags)
-against Canary 159.0.8149.0 with the flags, at 1400×1000, headless on Windows. The
+Measured on 2026-11-08 with polyfill 0.2.0, Chrome 156.0.8078.80 stable (no flags)
+against Canary 159.0.8150.0 with the flags, at 1400×1000, headless on Windows. The
 frame rate is taken while the pointer moves over the stage, so hovers cause captures:
 
 | Example | Polyfill fps | Hits | Input to paint (polyfill / native) | Offered |
 |---|---|---|---|---|
-| layers, motion, effects, presence, tasks, pond, compare | 57–60 | all correct | 62–123 ms / 13–18 ms | yes |
-| instrument | 59 | all correct | 78 ms / – | yes |
-| fluent | 55 | all correct | 123 ms / 16 ms | yes |
-| strata | 12 (45 with the pointer still) | all correct | 336 ms / 16 ms (a click in the gallery) | no |
+| layers, motion, effects, presence, tasks, pond, compare | 54–57 | all correct | 49–78 ms / 15–17 ms | yes |
+| instrument | 55 | all correct | 64 ms / – | yes |
+| fluent | 53 | all correct | 125 ms / 21 ms | yes |
+| strata | 34 | all correct | 312 ms / 16 ms (a click in the gallery) | no |
 
 0.1.0 put every Fluent card's hit region on the last card, and an endless spinner
-held Strata at 6 fps; 0.1.1 fixed both. Strata stays excluded because its gallery
-is one layer of about 500 elements: every hover or click re-serializes all of it.
+held Strata at 6 fps; 0.1.1 fixed both. 0.2.0 recaptures on hover only when a
+`:hover` rule matches different elements, which took Strata from 12 to 34 fps while
+the pointer moves. Strata stays excluded because its gallery is one layer of about
+500 elements: every click still re-serializes all of it. On 0.2.0 it also draws
+wrongly: no GPU relief on any component, square radios, a grey disabled field,
+markers in the tree, a table taller than its card and a wrapped icon button. Polyfill
+pull requests [#12](https://github.com/RaananW/html-in-canvas-polyfill/pull/12)–[#15](https://github.com/RaananW/html-in-canvas-polyfill/pull/15)
+fix these; with them every Strata tab matches native to within 0.1% of its pixels.
 
 Playwright's WebKit refused admission (no `Element.moveBefore`) and its Firefox has
 no WebGPU adapter, so neither was measured; a real Firefox build has both and is

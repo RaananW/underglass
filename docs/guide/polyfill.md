@@ -54,17 +54,21 @@ polyfill keeps the elements Underglass moves into the canvas; you don't need its
 ## What to expect
 
 - **Lag.** The polyfill paints a few frames after a change. In the
-  [showcase](https://underglass.dev), typing reached the GPU in 62–123 ms on the
-  polyfill in Chrome 156, against 13–18 ms natively in Canary.
+  [showcase](https://underglass.dev), input reached the GPU in 49–125 ms on the
+  polyfill 0.2.0 in Chrome 156, against 15–21 ms natively in Canary.
 - **Cost per change.** Every change re-serializes the whole layer it is in, at about
   1 ms per element in Chromium. Small layers that change on input are fine. In the
-  showcase's Strata gallery, one layer of about 500 elements, each hover or click
-  takes about a third of a second to reach the GPU and the page drops to about
-  12 fps while the pointer moves over it. Keep layers small, and give animated parts
-  their own layer, or animate with Underglass's [motion](motion.md), which moves
-  layers without new captures. Since 0.1.1 the polyfill redraws a layer that only a
-  running animation changes at a reduced rate, so a spinner no longer holds the page
-  at a few frames a second.
+  showcase's Strata gallery, one layer of about 500 elements, each click takes about
+  a third of a second to reach the GPU, and the page runs at about 34 fps while the
+  pointer moves over it. Keep layers small, and give animated parts their own layer,
+  or animate with Underglass's [motion](motion.md), which moves layers without new
+  captures. Since 0.1.1 the polyfill redraws a layer that only a running animation
+  changes at a reduced rate, so a spinner no longer holds the page at a few frames a
+  second, and since 0.2.0 a pointer move only causes a capture when a `:hover` rule
+  then matches different elements.
+- **Workers.** Since 0.2.0 an `ElementImage` can be transferred to a worker that
+  imports the polyfill's worker entry. Underglass's experimental worker compositor
+  has not been tested on it.
 - **Hit regions.** They are close, but not always exact: positions round to whole
   CSS pixels, and the polyfill's own
   [limitations](https://github.com/RaananW/html-in-canvas-polyfill/blob/main/docs/LIMITATIONS.md)
@@ -72,6 +76,12 @@ polyfill keeps the elements Underglass moves into the canvas; you don't need its
   of the showcase's Fluent cards on the last card, because it couldn't override the
   `transform` Underglass sets on layers. Test the clicks of your own app before you
   rely on it.
+- **Rendering.** The snapshot re-lays out your elements, so styles that depend on
+  layout precision, UA rules or the element's visibility can come out differently.
+  0.2.0 drew the showcase's Strata gallery without its GPU relief and with square
+  radios, among other differences; polyfill pull requests
+  [#12](https://github.com/RaananW/html-in-canvas-polyfill/pull/12)–[#15](https://github.com/RaananW/html-in-canvas-polyfill/pull/15)
+  fix them. Compare your app on the polyfill with its DOM mode before you rely on it.
 - **Browsers.** Underglass needs WebGPU and `Element.moveBefore`, which the polyfill
   does not provide. Chromium browsers without the flags (Chrome, Edge) have both.
   Safari has no `moveBefore` yet, so admission refuses there. Firefox has both but
