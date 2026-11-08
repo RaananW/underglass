@@ -1,5 +1,11 @@
 # @underglass/ui
 
+## 0.2.4
+
+### Patch Changes
+
+- 019460f: React `useStrataGpu` releases its panels before React removes them, so unmounting a component that uses it keeps GPU mode on. Before, the runtime met a detached enrolled layer and fell back to DOM.
+
 ## 0.2.3
 
 No changes in this release.
