@@ -32,6 +32,7 @@ import { RELIEF_EMITTER_BASE, RELIEF_VEC4S, reliefUniforms, type ReliefScene } f
 import { DEFAULT_FEATHER, EMITTER_BLOCK_VEC4S, EMITTERS_PER_LAYER, layerGuard, packEmitters, packPoolHeader, poolBlend, poolWGSL, POOL_HEADER_VEC4S, POOL_VEC4S, selectEmitters,
   type Bounds, type Guard, type LayerEmitters, type SceneLight } from "./emitters.js";
 import { swapUnderCover, type SwapCover } from "./swap-cover.js";
+import { describeAdmissionError } from "./engine-failure.js";
 import { createAdmissionProbe, verifyFrameBounds, verifyProbeGeometry, verifyProbePixels, verifyProjectiveHits, type FrameBounds } from "./admission.js";
 import type { Ripple } from "./ripple.js";
 import { isSceneMaterial, type ApplicationEffect, type EffectDescriptor, type MaterialDescriptor } from "./effects.js";
@@ -1895,7 +1896,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       abandoned = true;
       await recoverToDOM(admissionCancellation ?? (lostInfo
         ? `GPU admission failed: device lost (${lostInfo.reason}): ${lostInfo.message}`
-        : `GPU admission failed: ${String(error)}`));
+        : `GPU admission failed: ${describeAdmissionError(error)}`));
       if (!admissionCancellation) console.error(reason);
     } finally {
       pointerDocument.removeEventListener("pointerdown", pointerDown, true);

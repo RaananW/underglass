@@ -40,7 +40,7 @@ const known: [RegExp, Explanation][] = [
     hint: "GPU mode needs Element.moveBefore, which this browser doesn't have yet. The examples keep working as ordinary DOM." }],
   [/canvas\.content|requestPaint|updateElementGeometry|drawElementImageToTexture unavailable|getElementImageDefaultSize/, {
     title: "This browser doesn't have HTML-in-Canvas.", hint: "GPU mode needs Chrome Canary with the two flags in the steps above. The examples keep working as ordinary DOM." }],
-  [/WebGPU unavailable|requestAdapter|No WebGPU/, { title: "WebGPU isn't available.", hint: "Check chrome://gpu and make sure hardware acceleration is on." }],
+  [/WebGPU unavailable|WebGPU adapter unavailable|requestAdapter|No WebGPU/, { title: "WebGPU isn't available.", hint: "Check chrome://gpu and make sure hardware acceleration is on." }],
   [/inside the viewport|explicitly enable again when visible/, { title: "Scroll the stage into view, then enable again.", hint: "The GPU check draws and clicks a tiny probe inside the visible stage." }],
   [/probe failed|hit testing/, { title: "The GPU check couldn't confirm clicks would land correctly.", hint: "Make sure nothing covers the stage, then try again. If it keeps failing, please report your browser build." }],
   [/device lost/i, { title: "The GPU reset.", hint: "This is usually temporary: enable GPU again." }],
