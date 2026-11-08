@@ -673,6 +673,33 @@ try {
       assert.equal(await strata.evaluate(() => !document.querySelector(".stage").contains(document.querySelector(".ug-toast-region"))), true);
       record.strata.final = await strataMode("after overlays");
       if (lane === "native") await strataOutput.screenshot({ path: join(run, "native-strata-feedback.png") });
+      // Leaving the gallery for another example in place: `useStrataGpu` must release its panels before React removes
+      // them, or the runtime meets a detached enrolled layer and leaves GPU (it did, and the next example never
+      // mounted). The next example must mount on the GPU, without Strata's layers, with fresh pixels and real hits.
+      await strata.getByLabel("Example", { exact: true }).selectOption("layers");
+      await strata.locator("#studio-title").waitFor();
+      await strataSettle();
+      record.strata.left = await strataMode("switched to layers");
+      assert.deepEqual(record.strata.left.layers.map(layer => layer.id).filter(id => id.startsWith("strata")), []);
+      const leftSave = async text => {
+        await strata.locator("#studio-title").fill(text);
+        const box = await strata.locator(".stage button").filter({ hasText: /^Save postcard$/ }).boundingBox();
+        await strata.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+        await strata.locator("#saved-title").filter({ hasText: text }).waitFor();
+        await strataSettle();
+        if (lane === "native") return PNG.sync.read(await strataOutput.screenshot({ path: join(run, `native-strata-left-${text[0]}.png`) }));
+      };
+      const leftWide = await leftSave("W".repeat(32)), leftNarrow = await leftSave("I".repeat(32));
+      if (lane === "native") {
+        let changed = 0;
+        for (let y = 92; y < 160; y++) for (let x = 406; x < 700; x++) {
+          const offset = (y * leftNarrow.width + x) * 4;
+          if (leftWide.data.subarray(offset, offset + 4).some((v, i) => v !== leftNarrow.data[offset + i])) changed++;
+        }
+        assert.ok(changed > 100, `Title pixels changed after leaving Strata: ${changed}`);
+        record.strata.leftChangedTitlePixels = changed;
+      }
+      await strataMode("after leaving");
       await strataContext.close();
       // With `navigator.gpu` hidden, enabling GPU must fall back to DOM with a GPU reason and keep the user's input.
       if (lane === "dom") {
