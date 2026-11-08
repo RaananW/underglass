@@ -20,7 +20,8 @@ code changes.
   --enable-blink-features=CanvasDrawElement,ElementCanvasTransform --enable-experimental-web-platform-features
   ```
 
-  Every other browser gets ordinary DOM.
+  Every other browser gets ordinary DOM, unless you opt in to the
+  [HTML-in-Canvas polyfill](polyfill.md).
 
 ## Install
 
