@@ -5,7 +5,7 @@
  * against the polyfill exactly as it runs against the browser. A refused admission removes it again.
  *
  * The polyfill draws each element by serializing it into an image, so changes reach the GPU a few frames
- * late (about 50–125 ms in Chrome 156, against 15–21 ms natively) and some details differ (see its
+ * late (about 40–90 ms in Chrome 156, against 9–16 ms natively) and some details differ (see its
  * LIMITATIONS.md). The page says so for as long as it is active. Only the examples measured to run well on
  * it are offered; `docs/showcase.md` records the measurements.
  */
@@ -22,7 +22,7 @@ export const polyfillLinks = {
 
 /**
  * Examples not offered on the polyfill, with the reason shown to visitors. Every other example ran GPU mode on
- * it with correct native hits at 53–57 fps in Chrome 156 (2026-11-08, polyfill 0.2.0).
+ * it with correct native hits at 49–60 fps in Chrome 156 (2026-11-08, polyfill 0.3.0).
  */
 export const polyfillExcluded: Partial<Record<ExampleId, string>> = {
   strata: "its gallery is one large layer, so the polyfill redraws all of it on every click, about a third of a second each time",

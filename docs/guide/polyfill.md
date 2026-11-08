@@ -54,12 +54,12 @@ polyfill keeps the elements Underglass moves into the canvas; you don't need its
 ## What to expect
 
 - **Lag.** The polyfill paints a few frames after a change. In the
-  [showcase](https://underglass.dev), input reached the GPU in 49–125 ms on the
-  polyfill 0.2.0 in Chrome 156, against 15–21 ms natively in Canary.
+  [showcase](https://underglass.dev), input reached the GPU in 37–87 ms on the
+  polyfill 0.3.0 in Chrome 156, against 9–16 ms natively in Canary.
 - **Cost per change.** Every change re-serializes the whole layer it is in, at about
   1 ms per element in Chromium. Small layers that change on input are fine. In the
   showcase's Strata gallery, one layer of about 500 elements, each click takes about
-  a third of a second to reach the GPU, and the page runs at about 34 fps while the
+  0.3 seconds to reach the GPU, and the page runs at about 30 fps while the
   pointer moves over it. Keep layers small, and give animated parts their own layer,
   or animate with Underglass's [motion](motion.md), which moves layers without new
   captures. Since 0.1.1 the polyfill redraws a layer that only a running animation
@@ -76,12 +76,13 @@ polyfill keeps the elements Underglass moves into the canvas; you don't need its
   of the showcase's Fluent cards on the last card, because it couldn't override the
   `transform` Underglass sets on layers. Test the clicks of your own app before you
   rely on it.
-- **Rendering.** The snapshot re-lays out your elements, so styles that depend on
-  layout precision, UA rules or the element's visibility can come out differently.
-  0.2.0 drew the showcase's Strata gallery without its GPU relief and with square
-  radios, among other differences; polyfill pull requests
-  [#12](https://github.com/RaananW/html-in-canvas-polyfill/pull/12)–[#15](https://github.com/RaananW/html-in-canvas-polyfill/pull/15)
-  fix them. Compare your app on the polyfill with its DOM mode before you rely on it.
+- **Rendering.** Use 0.3.0 or later. 0.2.0 drew the showcase's Strata gallery
+  without its GPU relief and with square radios, among other differences: it hid
+  drawn elements from `checkVisibility()`, rounded copied sizes, mis-sized tables with
+  a caption and dropped styles equal to a UA default. The snapshot still re-lays out
+  your elements, so compare your app on the polyfill with its DOM mode before you
+  rely on it. 0.3.0 also places `position: fixed` content inside a drawn element
+  against the canvas, as native HTML-in-Canvas does, rather than the viewport.
 - **Browsers.** Underglass needs WebGPU and `Element.moveBefore`, which the polyfill
   does not provide. Chromium browsers without the flags (Chrome, Edge) have both.
   Safari has no `moveBefore` yet, so admission refuses there. Firefox has both but

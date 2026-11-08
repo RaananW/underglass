@@ -13,7 +13,7 @@
     "@fluentui/react-components": "9.75.0",
     "@fluentui/react-icons": "2.0.345",
     "@radix-ui/react-dialog": "1.3.1",
-    "@underglass/html-in-canvas-polyfill": "0.2.0",
+    "@underglass/html-in-canvas-polyfill": "0.3.0",
     "@underglass/react": "*",
     "@underglass/ui": "*",
     "@vercel/analytics": "2.0.1",
