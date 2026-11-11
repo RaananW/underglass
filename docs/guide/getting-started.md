@@ -6,15 +6,16 @@ places parts of that tree in **layers** that the GPU can move, rotate, fade and 
 shader effects on, while every click, keystroke and focus change still goes to the
 original elements.
 
-Without the experimental browser features the same app runs as plain DOM, with no
-code changes.
+In a browser without HTML-in-Canvas the same app runs as plain DOM, with no code
+changes.
 
 ## Requirements
 
 - React 18 or 19.
-- For GPU mode: **Chrome Canary** with HTML-in-Canvas enabled. Either turn on
+- For GPU mode: **Chrome or Edge 157 or later**, which ship HTML-in-Canvas without
+  flags. An older build can turn it on with
   `chrome://flags/#canvas-draw-element` and
-  `chrome://flags/#enable-experimental-web-platform-features`, or launch with:
+  `chrome://flags/#enable-experimental-web-platform-features`, or by launching with:
 
   ```sh
   --enable-blink-features=CanvasDrawElement,ElementCanvasTransform --enable-experimental-web-platform-features

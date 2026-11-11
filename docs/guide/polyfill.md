@@ -1,7 +1,8 @@
 # Browsers without HTML-in-Canvas
 
-Underglass presents through the browser's HTML-in-Canvas API, which today only
-Chrome Canary has, behind flags. In other browsers your app runs in ordinary DOM,
+Underglass presents through the browser's HTML-in-Canvas API, which Chrome and Edge
+ship without flags from version 157. In other browsers, and in older Chrome and Edge,
+your app runs in ordinary DOM,
 which is complete and correct. If you want GPU mode there too, the
 [HTML-in-Canvas polyfill](https://github.com/RaananW/html-in-canvas-polyfill)
 (`@underglass/html-in-canvas-polyfill`) can stand in for the API. This page explains
@@ -93,7 +94,7 @@ polyfill keeps the elements Underglass moves into the canvas; you don't need its
   rely on it. 0.3.0 also places `position: fixed` content inside a drawn element
   against the canvas, as native HTML-in-Canvas does, rather than the viewport.
 - **Browsers.** Underglass needs WebGPU and `Element.moveBefore`, which the polyfill
-  does not provide. Chromium browsers without the flags (Chrome, Edge) have both.
+  does not provide. Chrome and Edge before 157 have both.
   Safari has no `moveBefore` yet, so admission refuses there. Firefox has both but
   has not been tested.
 

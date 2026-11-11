@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting. GPU mode depends on experimental Chrome Canary features, so the browser build matters a lot.
+        Thanks for reporting. GPU mode depends on HTML-in-Canvas, which is new in Chrome and Edge 157, so the browser build matters a lot.
   - type: textarea
     id: what
     attributes:
@@ -23,14 +23,14 @@ body:
     id: mode
     attributes:
       label: Presentation mode
-      options: ["GPU (Chrome Canary)", "Ordinary DOM", "Both"]
+      options: ["GPU (browser's HTML-in-Canvas)", "GPU (polyfill)", "Ordinary DOM", "Both"]
     validations:
       required: true
   - type: input
     id: browser
     attributes:
       label: Browser and version
-      description: From chrome://version, for example "Chrome Canary 157.0.8102.0, Windows 11".
+      description: From chrome://version (edge://version in Edge), for example "Edge 157.0.4341.42, Windows 11".
     validations:
       required: true
   - type: textarea

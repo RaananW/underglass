@@ -41,9 +41,9 @@ The camera image never leaves the page.
 | [![Shader lab](examples/showcase/src/previews/shader-lab.jpg)](https://underglass.dev/examples/effects) | [![Notification stack](examples/showcase/src/previews/notification-stack.jpg)](https://underglass.dev/examples/presence) |
 | **Shader lab.** Ripple, chromatic split, noise dissolve and application-written WGSL chained on live DOM artwork. | **Notification stack.** `Presence` keeps each toast's React subtree, with its real Dismiss button, through its exit. |
 
-GPU mode needs Chrome Canary with HTML-in-Canvas enabled (see [Requirements](#requirements)).
-In Chrome and Edge without the flags, the showcase offers to run it on an opt-in polyfill;
-in other browsers it runs as ordinary DOM with the same controls.
+GPU mode needs HTML-in-Canvas, which Chrome and Edge ship without flags from version 157
+(see [Requirements](#requirements)). In older Chrome and Edge, the showcase offers to run it
+on an opt-in polyfill; in other browsers it runs as ordinary DOM with the same controls.
 
 ## Status
 
@@ -59,9 +59,9 @@ under one version (see each package's `CHANGELOG.md` and [releasing](docs/releas
 | [`@underglass/css-compiler`](https://www.npmjs.com/package/@underglass/css-compiler) | The opt-in build-time CSS compiler (Vite and webpack) |
 
 It is for deliberately adopted small applications, not for loading arbitrary
-websites or libraries unchanged. GPU mode needs Chrome Canary with experimental
-flags, or the opt-in HTML-in-Canvas polyfill in other Chromium browsers; plain DOM
-mode works in any browser. Licensed under the
+websites or libraries unchanged. GPU mode needs Chrome or Edge 157 or later, or the
+opt-in HTML-in-Canvas polyfill in older Chromium browsers; plain DOM mode works in any
+browser. Licensed under the
 [Apache License 2.0](LICENSE). History and acceptance records are in
 [docs/archive/history.md](docs/archive/history.md).
 
@@ -79,8 +79,10 @@ components, and `@underglass/css-compiler` only for its build-time route.
 
 - To work on this repository: Node 24 (validated with Node 24.19.0 / npm 11.17.0).
   Dependencies are exact-pinned.
-- For GPU mode: Chrome Canary (most recently tested: 159.0.8134.0 on Windows 11)
-  with the HTML-in-Canvas features enabled. Either launch with
+- For GPU mode: Chrome or Edge 157 or later, which ship HTML-in-Canvas without flags
+  (tested unflagged: Edge 157.0.4341.42 on Windows 11). Older builds can turn it on
+  with flags; the browser tests still launch Chrome Canary (most recently tested:
+  159.0.8134.0 on Windows 11) this way. Either launch with
 
   ```sh
   --enable-blink-features=CanvasDrawElement,ElementCanvasTransform --enable-experimental-web-platform-features
@@ -91,8 +93,8 @@ components, and `@underglass/css-compiler` only for its build-time route.
   verified functionally at runtime (admission), not inferred from API presence.
 - Without HTML-in-Canvas: GPU mode can run on the opt-in
   [`@underglass/html-in-canvas-polyfill`](https://github.com/RaananW/html-in-canvas-polyfill)
-  in browsers that have WebGPU and `Element.moveBefore` (Chrome and Edge today, not
-  Safari). Admission tests it like the browser's own API, and `state().htmlInCanvas`
+  in browsers that have WebGPU and `Element.moveBefore` (Chrome and Edge before 157,
+  not Safari). Admission tests it like the browser's own API, and `state().htmlInCanvas`
   reports which one it tested. Changes reach the GPU a few frames late, and large
   layers cost more: see [Browsers without HTML-in-Canvas](docs/guide/polyfill.md).
 
@@ -107,7 +109,7 @@ npm run dev:showcase   # React example gallery
 The [showcase](docs/showcase.md) is the public gallery: ten live examples, from native
 forms, motion and shader effects to stock Fluent UI components, a GPU-versus-CSS
 comparison and the Strata and Instrument component galleries. **GPU demos require
-Chrome Canary with HTML-in-Canvas enabled**; ordinary DOM mode works without flags. It deploys to
+Chrome or Edge 157 or later**; ordinary DOM mode works in any browser. It deploys to
 <https://underglass.dev/> on Vercel, and to GitHub Pages at
 <https://raananw.github.io/underglass/>, from `main`.
 

@@ -8,7 +8,7 @@ the showcase's **Status** line. Then call `enable()` again once the cause is gon
 
 | Reason contains | Meaning | What to do |
 | --- | --- | --- |
-| `canvas.content` / `requestPaint` / `drawElementImageToTexture` unavailable | The browser lacks HTML-in-Canvas | Use Chrome Canary with the flags in [Getting started](getting-started.md#requirements), or the [polyfill](polyfill.md) |
+| `canvas.content` / `requestPaint` / `drawElementImageToTexture` unavailable | The browser lacks HTML-in-Canvas | Use Chrome or Edge 157 or later (older builds need the flags in [Getting started](getting-started.md#requirements)), or the [polyfill](polyfill.md) |
 | `State-preserving Element.moveBefore unavailable` | The browser can't move the controls into the canvas without resetting them (Safari today) | Stay in ordinary DOM; the polyfill doesn't add `moveBefore` |
 | `WebGPU unavailable` / `WebGPU adapter unavailable` | The browser has no usable WebGPU adapter (`navigator.gpu` is missing, or `requestAdapter()` found nothing, as in Firefox without a GPU adapter) | Check `chrome://gpu` or `about:support`; enable hardware acceleration |
 | `inside the viewport; explicitly enable again when visible` | The output canvas was off screen during admission | Scroll the stage into view, then `enable()` again |

@@ -167,7 +167,7 @@ preserves short motion after large delays and avoids shader division rounding
 near sharp easing endpoints. Mirrored cubic evaluation avoids cancellation
 near the end of a curve; motion interpolation remains in generated WGSL.
 
-GPU operation requires Chrome Canary with HTML-in-Canvas enabled, WebGPU and
+GPU operation requires HTML-in-Canvas (Chrome or Edge 157 or later), WebGPU and
 functional capture/native-hit admission. Unsupported browsers remain ordinary
 DOM. Reduced motion pauses motion without revoking working GPU presentation.
 No performance improvement, arbitrary package compatibility, WebGL compiler,

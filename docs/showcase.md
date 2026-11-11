@@ -138,7 +138,8 @@ up-front guess of whether this browser can run GPU mode, `likely`, `chrome-flags
 `unsupported`), `GPU Enable` (result mode, the status line's headline, the up-front
 browser guess and `api`: `native` or `polyfill`), `GPU Lost` (GPU mode ended without
 the visitor asking, with `api`), `Studio Action` (**Use ordinary DOM**, **Dispose
-example**), `GPU Help` (preview, copied flag, Canary link, polyfill button) and
+example**), `GPU Help` (preview, copied flag, Chrome download link, polyfill button;
+the download link was the Canary link, action `canary`, until Chrome 157) and
 `Outbound Link` (GitHub, npm). `api` keeps polyfilled runs out of the native numbers. No event carries anything a visitor
 typed, searched or filmed. The footer says when analytics is on. The documentation
 site's Vercel builds load the same script in each page's head and count page views
@@ -176,19 +177,25 @@ physical-device and broader browser/production qualification remain open.
 
 ## Experimental GPU browser requirement
 
-**GPU demos require Chrome Canary with HTML-in-Canvas enabled.** Ordinary DOM
-mode works without experimental flags. The current native validation route
-launches Canary with these switches, including the required native geometry
-support:
+**GPU demos require Chrome or Edge 157 or later**, which ship HTML-in-Canvas,
+including the native geometry support Underglass needs, without flags. Ordinary
+DOM mode works in any browser. On 2026-11-11, unflagged Edge 157.0.4341.42
+(Windows 11, headless and headful) admitted GPU mode natively on the live site,
+while Chrome stable 156.0.8078.80 did not have the API. For a visitor's Chromium
+browser without the API, the help panel says to update, and keeps the
+`chrome://flags` entries for older builds.
+
+The native validation route (`npm run test:showcase`) still launches Canary with
+these switches:
 
 ```text
 --enable-blink-features=CanvasDrawElement,ElementCanvasTransform
 --enable-experimental-web-platform-features
 ```
 
-After opening the page in that configured Canary session, choose **Enable
-experimental GPU**. Flags alone do not guarantee support in every Canary build;
-Underglass checks working capture and geometry and reports refusal reasons.
+In either browser, choose **Enable experimental GPU**. A version number or the
+API's presence does not guarantee support; Underglass checks working capture and
+geometry and reports refusal reasons.
 
 ## The opt-in polyfill
 

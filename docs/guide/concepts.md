@@ -8,7 +8,7 @@ one of two modes:
 | Mode | What draws it | When |
 | --- | --- | --- |
 | **Ordinary DOM** | The browser, as usual | At startup, in browsers without HTML-in-Canvas, after `disable()`, or after a diagnosed problem |
-| **GPU** | WebGPU, from live captures of the same elements | After a successful `enable()` in Chrome Canary |
+| **GPU** | WebGPU, from live captures of the same elements | After a successful `enable()` in Chrome or Edge 157 or later |
 
 Switching modes **moves** the same React root between the ordinary host and the
 output canvas. React does not remount: state, focus, selection and input values stay
