@@ -1,8 +1,10 @@
 # Babylon Lite findings
 
-Everything the Instrument work found in `@babylonjs/lite` **1.33.0** (the version pinned in `packages/core`), collected
-for upstream reports. Nothing here has been filed upstream yet; each entry says where it was found, how to reproduce it
-in this repository, what core does about it, and what an upstream fix or API would look like. Sources: the
+Everything the Instrument work found in `@babylonjs/lite` **1.33.0**, collected for upstream reports. `packages/core`
+pins **1.39.2** since 2026-11-11; [babylon-lite-1.39-assessment.md](babylon-lite-1.39-assessment.md) says which entries
+that release touches (none is claimed fixed; L10 and L11 now have an API; error numbers such as L22's changed).
+Nothing here has been filed upstream yet; each entry says where it was found, how to reproduce it in this repository,
+what core does about it, and what an upstream fix or API would look like. Sources: the
 [Phase I0 report](../ui-library/instrument-phase0.md#findings-for-later-phases), the
 [Phase I2 design note](../ui-library/instrument-phase2.md), the Rendering Model's
 [version 4 change log](../ui-library/rendering-model.md#change-log) and the pull requests named below. Tested on Chrome

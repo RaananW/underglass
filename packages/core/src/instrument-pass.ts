@@ -392,7 +392,7 @@ export function createInstrumentController(options: InstrumentControllerOptions)
           orthoMinZ: distance - window, orthoMaxZ: distance + window });
         key.shadowGenerator = generator;
         mapState = { ...map, biasPx: map.bias, bias: liteMapBias(map.bias, window), window, casters: 0, renders: 0, timedRenders: 0, generator };
-        // Lite 1.33 has no public disposal for a generator's map: its depth texture (64 MB at 4,096²) is released with the
+        // Lite (1.33 to 1.39) has no public disposal for a generator's map: its depth texture (64 MB at 4,096²) is released with the
         // scene through the internal field. If a Lite version renames it, that is counted and reported once, not leaked silently.
         onSceneDispose(sceneContext, () => {
           const texture = (generator as { _depthTexture?: GPUTexture })._depthTexture;
