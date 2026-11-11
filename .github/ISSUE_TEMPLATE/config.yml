@@ -2,4 +2,4 @@ blank_issues_enabled: true
 contact_links:
   - name: Live showcase
     url: https://raananw.github.io/underglass/
-    about: Try the examples in Chrome Canary before reporting.
+    about: Try the examples in Chrome or Edge 157 or later before reporting.

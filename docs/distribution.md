@@ -64,10 +64,10 @@ the application's integration work, not assets the packages inject.
 ## Browser contract
 
 The application always starts in usable ordinary DOM, in every browser. GPU mode needs
-Chrome Canary with HTML-in-Canvas enabled (`CanvasDrawElement`, `ElementCanvasTransform`
-and experimental web-platform features), WebGPU, and state-preserving
+HTML-in-Canvas (`CanvasDrawElement` and `ElementCanvasTransform`), which Chrome and Edge
+ship without flags from version 157, WebGPU, and state-preserving
 `Element.moveBefore`; [Getting started](guide/getting-started.md#requirements) has the
-flags. Feature presence is not enough: admission verifies real native capture pixels,
+flags for older builds. Feature presence is not enough: admission verifies real native capture pixels,
 uploaded output pixels and native hit geometry before it presents anything, and refuses
 with a diagnosed reason otherwise. This is experimental Chromium support, not a WebGL
 fallback or a promise about Safari, Firefox or other Chromium builds.

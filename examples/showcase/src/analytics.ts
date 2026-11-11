@@ -25,8 +25,8 @@ export const analyticsEnabled = __VERCEL_ANALYTICS__;
  *   (`api`), so polyfilled runs never count as native ones.
  * - `GPU Lost`: GPU mode ended without the visitor asking (a revocation or fallback), with its headline and `api`.
  * - `Studio Action`: **Use ordinary DOM** or **Dispose example**.
- * - `GPU Help`: the help panel was used (`action`: the preview image, a copied flag, the Canary link or the
- *   polyfill button).
+ * - `GPU Help`: the help panel was used (`action`: the preview image, a copied flag, the Chrome download link
+ *   (`download`; `canary` before 157 shipped HTML-in-Canvas) or the polyfill button).
  * - `Outbound Link`: a link to the source or the npm package (`target`).
  */
 /** Which HTML-in-Canvas implementation GPU mode ran on: the browser's own, or the opt-in polyfill. */
@@ -37,7 +37,7 @@ export interface Events {
   "GPU Enable": { example: ExampleId; result: string; status: string; support: string; api: Api };
   "GPU Lost": { example: ExampleId; status: string; api: Api };
   "Studio Action": { example: ExampleId; action: "disable" | "dispose" };
-  "GPU Help": { example: ExampleId; action: "preview" | "copy-flag" | "canary" | "polyfill" };
+  "GPU Help": { example: ExampleId; action: "preview" | "copy-flag" | "download" | "polyfill" };
   "Outbound Link": { target: "github" | "npm" };
 }
 

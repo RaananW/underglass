@@ -277,7 +277,7 @@ function App() {
         </div>
         <p className="studio-detail">{current.detail}</p>
         <div className="control-bar">
-          <p className="stage-note" id="gpu-requirement"><strong>GPU demos require Chrome Canary with HTML-in-Canvas enabled{offerPolyfill && ", or the polyfill offered below"}.</strong> Ordinary DOM mode works without experimental flags.</p>
+          <p className="stage-note" id="gpu-requirement"><strong>GPU demos require Chrome or Edge 157 or later{offerPolyfill && ", or the polyfill offered below"}.</strong> Ordinary DOM mode works in any browser.</p>
           <div className="toolbar"><button aria-describedby="gpu-requirement" disabled={busy || disposed || !mounted || !!polyfillRefused} onClick={() => void action("enable")}>Enable experimental GPU</button>
             <button disabled={busy || disposed || !mounted} onClick={() => void action("disable")}>Use ordinary DOM</button>
             <button disabled={busy || disposed || !mounted} onClick={() => void action("dispose")}>Dispose example</button></div>
@@ -286,7 +286,7 @@ function App() {
           polyfill={offerPolyfill ? { excluded: polyfillExcluded[selected], ready: mounted && !busy, run: () => void tryPolyfill() } : undefined} />}
         {gpu && polyfilled && <p className="polyfill-note" role="note"><strong>Running on the HTML-in-Canvas polyfill.</strong> GPU mode here uses
           a JavaScript stand-in for the browser API, not Chrome's own HTML-in-Canvas: changes reach the GPU about a tenth of a second late,
-          and some details differ. Chrome Canary with HTML-in-Canvas shows the real thing. <a href={polyfillLinks.limitations} target="_blank" rel="noreferrer">What
+          and some details differ. Chrome or Edge 157 or later shows the real thing. <a href={polyfillLinks.limitations} target="_blank" rel="noreferrer">What
           the polyfill can't do <span aria-hidden="true">&#8599;</span></a></p>}
         <Status reason={diagnostic} />
         {disposed && <p className="disposed-note">The example is disposed. Reload this page to start a fresh session.</p>}
@@ -364,21 +364,24 @@ function GpuHelp({ support, preview, title, example, polyfill }: { support: Supp
   const copy = (url: string) => { track("GPU Help", { example, action: "copy-flag" }); void navigator.clipboard?.writeText(url).then(() => setCopied(url), () => setCopied(undefined)); };
   return <section className="gpu-help" aria-labelledby="gpu-help-title">
     <div className="gpu-help-text">
-      <h3 id="gpu-help-title">{support === "chrome-flags" ? "Turn on GPU mode in Chrome Canary" : "You're seeing the ordinary DOM version"}</h3>
+      <h3 id="gpu-help-title">{support === "chrome-flags" ? "Update your browser to turn on GPU mode" : "You're seeing the ordinary DOM version"}</h3>
       <p>{support === "chrome-flags"
-        ? "This browser doesn't have HTML-in-Canvas turned on. Everything below works as ordinary DOM; GPU mode adds the effects described under the stage."
-        : "GPU mode needs Chrome Canary's experimental HTML-in-Canvas. Every example below still works here as plain DOM, with the same controls."}</p>
+        ? "This browser doesn't have HTML-in-Canvas yet. Everything below works as ordinary DOM; GPU mode adds the effects described under the stage."
+        : "GPU mode needs HTML-in-Canvas, which Chrome and Edge have from version 157. Every example below still works here as plain DOM, with the same controls."}</p>
       <ol>
-        <li>Install <a href="https://www.google.com/chrome/canary/" target="_blank" rel="noreferrer" onClick={() => track("GPU Help", { example, action: "canary" })}>Chrome Canary</a>.</li>
-        {flags.map(flag => <li key={flag.url}>Open <code>{flag.url}</code>
-          <button type="button" className="copy" onClick={() => copy(flag.url)}>{copied === flag.url ? "Copied" : "Copy"}</button>
-          and set it to <strong>Enabled</strong>.</li>)}
-        <li>Restart Canary, come back here and press <strong>Enable experimental GPU</strong>.</li>
+        <li>Use <a href="https://www.google.com/chrome/" target="_blank" rel="noreferrer" onClick={() => track("GPU Help", { example, action: "download" })}>Chrome</a> or
+          Edge 157 or later. Already have one? Open <code>chrome://settings/help</code> or <code>edge://settings/help</code> to update it.</li>
+        <li>Restart the browser, come back here and press <strong>Enable experimental GPU</strong>.</li>
       </ol>
+      {support === "chrome-flags" && <>
+        <p className="gpu-help-flags">On an older build, open each of these, set it to <strong>Enabled</strong> and restart:</p>
+        <ul>{flags.map(flag => <li key={flag.url}><code>{flag.url}</code>
+          <button type="button" className="copy" onClick={() => copy(flag.url)}>{copied === flag.url ? "Copied" : "Copy"}</button></li>)}</ul>
+      </>}
       {polyfill && <div className="polyfill-offer">
         <h4>Or try GPU mode here, through a polyfill</h4>
         <p>The <a href={polyfillLinks.repository} target="_blank" rel="noreferrer">HTML-in-Canvas polyfill</a> imitates the browser API in
-          JavaScript, so this browser can run GPU mode without Canary. It is slower than the real thing: changes reach the GPU about a tenth of
+          JavaScript, so this browser can run GPU mode without updating. It is slower than the real thing: changes reach the GPU about a tenth of
           a second late, and some details differ.</p>
         {polyfill.excluded
           ? <p className="polyfill-off">{title} isn't offered on the polyfill: {polyfill.excluded}.</p>

@@ -7,8 +7,8 @@ export type Support = "likely" | "chrome-flags" | "unsupported";
 
 /**
  * Guesses up front whether GPU mode can work here: `"likely"` when the HTML-in-Canvas methods and
- * `navigator.gpu` are present, `"chrome-flags"` for another Chromium browser (the flags may simply be
- * off), else `"unsupported"`. `main.tsx` uses it only to choose the help panel; property presence is
+ * `navigator.gpu` are present, `"chrome-flags"` for another Chromium browser (older than 157, or with
+ * the feature off; the name predates 157 and is kept for continuous analytics), else `"unsupported"`. `main.tsx` uses it only to choose the help panel; property presence is
  * never treated as proof, which is why `enable()` still runs functional admission.
  */
 export function detectSupport(): Support {
@@ -21,7 +21,7 @@ export function detectSupport(): Support {
   return chromium ? "chrome-flags" : "unsupported";
 }
 
-/** The `chrome://flags` entries the help panel asks visitors to enable in Chrome Canary. */
+/** The `chrome://flags` entries the help panel offers visitors on Chromium builds older than 157. */
 export const flags = [
   { url: "chrome://flags/#canvas-draw-element" },
   { url: "chrome://flags/#enable-experimental-web-platform-features" },
@@ -39,7 +39,7 @@ const known: [RegExp, Explanation][] = [
   [/moveBefore/, { title: "This browser can't move the controls without resetting them.",
     hint: "GPU mode needs Element.moveBefore, which this browser doesn't have yet. The examples keep working as ordinary DOM." }],
   [/canvas\.content|requestPaint|updateElementGeometry|drawElementImageToTexture unavailable|getElementImageDefaultSize/, {
-    title: "This browser doesn't have HTML-in-Canvas.", hint: "GPU mode needs Chrome Canary with the two flags in the steps above. The examples keep working as ordinary DOM." }],
+    title: "This browser doesn't have HTML-in-Canvas.", hint: "GPU mode needs Chrome or Edge 157 or later; the steps above say how. The examples keep working as ordinary DOM." }],
   [/WebGPU unavailable|WebGPU adapter unavailable|requestAdapter|No WebGPU/, { title: "WebGPU isn't available.", hint: "Check chrome://gpu and make sure hardware acceleration is on." }],
   [/inside the viewport|explicitly enable again when visible/, { title: "Scroll the stage into view, then enable again.", hint: "The GPU check draws and clicks a tiny probe inside the visible stage." }],
   [/probe failed|hit testing/, { title: "The GPU check couldn't confirm clicks would land correctly.", hint: "Make sure nothing covers the stage, then try again. If it keeps failing, please report your browser build." }],
