@@ -67,4 +67,20 @@ New since 1.36 and not adopted: `createOverlayScene`, `moveRenderingContext`, `c
 5. Device loss, GPU errors, hidden tabs (#868 changed recovery), and the first-frame blank check (PBR meshes rebuild one
    by one since #863).
 
-RESULTS_PLACEHOLDER
+## Results
+
+Tested on 2026-11-11 with Chrome Canary **160.0.8155.0** (Windows 11, a real GPU; Playwright's `chrome-canary`
+channel with the harness's HTML-in-Canvas flags). No browser or Lite patch was assumed or applied.
+
+| Gate | Result |
+| --- | --- |
+| `npm run typecheck`, `npm run test:unit` (434), `node --test tests/compiler/*.test.mjs` (129) | pass |
+| `npm run test:browser`, headless | 1129 passed, 1 skipped, 0 failed, 0 flaky |
+| `npm run test:browser:probes` (`ui-probe-*`, `ui-proto-*`), headless | 52 passed, 1 skipped |
+| `npm run test:showcase` | passed |
+| `npm run test:package` (React 18 and 19 consumers, four browser and DPR contracts each) | passed |
+| Headful Canary window: `surface`, `core-layer-exactness`, `core-scene-media-change`, `core-instrument`, `ui-instrument-conformance`, `ui-probe-instrument-shadows` | 59 passed |
+
+The browser runs cover each risk above: GPU stays on, pixels are fresh and native hits match in the layer, instrument
+and multi-scene suites. `ui-instrument-conformance` passes at its unchanged tolerance of 16. So core does not depend on
+the automatic overlay setup that #888 removed, and no tolerance was loosened.
