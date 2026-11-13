@@ -42,7 +42,7 @@ import {
   createPcfDirectionalShadowGenerator, createRenderTarget, createRenderTargetTexture, createRenderTask, createScreenSpaceContactShadowsPostProcessTask,
   createShaderMaterial, createStorageBuffer, disposeRenderTargetTexture, disposeStorageBuffer, enableShaderMaterialInstanceWorld, flushThinInstances, getFrameGraph, getRenderTaskGpuTimings,
   isGpuTimingSupported, onSceneDispose, registerSceneWithShadowSupport, setGpuTimingEnabled, setPbrEmissive, setRenderTaskGpuTimingEnabled, setShaderStorageBuffer,
-  setShaderTexture, setShadowGeneratorEnabled, setShadowTaskCasterMeshes, setThinInstances, updateStorageBuffer,
+  setMeshVisible, setShaderTexture, setShadowGeneratorEnabled, setShadowTaskCasterMeshes, setThinInstances, updateStorageBuffer,
   type EngineContext, type Material, type Mesh, type PbrMaterialProps, type RenderTask, type Screenshot, type ScreenSpaceContactShadowsPostProcessTask,
   type ShadowGenerator, type StorageBuffer,
 } from "@babylonjs/lite";
@@ -535,7 +535,7 @@ async function build(layer: InstrumentLayer) {
   const quads = new Float32Array(capacity * 16);
   setThinInstances(quad, quads, capacity);
   addToScene(layer.scene, quad);
-  quad.visible = paths.analytic;
+  setMeshVisible(quad, paths.analytic);
   built = { layer, parts, controls, analytic: { mesh: quad, data, buffer, dirty: true, quads }, generator, config: current };
   if (generator) setShadowTaskCasterMeshes(generator, casterMeshes);
   for (const element of controls.keys()) pose(element);
@@ -583,7 +583,7 @@ function applyPaths(strict = false) {
   if (strict && paths.map && !built.generator) throw new Error("The map path needs a generator: configure({ generator })");
   if (strict && paths.contact && !built.contact) throw new Error("The contact path needs the post chain: configure({ post: true })");
   paths = { ...paths, map: paths.map && !!built.generator, contact: paths.contact && !!built.contact };
-  built.analytic.mesh.visible = paths.analytic;
+  setMeshVisible(built.analytic.mesh, paths.analytic);
   if (built.generator) {
     if (!paths.map && !built.mapRendered) { setShadowGeneratorEnabled(built.generator, true); harness.draw(); }
     built.mapRendered = true;
