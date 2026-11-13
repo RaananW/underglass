@@ -1,5 +1,13 @@
 # @underglass/css-compiler
 
+## 0.2.5
+
+### Patch Changes
+
+- 4083e92: Updates `magic-string` to 1.4.5 and `postcss` to 8.5.32.
+- Updated dependencies [e487884]
+  - @underglass/core@0.2.5
+
 ## 0.2.4
 
 ### Patch Changes
