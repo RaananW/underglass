@@ -202,7 +202,7 @@ geometry and reports refusal reasons.
 Visitors without native HTML-in-Canvas can run GPU mode through
 [`@underglass/html-in-canvas-polyfill`](https://github.com/RaananW/html-in-canvas-polyfill)
 (`src/polyfill.ts`). The site never loads it on its own: the help panel offers
-**Run GPU mode on the polyfill**, which downloads it (its own chunk, about 70 kB),
+**Run GPU mode on the polyfill**, which downloads it (its own chunk, about 61 kB),
 installs it and requests admission. Admission tests the polyfill with the same
 functional pixel and hit probes it runs against a browser; if it refuses, the
 polyfill is removed again and the reason stays in the status line. While GPU mode
@@ -237,6 +237,10 @@ about 500 elements, re-serialized all of it and took about 0.3 s to reach the GP
 so Strata was not offered. 0.4.0 reuses the styles of elements that can't have
 changed, which brought that click to 109 ms (291 ms on 0.3.0) and the frame rate to
 about 40 fps, still the lowest of the examples.
+
+The showcase uses 0.5.0 since 2026-11-11. That release only makes the code smaller and
+moves worker messaging into an entry of its own, which the showcase doesn't use, so the
+table above was not re-measured for it.
 
 0.2.0 also drew Strata wrongly: no GPU relief on any component, square radios, a grey
 disabled field, markers in the tree, a table taller than its card and a wrapped icon
