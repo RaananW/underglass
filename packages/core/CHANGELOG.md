@@ -1,5 +1,11 @@
 # @underglass/core
 
+## 0.2.5
+
+### Patch Changes
+
+- e487884: Babylon Lite 1.39.2. A browser that exposes WebGPU but has no adapter is still reported as "WebGPU adapter unavailable": Lite 1.39 renumbered that error from `#47` to `#54`.
+
 ## 0.2.4
 
 No changes in this release.
