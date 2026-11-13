@@ -1,7 +1,7 @@
 # Babylon Lite findings
 
 Everything the Instrument work found in `@babylonjs/lite` **1.33.0**, collected for upstream reports. `packages/core`
-pins **1.39.2** since 2026-11-11; [babylon-lite-1.39-assessment.md](babylon-lite-1.39-assessment.md) says which entries
+pins **1.39.3** since 2026-11-13; [babylon-lite-1.39-assessment.md](babylon-lite-1.39-assessment.md) says which entries
 that release touches (none is claimed fixed; L10 and L11 now have an API; error numbers such as L22's changed).
 Nothing here has been filed upstream yet; each entry says where it was found, how to reproduce it in this repository,
 what core does about it, and what an upstream fix or API would look like. Sources: the

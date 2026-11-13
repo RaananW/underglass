@@ -1,7 +1,8 @@
-# Babylon Lite 1.33 to 1.39.2 and lite-gl 1.19 to 1.21.1: upgrade
+# Babylon Lite 1.33 to 1.39.3 and lite-gl 1.19 to 1.21.1: upgrade
 
-`packages/core` moves from `@babylonjs/lite` **1.33.0** to **1.39.2**, and the playground from `@babylonjs/lite-gl`
-**1.19.0** to **1.21.1**. Written on 2026-11-11. It continues
+`packages/core` moves from `@babylonjs/lite` **1.33.0** to **1.39.3**, and the playground from `@babylonjs/lite-gl`
+**1.19.0** to **1.21.1**. Written on 2026-11-11 for 1.39.2; [1.39.2 to 1.39.3](#1392-to-1393) was added on
+2026-11-13. It continues
 [babylon-lite-1.36-assessment.md](babylon-lite-1.36-assessment.md), which covers 1.33 to 1.36 and still applies; this
 note covers 1.36 to 1.39.2 and records what was changed and tested. Findings are numbered as in
 [babylon-lite.md](babylon-lite.md).
@@ -9,13 +10,14 @@ note covers 1.36 to 1.39.2 and records what was changed and tested. Findings are
 ## Sources and what could not be accessed
 
 - npm registry: `@babylonjs/lite` 1.37.0 (2026-10-26), 1.37.1 (10-27), 1.37.2 (10-29), 1.38.0 (11-02), 1.38.1 (11-04),
-  1.38.2 (11-06), 1.39.0 (11-09), 1.39.1 (11-09), 1.39.2 (11-10). `@babylonjs/lite-gl` 1.20.0 (11-02), 1.20.1 (11-04),
+  1.38.2 (11-06), 1.39.0 (11-09), 1.39.1 (11-09), 1.39.2 (11-10), 1.39.3 (11-12). `@babylonjs/lite-gl` 1.20.0 (11-02), 1.20.1 (11-04),
   1.21.0 (11-09), 1.21.1 (11-09). lite-gl's `latest` tag points at 1.21.0 and its `release` tag at 1.21.1; this uses
   1.21.1, the newest.
-- GitHub releases of `BabylonJS/Babylon-Lite` up to `npm-lite-v1.39.0`, and the `CHANGELOG.md` inside the 1.39.2
-  tarball.
-- The shipped 1.36.0 and 1.39.2 tarballs, diffed (JavaScript and `.d.ts`), and the lite-gl 1.19.0 and 1.21.0 `.d.ts`.
-- **Not accessible:** there is no `npm-lite-v1.39.2` tag or release (the newest tag is 1.39.0); GitHub's compare view
+- GitHub releases of `BabylonJS/Babylon-Lite` up to `npm-lite-v1.39.0`, and the `CHANGELOG.md` inside the 1.39.2 and
+  1.39.3 tarballs.
+- The shipped 1.36.0 and 1.39.2 tarballs, diffed (JavaScript and `.d.ts`), and the lite-gl 1.19.0 and 1.21.0 `.d.ts`;
+  the 1.39.2 and 1.39.3 tarballs, diffed with `npm diff`.
+- **Not accessible:** there is no `npm-lite-v1.39.2` or `npm-lite-v1.39.3` tag or release (the newest tag is 1.39.0); GitHub's compare view
   stops at 300 files, so the library source was diffed from the tarballs instead; pull request bodies (including #820
   and #888) were not read; lite-gl has no changelog or tags of its own.
 
@@ -56,6 +58,18 @@ No finding is claimed fixed in the release notes. From the diffs:
 New since 1.36 and not adopted: `createOverlayScene`, `moveRenderingContext`, `createDevice` / `disposeDevice`,
 `EngineContext.device`, `setEnvironmentLightingRotation`, `setEnvironmentSkyboxRotation`, bent-normal PBR inputs, and
 `html-texture` preferring `drawElementImageToTexture` (#891; core draws through its own path).
+
+## 1.39.2 to 1.39.3
+
+Added on 2026-11-13. The 1.39.3 `CHANGELOG.md` entry is cumulative from 1.39.0, so what is new is what 1.39.2's entry
+lacks. The 1.39.2 and 1.39.3 tarballs differ in 699 files, most of them only in renumbered error codes.
+
+| Change | Effect on Underglass | Done |
+| --- | --- | --- |
+| **Breaking:** per-family scene collections for text, depth-hosted sprites and billboards (#907). `addTextRenderable`, `addDepthHostedSpriteLayer`, `addFacingBillboardSystem` and `addAxisLockedBillboardSystem` are removed (`addTextRenderableToScene`, `addDepthHostedSpriteLayerToScene` and `addBillboardSystemToScene` replace them) | None: core, the playground and the tests call none of them. They are the only names removed from `index.d.ts` | Nothing changed |
+| Error codes renumbered again (from about 170 up) | `#54` is still "WebGPU adapter not available": the unit test that decodes `LITE_NO_ADAPTER_CODE` with the installed message table passes. Core matches no other code | Nothing changed |
+| New: a scene SSAO pipeline (#908), public texture pixel readback (#906), texture replacement (#901), the HTML-in-Canvas polyfill lifecycle in compat (#903) | Not used | Not adopted |
+| Fixes: HTML texture elements moved by HTML-in-Canvas polyfills are restored (#897); KTX2 transcoder fetches retry (#905) | Core draws captures through its own path, not Lite's `html-texture`, and loads no KTX2 | Nothing changed |
 
 ## Highest risk, and how it was tested
 
