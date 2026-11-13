@@ -77,8 +77,11 @@ polyfill keeps the elements Underglass moves into the canvas; you don't need its
   stylesheet edited in place within a second, and `install({ incremental: false })`
   turns style reuse off if a drawing looks stale.
 - **Workers.** Since 0.2.0 an `ElementImage` can be transferred to a worker that
-  imports the polyfill's worker entry. Underglass's experimental worker compositor
-  has not been tested on it.
+  imports the polyfill's worker entry. Since 0.5.0 the page must also import
+  `@underglass/html-in-canvas-polyfill/messaging` next to the main entry, or the
+  transfer throws `DataCloneError`; `/auto` and the script-tag build include it.
+  Underglass's experimental worker compositor posts `ElementImage`s, so it needs
+  that import, and it has not been tested on the polyfill.
 - **Hit regions.** They are close, but not always exact: positions round to whole
   CSS pixels, and the polyfill's own
   [limitations](https://github.com/RaananW/html-in-canvas-polyfill/blob/main/docs/LIMITATIONS.md)
