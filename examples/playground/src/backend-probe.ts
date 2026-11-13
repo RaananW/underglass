@@ -246,7 +246,7 @@ export function createBackendProbe(host: DrawableCanvas, elements: readonly HTML
           const textures = staging.map((source) => {
             const texture = api.createDynamicTexture(engine, source.width, source.height);
             resources.textures++;
-            cleanup.push(() => { api.clearDynamicTextureSource(texture); api.disposeTexture(engine, texture); resources.textures--; });
+            cleanup.push(() => { api.clearDynamicTextureSource(texture); api.disposeTexture(texture); resources.textures--; });
             return texture;
           });
           const effect = api.createEffectWrapper(engine, {
@@ -277,19 +277,19 @@ void main() {
           cleanup.push(() => { api.disposeEffectWrapper(effect); resources.effects--; });
           // Wait until the effect reports ready, polling once per frame, with a 1.5 s limit.
           const deadline = performance.now() + 1500;
-          while (!api.isEffectReady(engine, effect.effect)) {
+          while (!api.isEffectReady(effect.effect)) {
             if (performance.now() > deadline) throw new Error("Lite GL shader compilation timed out");
             await nextFrame();
           }
           // The GL fragment shader flips Y itself (`1.0 - vUv.y`) when computing pixel coordinates.
-          upload = (index) => api.updateDynamicTexture(engine, textures[index], staging[index], false, false);
+          upload = (index) => api.updateDynamicTexture(textures[index], staging[index], { invertY: false, premultiplyAlpha: false });
           draw = (offset, phase) => {
             api.setViewport(engine);
             api.applyEffectWrapper(effect);
-            api.setEffectTexture(engine, effect.effect, "first", textures[0]);
-            api.setEffectTexture(engine, effect.effect, "second", textures[1]);
-            api.setEffectFloat(engine, effect.effect, "offset", offset);
-            api.setEffectFloat(engine, effect.effect, "phase", phase);
+            api.setEffectTexture(effect.effect, "first", textures[0]);
+            api.setEffectTexture(effect.effect, "second", textures[1]);
+            api.setEffectFloat(effect.effect, "offset", offset);
+            api.setEffectFloat(effect.effect, "phase", phase);
             api.drawEffect(engine);
           };
         }

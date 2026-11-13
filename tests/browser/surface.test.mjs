@@ -362,7 +362,7 @@ test("an adapter rejection after the slow diagnosis falls back with the error", 
 });
 
 // `navigator.gpu` exists but no adapter is available (Firefox without a WebGPU adapter): the engine throws the opaque
-// code `#47`. That is a factual lack of support, so enable() ends in DOM with a plain reason, and the page stays usable.
+// code `#54` (Lite 1.39). That is a factual lack of support, so enable() ends in DOM with a plain reason, and the page stays usable.
 test("a missing WebGPU adapter falls back to DOM with a plain reason", async ({ page }) => {
   await page.addInitScript(() => { navigator.gpu.requestAdapter = () => Promise.resolve(null); });
   await page.goto("/surface.html?dom");
@@ -370,7 +370,7 @@ test("a missing WebGPU adapter falls back to DOM with a plain reason", async ({ 
   const result = await page.evaluate(() => window.surfaceProbe.enable());
   expect(result.mode).toBe("dom");
   expect(result.reason).toMatch(/^GPU admission failed: WebGPU adapter unavailable/);
-  expect(result.reason).not.toMatch(/#47/);
+  expect(result.reason).not.toMatch(/#\d+/);
   expect(result.resources.pendingEngines).toBe(0);
   expect(result.resources.engines).toBe(0);
   await page.locator("#count").click();

@@ -17,7 +17,7 @@ import {
   addToScene, captureScreenshot, composeMat4, createBox, createCapsule, createCylinder, createDirectionalLight,
   createDynamicTexture, createEngine, createFreeCamera, createHemisphericLight, createMeshFromData, createPbrMaterial,
   createPcfDirectionalShadowGenerator, createSceneContext, createSphere, eulerXYZToQuatTuple, markMaterialUboDirty, registerSceneWithShadowSupport,
-  renderFrame, setPbrEmissive, setPbrUnlit, setShadowOnly, setShadowTaskCasterMeshes, setThinInstances, waitForGpuIdle,
+  renderFrame, setMeshVisible, setPbrEmissive, setPbrUnlit, setShadowOnly, setShadowTaskCasterMeshes, setThinInstances, waitForGpuIdle,
   vec3, type DynamicTexture2D, type Material, type Mesh, type PbrMaterialProps,
 } from "@babylonjs/lite";
 import { hitAt, offsetWithin, type DrawableCanvas, type Point } from "./common.ts";
@@ -170,9 +170,9 @@ async function start() {
   // Cost probe: thin instances of a small box in the empty lower-left of the panel.
   const extraRegion = { x: 24, y: 190, width: 220, height: 70 };
   const extra = add(createBox(engine, { size: 4 }), createPbrMaterial({ baseColorFactor: linear(120, 128, 140), metallicFactor: 0.2, roughnessFactor: 0.6 }));
-  extra.visible = false;
+  setMeshVisible(extra, false);
   function setExtra(count: number) {
-    extra.visible = count > 0;
+    setMeshVisible(extra, count > 0);
     if (!count) return;
     const columns = Math.ceil(Math.sqrt(count * extraRegion.width / extraRegion.height));
     const rows = Math.ceil(count / columns);
