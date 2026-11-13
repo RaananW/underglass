@@ -98,3 +98,17 @@ channel with the harness's HTML-in-Canvas flags). No browser or Lite patch was a
 The browser runs cover each risk above: GPU stays on, pixels are fresh and native hits match in the layer, instrument
 and multi-scene suites. `ui-instrument-conformance` passes at its unchanged tolerance of 16. So core does not depend on
 the automatic overlay setup that #888 removed, and no tolerance was loosened.
+
+### 1.39.3
+
+Tested on 2026-11-13 with Chrome Canary **160.0.8160.0** (Windows 11, a real GPU, headless; the same channel and
+flags), on main after #291 (Astro 7.4.12, Starlight 0.43.1, Playwright 1.65.0).
+
+| Gate | Result |
+| --- | --- |
+| `npm run typecheck`, `npm run test:unit` (435), `node --test tests/compiler/*.test.mjs` (129) | pass |
+| `npm run test:browser`, headless | 1129 passed, 1 skipped, 0 failed |
+| `npm run test:showcase` | passed |
+
+The probe suites and the headful window were not rerun for this patch: no core code changed, and the default suite
+includes `core-instrument`, `core-scene-media-change` and `ui-instrument-conformance` (tolerance 16).
