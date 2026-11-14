@@ -34,19 +34,28 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => { await server?.close(); });
 
-/** Opens the gallery, turns GPU on and waits for the layers to be presented. */
+/**
+ * Waits for the showcase's automatic start: in a browser with HTML-in-Canvas GPU mode starts by itself once the stage is
+ * in view, and is settled when the startup reason is gone and admission is over.
+ */
+async function autoAdmission(page) {
+  await page.waitForFunction(() => { const state = window.showcase.state();
+    return !state.initializing && state.mode !== "admitting" && !/^Ordinary DOM startup/.test(state.reason); }, null, { timeout: 60000 });
+}
+/**
+ * Opens the gallery with the stage in view and waits for GPU mode to start by itself, or with `gpu: false` records the
+ * visitor's **Use ordinary DOM** choice first (as the page does), so it stays in DOM.
+ */
 async function open(browser, { dpr = 1, width = 1280, height = 900, gpu = true, colorScheme = "light", reducedMotion = "no-preference" } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr, colorScheme, reducedMotion });
+  if (!gpu) await context.addInitScript(() => { try { sessionStorage.setItem("underglass-showcase-dom", "1"); } catch { /* opaque origin */ } });
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto(`${base}examples/instrument`);
   await page.waitForFunction(() => window.showcase && window.instrumentGallery);
-  if (gpu) {
-    await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
-    await page.waitForFunction(() => !window.showcase.state().initializing && window.showcase.state().mode !== "admitting", null, { timeout: 60000 });
-  }
   await page.locator(".stage").scrollIntoViewIfNeeded();
+  if (gpu) await autoAdmission(page);
   return { context, page, errors };
 }
 const gallery = (page, call, ...args) => page.evaluate(([call, args]) => window.instrumentGallery[call](...args), [call, args]);
@@ -462,8 +471,8 @@ test("reduced motion and more contrast are respected: GPU stays, the pointer lig
   await page.emulateMedia({ contrast: "more" });
   await page.goto(`${base}examples/instrument`);
   await page.waitForFunction(() => window.showcase && window.instrumentGallery);
-  await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
-  await page.waitForFunction(() => !window.showcase.state().initializing && window.showcase.state().mode !== "admitting", null, { timeout: 60000 });
+  await page.locator(".stage").scrollIntoViewIfNeeded();
+  await autoAdmission(page);
   await select(page, "showpiece", "instrument");
   expect((await stateOf(page)).mode).toBe("gpu");
   expect((await page.evaluate(() => window.instrumentGallery.light())).active, "more contrast turns the light off").toBe(false);
