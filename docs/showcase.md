@@ -136,7 +136,8 @@ cookies. Page views count each example's page. The custom events (a Pro plan fea
 are `Browser Support` (once per visit, kept to one by a `sessionStorage` flag: the
 up-front guess of whether this browser can run GPU mode, `likely`, `chrome-flags` or
 `unsupported`), `GPU Enable` (result mode, the status line's headline, the up-front
-browser guess and `api`: `native` or `polyfill`), `GPU Lost` (GPU mode ended without
+browser guess, `api`: `native` or `polyfill`, and `trigger`: `auto` when the page
+started GPU mode by itself, `button` for a press), `GPU Lost` (GPU mode ended without
 the visitor asking, with `api`), `Studio Action` (**Use ordinary DOM**, **Dispose
 example**), `GPU Help` (preview, copied flag, Chrome download link, polyfill button;
 the download link was the Canary link, action `canary`, until Chrome 157) and
@@ -166,10 +167,22 @@ decorative transition helper, with owned cleanup on example retirement.
 The fixed-size live studio scrolls horizontally on small screens to preserve
 native control geometry; the catalog itself reflows. Choosing another example
 resets that example's local in-memory state, deliberately. No backend, external
-font/CDN or local-storage persistence is added; analytics is described above.
+font/CDN or local-storage persistence is added; analytics is described above. The
+one `sessionStorage` entry besides analytics' is the visitor's DOM choice (below).
 
-Ordinary DOM is the default. **Enable experimental GPU** requests actual
-capability admission; raw refusal reasons remain visible. The shader affects
+The page starts in ordinary DOM. In a browser that `detectSupport` (`src/support.ts`)
+judges `likely` (the HTML-in-Canvas methods and `navigator.gpu` are present), it then
+starts GPU mode by itself, once, when the stage comes into view: admission draws and
+clicks a probe inside the visible stage, so it waits for 160 px of the stage, or half
+of it, in the viewport. Presence is only the guess that decides whether to try:
+admission is the proof, and a refusal leaves ordinary DOM with its reason in the
+status line. If admission is refused only because the stage left the viewport while
+the probe ran, the page tries again the next time it is in view. Any lifecycle button
+cancels the automatic start. **Use ordinary DOM** also records the choice in
+`sessionStorage` (`underglass-showcase-dom`), so this tab stays in DOM after a reload;
+**Enable experimental GPU** clears it. Other browsers keep ordinary DOM until the
+visitor presses **Enable experimental GPU** or the polyfill button. Raw refusal
+reasons remain visible. The shader affects
 only inert aria-hidden artwork, never essential input geometry. Explicit DOM
 recovery preserves original values and focus; disposal ends the app until
 reload. Reduced motion is handled by the existing runtime. Accessibility,
@@ -193,9 +206,10 @@ these switches:
 --enable-experimental-web-platform-features
 ```
 
-In either browser, choose **Enable experimental GPU**. A version number or the
-API's presence does not guarantee support; Underglass checks working capture and
-geometry and reports refusal reasons.
+In either browser GPU mode starts by itself when the stage comes into view (above);
+**Enable experimental GPU** starts it again after **Use ordinary DOM**. A version
+number or the API's presence does not guarantee support; Underglass checks working
+capture and geometry and reports refusal reasons.
 
 ## The opt-in polyfill
 

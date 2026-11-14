@@ -26,6 +26,19 @@ import { devNull } from "../tests/helpers/process.mjs";
 
 const root = resolve(".");
 const sha = data => createHash("sha256").update(data).digest("hex");
+/** The `sessionStorage` key where the showcase records a visitor's **Use ordinary DOM** (`src/main.tsx`). */
+const domChoiceKey = "underglass-showcase-dom";
+/**
+ * Waits for the showcase's automatic start (GPU mode on its own once the stage is in view) to finish: the startup
+ * reason is gone and admission has settled. Asserts GPU, with the runtime's reason as the message.
+ */
+async function autoAdmission(page) {
+  await page.waitForFunction(() => { const state = window.showcase.state();
+    return !state.initializing && state.mode !== "admitting" && !/^Ordinary DOM startup/.test(state.reason); }, null, { timeout: 60000 });
+  const state = await page.evaluate(() => window.showcase.state());
+  assert.equal(state.mode, "gpu", `automatic start: ${state.reason}`);
+  return state;
+}
 // Run output goes under a git-ignored root and must not be reached through a symlink.
 const parent = join(root, "evidence/showcase");
 execFileSync("git", ["check-ignore", parent]);
@@ -168,16 +181,25 @@ try {
   for (const asset of html.matchAll(/(?:src|href)="(\/underglass\/assets\/[^"]+)"/g)) {
     assert.equal((await fetch(`http://127.0.0.1:${port}${asset[1]}`)).status, 200);
   }
-  // The same scenario runs twice: `dom` (no HTML-in-Canvas flags; the examples must stay on DOM) and
-  // `native` (flags on; GPU must be admitted and the pixels must change as the examples run).
+  // The same scenario runs twice: `dom` (no HTML-in-Canvas flags, and the visitor's DOM choice recorded, as
+  // **Use ordinary DOM** does; the examples must stay on DOM) and `native` (flags on; GPU starts by itself when the
+  // stage is in view and the pixels must change as the examples run).
   for (const lane of ["dom", "native"]) {
     const executablePath = process.env.CANVAS_BROWSER_EXECUTABLE;
     result.executable = executablePath ? { path: executablePath, sha256: sha(await readFile(executablePath)) } : { channel: "chrome-canary" };
     const browser = await chromium.launch(browserLaunchOptions({ native: lane === "native" ? true : "none" }));
     const record = { lane, status: "running" };
     result.browsers.push(record);
+    // Stable builds have shipped HTML-in-Canvas since 157, so without the recorded choice the page would start GPU by
+    // itself in the DOM lane too.
+    const laneContext = async options => {
+      const context = await browser.newContext(options);
+      // Init scripts also run on `about:blank`, where `sessionStorage` throws.
+      if (lane === "dom") await context.addInitScript(key => { try { sessionStorage.setItem(key, "1"); } catch { /* opaque origin */ } }, domChoiceKey);
+      return context;
+    };
     try {
-      const context = await browser.newContext({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: 1 });
+      const context = await laneContext({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: 1 });
       const page = await context.newPage();
       const cdp = await context.newCDPSession(page);
       record.actual = await cdp.send("Browser.getVersion");
@@ -203,8 +225,9 @@ try {
       const studioButton = name => page.locator(".stage button").filter({ hasText: new RegExp(`^${name}$`) });
       const settle = async () => { await page.evaluate(() => window.showcase.controller.settle()); await page.waitForTimeout(250); };
       if (lane === "native") {
-        await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
-        await page.waitForFunction(() => !window.showcase.state().initializing);
+        // Nothing is pressed: GPU starts by itself once the stage is in view.
+        await page.locator(".stage").scrollIntoViewIfNeeded();
+        await autoAdmission(page);
       }
       record.initial = await state();
       assert.equal(record.initial.mode, lane === "native" ? "gpu" : "dom", record.initial.reason);
@@ -526,7 +549,8 @@ try {
       record.disposed = await state();
       assert.ok(Object.values(record.disposed.resources).every(value => value === 0));
       assert.ok(Object.values(record.disposed.runtimeResources).every(value => value === 0));
-      // Deep links: opening `examples/effects` and reloading must show that example in DOM mode (GPU is opt-in).
+      // Deep links: opening `examples/effects` and reloading must show that example in DOM mode (the stage is below
+      // the fold, and GPU waits for it to be in view).
       // An old `#/effects` link opens the same page and moves to its path.
       await page.goto("about:blank");
       await page.goto(`${url}#/effects`);
@@ -554,7 +578,7 @@ try {
       await page.evaluate(() => scrollTo(0, 0));
       await page.screenshot({ path: join(run, `${lane}-desktop.png`) });
       // Mobile viewport: no horizontal overflow and a single site header.
-      const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+      const mobileContext = await laneContext({ viewport: { width: 390, height: 844 } });
       const mobile = await mobileContext.newPage();
       await mobile.goto(`${url}examples/motion`);
       await mobile.waitForFunction(() => window.showcase);
@@ -568,9 +592,36 @@ try {
       await mobile.waitForTimeout(300);
       await mobile.screenshot({ path: join(run, `${lane}-mobile-studio.png`) });
       await mobileContext.close();
+      // A visitor's **Use ordinary DOM** holds for the tab: after a reload GPU doesn't start by itself, even with the
+      // stage in view, and **Enable experimental GPU** clears the choice.
+      if (lane === "native") {
+        const choiceContext = await laneContext({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: 1 });
+        const choice = await choiceContext.newPage();
+        choice.on("pageerror", error => errors.push(String(error)));
+        await choice.goto(`${url}examples/layers`);
+        await choice.waitForFunction(() => window.showcase);
+        await choice.locator(".stage").scrollIntoViewIfNeeded();
+        await autoAdmission(choice);
+        await choice.getByRole("button", { name: "Use ordinary DOM", exact: true }).click();
+        await choice.waitForFunction(() => window.showcase.state().mode === "dom");
+        assert.equal(await choice.evaluate(key => sessionStorage.getItem(key), domChoiceKey), "1");
+        await choice.reload();
+        await choice.waitForFunction(() => window.showcase);
+        await choice.locator(".stage").scrollIntoViewIfNeeded();
+        await choice.waitForTimeout(1500);
+        record.domChoice = await choice.evaluate(() => window.showcase.state());
+        assert.equal(record.domChoice.mode, "dom", record.domChoice.reason);
+        assert.match(record.domChoice.reason, /^Ordinary DOM startup/);
+        await choice.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
+        await choice.waitForFunction(() => { const state = window.showcase.state();
+          return !state.initializing && state.mode !== "admitting" && !/^Ordinary DOM startup/.test(state.reason); });
+        assert.equal((await choice.evaluate(() => window.showcase.state())).mode, "gpu");
+        assert.equal(await choice.evaluate(key => sessionStorage.getItem(key), domChoiceKey), null);
+        await choiceContext.close();
+      }
       // Strata gallery, opened directly: its components render in the runtime's first, synchronous render, so
       // `useStrataGpu` must attach after the mount returns. Real keys and clicks drive the original controls.
-      const strataContext = await browser.newContext({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: 1 });
+      const strataContext = await laneContext({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: 1 });
       const strata = await strataContext.newPage();
       strata.on("pageerror", error => errors.push(String(error)));
       await strata.goto(`${url}examples/strata`);
@@ -582,10 +633,7 @@ try {
         return current;
       };
       const strataSettle = async () => { await strata.evaluate(() => window.showcase.controller.settle()); await strata.waitForTimeout(250); };
-      if (lane === "native") {
-        await strata.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
-        await strata.waitForFunction(() => !window.showcase.state().initializing && window.showcase.state().mode !== "admitting");
-      }
+      if (lane === "native") await autoAdmission(strata);
       record.strata = { initial: await strataMode("opened") };
       // On the GPU both panels are in face mode with a Relief scene; in ordinary DOM CSS keeps the relief.
       await strata.waitForFunction(native => [...document.querySelectorAll("#strata-bar, #strata-gallery")]

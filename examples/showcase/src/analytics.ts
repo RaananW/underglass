@@ -18,11 +18,12 @@ export const analyticsEnabled = __VERCEL_ANALYTICS__;
  * - `Browser Support`: once per visit, the page's up-front guess of whether this browser can run GPU
  *   mode (`detectSupport`): `likely`, `chrome-flags` or `unsupported`. Against `GPU Enable` it shows how
  *   many visitors could run GPU mode, how many tried and how many got it. It is a guess: only admission
- *   (pressing Enable) proves GPU mode works, and the site never starts it on its own.
- * - `GPU Enable`: a press of **Enable experimental GPU** (or **Run GPU mode on the polyfill**) and what
- *   admission decided (`result` is the resulting mode, `status` the status line's headline), with the
- *   up-front browser guess (`support`) and whether the browser's own API or the polyfill was admitted
- *   (`api`), so polyfilled runs never count as native ones.
+ *   proves GPU mode works.
+ * - `GPU Enable`: an admission and what it decided (`result` is the resulting mode, `status` the status
+ *   line's headline), with the up-front browser guess (`support`), whether the browser's own API or the
+ *   polyfill was admitted (`api`), so polyfilled runs never count as native ones, and what started it
+ *   (`trigger`): `auto` when the stage came into view on a `likely` browser, `button` for a press of
+ *   **Enable experimental GPU** (or **Run GPU mode on the polyfill**).
  * - `GPU Lost`: GPU mode ended without the visitor asking (a revocation or fallback), with its headline and `api`.
  * - `Studio Action`: **Use ordinary DOM** or **Dispose example**.
  * - `GPU Help`: the help panel was used (`action`: the preview image, a copied flag, the Chrome download link
@@ -34,7 +35,7 @@ export type Api = "native" | "polyfill";
 
 export interface Events {
   "Browser Support": { support: Support };
-  "GPU Enable": { example: ExampleId; result: string; status: string; support: string; api: Api };
+  "GPU Enable": { example: ExampleId; result: string; status: string; support: string; api: Api; trigger: "auto" | "button" };
   "GPU Lost": { example: ExampleId; status: string; api: Api };
   "Studio Action": { example: ExampleId; action: "disable" | "dispose" };
   "GPU Help": { example: ExampleId; action: "preview" | "copy-flag" | "download" | "polyfill" };

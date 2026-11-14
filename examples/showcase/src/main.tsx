@@ -44,6 +44,17 @@ upgradeHashLink();
 applyHead(pageExample());
 /** True for a click the browser should handle itself: another button, or a modifier that opens a new tab or window. */
 const ownClick = (event: MouseEvent) => event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+// A visitor who presses **Use ordinary DOM** keeps ordinary DOM in this tab: the page then doesn't turn GPU mode on
+// by itself, even after a reload. **Enable experimental GPU** clears the choice. Blocked storage just forgets it.
+const domChoiceKey = "underglass-showcase-dom";
+function prefersDom() {
+  try { return sessionStorage.getItem(domChoiceKey) === "1"; } catch { return false; }
+}
+function rememberDom(on: boolean) {
+  try { if (on) sessionStorage.setItem(domChoiceKey, "1"); else sessionStorage.removeItem(domChoiceKey); } catch { /* storage blocked */ }
+}
+/** Admission draws and clicks a probe inside the visible stage, so the automatic start waits for this much of it in view. */
+const autoVisiblePx = 160;
 startAnalytics();
 trackSupport(detectSupport());
 
@@ -68,6 +79,11 @@ function App() {
   const [disposed, setDisposed] = useState(false);
   // False until the Underglass root is mounted: the lifecycle buttons wait for it.
   const [mounted, setMounted] = useState(false);
+  // GPU mode starts by itself, once, when the stage comes into view in a browser that likely has HTML-in-Canvas,
+  // unless the visitor chose ordinary DOM in this tab. Any lifecycle button press cancels it. `autoArmed` re-arms
+  // the observer when the automatic admission was refused only because the stage had left the viewport.
+  const autoStart = useRef(support === "likely" && !prefersDom());
+  const [autoArmed, setAutoArmed] = useState(0);
   // Set when the runtime is disposed or the page is going away; URL changes are then ignored.
   const retired = useRef(false);
   // Reads the URL and shows its example (set by the effect; `go` calls it after `pushState`).
@@ -170,25 +186,49 @@ function App() {
     go(id);
     if (id) requestAnimationFrame(() => studio.current?.scrollIntoView({ block: "start" }));
   }
+  // Starts GPU mode by itself when enough of the stage is in view (see `autoStart`). Admission is the proof, as for a
+  // press of Enable: a refusal is shown in the status line and the page stays ordinary DOM.
+  useEffect(() => {
+    if (!mounted || !autoStart.current || disposed) return;
+    const observer = new IntersectionObserver(entries => {
+      const entry = entries[entries.length - 1];
+      if (!autoStart.current || !entry.isIntersecting || (entry.intersectionRect.height < autoVisiblePx && entry.intersectionRatio < 0.5)) return;
+      observer.disconnect();
+      autoStart.current = false;
+      void action("enable", "auto").then(result => {
+        // Scrolled away while the probe ran: try again the next time the stage is in view.
+        if (result === "dom" && /inside the viewport|enable again when visible/.test(controller.current?.state().reason ?? "")) {
+          autoStart.current = true; setAutoArmed(count => count + 1);
+        }
+      });
+    }, { threshold: [0, 0.05, 0.1, 0.25, 0.5, 1] });
+    observer.observe(frame.current!);
+    return () => observer.disconnect();
+    // `action` is recreated every render; the call above only reads refs and state setters, so it is not a dependency.
+  }, [mounted, autoArmed, disposed]);
   // Runs a caller-owned lifecycle action on the controller, then shows the resulting mode and
-  // reason, and resolves with that mode. A rejection is shown in the status line.
-  async function action(operation: "enable" | "disable" | "dispose") {
+  // reason, and resolves with that mode. A rejection is shown in the status line. A press of a button
+  // (`trigger: "button"`) cancels the automatic start and records a DOM choice for this tab.
+  async function action(operation: "enable" | "disable" | "dispose", trigger: "auto" | "button" = "button") {
+    if (trigger === "button") { autoStart.current = false; if (operation !== "dispose") rememberDom(operation === "disable"); }
     setBusy(true);
     leaving.current = operation !== "enable";
+    // `shown` rather than `selected`: the automatic start runs from an observer set up in an earlier render.
+    const example = shown.current;
     try {
       await controller.current![operation]();
       const state = controller.current!.state();
       setMode(state.mode);
       setDiagnostic(state.reason);
       lastMode.current = state.mode;
-      if (operation === "enable") track("GPU Enable", { example: selected, result: state.mode, status: explain(state.reason).title, support, api: api() });
-      else track("Studio Action", { example: selected, action: operation });
+      if (operation === "enable") track("GPU Enable", { example, result: state.mode, status: explain(state.reason).title, support, api: api(), trigger });
+      else track("Studio Action", { example, action: operation });
       if (operation === "dispose") { retired.current = true; setDisposed(true); }
       return state.mode;
     } catch (error) {
       setDiagnostic(`Action rejected: ${String(error)}`);
       console.error("Showcase action rejected", error);
-      if (operation === "enable") track("GPU Enable", { example: selected, result: "rejected", status: String(error), support, api: api() });
+      if (operation === "enable") track("GPU Enable", { example, result: "rejected", status: String(error), support, api: api(), trigger });
       return undefined;
     } finally { setBusy(false); leaving.current = false; }
   }
@@ -228,7 +268,7 @@ function App() {
           <p className="hero-copy">Underglass draws your <em>original</em> React DOM into one shared WebGPU compositor through Chrome's
             HTML-in-Canvas API. Layers fly, spin and shimmer on the GPU, while typing, focus and clicks stay with the native controls.</p>
           <div className="hero-cta"><a className="cta primary" href="#studio">Open the live studio</a><a className="cta ghost" href="#how-it-works">How it works</a></div>
-          <ul className="hero-notes" aria-label="Highlights"><li>Original React state</li><li>Native inputs and hits</li><li>One shared compositor</li><li>DOM by default</li></ul>
+          <ul className="hero-notes" aria-label="Highlights"><li>Original React state</li><li>Native inputs and hits</li><li>One shared compositor</li><li>Ordinary DOM everywhere else</li></ul>
         </div>
         <HeroVisual />
       </section>
@@ -312,7 +352,7 @@ function App() {
       <section className="about" id="about"><p className="eyebrow">AN HONEST EXPERIMENT</p><h2>Progressive presentation, not pretend compatibility.</h2>
         <div className="about-grid">
           <div><h3>What it is</h3><p>Underglass layers GPU presentation over React's original controls. The examples use the public Surface, Box, Presence, motion and effect APIs. Typed layout and appearance compile to browser CSS; the browser still owns layout and editing.</p></div>
-          <div><h3>What it needs</h3><p>Ordinary DOM works by default. Experimental GPU needs a compatible browser with HTML-in-Canvas and native geometry support. In other Chromium browsers, an opt-in polyfill can stand in for that API, and the page says so while it does. Missing capabilities are diagnosed, not disguised. Decorative shaders never replace essential controls.</p></div>
+          <div><h3>What it needs</h3><p>Experimental GPU needs a compatible browser with HTML-in-Canvas and native geometry support; in one, the studio turns it on by itself when the stage comes into view, and <strong>Use ordinary DOM</strong> turns it off for this tab. Ordinary DOM works everywhere else. In other Chromium browsers, an opt-in polyfill can stand in for that API, and the page says so while it does. Missing capabilities are diagnosed, not disguised. Decorative shaders never replace essential controls.</p></div>
           <div><h3>What it is not</h3><p>This is a prepared showcase, not a production certification. Accessibility, physical-device and broader browser qualification remain open. Your reduced-motion preference is respected.</p></div>
         </div>
       </section>

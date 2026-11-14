@@ -1,15 +1,16 @@
 /**
  * What a visitor's browser can do, judged without starting the GPU: GPU mode itself
- * is still proven by admission when they press Enable. This only decides what to
- * explain up front.
+ * is still proven by admission, whether it starts by itself or from Enable. This only
+ * decides what to explain up front and whether to try GPU mode on its own.
  */
 export type Support = "likely" | "chrome-flags" | "unsupported";
 
 /**
  * Guesses up front whether GPU mode can work here: `"likely"` when the HTML-in-Canvas methods and
  * `navigator.gpu` are present, `"chrome-flags"` for another Chromium browser (older than 157, or with
- * the feature off; the name predates 157 and is kept for continuous analytics), else `"unsupported"`. `main.tsx` uses it only to choose the help panel; property presence is
- * never treated as proof, which is why `enable()` still runs functional admission.
+ * the feature off; the name predates 157 and is kept for continuous analytics), else `"unsupported"`. `main.tsx` uses it to choose the
+ * help panel and, on `"likely"`, to start GPU mode by itself; property presence is never treated as proof, which is why `enable()` still
+ * runs functional admission and a refusal leaves ordinary DOM.
  */
 export function detectSupport(): Support {
   // The prototype carries the HTML-in-Canvas members when the browser exposes the API.
@@ -34,7 +35,7 @@ const known: [RegExp, Explanation][] = [
   // Tested in order against the runtime's reason text (`CanvasStatus.reason`); the first match
   // wins. These only change what the status line says, never what the runtime does.
   [/^Current content=drawable/, { title: "GPU mode is on.", hint: "Every control is still the original React element." }],
-  [/Ordinary DOM startup/, { title: "Ordinary DOM is ready.", hint: "GPU mode is experimental and starts only when you enable it." }],
+  [/Ordinary DOM startup/, { title: "Ordinary DOM is ready.", hint: "Where the browser supports it, GPU mode starts when the stage comes into view." }],
   [/Explicit disable/, { title: "Back in ordinary DOM.", hint: "Same controls, same state. Enable GPU again whenever you like." }],
   [/moveBefore/, { title: "This browser can't move the controls without resetting them.",
     hint: "GPU mode needs Element.moveBefore, which this browser doesn't have yet. The examples keep working as ordinary DOM." }],
