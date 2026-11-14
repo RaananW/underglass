@@ -60,8 +60,12 @@ async function open(browser, { dpr = 1, width = 1280, height = 900, gpu = true, 
 }
 const gallery = (page, call, ...args) => page.evaluate(([call, args]) => window.instrumentGallery[call](...args), [call, args]);
 /** Waits until every Instrument layer is built (or the level has none) and the compositor is idle. */
+// On the GPU at the Instrument level the scene must exist first: it is reported a little after the level changes, and
+// GPU mode starting by itself (rather than from a press) can leave the test there before it is.
 async function settle(page) {
-  await page.waitForFunction(() => { const i = window.showcase.state().instrument; return !i || (!i.compile.building && i.layers.every(layer => layer.status !== "pending")); }, null, { timeout: 60000 });
+  await page.waitForFunction(() => { const state = window.showcase.state(), i = state.instrument;
+    if (!i) return !(state.mode === "gpu" && window.instrumentGallery?.level === "instrument");
+    return !i.compile.building && i.layers.every(layer => layer.status !== "pending"); }, null, { timeout: 60000 });
   await page.evaluate(async () => { await window.showcase.controller.settle(); for (let index = 0; index < 3; index++) await new Promise(requestAnimationFrame); await window.showcase.controller.settle(); });
 }
 const select = async (page, tab, level) => {
