@@ -1,7 +1,7 @@
 /**
  * Popover (anatomy page `popover.md`) and Menu placement. CSS anchor positioning places a `.ug-popover` or `.ug-menu` below the button that
  * opens it (its implicit anchor). When that button is inside an Underglass layer, it is laid out inside the output
- * `<canvas>` (HTML-in-Canvas `layoutsubtree`), where anchor positioning does not follow the layer's drawn place
+ * `<canvas>` (HTML-in-Canvas `content="drawable"`), where anchor positioning does not follow the layer's drawn place
  * (Canary 158.0.8109.0: the popover lands offset by the layer's position). Such a popover is placed with script instead,
  * from the button's box, and follows scrolling and resizing. One delegated listener per document
  * (`attachStrataPopovers`); `attachStrata` and the React and Vue bindings call it.

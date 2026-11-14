@@ -5,6 +5,29 @@ collected in [babylon-lite.md](babylon-lite.md). A nested `<canvas>` captured bl
 `paint` for `OffscreenCanvas` commits, filed as Chromium 576333009 and 576333010 and raised in WICG #187, are in
 [canvas-in-drawable.md](canvas-in-drawable.md).
 
+## Upstream check, 2026-11-14
+
+The dated checks elsewhere in these docs record the proposal as it was when that work was done; this is the most recent one.
+
+- **WICG proposal:** `main` at [`5d9d970ebc06d1903aa0f4b99ac78655b9922804`](https://github.com/WICG/html-in-canvas/commit/5d9d970ebc06d1903aa0f4b99ac78655b9922804)
+  (committed 2026-10-30T21:30:20Z, "Remove dev trail information from explainer"), read through `gh api`. The only commit since
+  `5fb3df86` (2026-10-09); it deletes the "behind a flag" sentence and the "Developer Trial Information" section and changes
+  no API.
+- **Breaking-change announcements closed:** [#174](https://github.com/WICG/html-in-canvas/issues/174)
+  (`drawElementImageToTexture`, `texElementSubImage2D`, `drawable`, geometry updates) and
+  [#179](https://github.com/WICG/html-in-canvas/issues/179) (`layoutsubtree` to `content=drawable`) were closed as completed on
+  2026-11-05. Underglass already uses the new names.
+- **Shipping:** [Chrome Platform Status](https://chromestatus.com/feature/5172548013916160) lists the ship stage at Chrome 157
+  (desktop, Android, WebView), with an Intent to Ship that has three API-owner LGTMs; its status field still reads "In
+  development" (last updated 2026-10-30). Chrome 157 is the current stable release.
+- **Open issues to watch:** [#186](https://github.com/WICG/html-in-canvas/issues/186) (below) and
+  [#187](https://github.com/WICG/html-in-canvas/issues/187) have no reply yet.
+  [#188](https://github.com/WICG/html-in-canvas/issues/188) asks for backdrop sampling; the Chromium reply notes that CSS
+  `backdrop-filter` on a `drawable` element already uses the canvas content as its backdrop.
+- **Tracker access:** Chromium hotlist 6783002 shows only a sign-in page without a login; not read.
+- **Browsers:** installed Chrome 157.0.8103.52 (stable) and Canary 160.0.8160.0 on Windows 11. No probes were run for this check,
+  so neither build is qualified by it.
+
 ## canvasClip hit testing uses the bounding box on rotated drawable children
 
 **Filed 2026-10-14:**
