@@ -7,7 +7,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { Surface } from "@underglass/react";
-import type { ExampleId } from "./catalog";
+import type { ExampleId, SceneId } from "./catalog";
 import { loadExample, loadedExample } from "./examples";
 import { Backdrop, type BackdropTheme } from "./shared";
 import { ART, SceneProvider, useArt } from "./scene";
@@ -21,7 +21,7 @@ const themes: Record<ExampleId, BackdropTheme> = { layers: "postcard", motion: "
  * art layer persists and only changes its layout and content. `id` must already be loaded
  * (`loadExample`) when the root mounts.
  */
-export function Demo({ id, onReady }: { id: ExampleId; onReady(change: (id: ExampleId) => void): void }) {
+export function Demo({ id, onReady }: { id: SceneId; onReady(change: (id: SceneId) => void): void }) {
   // `selected` can change after mount: `main.tsx` calls the function handed over by `onReady` when the
   // URL changes, which loads the example and then swaps it without remounting the root or the runtime.
   const [selected, setSelected] = useState(id);
@@ -38,8 +38,9 @@ export function Demo({ id, onReady }: { id: ExampleId; onReady(change: (id: Exam
   // Paint order is DOM order: the backdrop first, then the persistent art layer, then the example's
   // own layers. The `key` on each example makes React reset its local state when you switch.
   return <SceneProvider>
-    {/* The Instrument gallery has a wall of its own and a fluid stage: the fixed-size backdrop is not rendered. */}
-    {selected !== "instrument" && <Backdrop theme={themes[selected]} />}
+    {/* The Instrument gallery and the home page's scene have a wall or sky of their own and a fluid stage: the
+        fixed-size backdrop is not rendered. */}
+    {selected !== "instrument" && selected !== "hero" && <Backdrop theme={themes[selected]} />}
     <SceneArt />
     <Example key={selected} />
   </SceneProvider>;

@@ -149,6 +149,17 @@ export const examples = [
 
 /** The id of one catalog example, such as `"layers"` or `"pond"`. */
 export type ExampleId = typeof examples[number]["id"];
+/**
+ * The home page's scene (`hero.tsx`): the stage at the top of the home page, where the headline and its links are
+ * the original React elements on a GPU-presented layer, under glass that follows the pointer and changes colour as
+ * the page scrolls. Not a catalog example, so the catalog, search and the sitemap leave it out.
+ */
+export const hero = {
+  id: "hero", number: "00", title: "Underglass",
+  detail: "This header is the live stage. The headline, its links and the glass panel's controls are the original React elements; the light, the colour and the ripples are drawn by one WebGPU pass.",
+} as const;
+/** What the stage can show: the home page's scene or one catalog example. */
+export type SceneId = ExampleId | typeof hero.id;
 /** Maps a location hash (`#/motion`, `#motion` or empty) to an example id; unknown ids open `"layers"`. */
 export function route(hash: string): ExampleId {
   const id = hash.replace(/^#\/?/, "");
