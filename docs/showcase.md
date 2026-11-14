@@ -5,6 +5,44 @@ Underglass package. Its catalog opens ten live examples in the same app. The
 engineering playground remains separate; raw reports, probes, test evidence and
 private fixtures are not served.
 
+The live stage is the top of every page, right under the site header, on the dark
+band. On the home page it shows the hero scene (below); on an example's page it
+shows that example, with its title (the page's `h1`), the picker, the mode, the
+controls, the status line and the **Why the GPU here** panel around it. "How it
+works", the catalog and "About" follow.
+
+## The home page's scene
+
+`src/hero.tsx` is the stage on the home page, and a scene rather than a catalog
+example (`hero` in `src/catalog.ts`, number 00 in the picker). Its layers, all
+enrolled with `useSurfaceRef` and laid out by CSS on a fluid stage that is as tall as
+its content (as the Instrument gallery's is):
+
+| Layer | Kind | What it is |
+| --- | --- | --- |
+| `hero-sky` | decorative | A night of colour blobs. Ripple (at rest), then the custom `showcase-hero-sky` shader: a hue turn and a lamp with faint caustic rings at the pointer. |
+| `hero-pane-art`, `hero-pane-code` | decorative | Translucent glass panes. Ripple (at rest), a 1 px chromatic split, then the custom `showcase-hero-glass` sheen: a glint and a streak that slide with the pointer and an edge lit on the side facing it. They drift away from the pointer (`setTransform`). |
+| `hero-card-glass` | decorative | The glass slab under the card, kept on the card's box, with the same chain. |
+| `hero-copy` | interactive | The page's `h1`, its lede, the two links and the highlights. |
+| `hero-card` | interactive | Real range inputs (**Light**, **Colour**) and a **Ripple the glass** button, whose values the shaders read. |
+
+Effects only ever go on the decorative layers. The pointer, the scroll position and
+the card's inputs only write effect parameters (`handle.update`) and transforms, so
+nothing is recaptured while the light moves: the lamp eases toward the pointer (or
+drifts slowly round its resting place without one), the hue turns as the stage
+scrolls out of view, and a press on the sky, or the button, ripples the glass and the
+sky for about a second. The frame loop runs only in GPU mode, with the stage in view
+and the page visible. Under `prefers-reduced-motion` the lamp follows the pointer
+without easing, and nothing drifts or ripples; the shaders' clock is paused. In
+ordinary DOM the scene is the same markup with working inputs and no effects (the
+button is disabled and the card says why).
+
+The panes never rotate: a stage taller than the viewport (on a phone, or a short
+window) is clipped to the viewport, and a clipped layer must stay axis-aligned
+(`Viewport clipping requires positive axis-aligned layer transforms`). On a stage
+narrower than 760 px the copy and the card stack, and the panes move to a strip of
+their own under the card.
+
 | Example | What it shows |
 | --- | --- |
 | `examples/layers` Postcard studio | Native text input, textarea and radio swatches/stamps edit a postcard surface live; an outbox surface lists saved cards with native **Reuse** buttons. **Riso print** applies a chromatic channel shift to the landscape artwork. |
@@ -31,7 +69,8 @@ camera** and the browser grants permission. Video only, no audio. Frames go from
 or sent anywhere, and the site has no backend. **Stop camera**, leaving the example or
 closing the tab stops every track. The panel says this before the camera is started.
 
-All examples share a 1040x700 stage. A decorative backdrop and the decorative
+The examples share a 1040x700 stage, except the Instrument gallery, whose stage is
+fluid like the home page's scene. A decorative backdrop and the decorative
 `showcase-art` layer persist across examples (only their layout/content change).
 The art layer always carries the aurora definition, at identity strength unless
 the shader lab asks for more, because custom WGSL is compiled per layer during
@@ -60,9 +99,10 @@ directory path ending in `/` for a different project/domain (in Git Bash on Wind
 
 ## Pages, search and social metadata
 
-The base is the home page, which opens the first example; each example has its own
+The base is the home page, whose stage shows the hero scene; each example has its own
 page at `<base>examples/<id>`. Catalog cards, the brand link and the studio's example
-picker switch examples in place with `history.pushState`, so the running runtime (and
+picker (whose first entry, 00, is the home page) switch scenes in place with
+`history.pushState`, so the running runtime (and
 GPU mode) survives; a modified click opens the page's own URL. Old `#/motion` links
 open the same example and are moved to its path. Search and categories stay in the
 SPA; no iframe capture is used.
@@ -158,8 +198,8 @@ inside the root suspends, and the current example stays on stage, GPU-presented,
 until the next one is ready. Vite's chunk-size warning limit is 600 kB, just above
 the two largest chunks (Fluent UI and the Underglass runtime with Babylon Lite).
 
-The surrounding responsive chrome uses ordinary CSS; its hero motion stops
-under `prefers-reduced-motion`. Enrolled example surfaces
+The surrounding responsive chrome uses ordinary CSS and has no motion of its own
+(the hero's motion is drawn on the GPU, above). Enrolled example surfaces
 use typed layout and appearance that compile to browser CSS, not a replacement
 layout engine. The shared compositor retains the original React controls/state.
 The task example reuses its existing authored CSS, original component and
@@ -181,8 +221,9 @@ the probe ran, the page tries again the next time it is in view. Any lifecycle b
 cancels the automatic start. **Use ordinary DOM** also records the choice in
 `sessionStorage` (`underglass-showcase-dom`), so this tab stays in DOM after a reload;
 **Enable experimental GPU** clears it. Other browsers keep ordinary DOM until the
-visitor presses **Enable experimental GPU** or the polyfill button. Raw refusal
-reasons remain visible. The shader affects
+visitor presses **Enable experimental GPU** or the polyfill button. Those buttons sit
+under the stage, so a press with less than 160 px of the stage in view scrolls the
+stage into view first. Raw refusal reasons remain visible. The shader affects
 only inert aria-hidden artwork, never essential input geometry. Explicit DOM
 recovery preserves original values and focus; disposal ends the app until
 reload. Reduced motion is handled by the existing runtime. Accessibility,

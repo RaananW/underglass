@@ -619,6 +619,81 @@ try {
         assert.equal(await choice.evaluate(key => sessionStorage.getItem(key), domChoiceKey), null);
         await choiceContext.close();
       }
+      // The home page: the stage at the top holds the hero scene (src/hero.tsx). Its headline, links and the card's
+      // inputs are the original elements; in GPU mode the sky and the glass take their light, colour and ripples from
+      // effect parameters. GPU starts by itself with nothing pressed or scrolled: the stage is in view on arrival.
+      const homeContext = await laneContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
+      const home = await homeContext.newPage();
+      home.on("pageerror", error => errors.push(String(error)));
+      await home.goto(url);
+      await home.waitForFunction(() => window.showcase && document.getElementById("hero-card"));
+      const homeState = () => home.evaluate(() => window.showcase.state());
+      const sheen = id => home.evaluate(layer => window.showcase.state().decorativeEffects.find(entry => entry.id === layer)
+        ?.effects.find(effect => effect.kind === "custom")?.parameters, id);
+      assert.equal(await home.locator("h1#hero-title").count(), 1, "The home page's h1 is the hero headline");
+      if (lane === "native") {
+        record.home = { initial: await autoAdmission(home) };
+        assert.equal((await home.evaluate(() => scrollY)), 0, "GPU started without scrolling");
+        // Native hits: the call to action and the card's range input are hit where they are drawn.
+        record.home.hits = await home.evaluate(() => ["#hero-copy a.cta.primary", "#hero-card input[type=range]", "#hero-card button"].map(selector => {
+          const element = document.querySelector(selector), box = element.getBoundingClientRect();
+          const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+          return { selector, hit: hit === element || element.contains(hit) };
+        }));
+        assert.ok(record.home.hits.every(entry => entry.hit), `Hero hits: ${JSON.stringify(record.home.hits)}`);
+        // The lamp follows the pointer: the sky's parameters move toward it.
+        const stageBox = await home.locator(".stage").boundingBox();
+        await home.mouse.move(stageBox.x + stageBox.width * 0.3, stageBox.y + stageBox.height * 0.8, { steps: 5 });
+        await home.waitForFunction(() => {
+          const sky = window.showcase.state().decorativeEffects.find(entry => entry.id === "hero-sky");
+          const parameters = sky?.effects.find(effect => effect.kind === "custom")?.parameters;
+          return parameters && Math.abs(parameters.pointerX - 0.3) < 0.03 && Math.abs(parameters.pointerY - 0.8) < 0.03;
+        }, null, { timeout: 5000 });
+        record.home.sky = await sheen("hero-sky");
+        // A real key on the card's Light input changes the glass's light, and the input's own label is presented fresh.
+        const output = home.locator(".stage .output");
+        const before = PNG.sync.read(await output.screenshot());
+        const lightInput = home.locator("#hero-card input[type=range]").first();
+        await lightInput.focus();
+        for (let step = 0; step < 10; step++) await home.keyboard.press("ArrowLeft");
+        assert.equal(await home.locator("#hero-card output").first().innerText(), "60%");
+        await home.evaluate(() => window.showcase.controller.settle());
+        await home.waitForTimeout(250);
+        const after = PNG.sync.read(await output.screenshot());
+        const label = await home.locator("#hero-card output").first().boundingBox(), canvas = await output.boundingBox();
+        let changed = 0;
+        for (let y = Math.floor(label.y - canvas.y); y < Math.ceil(label.y - canvas.y + label.height); y++) {
+          for (let x = Math.floor(label.x - canvas.x); x < Math.ceil(label.x - canvas.x + label.width); x++) {
+            const offset = (y * after.width + x) * 4;
+            if (before.data.subarray(offset, offset + 3).some((value, index) => Math.abs(value - after.data[offset + index]) > 24)) changed++;
+          }
+        }
+        assert.ok(changed > 20, `The card's label is presented fresh: ${changed} pixels changed`);
+        record.home.labelPixels = changed;
+        // A press on the sky ripples the glass: the panes' ripple amplitude rises, then settles back to 0.
+        await home.mouse.click(stageBox.x + stageBox.width * 0.5, stageBox.y + stageBox.height * 0.04);
+        await home.waitForFunction(() => window.showcase.state().decorativeEffects.find(entry => entry.id === "hero-pane-art")
+          ?.effects.find(effect => effect.kind === "ripple")?.parameters.amplitude > 0, null, { timeout: 2000 });
+        await home.waitForFunction(() => window.showcase.state().decorativeEffects.find(entry => entry.id === "hero-pane-art")
+          ?.effects.find(effect => effect.kind === "ripple")?.parameters.amplitude === 0, null, { timeout: 4000 });
+        // Scrolling the stage out of view turns the colour.
+        await home.mouse.move(stageBox.x + stageBox.width + 4, 4);
+        await home.evaluate(() => scrollTo(0, 420));
+        await home.waitForFunction(() => (window.showcase.state().decorativeEffects.find(entry => entry.id === "hero-sky")
+          ?.effects.find(effect => effect.kind === "custom")?.parameters.hue ?? 0) > 0.2, null, { timeout: 5000 });
+        record.home.scrolled = await sheen("hero-sky");
+        const end = await homeState();
+        assert.equal(end.mode, "gpu", end.reason);
+        record.home.layers = end.layers.length;
+      } else {
+        // Ordinary DOM: the same scene, with working inputs and no effects drawn.
+        await home.locator("#hero-card input[type=range]").first().fill("30");
+        assert.equal(await home.locator("#hero-card output").first().innerText(), "30%");
+        assert.equal((await homeState()).mode, "dom");
+        assert.ok(await home.locator("#hero-card button").isDisabled(), "Ripple needs GPU mode");
+      }
+      await home.screenshot({ path: join(run, `${lane}-home.png`) });
+      await homeContext.close();
       // Strata gallery, opened directly: its components render in the runtime's first, synchronous render, so
       // `useStrataGpu` must attach after the mount returns. Real keys and clicks drive the original controls.
       const strataContext = await laneContext({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: 1 });
@@ -754,7 +829,7 @@ try {
         const unsupported = await browser.newContext({ viewport: { width: 1280, height: 1100 } });
         await unsupported.addInitScript(() => Object.defineProperty(navigator, "gpu", { get: () => undefined }));
         const fallback = await unsupported.newPage();
-        await fallback.goto(url);
+        await fallback.goto(`${url}examples/layers`);
         await fallback.waitForFunction(() => window.showcase);
         await fallback.locator("#studio-title").fill("Retained fallback");
         await fallback.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();

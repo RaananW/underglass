@@ -6,7 +6,7 @@
  * only example ids, runtime modes and the status line's headline.
  */
 import { inject, track as send } from "@vercel/analytics";
-import type { ExampleId } from "./catalog";
+import type { SceneId } from "./catalog";
 import type { Support } from "./support";
 
 declare const __VERCEL_ANALYTICS__: boolean;
@@ -35,10 +35,10 @@ export type Api = "native" | "polyfill";
 
 export interface Events {
   "Browser Support": { support: Support };
-  "GPU Enable": { example: ExampleId; result: string; status: string; support: string; api: Api; trigger: "auto" | "button" };
-  "GPU Lost": { example: ExampleId; status: string; api: Api };
-  "Studio Action": { example: ExampleId; action: "disable" | "dispose" };
-  "GPU Help": { example: ExampleId; action: "preview" | "copy-flag" | "download" | "polyfill" };
+  "GPU Enable": { example: SceneId; result: string; status: string; support: string; api: Api; trigger: "auto" | "button" };
+  "GPU Lost": { example: SceneId; status: string; api: Api };
+  "Studio Action": { example: SceneId; action: "disable" | "dispose" };
+  "GPU Help": { example: SceneId; action: "preview" | "copy-flag" | "download" | "polyfill" };
   "Outbound Link": { target: "github" | "npm" };
 }
 

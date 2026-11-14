@@ -10,7 +10,7 @@
  * it are offered; `docs/showcase.md` records the measurements.
  */
 import type { PolyfillStatus } from "@underglass/html-in-canvas-polyfill";
-import type { ExampleId } from "./catalog";
+import type { SceneId } from "./catalog";
 
 export type { PolyfillStatus };
 
@@ -25,10 +25,10 @@ export const polyfillLinks = {
  * on it with correct native hits in Chrome 156 (2026-11-08, polyfill 0.4.0), at 58–60 fps and Strata at about
  * 40. Strata was excluded until 0.4.0, which brought a click in its gallery from about 0.3 s to 0.1 s.
  */
-export const polyfillExcluded: Partial<Record<ExampleId, string>> = {};
+export const polyfillExcluded: Partial<Record<SceneId, string>> = {};
 
 /** Whether `id` is offered on the polyfill. */
-export const polyfillOffers = (id: ExampleId) => !(id in polyfillExcluded);
+export const polyfillOffers = (id: SceneId) => !(id in polyfillExcluded);
 
 /**
  * Whether trying the polyfill can work in this browser at all: Underglass itself needs WebGPU and the
