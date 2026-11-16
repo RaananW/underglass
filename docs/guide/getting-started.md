@@ -105,6 +105,7 @@ if (state.mode !== "gpu") console.info("Staying in DOM:", state.reason);
 - [Effects](effects.md): ripple, chromatic, dissolve and your own WGSL.
 - [Building components](components.md): the standard for components that work here.
 - [Troubleshooting](troubleshooting.md): what each fallback reason means.
+- [Prerendering and hydration](server-rendering.md): HTML rendered ahead of time.
 - [API reference](../api.md) for every option.
 - The [live showcase](https://underglass.dev/) and its source in
   `examples/showcase`.

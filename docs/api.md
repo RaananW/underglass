@@ -83,6 +83,20 @@ styles ([Getting started](guide/getting-started.md#your-first-layer)); the playg
 `runtime.html` shows the same scaffolding by hand. Those styles are host integration,
 not layer authoring.
 
+**Prerendering and hydration.** `prerenderCanvasApp(children, renderToString)` renders the
+tree without a DOM and returns the HTML of the three hosts with the application inside;
+write it as the only content of the frame. `canvasHostsMarkup(content)` is the
+framework-neutral part (the hosts around markup you rendered yourself). In the browser,
+`createCanvasHosts(frame)` adopts prerendered hosts instead of creating them (and throws
+when the frame holds only some of them, or anything else), and `hydrate: true` on
+`mountCanvasApp` (or `mountApplicationModule`) adopts the prerendered root container and
+hydrates inside it, synchronously, so the served elements stay the original ones. The
+`hydrateRoot` option replaces React's (to pass `onRecoverableError`, for example).
+Hydrating hosts that are not prerendered, or mounting without `hydrate` into prerendered
+ones, throws. While prerendering, controller methods throw when called during render, and
+`NativeOverlay` renders nothing; it mounts after hydration. See
+[Prerendering and hydration](guide/server-rendering.md).
+
 ```tsx
 import { useState } from "react";
 import { mountCanvasApp, Surface, Box, NativeOverlay } from "@underglass/react";

@@ -9,7 +9,7 @@
  */
 export { CanvasRuntime } from "./runtime.js";
 export type { AdmissionPolicy, LayerDefinition, RuntimeOptions, CanvasController } from "./runtime.js";
-export { createCanvasHosts } from "./hosts.js";
+export { createCanvasHosts, canvasHostsMarkup } from "./hosts.js";
 export type { CanvasHosts } from "./hosts.js";
 export { EnrollmentError } from "./enrollment.js";
 export type { EnrollmentOptions, EnrollmentErrorCode } from "./enrollment.js";

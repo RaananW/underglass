@@ -5,11 +5,11 @@
  * React-rendered elements with the runtime. The components render plain DOM, so they work unchanged
  * when GPU presentation is off. The framework-neutral runtime in `@underglass/core` owns all GPU behaviour.
  */
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, StrictMode, type HTMLAttributes, type ReactNode, type RefCallback } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, StrictMode, type HTMLAttributes, type ReactNode, type RefCallback } from "react";
 import { createPortal, flushSync } from "react-dom";
-import { createRoot } from "react-dom/client";
+import { createRoot, hydrateRoot } from "react-dom/client";
 import {
-  CanvasRuntime, affine, pivot, compileStyle, type CanvasController, type RuntimeOptions, type Transform, type TransformOrigin,
+  CanvasRuntime, affine, pivot, compileStyle, canvasHostsMarkup, type CanvasController, type RuntimeOptions, type Transform, type TransformOrigin,
   type Layout, type Appearance, type EnrollmentOptions, type MotionDescriptor, type TransitionResult,
 } from "@underglass/core";
 
@@ -189,37 +189,82 @@ export function Box({ layout, appearance, ...attributes }: BoxProps) {
 export function NativeScroll({ layout, ...attributes }: BoxProps) {
   return <Box {...attributes} layout={{ ...layout, overflow: "scroll" }} data-underglass-scroll="" />;
 }
+const neverChanges = () => () => {};
 /**
  * Portals its children into the adapter-owned overlay host, outside the captured tree, so native
  * dialogs and popovers keep working. Throws when the mount supplied no `overlayHost`.
+ *
+ * An overlay has no prerendered markup (React cannot hydrate a portal): it renders nothing while the
+ * tree is prerendered and while it hydrates, and mounts its portal right after.
  */
 export function NativeOverlay({ children }: { children: ReactNode }) {
   const runtime = useRuntime();
+  // The server snapshot is what React uses while prerendering and while hydrating.
+  const mounted = useSyncExternalStore(neverChanges, () => true, () => false);
+  if (!mounted) return null;
   if (!runtime.overlayHost) throw new Error("NativeOverlay requires the adapter-owned overlayHost");
   return createPortal(children, runtime.overlayHost);
 }
 /**
+ * Stands in for the runtime while the tree is rendered ahead of time (`prerenderCanvasApp`). Rendering
+ * needs none of it: layers register from refs and layout effects, which do not run there. Reading the
+ * controller during render (`useGPUHost().state()`, for example) throws and names the method.
+ */
+const prerenderRuntime = new Proxy({}, {
+  get(_target, key) {
+    if (key === "requestReconcile") return () => {};
+    if (key === "overlayHost" || typeof key === "symbol") return undefined;
+    return () => { throw new Error(`Underglass controller.${key} is not available while prerendering; call it from an effect or an event handler`); };
+  },
+}) as CanvasRuntime;
+/**
+ * Renders the application ahead of time (on a server or in a build) and returns the HTML of the
+ * adapter-owned hosts with it inside: write it as the only content of the sized frame element. Pass
+ * React's own renderer as `render` (`renderToString` from `react-dom/server`), so this package never
+ * imports it. In the browser, mount the same `children` with `createCanvasHosts(frame)` and
+ * `mountCanvasApp({ ...hosts, hydrate: true }, children)`: React attaches to the prerendered elements,
+ * and they are the ones GPU presentation later draws. `NativeOverlay` renders nothing here.
+ */
+export function prerenderCanvasApp(children: ReactNode, render: (tree: ReactNode) => string): string {
+  return canvasHostsMarkup(render(<GPUHost runtime={prerenderRuntime}>{children}</GPUHost>));
+}
+/**
  * Options for `mountCanvasApp`: the runtime options minus `mount`, plus injectable React entry
  * points (for a second React copy or tests) and `strict` to wrap the tree in `StrictMode`.
+ *
+ * With `hydrate` (a runtime option), the hosts must be the prerendered ones (`prerenderCanvasApp`,
+ * adopted by `createCanvasHosts`) and the tree is hydrated with `hydrateRoot` instead of rendered.
+ * Pass your own `hydrateRoot` to give React options such as `onRecoverableError`.
  */
 export type MountCanvasOptions = Omit<RuntimeOptions, "mount"> & {
   createRoot?: typeof createRoot;
+  hydrateRoot?: (container: HTMLDivElement, tree: ReactNode) => { unmount(): void };
   flushSync?: typeof flushSync;
   strict?: boolean;
 };
 /**
  * Explicit bootstrap: creates the persistent React root inside the adapter-owned container, renders
- * `children` under `GPUHost` synchronously and returns the controller. The app starts in ordinary
- * DOM; call `enable()` to request GPU presentation. If the first render throws, the root is
- * unmounted and the error rethrown.
+ * `children` under `GPUHost` synchronously (or, with `hydrate`, hydrates the prerendered markup
+ * there) and returns the controller. The app starts in ordinary DOM; call `enable()` to request GPU
+ * presentation. If the first render throws, the root is unmounted and the error rethrown.
  */
 export function mountCanvasApp(options: MountCanvasOptions, children: ReactNode): CanvasController {
   return new CanvasRuntime({
     ...options,
     mount(container, runtime) {
+      const host = <GPUHost runtime={runtime}>{children}</GPUHost>;
+      const tree = options.strict ? <StrictMode>{host}</StrictMode> : host;
+      const flush = options.flushSync ?? flushSync;
+      if (options.hydrate) {
+        // Hydration inside `flushSync` completes before it returns, so the layers are registered when
+        // the controller is, as with a client render.
+        let root: { unmount(): void } | undefined;
+        try { flush(() => { root = (options.hydrateRoot ?? hydrateRoot)(container, tree); }); }
+        catch (error) { root?.unmount(); throw error; }
+        return () => root!.unmount();
+      }
       const root = (options.createRoot ?? createRoot)(container);
-      const tree = <GPUHost runtime={runtime}>{children}</GPUHost>;
-      try { (options.flushSync ?? flushSync)(() => root.render(options.strict ? <StrictMode>{tree}</StrictMode> : tree)); }
+      try { flush(() => root.render(tree)); }
       catch (error) { root.unmount(); throw error; }
       return () => root.unmount();
     },

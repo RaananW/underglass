@@ -12,6 +12,7 @@ Start here if you are using Underglass or writing components for it.
 6. [Troubleshooting](guide/troubleshooting.md): every fallback reason and its fix.
 7. [Browsers without HTML-in-Canvas](guide/polyfill.md): GPU mode through the opt-in polyfill, and what it costs.
 8. [Other frameworks and plain DOM](guide/frameworks.md): the core runtime without React, and writing an adapter.
+9. [Prerendering and hydration](guide/server-rendering.md): HTML rendered ahead of time, hydrated in place.
 
 ## Reference
 

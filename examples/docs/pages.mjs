@@ -34,6 +34,7 @@ export const sidebar = [
     ["guide/troubleshooting.md", "guide/troubleshooting"],
     ["guide/polyfill.md", "guide/polyfill"],
     ["guide/frameworks.md", "guide/frameworks"],
+    ["guide/server-rendering.md", "guide/server-rendering"],
   ] },
   { label: "Reference", pages: [
     ["api.md", "reference/api"],

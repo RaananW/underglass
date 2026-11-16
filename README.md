@@ -232,7 +232,8 @@ Not qualified (see [open issues](docs/open-issues.md), SCOPE entries):
 - Arbitrary CSS: transformed or mixed-axis ancestor chains, RTL, writing modes, zoom.
 - General WAAPI/CSS conversion, arbitrary animation or UI libraries, routes,
   shared elements, springs, virtualization.
-- SSR and hydration (mounting creates a client root).
+- Streaming server rendering, React Server Components and framework-owned roots
+  (a complete prerender hydrates: [guide](docs/guide/server-rendering.md)).
 - A WebGL2 direct-capture runtime route (the supported route is public WebGPU).
 - Manual and physical gates: OS IME, screen readers, physical display/DPR moves,
   everyday browser profiles, hardware device loss, numeric performance budgets.

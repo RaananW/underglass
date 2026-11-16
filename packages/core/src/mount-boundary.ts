@@ -3,6 +3,7 @@
  * ordinary DOM host and the GPU output canvas without remounting. Created by the renderer in
  * `renderer.ts` so GPU admission and recovery keep the original controls and framework state.
  */
+import { CONTAINER_CLASS } from "./hosts.js";
 
 /** Hosts and mount callback for `createMountBoundary`. */
 export interface MountBoundaryOptions {
@@ -12,6 +13,11 @@ export interface MountBoundaryOptions {
   outputCanvas: HTMLCanvasElement;
   /** Holds the root container in ordinary DOM mode. */
   ordinaryHost: HTMLElement;
+  /**
+   * Adopts the prerendered root container in `ordinaryHost` (written by `canvasHostsMarkup`) instead of
+   * creating one, for a `mount` that hydrates it. The host must then hold exactly that container.
+   */
+  hydrate?: boolean;
   /** Creates the persistent framework root in `container` and returns its synchronous unmount callback. */
   mount(container: HTMLDivElement): () => void;
 }
@@ -23,6 +29,10 @@ export interface MountBoundaryOptions {
  * controls and framework state survive the move. Throws if the hosts are not distinct, connected,
  * same-document siblings, or are not empty. `dispose` unmounts and requires the container to be back
  * in the ordinary host.
+ *
+ * With `hydrate`, the container is the prerendered one already in `ordinaryHost`: it is adopted, not
+ * created, so `mount` can hydrate the markup inside it and the prerendered elements stay the original
+ * ones. If `mount` throws, the prerendered container is left in place.
  */
 export function createMountBoundary(options: MountBoundaryOptions) {
   const { captureHost, outputCanvas, ordinaryHost } = options;
@@ -37,15 +47,25 @@ export function createMountBoundary(options: MountBoundaryOptions) {
     }
   }
   validateDestinations();
-  if (ordinaryHost.childNodes.length || captureHost?.childNodes.length || outputCanvas.childNodes.length) {
+  if (captureHost?.childNodes.length || outputCanvas.childNodes.length) {
     throw new Error("Mount boundary requires empty adapter-owned hosts");
   }
-  const container = document.createElement("div");
-  container.className = "app-container";
-  ordinaryHost.append(container); // Adapter-owned, before the persistent framework root is created.
+  let container: HTMLDivElement;
+  if (options.hydrate) {
+    const prerendered = ordinaryHost.firstChild;
+    if (ordinaryHost.childNodes.length !== 1 || !(prerendered instanceof HTMLDivElement) || !prerendered.classList.contains(CONTAINER_CLASS)) {
+      throw new Error("Hydration requires the ordinary host to hold exactly the prerendered root container written by canvasHostsMarkup");
+    }
+    container = prerendered;
+  } else {
+    if (ordinaryHost.childNodes.length) throw new Error("Mount boundary requires empty adapter-owned hosts");
+    container = document.createElement("div");
+    container.className = CONTAINER_CLASS;
+    ordinaryHost.append(container); // Adapter-owned, before the persistent framework root is created.
+  }
   let unmount: () => void;
   try { unmount = options.mount(container); }
-  catch (error) { container.remove(); throw error; }
+  catch (error) { if (!options.hydrate) container.remove(); throw error; }
   let disposed = false;
   // Throws unless a state-preserving move is possible right now; moves nothing.
   function assertMovable() {
