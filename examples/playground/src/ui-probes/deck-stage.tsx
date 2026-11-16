@@ -19,7 +19,7 @@
  * `?snap` turns on scroll snapping per section, and `?hud` shows a fixed status box over the stage (both for a look in a
  * real window). The test drives `window.deckProbe`.
  */
-import { useState, type CSSProperties } from "react";
+import { useCallback, useState, type CSSProperties } from "react";
 import { createRoot, flushSync } from "../demo/react-root";
 import { createCanvasHosts, defineEffect, mountCanvasApp, useSurfaceRef, type CanvasController, type EffectHandle, type Transform } from "@underglass/react";
 
@@ -85,10 +85,12 @@ function Section({ index, live, deck }: { index: number; live: boolean; deck: bo
 function App() {
   const [shown, setShown] = useState<View>(view);
   showView = setShown;
-  const backdrop = useSurfaceRef<HTMLDivElement>({ id: "backdrop", decorative: true });
+  const enrolBackdrop = useSurfaceRef<HTMLDivElement>({ id: "backdrop", decorative: true });
+  // A decorative layer must be inert before it is enrolled. React 18 has no `inert` prop, so it is set on the node.
+  const backdrop = useCallback((element: HTMLDivElement | null) => { if (element) element.inert = true; enrolBackdrop(element); }, [enrolBackdrop]);
   const live = (index: number) => shown.deck && (index === shown.from || index === shown.to);
   return <>
-    <div ref={backdrop} id="backdrop" className="backdrop" aria-hidden="true" inert style={{ pointerEvents: "none" }}><i /><b>one stage</b></div>
+    <div ref={backdrop} id="backdrop" className="backdrop" aria-hidden="true" style={{ pointerEvents: "none" }}><i /><b>one stage</b></div>
     {colours.map((_, index) => shown.deck && parking === "unmount" && !live(index) ? null
       : <Section key={index} index={index} live={live(index)} deck={shown.deck} />)}
   </>;
