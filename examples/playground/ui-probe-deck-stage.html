@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Probe: a pinned stage driven by scroll</title>
+  <style>
+    html, body { margin: 0; background: rgb(18, 20, 32); color: white; font: 16px system-ui; }
+    html.snap { scroll-snap-type: y proximity; }
+    button, input { font: inherit; }
+    #intro { box-sizing: border-box; height: 320px; padding: 24px; }
+    #outro { box-sizing: border-box; height: 600px; padding: 24px; }
+    #status { white-space: pre-wrap; margin: 0; }
+    /* The track is as tall as its sections, one viewport each. In the flow (ordinary DOM) the stage is the whole
+       track and the sections follow each other down it. In the deck (GPU) the pin holds a stage one viewport tall
+       in the window while the track scrolls past, and the sections are stacked on it. */
+    #track { position: relative; height: 400vh; }
+    #pin { height: 100%; }
+    html.deck #pin { position: sticky; top: 0; height: 100vh; }
+    #frame { position: relative; width: 100%; height: 100%; }
+    .snap-point { position: absolute; left: 0; width: 1px; height: 100vh; pointer-events: none; }
+    html.snap .snap-point { scroll-snap-align: start; }
+    #hud { position: fixed; right: 12px; bottom: 12px; width: 260px; padding: 8px 10px; background: rgb(0 0 0 / 70%);
+      font: 12px ui-monospace, monospace; white-space: pre-wrap; pointer-events: none; }
+
+    .backdrop { position: absolute; inset: 0; background: rgb(18, 20, 32); }
+    .backdrop i { position: absolute; left: 2%; top: 4vh; width: 60px; height: 24px; background: rgb(90, 60, 200); }
+    .backdrop b { position: absolute; left: 0; right: 0; bottom: 8vh; text-align: center; font: 600 64px system-ui; color: rgb(40, 44, 70); }
+    /* `--row` is the section's place down the track in the flow, and 0 in the deck. */
+    .copy, .panel { position: absolute; top: calc(var(--row, 0) * 100vh + 22vh); width: 38%; height: 52vh; box-sizing: border-box; padding: 24px; }
+    .copy { left: 8%; background: rgb(32, 36, 56); }
+    .copy h2 { margin: 0 0 12px; font-size: 32px; }
+    .panel { left: 54%; }
+    .panel button { display: block; margin: 0 0 16px; padding: 12px 20px; font-size: 20px; }
+    .panel input { display: block; width: 80%; padding: 8px; }
+    /* A parked section stays in the document and in the accessibility tree, unpainted and out of the pointer's way. */
+    .parked { opacity: 0; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <header id="intro">
+    <h1>Probe: a pinned stage driven by scroll</h1>
+    <p>Four sections, one viewport each. In ordinary DOM they follow each other down the page. With GPU they share one
+      stage that sticks to the viewport, and scroll position drives the change from one section to the next: a tilt, a
+      custom WGSL materialise and a ripple. See <code>docs/showcase-deck-probe.md</code>.</p>
+    <p><button id="enable">GPU</button> <button id="disable">Ordinary DOM</button></p>
+    <pre id="status" role="status"></pre>
+  </header>
+  <div id="track"><div id="pin"><div id="frame"></div></div></div>
+  <footer id="outro"><p>After the track: the stage scrolls away with the page.</p></footer>
+  <script type="module" src="/src/ui-probes/deck-stage.tsx"></script>
+</body>
+</html>
