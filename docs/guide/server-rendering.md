@@ -6,8 +6,8 @@ script runs, search engines and other readers get real HTML, and the elements th
 server sent are the application's original elements: React attaches to them, and GPU
 presentation later draws those same elements.
 
-This is for the React adapter. It needs no browser API: any browser hydrates, and GPU
-presentation stays a separate, later step (`enable()`).
+This is for the React adapter. Hydration needs nothing an ordinary mount does not need,
+and GPU presentation stays a separate, later step (`enable()`).
 
 ## Prerender
 
@@ -68,20 +68,29 @@ mountCanvasApp({ ...hosts, hydrate: true,
   first render: read them in an effect.
 - **The controller is not there while prerendering.** Components and hooks render as
   usual, but calling a controller method during render (`useGPUHost().state()`, for
-  example) throws and names the method. Call it from an effect or an event handler,
-  where it only runs in the browser.
+  example) throws and names the method, and so does `useNativeOverlayHost()`. Use them
+  from an effect or an event handler, where they only run in the browser.
+- **A first render that throws makes the mount throw.** React has discarded the
+  prerendered markup by then, so catch the error from `mountCanvasApp` and show
+  something. (With your own `hydrateRoot`, React 19 reports the error to you instead:
+  pass `onUncaughtError`.)
 - **`NativeOverlay` has no prerendered markup.** A portal cannot be hydrated, so an
   overlay renders nothing in the HTML and mounts right after hydration.
 - **Colours are checked in the browser.** `appearance` colours are validated with the
   browser's CSS parser. While prerendering there is none, so a value is only refused
-  when it holds something no colour does (a URL, an image, a second declaration); the
-  browser checks it fully when the page hydrates.
+  when it holds something no colour does (a URL, an image, a second declaration, an
+  unclosed bracket). The browser checks it fully when the page hydrates, and a value it
+  refuses throws there, as in an ordinary mount.
+- **`inert` is applied when the page hydrates.** A `Surface` with `inert` or
+  `decorative` is not inert in the HTML itself.
 - **`hydrate` needs the prerendered hosts, and only them.** Hydrating hosts that were
   created empty is refused, and so is an ordinary mount into prerendered hosts. The
-  frame must hold nothing but the three hosts.
+  frame must hold no element or text but the three hosts (whitespace and comments
+  around them are fine). Do not reformat the application's markup inside them.
 - **Layout comes from your CSS.** `Surface` layout and appearance are inline styles,
   so they are in the HTML. Classes you use need their stylesheet loaded in the page's
-  `<head>`, or the content jumps when it arrives.
+  `<head>`, or the content jumps when it arrives. A Content Security Policy that
+  forbids inline styles blocks the hosts' and the surfaces' styles until the script runs.
 
 ## Not covered
 
@@ -90,7 +99,9 @@ mountCanvasApp({ ...hosts, hydrate: true,
 - Frameworks that own the React root themselves (Next.js, Remix): `mountCanvasApp`
   creates and owns its root.
 - The Vue adapter and the experimental worker backend.
-- React 18: the same API exists there, but the tests run on React 19.
+- React 18: the browser tests run on React 19 only. React 18 also logs its
+  "useLayoutEffect does nothing on the server" warning while prerendering.
+- Browsers other than Chrome: nothing here is specific to it, but only Chrome is tested.
 
 A plain-DOM application can use the same two core pieces, `canvasHostsMarkup(content)`
 and `hydrate: true` on `mountApplicationModule`: its `mount` then receives the

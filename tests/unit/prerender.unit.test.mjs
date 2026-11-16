@@ -25,7 +25,9 @@ test("without a CSS parser, compileStyle accepts colours and refuses what no col
   for (const color of ["white", "#1e6ee6", "rgb(240, 30, 60)", "rgb(0 0 0 / 50%)", "oklch(70% 0.1 200)", "color-mix(in srgb, red 40%, blue)", "var(--panel)", "light-dark(white, black)"]) {
     assert.equal(compileStyle({}, { background: color, color }).backgroundColor, color);
   }
-  for (const value of ["", " ", "url(https://example.com/x.png)", "linear-gradient(red, blue)", "image-set('a.png' 1x)", "red; position: fixed", "red } body { display: none", "red /* note */", "red !important", "</style>", "r\\65 d", "'red'"]) {
+  for (const value of ["", " ", "url(https://example.com/x.png)", "linear-gradient(red, blue)", "image-set('a.png' 1x)", "red; position: fixed", "red } body { display: none", "red /* note */", "red !important", "</style>", "r\\65 d", "'red'",
+    // An open bracket would swallow the declarations after it in the style attribute.
+    "rgb(", "rgb(0 0 0", "red)", "color-mix(in srgb, red, rgb(0 0 0)", "red[", "red]"]) {
     assert.throws(() => compileStyle({}, { background: value }), /Invalid authored color: background/, value);
     assert.throws(() => compileStyle({}, { color: value }), /Invalid authored color: color/, value);
   }

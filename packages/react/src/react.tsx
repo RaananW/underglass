@@ -214,6 +214,7 @@ const prerenderRuntime = new Proxy({}, {
   get(_target, key) {
     if (key === "requestReconcile") return () => {};
     if (key === "overlayHost" || typeof key === "symbol") return undefined;
+    if (key === "container") throw new Error("Underglass controller.container is not available while prerendering; read it from an effect or an event handler");
     return () => { throw new Error(`Underglass controller.${key} is not available while prerendering; call it from an effect or an event handler`); };
   },
 }) as CanvasRuntime;
@@ -234,7 +235,8 @@ export function prerenderCanvasApp(children: ReactNode, render: (tree: ReactNode
  *
  * With `hydrate` (a runtime option), the hosts must be the prerendered ones (`prerenderCanvasApp`,
  * adopted by `createCanvasHosts`) and the tree is hydrated with `hydrateRoot` instead of rendered.
- * Pass your own `hydrateRoot` to give React options such as `onRecoverableError`.
+ * Pass your own `hydrateRoot` to give React options such as `onRecoverableError`; the adapter's own
+ * makes `mountCanvasApp` throw when the first render throws, which React 19 would otherwise only report.
  */
 export type MountCanvasOptions = Omit<RuntimeOptions, "mount"> & {
   createRoot?: typeof createRoot;
@@ -259,8 +261,16 @@ export function mountCanvasApp(options: MountCanvasOptions, children: ReactNode)
         // Hydration inside `flushSync` completes before it returns, so the layers are registered when
         // the controller is, as with a client render.
         let root: { unmount(): void } | undefined;
-        try { flush(() => { root = (options.hydrateRoot ?? hydrateRoot)(container, tree); }); }
+        // React 19 reports an error thrown by the first render instead of throwing it, after discarding the
+        // prerendered markup: it is caught here and thrown below, so a failed mount is not a blank page with a
+        // working controller. Later errors are reported as React does by default. (React 18 throws from `flushSync`.)
+        let failure: { error: unknown } | undefined, mounting = true;
+        const reactOptions = { onUncaughtError(error: unknown) { if (mounting) failure = { error }; else reportError(error); } } as Parameters<typeof hydrateRoot>[2];
+        const hydrate = options.hydrateRoot ?? ((target: HTMLDivElement, node: ReactNode) => hydrateRoot(target, node, reactOptions));
+        try { flush(() => { root = hydrate(container, tree); }); }
         catch (error) { root?.unmount(); throw error; }
+        finally { mounting = false; }
+        if (failure) { root?.unmount(); throw failure.error; }
         return () => root!.unmount();
       }
       const root = (options.createRoot ?? createRoot)(container);

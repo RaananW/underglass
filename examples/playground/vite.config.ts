@@ -3,10 +3,12 @@
 // pages run against the working tree without a build, sharing one copy of the core runtime with the
 // engineering deep imports.
 import { createServer, defineConfig, type Plugin } from "vite";
-import { readdirSync } from "node:fs";
+import { readdirSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 
-const root = import.meta.dirname;
+// The real path: a shell whose working directory spells the drive letter in the other case would otherwise make
+// Node load two copies of React while prerendering (one per spelling).
+const root = realpathSync.native(import.meta.dirname);
 /**
  * Prerenders a page's application in Node. A page marks the place with `<!-- prerender:/src/x/prerender.tsx -->`; the
  * named module exports `prerender(): string`, and its result replaces the marker when the page is built or served.
@@ -15,13 +17,15 @@ const root = import.meta.dirname;
  */
 function prerender(): Plugin {
   const marker = /<!-- prerender:(\S+) -->/;
+  let mode = "production";
   return {
     name: "playground-prerender",
+    configResolved(config) { mode = config.mode; },
     transformIndexHtml: { order: "pre", async handler(html, context) {
       const match = marker.exec(html);
       if (!match) return html;
       const server = context.server ?? await createServer({
-        configFile: resolve(root, "vite.config.ts"), root, appType: "custom", logLevel: "error",
+        configFile: resolve(root, "vite.config.ts"), root, mode, appType: "custom", logLevel: "error",
         server: { middlewareMode: true, hmr: false, ws: false }, optimizeDeps: { noDiscovery: true, include: [] },
         cacheDir: resolve(root, "../../node_modules/.vite/playground-prerender"),
       });

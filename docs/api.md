@@ -93,7 +93,9 @@ when the frame holds only some of them, or anything else), and `hydrate: true` o
 hydrates inside it, synchronously, so the served elements stay the original ones. The
 `hydrateRoot` option replaces React's (to pass `onRecoverableError`, for example).
 Hydrating hosts that are not prerendered, or mounting without `hydrate` into prerendered
-ones, throws. While prerendering, controller methods throw when called during render, and
+ones, throws. With the adapter's own `hydrateRoot`, a first render that throws makes
+`mountCanvasApp` throw (React 19 only reports it otherwise). While prerendering,
+controller methods and `useNativeOverlayHost` throw when called during render, and
 `NativeOverlay` renders nothing; it mounts after hydration. See
 [Prerendering and hydration](guide/server-rendering.md).
 

@@ -9,7 +9,10 @@
  *   nothing for React to recover from, and the application then works;
  * - those same elements are GPU-presented with fresh pixels and native hits, and come back to ordinary DOM;
  * - a server/client mismatch falls back to a client render that still works and still reaches the GPU;
- * - hydration is refused without the prerendered hosts, and a client render is refused into them.
+ * - hydration is refused without the prerendered hosts, and a client render is refused into them;
+ * - adopted hosts are disposed and removed like created ones, and a plain-DOM module receives the prerendered container;
+ * - hydration works under `StrictMode` and with the adapter's own `hydrateRoot`, which makes the mount throw when the
+ *   first render does.
  *
  * Specimen: `primary` rgb(240,30,60) at (40,40) 260x200 holding the Count button and an input, `enrolled`
  * rgb(30,110,230) at (340,40) enrolled by ref, and the decorative `art` rgb(20,150,90), on a white 640x420 frame.
@@ -117,6 +120,7 @@ test("a mismatch with the served markup falls back to a client render that still
   const report = await probe(page, "report");
   // React reports the mismatch as recoverable and renders on the client; the adapter-owned container is kept.
   expect(report.recoverable.length).toBeGreaterThan(0);
+  expect(report.same).toEqual({ count: false, primary: false, enrolled: false, art: false });
   expect(report.container).toBe(true);
   expect(report.layersAtMount).toEqual(layers);
   await page.locator("#count").click();
@@ -138,9 +142,56 @@ test("hydration needs the prerendered hosts, and a client render refuses them", 
   expect(faults.renderPrerendered).toMatch(/Mount boundary requires empty adapter-owned hosts/);
   expect(faults.missingHost).toMatch(/Prerendered canvas hosts must be exactly/);
   expect(faults.strayElement).toMatch(/Prerendered canvas hosts must be exactly/);
+  expect(faults.strayText).toMatch(/Prerendered canvas hosts must be exactly/);
+  expect(faults.strayInHost).toMatch(/Hydration requires the ordinary host to hold exactly the prerendered root container/);
+  // As written by canvasHostsMarkup, and with the whitespace and comments an HTML formatter adds around the hosts.
   expect(faults.valid).toBe("accepted");
-  expect(faults.module).toBe(true);
+  expect(faults.formatted).toBe("accepted");
   // The page's own application is untouched by the refused mounts.
   await page.locator("#count").click();
   await expect(page.locator("#count")).toHaveText("Count 1");
+});
+
+test("adopted hosts are disposed and removed like created ones, and a plain module receives the prerendered container", async ({ page }) => {
+  await page.goto("/core-hydration.html");
+  await page.waitForFunction(() => window.hydrationProbe);
+  const retired = await probe(page, "retire");
+  expect(retired.hydrated).toBe(true);
+  // Disposal unmounts and removes the container and the output canvas; the ordinary and overlay hosts remain until `remove()`.
+  expect(retired.afterDispose).toEqual({ container: 0, hosts: 2, mode: "disposed" });
+  expect(retired.afterRemove).toBe(0);
+  expect(await probe(page, "plainModule")).toBe(true);
+});
+
+test("hydration under StrictMode with the adapter's own hydrateRoot keeps the served elements", async ({ page }) => {
+  const problems = watch(page);
+  await page.goto("/core-hydration.html?strict&default");
+  await page.waitForFunction(() => window.hydrationProbe);
+  const report = await probe(page, "report");
+  expect(report.same).toEqual(kept);
+  expect(report.container).toBe(true);
+  expect(report.layersAtMount).toEqual(layers);
+  expect(report.mountError).toBe(null);
+  await page.locator("#count").click();
+  await expect(page.locator("#count")).toHaveText("Count 1");
+  const gpu = await probe(page, "enable");
+  expect(gpu.mode, gpu.reason).toBe("gpu");
+  const box = await probe(page, "box", "count");
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(page.locator("#count")).toHaveText("Count 2");
+  expect(problems).toEqual([]);
+});
+
+test("a first render that throws while hydrating makes the mount throw", async ({ page }) => {
+  const uncaught = [];
+  page.on("pageerror", error => uncaught.push(error.message));
+  // With the adapter's own hydrateRoot the error is thrown by mountCanvasApp, not left to the page.
+  await page.goto("/core-hydration.html?throw&default");
+  await page.waitForFunction(() => window.hydrationProbe);
+  const report = await probe(page, "report");
+  expect(report.mountError).toMatch(/The application failed in the browser/);
+  expect(uncaught).toEqual([]);
+  // The adapter-owned container is left in place; React has discarded the markup that was in it.
+  expect(report.servedContainerConnected).toBe(true);
+  expect(report.servedMarkupKept).toBe(false);
 });

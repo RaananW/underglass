@@ -52,8 +52,10 @@ export function createMountBoundary(options: MountBoundaryOptions) {
   }
   let container: HTMLDivElement;
   if (options.hydrate) {
-    const prerendered = ordinaryHost.firstChild;
-    if (ordinaryHost.childNodes.length !== 1 || !(prerendered instanceof HTMLDivElement) || !prerendered.classList.contains(CONTAINER_CLASS)) {
+    // Whitespace and comments beside the container are tolerated, as they are between the hosts; any other node is not adapter-owned.
+    const foreign = [...ordinaryHost.childNodes].some(node => node.nodeType === 3 ? !!node.nodeValue!.trim() : node.nodeType !== 1 && node.nodeType !== 8);
+    const prerendered = ordinaryHost.firstElementChild;
+    if (foreign || ordinaryHost.childElementCount !== 1 || !(prerendered instanceof HTMLDivElement) || !prerendered.classList.contains(CONTAINER_CLASS)) {
       throw new Error("Hydration requires the ordinary host to hold exactly the prerendered root container written by canvasHostsMarkup");
     }
     container = prerendered;

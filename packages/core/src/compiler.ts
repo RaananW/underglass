@@ -69,8 +69,17 @@ const px = (value: number | undefined) => value === undefined ? undefined : `${v
  * layers) adds `position: absolute` at `layout.x`/`layout.y`. Throws on a non-finite number,
  * a negative number (only `x`/`y` may be negative) or a color the browser does not support.
  */
-/** Anything that cannot be part of a colour: a second declaration, a rule, markup, an escape, a comment, or a function that loads or draws an image. */
-const notColor = /[;{}<>\\!"']|\/\*|\b(?:url|image|image-set|cross-fade|element|paint|[a-z-]*gradient)\s*\(/i;
+/** Anything that cannot be part of a colour: a second declaration, a rule or block, markup, an escape, a comment, or a function that loads or draws an image. */
+const notColor = /[;{}[\]<>\\!"']|\/\*|\b(?:url|image|image-set|cross-fade|element|paint|[a-z-]*gradient)\s*\(/i;
+/** Whether every parenthesis closes: an open one would swallow the declarations that follow it in the style attribute. */
+function balanced(value: string) {
+  let depth = 0;
+  for (const character of value) {
+    if (character === "(") depth++;
+    else if (character === ")" && --depth < 0) return false;
+  }
+  return depth === 0;
+}
 /**
  * Whether `value` is a colour for `property`. The browser decides (`CSS.supports`). Without a DOM (the
  * application is being prerendered) there is none to ask: the value is then only refused when it holds
@@ -78,7 +87,7 @@ const notColor = /[;{}<>\\!"']|\/\*|\b(?:url|image|image-set|cross-fade|element|
  */
 function validColor(property: string, value: string) {
   if (typeof CSS !== "undefined" && typeof CSS.supports === "function") return CSS.supports(property, value);
-  return value.trim().length > 0 && !notColor.test(value);
+  return value.trim().length > 0 && !notColor.test(value) && balanced(value);
 }
 export function compileStyle(layout: Layout = {}, appearance: Appearance = {}, positioned = false): CompiledStyle {
   for (const [key, value] of Object.entries({ ...layout, ...appearance })) {
