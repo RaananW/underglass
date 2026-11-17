@@ -328,6 +328,39 @@ try {
       assert.deepEqual([state.mode, state.effects, state.change, state.errors], ["gpu", ["cover:custom", "dom:custom", "dom-figure:custom"], "burn", []]);
       await page.screenshot({ path: join(run, "next-deck-burn.png") });
 
+      // When a change ends, the section that left must not show again. The GPU still draws its layers for a frame or
+      // more after they leave the stage, until the stage without them is ready, and they have to stay hidden for that
+      // long. So every frame the browser presents is recorded while the page scrolls through a change: once the stage
+      // shows the arriving section as it rests, no later frame may differ from that.
+      const cast = await context.newCDPSession(page);
+      const stageOf = image => { const part = new PNG({ width: 1350, height: 810 }); PNG.bitblt(image, part, 80, 80, 1350, 810, 0, 0); return part; };
+      const apart = (a, b) => {
+        let count = 0;
+        for (let offset = 0; offset < a.data.length; offset += 4) if ([0, 1, 2].some(channel => Math.abs(a.data[offset + channel] - b.data[offset + channel]) > 40)) count++;
+        return count / (a.width * a.height);
+      };
+      for (const [leaving, arriving] of [[0, 1], [1, 0], [1, 2]]) {
+        await go(arriving);
+        const rest = stageOf(PNG.sync.read(await page.screenshot()));
+        await go(leaving);
+        const frames = [];
+        const onFrame = event => { frames.push(event.data); cast.send("Page.screencastFrameAck", { sessionId: event.sessionId }).catch(() => {}); };
+        cast.on("Page.screencastFrame", onFrame);
+        await cast.send("Page.startScreencast", { format: "png", everyNthFrame: 1, maxWidth: 1440, maxHeight: 900 });
+        await page.evaluate(async ([a, b]) => {
+          for (let step = 0; step <= 45; step++) { scrollTo({ top: (a + (b - a) * step / 45) * innerHeight, behavior: "instant" }); await new Promise(resolve => requestAnimationFrame(resolve)); }
+        }, [leaving, arriving]);
+        await page.waitForTimeout(600);
+        await cast.send("Page.stopScreencast");
+        cast.off("Page.screencastFrame", onFrame);
+        const distances = frames.map(data => apart(stageOf(PNG.sync.read(Buffer.from(data, "base64"))), rest));
+        const arrived = distances.findIndex(distance => distance < 0.003);
+        assert.ok(frames.length > 20 && arrived >= 0, `${leaving} to ${arriving}: ${frames.length} frames recorded, the change ended at frame ${arrived}`);
+        const later = Math.max(0, ...distances.slice(arrived + 1));
+        assert.ok(later < 0.003, `after the change from ${leaving} to ${arriving} a frame differs from the resting section in ${(later * 100).toFixed(2)}% of the stage: the section that left showed again`);
+      }
+      await cast.detach();
+
       // The second section, at rest: its two layers. The controls are the served elements, the GPU draws what they
       // show now, and a real click lands on the button.
       await go(1);

@@ -121,12 +121,23 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
   }
   /** The change between the two sections on stage: its layers at rest, and the effect chains they carry. */
   let change: { transition: Transition; layers: StageLayer[]; handles: Map<string, EffectHandle> } | undefined;
-  /** Ends the effects and the poses of the sections on stage, before they change or come to rest. */
-  function release() {
-    for (const handle of change?.handles.values() ?? []) { try { handle.cancel(); } catch { /* already ended */ } }
+  /**
+   * Ends the change on stage, before its sections change or come to rest. A layer that stays on stage (`staying`)
+   * has its effect ended and its pose undone: it is then as it rests. A layer that leaves the stage is hidden
+   * instead, and keeps its effect until its enrolment ends. The GPU goes on drawing it for a frame or more after
+   * that, until the stage without it is ready, and an undone pose would show it whole for that long: a flash of the
+   * section that had just gone.
+   */
+  function release(staying: ReadonlySet<string>) {
+    const handles = change?.handles;
     change = undefined;
     // In the flow nothing is enrolled, so there is nothing to release.
-    if (view.deck) for (const index of [view.from, view.to]) if (index !== null) for (const id of layers(index)) transform(id, {});
+    if (!view.deck) return;
+    for (const index of [view.from, view.to]) if (index !== null) for (const id of layers(index)) {
+      if (!staying.has(id)) { transform(id, { opacity: 0 }); continue; }
+      try { handles?.get(id)?.cancel(); } catch { /* already ended */ }
+      transform(id, {});
+    }
   }
   /** Describes the change for the two sections now on stage (none at rest). Their layers are untransformed: measured as they rest. */
   function prepare() {
@@ -149,8 +160,8 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
    */
   function show(next: View) {
     if (next.deck === view.deck && next.from === view.from && next.to === view.to) return;
-    release();
     const wanted = new Set(next.deck ? [next.from, next.to].flatMap(index => index === null ? [] : layers(index)) : []);
+    release(wanted);
     for (const [id, end] of enrolled) if (!wanted.has(id)) { end(); enrolled.delete(id); }
     view = next;
     flushSync(() => viewStore.set(next));
@@ -302,7 +313,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     else schedule();
   });
   // The preference decides which change runs: the one on stage starts over as the other.
-  reduced.addEventListener("change", () => { if (change) { release(); prepare(); } schedule(); });
+  reduced.addEventListener("change", () => { if (change) { release(new Set(enrolled.keys())); prepare(); } schedule(); });
   // A link to a place in the page: in the deck its target is stacked on the stage, so the driver scrolls to its section.
   document.addEventListener("click", event => {
     const link = (event.target as Element).closest?.<HTMLAnchorElement>("a[href^='#']");

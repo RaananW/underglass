@@ -168,6 +168,9 @@ Rules the deck keeps, most of them from the [probe](showcase-deck-probe.md):
   because a layer at opacity 0 still takes native hits where it lies.
 - A tilted layer stays inside the stage (the stage does not clip it); a flat one may be
   cut off by it.
+- When a change ends, the layers that leave the stage are hidden, not put back as they
+  rest. The GPU still draws a layer for a frame or more after its enrolment ends, until
+  the stage without it is ready, and a layer put back would show whole for that long.
 - The layout changes to the deck before `enable()`, and back to the flow whenever the
   mode returns to `dom` (a refusal, the readout's switch, a lost GPU). The section in
   the window stays the same both ways, and so does every control's state.
