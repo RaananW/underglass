@@ -13,6 +13,7 @@ import { spawnSync } from "node:child_process";
 import { showcaseBase } from "../../examples/showcase/site-policy.mjs";
 import { route, searchExamples, examples, examplePath, exampleFromPath, pageMeta, site } from "../../examples/showcase/src/catalog.ts";
 import { headTags, noscriptBody, sitemap, robots, notFoundPage, structuredData, defaultImage } from "../../examples/showcase/seo.ts";
+import { inlineCss } from "../../examples/showcase/inline-css.ts";
 
 test("showcase project base is deterministic and rejects unsafe URL shapes", () => {
   assert.equal(showcaseBase(), "/underglass/");
@@ -119,4 +120,24 @@ test("public output guard fails before an unexpected artifact can be uploaded", 
     assert.equal(rejected.status, 1);
     assert.match(rejected.stderr, /Unexpected public asset/);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a page's stylesheet is written into the page, and its file dropped unless something else names it", () => {
+  const page = link => ({ type: "asset", fileName: "next.html", source: `<head>${link}</head>` });
+  const link = '<link rel="stylesheet" crossorigin href="/underglass/assets/next-abc.css">';
+  const css = { type: "asset", fileName: "assets/next-abc.css", source: "a{color:red}\n" };
+  const bundle = { "next.html": page(link), "assets/next-abc.css": css, "assets/next-1.js": { type: "chunk", fileName: "assets/next-1.js", code: "export {}" } };
+  inlineCss(["next.html"]).generateBundle({}, bundle);
+  assert.equal(bundle["next.html"].source, "<head><style>a{color:red}</style></head>");
+  assert.equal("assets/next-abc.css" in bundle, false);
+  // A script that still names the stylesheet (Vite preloads a lazy chunk's styles) keeps the file.
+  const kept = { "next.html": page(link), "assets/next-abc.css": css, "assets/lazy.js": { type: "chunk", fileName: "assets/lazy.js", code: 'load("next-abc.css")' } };
+  inlineCss(["next.html"]).generateBundle({}, kept);
+  assert.equal("assets/next-abc.css" in kept, true);
+  // Text that would end the style element cannot come from a stylesheet.
+  const closing = { "next.html": page(link), "assets/next-abc.css": { ...css, source: 'a::after{content:"</style>"}' } };
+  inlineCss(["next.html"]).generateBundle({}, closing);
+  assert.equal(closing["next.html"].source.match(/<\/style>/g).length, 1);
+  assert.throws(() => inlineCss(["next.html"]).generateBundle({}, { "next.html": page("") }), /links no stylesheet/);
+  assert.throws(() => inlineCss(["missing.html"]).generateBundle({}, {}), /not in the build/);
 });

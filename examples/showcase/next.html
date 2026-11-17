@@ -11,9 +11,12 @@
     <meta name="theme-color" content="#07080a">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <!-- Before the first frame: marks a browser that has the APIs GPU presentation needs (the same test as
+         `detectSupport` in src/support.ts), so the stylesheet can draw the stage's text as the GPU will. -->
+    <script>try { var c = HTMLCanvasElement.prototype; if ("content" in c && typeof c.requestPaint === "function" && typeof c.updateElementGeometry === "function" && "gpu" in navigator) document.documentElement.classList.add("can-gpu"); } catch (e) {}</script>
   </head>
   <body>
     <div id="app"><!-- prerender:/src/next/prerender.tsx --></div>
-    <script type="module" src="/src/next/main.tsx"></script>
+    <script type="module" src="/src/next/main.ts"></script>
   </body>
 </html>
