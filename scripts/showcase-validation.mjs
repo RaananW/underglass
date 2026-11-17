@@ -181,9 +181,10 @@ try {
   for (const asset of html.matchAll(/(?:src|href)="(\/underglass\/assets\/[^"]+)"/g)) {
     assert.equal((await fetch(`http://127.0.0.1:${port}${asset[1]}`)).status, 200);
   }
-  // The preview home page (`/next`). Its content is in the served HTML, inside prerendered Underglass hosts, and it is
-  // kept out of search and the sitemap. As ordinary DOM it is a flowing page whose controls work and which fits a
-  // desktop and a phone. With GPU presentation it is a deck: the stage stays in the window, the scroll position
+  // The preview home page (`/next`). Its content and its stylesheet are in the served HTML, inside prerendered
+  // Underglass hosts, and it is kept out of search and the sitemap. As ordinary DOM it is a flowing page whose controls
+  // work and which fits a desktop and a phone; where the deck cannot run, the Underglass runtime is never requested.
+  // With GPU presentation it is a deck: starting it changes no pixel of the stage, the stage stays in the window, the scroll position
   // changes the section on it, pixels are fresh, native hits land where a layer is drawn, and scrolling through a
   // change captures nothing.
   {
@@ -196,6 +197,12 @@ try {
     for (const id of sectionIds) assert.match(served, new RegExp(`<section class="slide-text slide-${id}" id="${id}"`), id);
     for (const host of ["output", "ordinary", "overlay"]) assert.match(served, new RegExp(`data-underglass-host="${host}"`), host);
     assert.match(served, /href="\/underglass\/examples\/instrument"/);
+    // The first frame needs the HTML alone: the stylesheet is in it, and the one script it names only decides what to load.
+    assert.doesNotMatch(served, /<link rel="stylesheet"/);
+    assert.match(served, /<style>[^<]*--ground:/);
+    const entry = /<script type="module" crossorigin src="(\/underglass\/assets\/[^"]+\.js)">/.exec(served);
+    assert.ok(entry, "the page names its entry script");
+    assert.ok((await (await fetch(`http://127.0.0.1:${port}${entry[1]}`)).text()).length < 4000, "the entry script is small");
     assert.doesNotMatch(await (await fetch(`${url}sitemap.xml`)).text(), /next/);
     // Chrome's warning about a WebGPU option on Windows is not the page's.
     const watch = page => {
@@ -244,6 +251,38 @@ try {
         assert.deepEqual(problems, [], `${name}: the preview page reported problems`);
         await context.close();
       }
+
+      // Where the deck cannot run, React alone hydrates the page and the Underglass runtime is never requested: a browser
+      // without the APIs, and a phone (Chrome there has them, but no window the deck fits). The whole page's scripts
+      // are then about a third of what the deck loads.
+      const withoutApis = await chromium.launch(browserLaunchOptions({ native: false }));
+      try {
+        for (const [name, from, options] of [["no APIs", withoutApis, { viewport: { width: 1440, height: 900 } }],
+          ["phone", browser, { viewport: { width: 390, height: 780 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 }]]) {
+          const context = await from.newContext(options);
+          const page = await context.newPage();
+          const problems = watch(page);
+          const scripts = [];
+          page.on("response", response => { if (/\/assets\/[^/]+\.js$/.test(response.url())) scripts.push(response.body().then(body => body.length)); });
+          await page.goto(`${url}next`);
+          await page.getByRole("button", { name: "Press" }).click();
+          await page.locator('.live-row [role="status"]').filter({ hasText: "Pressed 1 time." }).waitFor();
+          await page.getByLabel("Name").fill("Grace");
+          assert.equal(await page.locator('.live-row [role="status"]').innerText(), "Hello, Grace. Pressed 1 time.");
+          assert.equal(await page.evaluate(() => "nextDeck" in window), false, `${name}: the deck's driver is not loaded`);
+          const bytes = (await Promise.all(scripts)).reduce((sum, size) => sum + size, 0);
+          assert.ok(bytes > 100_000 && bytes < 400_000, `${name}: ${bytes} bytes of script (React and the page, not the runtime)`);
+          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, `${name}: sideways scroll`);
+          if (name === "no APIs") {
+            assert.equal(await page.locator("#deck-note").textContent(), "GPU presentation needs Chrome or Edge 157 or later. This is the same page as ordinary DOM.");
+            assert.equal(await page.locator("#deck-switch").isDisabled(), true);
+            await page.locator("#shaders").scrollIntoViewIfNeeded();
+            await page.locator('.rail a[href="#shaders"][aria-current]').waitFor({ state: "attached" });
+          }
+          assert.deepEqual(problems, [], `${name}: the preview page reported problems`);
+          await context.close();
+        }
+      } finally { await withoutApis.close(); }
 
       // GPU presentation: the deck.
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
@@ -353,9 +392,22 @@ try {
       assert.equal(await page.evaluate(() => window.servedPress === document.querySelector(".live-row button")), true);
       assert.equal(await page.evaluate(() => { const box = document.getElementById("dom").getBoundingClientRect(); return box.top >= 0 && box.bottom <= innerHeight; }), true, "the section is in the window in the flow");
       assert.equal(await page.locator("#deck-switch").getAttribute("aria-pressed"), "false");
+      // Starting GPU presentation changes no pixel of the stage: every layer is where ordinary DOM had it, on whole
+      // pixels, and its text is antialiased the same way. (The readout in the header does change: it is not compared.)
+      const stageClip = { x: 72, y: 72, width: 1440 - 72, height: 900 - 72 };
+      await page.evaluate(() => document.activeElement?.blur());
+      const flowScroll = await page.evaluate(() => scrollY);
+      const flowPixels = PNG.sync.read(await page.screenshot({ clip: stageClip, path: join(run, "next-stage-dom.png") }));
       await page.locator("#deck-switch").click();
       await page.waitForFunction(() => window.nextDeck.state().mode === "gpu", null, { timeout: 30_000 });
-      await page.evaluate(() => window.nextDeck.idle());
+      await page.evaluate(() => { document.activeElement?.blur(); return window.nextDeck.idle(); });
+      assert.equal(await page.evaluate(() => scrollY), flowScroll, "the scroll position is the same in the deck");
+      const deckPixels = PNG.sync.read(await page.screenshot({ clip: stageClip, path: join(run, "next-stage-gpu.png") }));
+      let changedPixels = 0;
+      for (let offset = 0; offset < flowPixels.data.length; offset += 4) {
+        if ([0, 1, 2].some(channel => Math.abs(flowPixels.data[offset + channel] - deckPixels.data[offset + channel]) > 24)) changedPixels++;
+      }
+      assert.ok(changedPixels <= flowPixels.width * flowPixels.height / 10_000, `starting GPU presentation changed ${changedPixels} pixels of the stage`);
       state = await snapshot();
       assert.deepEqual({ deck: state.deck, from: state.place.from, layers: state.layers, errors: state.errors }, { deck: true, from: 1, layers: ["dom", "dom-figure"], errors: [] });
       assert.equal(await status(), "Hello, Grace. Pressed 2 times.");

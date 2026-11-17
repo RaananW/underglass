@@ -11,8 +11,8 @@
  *   written (`setTransform`), so scrolling through a change captures nothing. Nothing in the document changes during
  *   a change either: a layer that is not seen is shrunk away by its matrix, so that it takes no click meant for the
  *   layer under it.
- * - Only the sections on stage are enrolled as layers. The view (`view.ts`) tells React which, inside `flushSync`, so a
- *   change starts in the frame its sections are enrolled.
+ * - Only the sections on stage are enrolled as layers (`controller.enroll`). The view (`view.ts`) tells React which to
+ *   park, inside `flushSync`, so a change starts in the frame its sections are enrolled.
  * - The layout changes to the deck before `enable()` and back to the flow whenever the mode returns to `dom` (a
  *   refusal, `disable()`, a lost GPU). The section in the window stays the same across both changes.
  * - Links to a section, focus moving into a parked section, and Page Up, Page Down, Space, Home and End bring that
@@ -22,13 +22,12 @@
  */
 import { flushSync } from "react-dom";
 import type { CanvasController, CanvasStatus, Transform } from "@underglass/react";
+import { flowIndex } from "./flow";
 import { figureId } from "./page";
 import { flow, viewStore, type View } from "./view";
 
 /** The part of a step, on each side of a section's place, where that section is at rest. */
 const band = 0.14;
-/** The layers' vertical margins in the deck (`next.css`), CSS px: a section fits when its tallest layer plus these does. */
-const deckMargins = 40;
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 const ease = (value: number) => value * value * (3 - 2 * value);
 const round = (value: number) => Math.round(value * 100) / 100;
@@ -86,26 +85,18 @@ export function createDeck({ controller, ids, track, onChange }: {
     const from = Math.floor(position);
     return { from, to: from + 1, t: clamp((position - from - band) / (1 - 2 * band)) };
   }
-  /** The section in the middle of the window, in the flow. */
-  function flowIndex() {
-    const middle = innerHeight / 2;
-    let best = 0, distance = Infinity;
-    ids.forEach((id, index) => {
-      const box = element(id).getBoundingClientRect();
-      const away = middle < box.top ? box.top - middle : middle > box.bottom ? middle - box.bottom : 0;
-      if (away < distance) { distance = away; best = index; }
-    });
-    return best;
-  }
   /** In the deck, the section that reads as the current one: the one arriving from the middle of a change on. */
   let front = 0;
   const current = () => view.deck ? front : flowIndex();
-  /** The document offset at which a section is in place: at rest in the deck, in the middle of the window in the flow. */
+  /**
+   * The document offset at which a section is in place: at rest in the deck, and in the flow the top of its row (a
+   * section starts its top margin below that). Where the deck fits, every row of the flow is one window tall, so the
+   * flow and the deck put each section at the same offset and at the same place in the window (`next.css`).
+   */
   function offset(index: number) {
     if (view.deck) return trackTop() + index * step();
-    const boxes = layers(index).map(id => element(id).getBoundingClientRect());
-    const top = Math.min(...boxes.map(box => box.top)), bottom = Math.max(...boxes.map(box => box.bottom));
-    return Math.max(0, scrollY + (top + bottom) / 2 - innerHeight / 2);
+    const text = element(parts[index]!.text);
+    return Math.max(0, Math.round(scrollY + text.getBoundingClientRect().top - parseFloat(getComputedStyle(text).marginTop)));
   }
   function go(index: number, smooth = false) {
     scrollTo({ top: offset(clamp(index, 0, count - 1)), behavior: smooth && !reduced.matches ? "smooth" : "instant" });
@@ -113,10 +104,11 @@ export function createDeck({ controller, ids, track, onChange }: {
   }
 
   /**
-   * Writes a layer's transform. The layers of the view are enrolled when `show` returns, so every id here is one. A
+   * Writes a layer's transform (a layer `show` could not enrol is skipped: its error is already recorded). A
    * layer at opacity 0 still takes native hits where it lies, so it is drawn at a hundredth of its size instead.
    */
   function transform(id: string, value: Transform) {
+    if (!enrolled.has(id)) return;
     if (value.opacity !== undefined && value.opacity <= 0) value = { opacity: 0, scaleX: 0.01, scaleY: 0.01 };
     try { controller.setTransform(id, value); } catch (error) { errors.push(`setTransform ${id}: ${String(error)}`); }
   }
@@ -125,12 +117,24 @@ export function createDeck({ controller, ids, track, onChange }: {
     // In the flow nothing is enrolled, so there is nothing to release.
     if (view.deck) for (const index of [view.from, view.to]) if (index !== null) for (const id of layers(index)) transform(id, {});
   }
-  /** Shows `next` (a no-op when nothing changed): the sections that leave the stage are released first. */
+  /** The layers enrolled now, each with the call that ends its enrolment. */
+  const enrolled = new Map<string, () => void>();
+  /**
+   * Shows `next` (a no-op when nothing changed). The sections that leave the stage are released and their layers'
+   * enrolment ended; React then parks them and unparks the ones arriving, and those are enrolled, all in this task,
+   * so a change starts in the frame its sections are on stage.
+   */
   function show(next: View) {
     if (next.deck === view.deck && next.from === view.from && next.to === view.to) return;
     release();
+    const wanted = new Set(next.deck ? [next.from, next.to].flatMap(index => index === null ? [] : layers(index)) : []);
+    for (const [id, end] of enrolled) if (!wanted.has(id)) { end(); enrolled.delete(id); }
     view = next;
     flushSync(() => viewStore.set(next));
+    for (const id of wanted) {
+      if (enrolled.has(id)) continue;
+      try { enrolled.set(id, controller.enroll(element(id), { id, origin: "center" })); } catch (error) { errors.push(`enroll ${id}: ${String(error)}`); }
+    }
   }
   /** Changes between the flow and the deck, keeping section `index` in the window. */
   function layout(deck: boolean, index: number) {
@@ -184,12 +188,18 @@ export function createDeck({ controller, ids, track, onChange }: {
   let frame = 0;
   function schedule() { frame ||= requestAnimationFrame(() => { frame = 0; update(); }); }
 
-  /** A section fits when its taller layer, with the deck's margins, is no taller than the stage will be. */
+  /**
+   * A section fits when each of its layers, with its margins, is no taller than the stage: the window under the
+   * header. Measured in either layout: the layers have the same sizes in both, and the flow's top margin is the
+   * deck's plus the header (`next.css`).
+   */
   function blocked() {
     if (!wide.matches) return "GPU presentation needs a wider window.";
-    // The stage is the window under the header (`next.css`); measured in either layout, where the layers have the same widths.
-    const room = innerHeight - parseFloat(getComputedStyle(root).getPropertyValue("--header")) - deckMargins;
-    const tall = ids.find((_, index) => layers(index).some(layer => element(layer).offsetHeight > room));
+    const header = parseFloat(getComputedStyle(root).getPropertyValue("--header"));
+    const tall = ids.some((_, index) => layers(index).some(id => {
+      const layer = element(id), style = getComputedStyle(layer);
+      return parseFloat(style.marginTop) + (view.deck ? header : 0) + layer.offsetHeight + parseFloat(style.marginBottom) > innerHeight;
+    }));
     return tall ? "GPU presentation needs a taller window." : null;
   }
   async function start() {

@@ -1,22 +1,21 @@
 /**
- * Browser entry of the preview home page (`next.html`). The build has already rendered the page (`prerender.tsx`): the
- * header, the side scale and the footer as static markup, and the stage as a prerendered Underglass root. This adopts
- * the stage's hosts and hydrates the application in them, so the served elements are the ones the GPU later draws.
+ * The preview home page where the deck can run (`main.ts` decides). The build has already rendered the page
+ * (`prerender.tsx`): the header, the side scale and the footer as static markup, and the stage as a prerendered
+ * Underglass root. This adopts the stage's hosts and hydrates the application in them, so the served elements are the
+ * ones the GPU later draws.
  *
  * It then starts the deck's driver (`deck.ts`) and wires the static controls: the readout in the header (how the stage
- * is drawn, and its switch) and the side scale's mark for the section in the window. Where the browser has the APIs the
- * deck starts by itself; a visitor who switches it off stays in the flow for the rest of the session.
+ * is drawn, and its switch) and the side scale's mark for the section in the window. The deck starts by itself; a
+ * visitor who switches it off stays in the flow for the rest of the session.
  */
 import { createCanvasHosts, mountCanvasApp, type CanvasStatus } from "@underglass/react";
 import { detectSupport, explain } from "../support";
 import { createDeck, type Deck } from "./deck";
-import { sections, Stage } from "./page";
-import "./next.css";
+import { ids, markRail, note } from "./flow";
+import { Stage } from "./page";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-const ids = sections.map(section => section.id);
-const switcher = $<HTMLButtonElement>("deck-switch"), modeText = $("deck-mode"), figures = $("deck-figures"), note = $("deck-note");
-const marks = ids.map(id => document.querySelector<HTMLAnchorElement>(`.rail a[href="#${id}"]`));
+const switcher = $<HTMLButtonElement>("deck-switch"), modeText = $("deck-mode"), figures = $("deck-figures");
 /** Remembers that the visitor switched the deck off, for this tab. */
 const preference = { get off() { try { return sessionStorage.getItem("underglass-deck") === "off"; } catch { return false; } },
   set off(value: boolean) { try { if (value) sessionStorage.setItem("underglass-deck", "off"); else sessionStorage.removeItem("underglass-deck"); } catch { /* no storage */ } } };
@@ -31,7 +30,7 @@ const controller = mountCanvasApp({
   onStatusChange(value) { status = value; driver?.modeChanged(value.mode); if (driver) render(); },
 }, <Stage base={import.meta.env.BASE_URL} />);
 const deck = driver = createDeck({ controller, ids, track: $("track"), onChange(current) {
-  marks.forEach((mark, index) => { if (index === current) mark?.setAttribute("aria-current", "true"); else mark?.removeAttribute("aria-current"); });
+  markRail(current);
   if (driver) render();
 } });
 
@@ -54,8 +53,7 @@ function render() {
     $("deck-captures").textContent = String(state.metrics.captures);
     $("deck-frame").textContent = work.length ? (work.reduce((sum, value) => sum + value, 0) / work.length).toFixed(1) : "0.0";
   }
-  const message = on ? "" : blocked ?? reason;
-  if (note.textContent !== message) note.textContent = message;
+  note(on ? "" : blocked ?? reason);
 }
 async function start() {
   if (support !== "likely" || deck.blocked()) { render(); return; }

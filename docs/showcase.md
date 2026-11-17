@@ -117,7 +117,8 @@ The header, the side scale and the footer are static markup outside the root.
 
 - **The flow** is the page in ordinary DOM, and what every browser, crawler and agent
   is served: a CSS grid with one row per section, at least a window tall on a wide
-  screen and a single column on a narrow one. Nothing is enrolled as a layer.
+  screen and a single column on a narrow one (a phone). Nothing is enrolled as a
+  layer. Sections start at the same height in their rows, as slides do.
 - **The deck** is the page with GPU presentation. `html.deck` makes the stage stick to
   the window under the header, with every section in its one row, while a track one
   window tall per section scrolls past. `src/next/deck.ts` reads the scroll position:
@@ -129,9 +130,10 @@ The header, the side scale and the footer are static markup outside the root.
 
 Rules the deck keeps, most of them from the [probe](showcase-deck-probe.md):
 
-- Only the sections on stage are enrolled (`src/next/view.ts` tells React which, inside
-  `flushSync`). The others are parked: in the document and the accessibility tree,
-  `opacity: 0` and out of the pointer's way.
+- Only the sections on stage are enrolled: the driver calls `controller.enroll` for
+  them, and `src/next/view.ts` tells React which others to park, inside `flushSync`.
+  A parked section is in the document and the accessibility tree, at `opacity: 0` and
+  out of the pointer's way. `page.tsx` itself imports nothing of Underglass.
 - Scrolling through a change writes matrices only. Nothing in the document changes, so
   nothing is captured. A layer that is not seen is drawn at a hundredth of its size,
   because a layer at opacity 0 still takes native hits where it lies.
@@ -147,7 +149,7 @@ Rules the deck keeps, most of them from the [probe](showcase-deck-probe.md):
 - The deck needs a window at least 1180 px wide in which every section fits the stage
   (about 650 px tall at 1366 px wide; type and spacing scale with the window's height
   there). Otherwise the page stays the flow, and the readout says why. The stage is
-  capped at 2048 by 1280 CSS px.
+  the window under the header and beside the side scale, at most 2560 CSS px wide.
 - The frame loop never calls `controller.state()`: it copies every metric and measures
   every layer. The driver keeps the mode from `onStatusChange`, and the readout reads
   the state twice a second.
@@ -158,30 +160,65 @@ APIs the deck starts by itself; a visitor who switches it off stays in the flow 
 the rest of the session (`sessionStorage`, `underglass-deck`).
 
 Not built yet: the transitions with shader effects and the live transitions section
-(this deck's change is matrices only), sections taller than the stage, touch screens,
-and scroll snapping. In the deck, the browser's find-in-page can match text in a parked
+(this deck's change is matrices only), sections taller than the stage, a deck for
+phones and other touch screens (they get the flow in ordinary DOM), and scroll
+snapping. In the deck, the browser's find-in-page can match text in a parked
 section, which is not painted.
 
-### Prerendering
+### The first load
 
-The page is **prerendered**: `prerender.ts`, a Vite plugin, loads
-`src/next/prerender.tsx` in Node when the site is built (or served by the dev server)
-and writes the page's markup into `next.html`. The stage is rendered with
-`prerenderCanvasApp`, so the HTML holds the Underglass hosts with the application in
-them; `src/next/main.tsx` adopts them (`createCanvasHosts`) and hydrates
-(`mountCanvasApp` with `hydrate: true`). The text is in the file a browser, a crawler
-or an agent is served, the page is readable before any script runs, and the elements
-served are the ones the GPU later draws
-([server rendering](guide/server-rendering.md)). In the flow the stylesheet lets the
-content size the hosts, which otherwise fill their frame.
+The first frame needs one request, the HTML (about 10 kB compressed), and no script:
 
-`npm run test:showcase` checks the served HTML and the page without JavaScript; the
-flow at a desktop and a phone width (hydration, the controls, no sideways scroll); and
-the deck: it starts by itself, the GPU draws what a control shows after it changes, a
-real click lands on a button in a tilted layer, scrolling through a change captures
-nothing, links, keys and focus change the section, the switch returns to the flow and
-back with the form's state kept, a short window keeps the flow, and reduced motion
-only fades.
+- The page is **prerendered**: `prerender.ts`, a Vite plugin, loads
+  `src/next/prerender.tsx` in Node when the site is built (or served by the dev server)
+  and writes the page's markup into `next.html`. The stage is rendered with
+  `prerenderCanvasApp`, so the HTML holds the Underglass hosts with the application in
+  them ([server rendering](guide/server-rendering.md)). In the flow the stylesheet
+  lets the content size the hosts, which otherwise fill their frame.
+- The stylesheet is **in the HTML**: `inline-css.ts`, another plugin, replaces the
+  page's stylesheet link with a `<style>` element. The page loads no font and no image.
+- The entry script, `src/next/main.ts`, is about 1 kB and only decides what to load:
+  - `gpu.tsx` where the deck can run: a browser with the APIs, unless it is a narrow
+    window with a coarse pointer (a phone has the APIs in Chrome, but no window the
+    deck fits; a desktop window can be made wider). It adopts the prerendered hosts
+    (`createCanvasHosts`), hydrates with `mountCanvasApp({ hydrate: true })` and starts
+    the deck. About 258 kB of JavaScript, compressed.
+  - `dom.tsx` everywhere else: React alone hydrates the same markup, in the root
+    container the hosts were served with, and the Underglass runtime is never
+    requested. About 81 kB.
+
+**Starting GPU presentation changes no pixel of the stage.** Three things make that so
+(`next.css`), and `npm run test:showcase` compares the pixels:
+
+- The flow and the deck put a section at the same place. On a wide screen the flow's
+  top margin is the deck's plus the header, so where the deck fits every row of the
+  flow is one window tall, like the deck's track, and the scroll position is the same
+  in both.
+- Every layer is on whole device pixels, with a size in whole pixels. The GPU draws a
+  layer on whole pixels, so a layer between two pixels in ordinary DOM would have its
+  text move by one. Whatever places a layer (the gutters, the gap, the first column,
+  the top margin) is rounded to 4 px with CSS `round()`, which is a whole number of
+  device pixels at every usual display scale, and every line of text in the stage has
+  a line height in whole pixels.
+- The stage's text is antialiased in grey from the first frame. Text the GPU draws is;
+  ordinary DOM text on Windows is antialiased per colour channel, so it would change
+  its tint. An inline script in `next.html` marks a browser that has the APIs before
+  the first frame (`html.can-gpu`), and the stage is then a compositing layer of its
+  own (`will-change: opacity`), where the browser antialiases text in grey.
+
+Measured in Chrome Canary 160 at display scales 1, 1.25, 1.5 and 2: between ordinary DOM
+and GPU, the only pixels that differ by more than a tenth of full scale are the
+readout's own text in the header.
+
+`npm run test:showcase` checks the served HTML (the content, the inlined stylesheet,
+the small entry script) and the page without JavaScript; the flow at a desktop and a
+phone width (hydration, the controls, no sideways scroll); the React-only path in a
+browser without the APIs and on a phone (the driver is not loaded and the scripts are
+under 400 kB uncompressed); and the deck: it starts by itself, the GPU draws what a
+control shows after it changes, a real click lands on a button in a tilted layer,
+scrolling through a change captures nothing, links, keys and focus change the section,
+the switch returns to the flow and back with the form's state kept and no pixel of the
+stage changed, a short window keeps the flow, and reduced motion only fades.
 
 ## Pages, search and social metadata
 

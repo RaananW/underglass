@@ -1,13 +1,14 @@
 /**
  * The preview of the new home page, served at `/next` until it replaces the home page. Eight sections, each making one
  * claim about the framework and showing it in a "specimen" panel beside the text. Written with no browser globals at
- * render: the build renders it to HTML (`prerender.tsx`) and the browser hydrates that (`main.tsx`).
+ * render, and nothing of Underglass at all: the build renders it to HTML (`prerender.tsx`) and the browser hydrates
+ * that, with the Underglass runtime where the deck can run (`gpu.tsx`) and with React alone elsewhere (`dom.tsx`).
  *
  * The page has two parts:
  *
  * - `Header`, `Rail` and `Footer` are static markup around the stage. They are rendered once, at build time, and are
- *   not part of any React root in the browser (`main.tsx` wires their few controls by hand).
- * - `Stage` is the application of an Underglass root. Each section is two elements, its text (`<section>`) and its
+ *   not part of any React root in the browser (`gpu.tsx` and `dom.tsx` wire their few controls by hand).
+ * - `Stage` is the application inside the stage's root. Each section is two elements, its text (`<section>`) and its
  *   specimen (`<figure>`), both direct children of the root, because a GPU layer must be one (the cover is a single
  *   element, with its specimen inside it under the headline). In the **flow** they are
  *   ordinary DOM laid out by a CSS grid, one section under the other. In the **deck** (GPU) they are stacked on a stage
@@ -15,7 +16,6 @@
  *   document and the accessibility tree, unpainted (`view.ts`, `deck.ts`, `docs/showcase.md`).
  */
 import { useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
-import { useSurfaceRef } from "@underglass/react";
 import { examples, site } from "../catalog";
 import { flow, viewStore } from "./view";
 
@@ -41,23 +41,21 @@ function Specimen({ index, caption, children }: { index: number; caption: string
 }
 /**
  * One section: its text and, with `specimen`, its specimen as a sibling. `--row` places both in the section's row of
- * the flow. While the section is on the deck's stage they are enrolled as layers (the layer ids are the element ids); in
- * the deck, a section that is not on stage is parked.
+ * the flow. While the section is on the deck's stage the driver enrols them as layers (`deck.ts`; the layer ids are the
+ * element ids); in the deck, a section that is not on stage is parked.
  */
 function Slide({ id, label, children, specimen, figure }: { id: SectionId; label: string; children: ReactNode; specimen?: ReactNode; figure?: string }) {
   const index = sections.findIndex(section => section.id === id);
   const view = useSyncExternalStore(viewStore.subscribe, viewStore.get, () => flow);
   const live = view.deck && (index === view.from || index === view.to);
-  const text = useSurfaceRef<HTMLElement>({ id, origin: "center" });
-  const plate = useSurfaceRef<HTMLElement>({ id: figureId(id), origin: "center" });
   const parked = view.deck && !live ? " parked" : "";
   const row = { "--row": index + 1 } as CSSProperties;
   return <>
-    <section ref={live ? text : undefined} className={`slide-text slide-${id}${parked}`} id={id} data-section={index} aria-labelledby={`${id}-title`} style={row}>
+    <section className={`slide-text slide-${id}${parked}`} id={id} data-section={index} aria-labelledby={`${id}-title`} style={row}>
       <p className="label"><span className="label-number">{number(index)}</span>{label}</p>
       {children}
     </section>
-    {specimen !== undefined && <figure ref={live ? plate : undefined} className={`specimen${parked}`} id={figureId(id)} data-section={index} style={row}>
+    {specimen !== undefined && <figure className={`specimen${parked}`} id={figureId(id)} data-section={index} style={row}>
       <Specimen index={index} caption={figure ?? ""}>{specimen}</Specimen>
     </figure>}
   </>;
@@ -91,7 +89,7 @@ const Mark = () => <span className="mark" aria-hidden="true"><i /><i /><i /></sp
 
 /**
  * The bar at the top: the brand, the site's links and the presentation readout. The readout says how the stage is
- * drawn and what it costs; `main.tsx` fills it and enables its switch once the deck's driver has started.
+ * drawn and what it costs; `gpu.tsx` fills it and enables its switch once the deck's driver has started.
  */
 export function Header({ base }: { base: string }) {
   return <>
