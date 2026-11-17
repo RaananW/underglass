@@ -58,8 +58,10 @@ the application's integration work, not assets the packages inject.
   the exact `@types/webxr`; Underglass exposes no WebXR feature.
 - **TypeScript 7.0.2** is the tested compiler. Declarations resolve under `Bundler` and
   `NodeNext` module resolution with `skipLibCheck: false`; older compilers are untested.
-- Importing an entry without browser globals works (checked), but server-side rendering
-  and hydration are not supported: mounting requires a browser DOM.
+- Importing an entry without browser globals works (checked). The React adapter can
+  prerender an application to HTML there and hydrate it in the browser
+  ([Prerendering and hydration](guide/server-rendering.md)); mounting itself requires a
+  browser DOM.
 
 ## Browser contract
 

@@ -387,7 +387,7 @@ while the adapter owns them. Final boundary disposal requires DOM recovery and
 unmounts exactly once.
 
 This API shape requires an explicit host/mount adapter. An ordinary JSX-only
-wrapper cannot silently assume the same ownership boundary. Framework-owned roots and hydration remain unsupported. `NativeOverlay` is
+wrapper cannot silently assume the same ownership boundary. Framework-owned roots remain unsupported. Hydration keeps the same boundary: the adapter writes the container as HTML (`canvasHostsMarkup`), adopts exactly that element and hydrates inside it ([guide](guide/server-rendering.md)). `NativeOverlay` is
 the narrow proven portal boundary: an empty, fixed, connected outside-root
 sibling supplied by the adapter. It never changes portal target or captures/
 duplicates portal controls. Native modal/dialog and automatic-popover behavior

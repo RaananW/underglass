@@ -10,6 +10,7 @@ import { canonical, cssMatrix, DEFAULT_PERSPECTIVE, pivot, project, tilted, type
 import { createSurfaceRenderer, type SurfaceRendererOptions } from "./renderer.js";
 import type { Layout } from "./compiler.js";
 import type { MountBoundaryOptions } from "./mount-boundary.js";
+import { CONTAINER_STYLE } from "./hosts.js";
 import { DeclarationOwnership, prepareAnimation, rejectImportantPresentation, type AnimationPlayback } from "./animation.js";
 import { validateCSSSource, type CSSAnimationSource } from "./css-animation.js";
 import { decorative, interactive, validateRipple, type Ripple } from "./ripple.js";
@@ -242,7 +243,7 @@ export class CanvasRuntime {
         ...options,
         mount: container => {
           this.rootContainer = container;
-          Object.assign(container.style, { position: "relative", width: "100%", height: "100%" });
+          Object.assign(container.style, CONTAINER_STYLE);
           return options.mount(container, this);
         },
         layers: () => this.ordered().map(layer => ({

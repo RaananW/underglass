@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Underglass prerender and hydration, React</title>
+  <style>
+    body { font: 16px system-ui; margin: 24px; background: white; color: #17202a; }
+    button, input { font: inherit; }
+    #frame { position: relative; width: 640px; height: 420px; background: white; }
+    #status { white-space: pre-wrap; }
+    .enrolled { position: absolute; left: 340px; top: 40px; width: 240px; height: 120px; box-sizing: border-box; padding: 12px; background: rgb(30, 110, 230); color: white; }
+  </style>
+</head>
+<body>
+  <h1>Prerendered markup, hydrated in place</h1>
+  <p>The frame's content below was rendered in Node when this page was built (<code>prerenderCanvasApp</code>).
+    The script hydrates it (<code>mountCanvasApp</code> with <code>hydrate</code>): the same elements become the
+    application's, and GPU presentation draws them.</p>
+  <p><button id="enable">GPU</button> <button id="disable">Ordinary DOM</button></p>
+  <div id="frame"><!-- prerender:/src/core-hydration/prerender.tsx --></div>
+  <pre id="status" role="status"></pre>
+  <script type="module" src="/src/core-hydration/page.tsx"></script>
+</body>
+</html>

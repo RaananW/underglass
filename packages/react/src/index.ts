@@ -6,9 +6,9 @@
  * and the experimental worker backend (`./experimental-worker`, `./experimental-worker/thread`)
  * are separate package entries.
  */
-export { GPUHost, Surface, Box, NativeScroll, NativeOverlay, Presence, useSurfaceRef, useNativeOverlayHost, useGPUHost, mountCanvasApp } from "./react.js";
+export { GPUHost, Surface, Box, NativeScroll, NativeOverlay, Presence, useSurfaceRef, useNativeOverlayHost, useGPUHost, mountCanvasApp, prerenderCanvasApp } from "./react.js";
 export type { SurfaceProps, BoxProps, PresenceProps, MountCanvasOptions } from "./react.js";
-export { createCanvasHosts, EnrollmentError, mountApplicationModule, defineEffect } from "@underglass/core";
+export { createCanvasHosts, canvasHostsMarkup, EnrollmentError, mountApplicationModule, defineEffect } from "@underglass/core";
 export type {
   CanvasController, CanvasHosts, EnrollmentOptions, EnrollmentErrorCode, Transform, TransformOrigin, Affine, Point,
   Layout, Appearance, LocalApplicationModule, AdmissionPolicy, LayerDefinition, RuntimeOptions, CanvasStatus,
