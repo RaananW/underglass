@@ -141,7 +141,7 @@ try {
       else {
         // The pages and site files `seo.ts` writes, the icons and social card, hashed JS/CSS and the JPEG
         // previews of GPU mode shown to browsers that cannot run it.
-        assert.ok(/^(?:(?:index|404)\.html|robots\.txt|sitemap\.xml|favicon\.svg|og\.jpg|apple-touch-icon\.png|examples\/[\w-]+\.html|assets\/[\w.-]+\.(?:js|css|jpg))$/.test(name),
+        assert.ok(/^(?:(?:index|404|next)\.html|robots\.txt|sitemap\.xml|favicon\.svg|og\.jpg|apple-touch-icon\.png|examples\/[\w-]+\.html|assets\/[\w.-]+\.(?:js|css|jpg))$/.test(name),
           `Unexpected public asset: ${name}`);
         const bytes = await readFile(path);
         if (name.endsWith(".jpg")) assert.ok(bytes[0] === 0xff && bytes[1] === 0xd8, `Public image is not a JPEG: ${name}`);
@@ -180,6 +180,51 @@ try {
   // Every script and stylesheet the page references must be served.
   for (const asset of html.matchAll(/(?:src|href)="(\/underglass\/assets\/[^"]+)"/g)) {
     assert.equal((await fetch(`http://127.0.0.1:${port}${asset[1]}`)).status, 200);
+  }
+  // The preview home page (`/next`): its content is in the served HTML, it is kept out of search and the sitemap, it
+  // hydrates without a complaint from React, its controls work, and it fits a desktop and a phone without sideways scroll.
+  {
+    const response = await fetch(`${url}next`);
+    assert.equal(response.status, 200);
+    const served = await response.text();
+    assert.match(served, /<meta name="robots" content="noindex">/);
+    assert.match(served, /<h1 id="cover-title">Real React controls\./);
+    for (const id of ["cover", "dom", "transitions", "motion", "shaders", "depth", "everywhere", "start"]) assert.match(served, new RegExp(`<section class="slide slide-${id}" id="${id}"`), id);
+    assert.match(served, /href="\/underglass\/examples\/instrument"/);
+    assert.doesNotMatch(await (await fetch(`${url}sitemap.xml`)).text(), /next/);
+    const browser = await chromium.launch(browserLaunchOptions({ native: "none" }));
+    try {
+      const still = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 1280, height: 800 } });
+      const stillPage = await still.newPage();
+      await stillPage.goto(`${url}next`);
+      assert.equal(await stillPage.locator("h1").innerText(), "Real React controls.\nPainted by the GPU.");
+      assert.equal(await stillPage.locator("main section").count(), 8);
+      await stillPage.screenshot({ path: join(run, "next-no-javascript.png") });
+      await still.close();
+      for (const [name, viewport] of [["desktop", { width: 1280, height: 800 }], ["phone", { width: 390, height: 780 }]]) {
+        const context = await browser.newContext({ viewport });
+        const page = await context.newPage();
+        const problems = [];
+        page.on("pageerror", error => problems.push(`pageerror: ${error.message}`));
+        page.on("console", message => { if (message.type() === "error" || message.type() === "warning") problems.push(`${message.type()}: ${message.text()}`); });
+        await page.goto(`${url}next`);
+        await page.getByLabel("Name").fill("Grace");
+        await page.getByRole("button", { name: "Press" }).click();
+        assert.equal(await page.locator('.live-row [role="status"]').innerText(), "Hello, Grace. Pressed 1 time.");
+        assert.equal(await page.getByLabel("Level").evaluate(input => input.closest("label").querySelector("output").textContent), "60");
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, `${name}: sideways scroll`);
+        if (name === "desktop") {
+          // Each section fills the window, and the side scale marks the one in view.
+          assert.equal(await page.locator("#transitions").evaluate(node => node.getBoundingClientRect().height >= innerHeight), true);
+          await page.locator("#shaders").scrollIntoViewIfNeeded();
+          await page.locator('.rail a[href="#shaders"][aria-current]').waitFor({ state: "attached" });
+        }
+        await page.screenshot({ path: join(run, `next-${name}.png`), fullPage: true });
+        assert.deepEqual(problems, [], `${name}: the preview page reported problems`);
+        await context.close();
+      }
+    } finally { await browser.close(); }
+    result.next = "passed";
   }
   // The same scenario runs twice: `dom` (no HTML-in-Canvas flags, and the visitor's DOM choice recorded, as
   // **Use ordinary DOM** does; the examples must stay on DOM) and `native` (flags on; GPU starts by itself when the

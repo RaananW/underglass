@@ -86,7 +86,7 @@ test("public output guard fails before an unexpected artifact can be uploaded", 
     await writeFile(join(root, "assets/index-abc.css"), "body{}");
     // The pages and site files `seo.ts` writes, and the icons and social card from `public/`.
     await mkdir(join(root, "examples"));
-    for (const name of ["404.html", "robots.txt", "sitemap.xml", "favicon.svg", "examples/motion.html"]) await writeFile(join(root, name), "text");
+    for (const name of ["404.html", "next.html", "robots.txt", "sitemap.xml", "favicon.svg", "examples/motion.html"]) await writeFile(join(root, name), "text");
     await writeFile(join(root, "og.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
     await writeFile(join(root, "apple-touch-icon.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
     // Runs the checker as a child process on the fake build output and returns its status and stderr.
