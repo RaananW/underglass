@@ -101,23 +101,87 @@ directory path ending in `/` for a different project/domain (in Git Bash on Wind
 
 `next.html` is the next home page, built beside the current one until it replaces it.
 It is `noindex`, its canonical URL is the home page, and it is not in the sitemap.
-`src/next/page.tsx` is a flowing document of eight sections, each making one claim
-about the framework (the DOM stays the DOM, page transitions, motion, shaders,
-components, ordinary DOM everywhere, getting started) beside a "specimen" panel of
-ordinary HTML: real controls, tables and code. `src/next/next.css` is its whole
-stylesheet (near-black ground, engraved type, hairline rules and one indicator
-colour); the page loads none of the gallery's CSS or JavaScript.
+`src/next/page.tsx` has eight sections, each making one claim about the framework (the
+DOM stays the DOM, page transitions, motion, shaders, components, ordinary DOM
+everywhere, getting started) beside a "specimen" panel of ordinary HTML: real controls,
+tables and code. `src/next/next.css` is its whole stylesheet (near-black ground,
+engraved type, hairline rules and one indicator colour); the page loads none of the
+gallery's CSS or JavaScript.
+
+### One document, two layouts
+
+The stage is an Underglass root. Each section is two elements, its text (a
+`<section>`) and its specimen (a `<figure>`), both direct children of the root, because
+a GPU layer must be one. The cover is a single element with its specimen inside it.
+The header, the side scale and the footer are static markup outside the root.
+
+- **The flow** is the page in ordinary DOM, and what every browser, crawler and agent
+  is served: a CSS grid with one row per section, at least a window tall on a wide
+  screen and a single column on a narrow one. Nothing is enrolled as a layer.
+- **The deck** is the page with GPU presentation. `html.deck` makes the stage stick to
+  the window under the header, with every section in its one row, while a track one
+  window tall per section scrolls past. `src/next/deck.ts` reads the scroll position:
+  around each section's place is a rest band (14% of a window each way) where that
+  section is alone on stage and untransformed; between two bands both sections are on
+  stage and the driver poses them with `setTransform` (the texts change places in
+  turn, the leaving specimen tilts back and the next rises over it). With reduced
+  motion they only fade.
+
+Rules the deck keeps, most of them from the [probe](showcase-deck-probe.md):
+
+- Only the sections on stage are enrolled (`src/next/view.ts` tells React which, inside
+  `flushSync`). The others are parked: in the document and the accessibility tree,
+  `opacity: 0` and out of the pointer's way.
+- Scrolling through a change writes matrices only. Nothing in the document changes, so
+  nothing is captured. A layer that is not seen is drawn at a hundredth of its size,
+  because a layer at opacity 0 still takes native hits where it lies.
+- A tilted layer stays inside the stage (the stage does not clip it); a flat one may be
+  cut off by it.
+- The layout changes to the deck before `enable()`, and back to the flow whenever the
+  mode returns to `dom` (a refusal, the readout's switch, a lost GPU). The section in
+  the window stays the same both ways, and so does every control's state.
+- A link to a section, Back and Forward, focus moving into a parked section, and Page
+  Up, Page Down, Space, Home and End bring that section on stage.
+- Nothing overlays the stage: the header and the side scale sit beside it, so the
+  admission probe is never covered.
+- The deck needs a window at least 1180 px wide in which every section fits the stage
+  (about 650 px tall at 1366 px wide; type and spacing scale with the window's height
+  there). Otherwise the page stays the flow, and the readout says why. The stage is
+  capped at 2048 by 1280 CSS px.
+- The frame loop never calls `controller.state()`: it copies every metric and measures
+  every layer. The driver keeps the mode from `onStatusChange`, and the readout reads
+  the state twice a second.
+
+The readout in the header shows the mode (a switch) and, on the GPU, the layers on
+stage, the captures so far and the runtime's work per frame. Where the browser has the
+APIs the deck starts by itself; a visitor who switches it off stays in the flow for
+the rest of the session (`sessionStorage`, `underglass-deck`).
+
+Not built yet: the transitions with shader effects and the live transitions section
+(this deck's change is matrices only), sections taller than the stage, touch screens,
+and scroll snapping. In the deck, the browser's find-in-page can match text in a parked
+section, which is not painted.
+
+### Prerendering
 
 The page is **prerendered**: `prerender.ts`, a Vite plugin, loads
 `src/next/prerender.tsx` in Node when the site is built (or served by the dev server)
-and writes the page's markup into `next.html`, and `src/next/main.tsx` hydrates it. So
-the text is in the file a browser, a crawler or an agent is served, and the page is
-readable before any script runs.
+and writes the page's markup into `next.html`. The stage is rendered with
+`prerenderCanvasApp`, so the HTML holds the Underglass hosts with the application in
+them; `src/next/main.tsx` adopts them (`createCanvasHosts`) and hydrates
+(`mountCanvasApp` with `hydrate: true`). The text is in the file a browser, a crawler
+or an agent is served, the page is readable before any script runs, and the elements
+served are the ones the GPU later draws
+([server rendering](guide/server-rendering.md)). In the flow the stylesheet lets the
+content size the hosts, which otherwise fill their frame.
 
-It is plain React today. GPU presentation, the scroll-driven deck
-([probe](showcase-deck-probe.md)) and the live transitions are added to this page in
-later steps; `npm run test:showcase` checks the served HTML, hydration, the controls
-and that nothing scrolls sideways at a desktop and a phone width.
+`npm run test:showcase` checks the served HTML and the page without JavaScript; the
+flow at a desktop and a phone width (hydration, the controls, no sideways scroll); and
+the deck: it starts by itself, the GPU draws what a control shows after it changes, a
+real click lands on a button in a tilted layer, scrolling through a change captures
+nothing, links, keys and focus change the section, the switch returns to the flow and
+back with the form's state kept, a short window keeps the flow, and reduced motion
+only fades.
 
 ## Pages, search and social metadata
 

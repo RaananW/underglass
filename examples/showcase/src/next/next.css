@@ -1,7 +1,11 @@
 /*
  * The preview home page (`/next`). An "optical instrument": near-black ground, engraved white type, hairline rules and
  * one indicator colour. No decoration that is not a rule, a scale or a pane of glass. System fonts only.
- * The page is a flowing document: each section is at least one viewport tall on a wide screen and stacks on a narrow one.
+ *
+ * One document, two layouts (`deck.ts`). The flow is the page as served: a grid with one row per section, at least one
+ * window tall on a wide screen, and one column on a narrow one. The deck (`html.deck`, GPU presentation) keeps the same
+ * grid in a stage that sticks to the window, with every section in its one row. A section is two grid items, its text
+ * and its specimen, because each is a GPU layer and a layer is a direct child of the Underglass root.
  */
 :root {
   --ground: #07080a; --panel: #0d0f13; --panel-raised: #13161b;
@@ -11,7 +15,13 @@
   --display: "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
   --gutter: clamp(20px, 5vw, 88px);
-  --rail: 0px;
+  --rail: 0px; --header: 72px; --gap: clamp(32px, 6vw, 96px);
+  /* What centres 1240 px of content in the stage: a percentage, so it follows the stage and not the window. */
+  --side: max(0px, calc((100% - 2 * var(--gutter) - 1240px) / 2));
+  /* The unit the type and the spacing scale with: the window's width, and on a wide screen its height too, so a
+     section stays about one window tall in a short window. */
+  --u: 1vw;
+  --space: clamp(16px, 2 * var(--u), 28px);
   color-scheme: dark;
   font-family: var(--display); font-synthesis: none; -webkit-font-smoothing: antialiased;
   color: var(--text); background: var(--ground);
@@ -30,11 +40,26 @@ code { font-family: var(--mono); font-size: .92em; }
 
 /* ---------- Header, side scale, footer ---------- */
 .top { position: absolute; z-index: 3; inset: 0 0 auto 0; display: flex; align-items: center; justify-content: space-between; gap: 24px;
-  height: 72px; padding-inline: var(--gutter); padding-left: calc(var(--gutter) + var(--rail)); }
+  height: var(--header); padding-inline: var(--gutter); padding-left: calc(var(--gutter) + var(--rail)); }
 .top a { text-decoration: none; }
 .top nav { display: flex; gap: clamp(14px, 2.4vw, 32px); font-size: 14px; color: var(--dim); }
 .top nav a:hover { color: var(--text); }
 .brand { display: inline-flex; align-items: center; gap: 12px; font-weight: 650; font-size: 18px; letter-spacing: -.02em; }
+/* The readout: how the stage is drawn (a switch) and, on the GPU, what it holds and costs. Only where the deck can run. */
+.readout { display: none; }
+@media (min-width: 1180px) {
+  .readout { display: flex; align-items: center; gap: 18px; margin-right: auto; margin-left: clamp(12px, 2vw, 32px); font: 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--quiet); }
+  .readout button { display: inline-flex; align-items: center; gap: 9px; min-height: 30px; padding: 0 12px; border: 1px solid var(--rule-strong); border-radius: 999px;
+    background: none; font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--dim); cursor: pointer; }
+  .readout button:hover:not(:disabled) { border-color: var(--text); color: var(--text); }
+  .readout button:disabled { cursor: default; border-color: var(--rule); }
+  .readout button i { width: 7px; height: 7px; border-radius: 50%; background: var(--quiet); }
+  .readout button[aria-pressed="true"] { color: var(--text); }
+  .readout button[aria-pressed="true"] i { background: var(--signal); box-shadow: 0 0 0 4px var(--signal-wash); }
+  .readout p { display: flex; gap: 18px; margin: 0; white-space: nowrap; }
+  .readout p[hidden] { display: none; }
+  .readout b { font-weight: 400; color: var(--text); font-variant-numeric: tabular-nums; }
+}
 /* The mark: three panes of glass, one of them lit. */
 .mark { position: relative; display: inline-block; width: 26px; height: 24px; flex: none; }
 .mark i { position: absolute; left: 0; top: 0; width: 17px; height: 13px; border: 1.5px solid var(--text); border-radius: 3px; background: var(--ground); }
@@ -43,7 +68,10 @@ code { font-family: var(--mono); font-size: .92em; }
 
 .rail { display: none; }
 @media (min-width: 1180px) {
-  :root { --rail: 72px; }
+  :root { --rail: 72px; --u: min(1vw, 1.6vh); }
+  /* On a wide screen the bar stays in the window in both layouts, so the readout and its switch are always at hand.
+     The flow scrolls under it and fades out; the deck's stage starts below it. */
+  .top { position: fixed; background: linear-gradient(var(--ground) 72%, transparent); }
   /* A graduated scale down the left edge: one numbered mark per section. */
   .rail { display: block; position: fixed; z-index: 2; inset: 0 auto 0 0; width: var(--rail); border-right: 1px solid var(--rule);
     background: repeating-linear-gradient(to bottom, var(--rule) 0 1px, transparent 1px 12px) right / 7px 100% no-repeat; }
@@ -66,68 +94,84 @@ code { font-family: var(--mono); font-size: .92em; }
 .bottom a { text-decoration: none; }
 .bottom a:hover { color: var(--text); }
 
-/* ---------- Sections ---------- */
-.slide { position: relative; display: grid; align-items: center; min-height: 100svh; padding: 112px var(--gutter) 80px; padding-left: calc(var(--gutter) + var(--rail)); }
-.slide + .slide { border-top: 1px solid var(--rule); }
-.slide-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: clamp(32px, 6vw, 96px); align-items: center;
-  width: 100%; max-width: 1240px; margin-inline: auto; }
-/* The cover: the headline runs across the page, with the text and the figure under it. */
-.cover { width: 100%; max-width: 1240px; margin-inline: auto; }
-.cover h1 { font-size: clamp(44px, 6.9vw, 104px); margin-bottom: clamp(28px, 3.6vw, 52px); }
-.cover .slide-grid { align-items: start; }
-.slide-text > :first-child { margin-top: 0; }
+/* ---------- The stage and its two layouts ---------- */
+#track { padding-left: var(--rail); }
+/* The root container is a grid in both layouts: text in the first column, the specimen in the second. */
+#stage .app-container { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); column-gap: var(--gap); align-items: center;
+  grid-auto-rows: minmax(100svh, auto); box-sizing: border-box; padding-inline: calc(var(--gutter) + var(--side)); }
+/* The flow: the hosts fill their frame by inline style, which suits a sized stage. Here the content sizes the page. */
+html:not(.deck) #stage > [data-underglass-host="ordinary"] { position: relative !important; height: auto !important; }
+html:not(.deck) #stage .app-container { height: auto !important; }
+.app-container > * { grid-row: var(--row); min-width: 0; margin-block: 112px 80px; }
+/* Room inside the text layer for a focus ring at its edge: a layer is captured at its own size. */
+.slide-text { grid-column: 1; padding: 6px; margin-inline: -6px; scroll-margin-top: 112px; }
+.app-container > .specimen { grid-column: 2; }
+/* The cover is one item across both columns: the headline, and under it the text beside the specimen. */
+.slide-cover { grid-column: 1 / -1; }
+.slide-cover h1 { font-size: clamp(44px, 6.9 * var(--u), 104px); margin-bottom: clamp(22px, 3.6 * var(--u), 52px); }
+.cover-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); column-gap: var(--gap); align-items: start; }
+.cover-grid > .specimen { margin: 0; }
+
+/* The deck: the pin keeps a stage in the window, under the header, while the track (one window per section) scrolls
+   past. Every section is in the one row; those not on stage are parked: in the document and the accessibility tree,
+   unpainted and out of the pointer's way. Nothing overlays the stage: the header and the side scale sit beside it. */
+html.deck #track { height: calc(var(--count) * 100vh); }
+html.deck #pin { position: sticky; top: 0; height: 100vh; box-sizing: border-box; padding-top: var(--header); display: grid; place-items: center; }
+html.deck #stage { width: min(100%, 2048px); height: min(100%, 1280px); }
+html.deck #stage .app-container { grid-template-rows: minmax(0, 1fr); }
+html.deck .app-container > * { grid-row: 1; margin-block: 8px 32px; }
+html.deck .parked { opacity: 0; pointer-events: none; }
+
 .slide-text > :last-child { margin-bottom: 0; }
-.label { display: flex; align-items: center; gap: 14px; margin: 0 0 28px; font: 12px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+.label { display: flex; align-items: center; gap: 14px; margin: 0 0 var(--space); font: 12px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
 .label-number { color: var(--signal); }
 .label::after { content: ""; flex: 0 1 56px; height: 1px; background: var(--rule-strong); }
-h1, h2 { margin: 0 0 28px; font-weight: 640; text-wrap: balance; }
-h1 { font-size: clamp(44px, 6.4vw, 96px); line-height: .96; letter-spacing: -.045em; }
-h2 { font-size: clamp(32px, 4.1vw, 60px); line-height: 1.02; letter-spacing: -.036em; }
-h3 { margin: 36px 0 14px; font: 12px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); font-weight: 400; }
+h1, h2 { margin: 0 0 var(--space); font-weight: 640; text-wrap: balance; }
+h1 { line-height: .96; letter-spacing: -.045em; }
+h2 { font-size: clamp(30px, 4.1 * var(--u), 60px); line-height: 1.02; letter-spacing: -.036em; }
+h3 { margin: var(--space) 0 12px; font: 12px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); font-weight: 400; }
 /* The second line of the headline: light falling off across glass, and a lit full stop. */
 .glass { background: linear-gradient(100deg, #ffffff 10%, #8b93a1 95%); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .glass i { font-style: normal; color: var(--signal); -webkit-text-fill-color: var(--signal); }
-.lede { max-width: 52ch; margin: 0 0 28px; font-size: clamp(17px, 1.35vw, 20px); line-height: 1.55; color: var(--dim); text-wrap: pretty; }
-.actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 24px; }
+.lede { max-width: 52ch; margin: 0 0 var(--space); font-size: clamp(16px, 1.35 * var(--u), 20px); line-height: 1.55; color: var(--dim); text-wrap: pretty; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 clamp(14px, 1.6 * var(--u), 24px); }
 .button { display: inline-flex; align-items: center; min-height: 46px; padding: 0 22px; border: 1px solid var(--rule-strong); border-radius: 8px;
   font-weight: 600; font-size: 15px; text-decoration: none; }
 .button:hover { border-color: var(--text); }
 .button.primary { background: var(--signal); border-color: var(--signal); color: #120703; }
 .button.primary:hover { background: #ff7150; border-color: #ff7150; }
-.install { margin: 0 0 20px; }
+.install { margin: 0 0 clamp(12px, 1.4 * var(--u), 20px); }
 .install code { display: inline-block; padding: 10px 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); font-size: 14px; color: var(--text); }
 .install code::before { content: "$ "; color: var(--quiet); }
 .chip { display: flex; align-items: center; gap: 10px; margin: 0; font: 12px/1.5 var(--mono); color: var(--quiet); }
 .chip i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 0 4px var(--signal-wash); }
 .facts { list-style: none; margin: 0 0 24px; padding: 0; max-width: 56ch; border-top: 1px solid var(--rule); }
-.facts li { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr); gap: 4px 20px; padding: 14px 0; border-bottom: 1px solid var(--rule); font-size: 15px; line-height: 1.5; }
+.facts li { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr); gap: 4px 20px; padding: clamp(9px, var(--u), 14px) 0; border-bottom: 1px solid var(--rule); font-size: clamp(13.5px, 1.04 * var(--u), 15px); line-height: 1.5; }
 .facts strong { font-weight: 600; }
 .facts span { color: var(--dim); }
 .links { display: flex; flex-wrap: wrap; gap: 10px 24px; margin: 0 0 8px; font-size: 15px; }
 .links a { text-decoration: none; border-bottom: 1px solid var(--signal); padding-bottom: 2px; }
 .links a:hover { color: var(--signal); }
 .note { max-width: 56ch; margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--quiet); }
+.specimen-body > .note { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--rule); max-width: none; }
 
 /* ---------- Specimens: the panel beside each section's text ---------- */
-.specimen { position: relative; margin: 0; min-width: 0; border: 1px solid var(--rule); border-radius: 14px;
-  background: linear-gradient(180deg, var(--panel-raised), var(--panel)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%), 0 40px 80px -40px #000; }
-/* Corner marks, as on a slide under a microscope. */
-.specimen::before, .specimen::after { content: ""; position: absolute; width: 14px; height: 14px; border: solid var(--rule-strong); pointer-events: none; }
-.specimen::before { left: -7px; top: -7px; border-width: 1px 0 0 1px; }
-.specimen::after { right: -7px; bottom: -7px; border-width: 0 1px 1px 0; }
+/* A layer is captured at its own size, so nothing is drawn outside the panel: no outer shadow, no marks beyond its corners. */
+.specimen { margin-inline: 0; border: 1px solid var(--rule); border-radius: 14px;
+  background: linear-gradient(180deg, var(--panel-raised), var(--panel)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%); }
 .specimen figcaption { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid var(--rule);
   font: 11px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--quiet); }
 .specimen figcaption span { color: var(--signal); white-space: nowrap; }
-.specimen-body { padding: clamp(18px, 2.4vw, 28px); }
+.specimen-body { padding: clamp(16px, 1.9 * var(--u), 28px); }
 .specimen-body > :first-child { margin-top: 0; }
 .specimen-body > :last-child { margin-bottom: 0; }
 
 /* Cover: three panes, each lying a little further down and to the right. */
-.stack { list-style: none; margin: 0; padding: clamp(18px, 2.4vw, 28px); display: grid; gap: 12px; }
-.stack li { position: relative; padding: 14px 18px 14px 58px; border: 1px solid var(--rule); border-radius: 10px; background: rgb(255 255 255 / 2.5%); }
-.stack li:nth-child(2) { margin-left: clamp(0px, 2vw, 28px); }
-.stack li:nth-child(3) { margin-left: clamp(0px, 4vw, 56px); border-color: rgb(255 90 54 / 45%); background: var(--signal-wash); }
-.stack span { position: absolute; left: 18px; top: 17px; font: 12px/1 var(--mono); color: var(--signal); }
+.stack { list-style: none; margin: 0; padding: 0; display: grid; gap: clamp(8px, .8 * var(--u), 12px); }
+.stack li { position: relative; padding: clamp(10px, var(--u), 14px) 18px clamp(10px, var(--u), 14px) 58px; border: 1px solid var(--rule); border-radius: 10px; background: rgb(255 255 255 / 2.5%); }
+.stack li:nth-child(2) { margin-left: clamp(0px, 1.4 * var(--u), 22px); }
+.stack li:nth-child(3) { margin-left: clamp(0px, 2.8 * var(--u), 44px); border-color: rgb(255 90 54 / 45%); background: var(--signal-wash); }
+.stack span { position: absolute; left: 18px; top: calc(clamp(10px, var(--u), 14px) + 3px); font: 12px/1 var(--mono); color: var(--signal); }
 .stack strong { display: block; margin-bottom: 6px; font-weight: 600; }
 .stack p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--dim); }
 .stack code { color: var(--text); }
@@ -187,15 +231,18 @@ h3 { margin: 36px 0 14px; font: 12px/1 var(--mono); letter-spacing: .16em; text-
 
 /* The examples, as an index. */
 .examples { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; max-width: 56ch; }
-.examples a { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 14.5px; text-decoration: none; }
+.examples a { display: flex; gap: 12px; padding: clamp(6px, .62 * var(--u), 9px) 0; border-bottom: 1px solid var(--rule); font-size: 14.5px; text-decoration: none; }
 .examples a span { font: 11px/1.8 var(--mono); color: var(--quiet); }
 .examples a:hover { color: var(--signal); }
 
 /* ---------- Narrow screens: one column, sections as tall as their content ---------- */
 @media (max-width: 920px) {
-  .slide { min-height: 0; padding-block: 96px 64px; }
-  .slide-cover { min-height: 100svh; }
-  .slide-grid { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  #stage .app-container { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; }
+  .app-container > *, .app-container > .specimen { grid-column: 1; grid-row: auto; }
+  .app-container > .slide-text { margin-block: 96px 0; }
+  .app-container > .specimen { margin-block: 40px 64px; }
+  .app-container > .slide-cover { margin-bottom: 64px; }
+  .cover-grid { grid-template-columns: minmax(0, 1fr); row-gap: 40px; }
   .facts li { grid-template-columns: minmax(0, 1fr); }
   .top nav a:nth-child(-n+2) { display: none; }
   .levels li { grid-template-columns: minmax(0, 1fr); gap: 6px; margin-left: 0 !important; }
