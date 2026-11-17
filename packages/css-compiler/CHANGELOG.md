@@ -1,5 +1,12 @@
 # @underglass/css-compiler
 
+## 0.3.0
+
+### Patch Changes
+
+- Updated dependencies [29e1c82]
+  - @underglass/core@0.3.0
+
 ## 0.2.5
 
 ### Patch Changes
