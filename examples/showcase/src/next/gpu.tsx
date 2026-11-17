@@ -32,6 +32,11 @@ const controller = mountCanvasApp({
 const deck = driver = createDeck({ controller, ids, track: $("track"), onChange(current) {
   markRail(current);
   if (driver) render();
+}, onTransition(name) {
+  // The readout names the change while it runs.
+  const label = $("deck-change");
+  label.hidden = name === null;
+  if (name !== null) label.textContent = name;
 } });
 
 const support = detectSupport();
@@ -83,4 +88,4 @@ if (!preference.off) void start(); else render();
 declare global { interface Window { nextDeck: unknown } }
 // For the site's checks (`scripts/showcase-validation.mjs`).
 window.nextDeck = { state: () => controller.state(), place: deck.place, go: (index: number) => { deck.go(index); return deck.idle(); }, idle: deck.idle,
-  start: () => deck.start().then(() => deck.idle()), stop: () => deck.stop().then(() => deck.idle()), blocked: deck.blocked, errors: deck.errors };
+  start: () => deck.start().then(() => deck.idle()), stop: () => deck.stop().then(() => deck.idle()), blocked: deck.blocked, warmed: deck.warmed, errors: deck.errors };

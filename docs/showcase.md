@@ -124,9 +124,38 @@ The header, the side scale and the footer are static markup outside the root.
   window tall per section scrolls past. `src/next/deck.ts` reads the scroll position:
   around each section's place is a rest band (14% of a window each way) where that
   section is alone on stage and untransformed; between two bands both sections are on
-  stage and the driver poses them with `setTransform` (the texts change places in
-  turn, the leaving specimen tilts back and the next rises over it). With reduced
-  motion they only fade.
+  stage and the driver runs the change between them. With reduced motion every
+  change is a fade.
+
+### The changes between sections
+
+`src/next/transitions.ts` has one change per boundary, each a different thing the GPU
+can do to a live page. The readout names the one that is running.
+
+| From | Change | What it is |
+| --- | --- | --- |
+| Cover | burn | A noise front with a glowing edge burns the section away, and the next one is what it leaves |
+| The DOM | tilt | Matrices only: the texts change places, the specimen tilts back and the next rises over it. The layers stay interactive: a button can be clicked mid-change |
+| Transitions | water | The built-in ripple and chromatic split: the section goes under water and the next settles out of it. The ripple keeps moving when the scroll stops |
+| Motion | scan | A bar of light crosses the stage, with the next section above it |
+| Shaders | iris | An aperture opens from the middle of the stage onto the next section |
+| Components | mosaic | Tiles of the stage change hands one by one |
+| Everywhere | exposure | The section is overexposed until it is gone, and the next comes out of the light |
+
+- Every change but the tilt puts an effect chain on each layer on stage, with
+  `interaction: "inert"`: the content takes no input until the chain ends, at the
+  next rest. The driver writes the chain's parameters each frame (`handle.update`),
+  which repaints nothing, like a transform.
+- Burn, scan, iris and mosaic are **masks**. The two sections stay in place, and one
+  field hides the leaving section exactly where it shows the arriving one. The field
+  is in stage coordinates (each layer is told its own origin), so it runs unbroken
+  across a section's layers. Their WGSL is written so that both ends are exact: the
+  layer untouched at one, gone at the other.
+- A custom effect's shader is compiled when it is first used, which stalled the page
+  for 60 to 85 ms once per effect when I measured it. So after the deck starts, the
+  driver puts each change's chain once on an empty 16 px layer in the stage's corner
+  (`deck-warm`), one per idle moment, and ends its enrolment when all are done: about
+  0.4 s in all. The first scroll into a change then has no frame gap over 34 ms.
 
 Rules the deck keeps, most of them from the [probe](showcase-deck-probe.md):
 
@@ -134,8 +163,8 @@ Rules the deck keeps, most of them from the [probe](showcase-deck-probe.md):
   them, and `src/next/view.ts` tells React which others to park, inside `flushSync`.
   A parked section is in the document and the accessibility tree, at `opacity: 0` and
   out of the pointer's way. `page.tsx` itself imports nothing of Underglass.
-- Scrolling through a change writes matrices only. Nothing in the document changes, so
-  nothing is captured. A layer that is not seen is drawn at a hundredth of its size,
+- Scrolling through a change writes matrices and effect parameters only. Nothing in
+  the document changes, so nothing is captured. A layer that is not seen is drawn at a hundredth of its size,
   because a layer at opacity 0 still takes native hits where it lies.
 - A tilted layer stays inside the stage (the stage does not clip it); a flat one may be
   cut off by it.
@@ -159,8 +188,8 @@ stage, the captures so far and the runtime's work per frame. Where the browser h
 APIs the deck starts by itself; a visitor who switches it off stays in the flow for
 the rest of the session (`sessionStorage`, `underglass-deck`).
 
-Not built yet: the transitions with shader effects and the live transitions section
-(this deck's change is matrices only), sections taller than the stage, a deck for
+Not built yet: the live transitions section, changes that displace pixels with custom
+WGSL (a custom effect changes colour and alpha only), sections taller than the stage, a deck for
 phones and other touch screens (they get the flow in ordinary DOM), and scroll
 snapping. In the deck, the browser's find-in-page can match text in a parked
 section, which is not painted.
@@ -216,7 +245,10 @@ phone width (hydration, the controls, no sideways scroll); the React-only path i
 browser without the APIs and on a phone (the driver is not loaded and the scripts are
 under 400 kB uncompressed); and the deck: it starts by itself, the GPU draws what a
 control shows after it changes, a real click lands on a button in a tilted layer,
-scrolling through a change captures nothing, links, keys and focus change the section,
+scrolling through a change captures nothing (the tilt and an effect change), every
+change runs with GPU presentation staying on and its chains gone at the next rest, the
+scan's mask shows the arriving section above the bar and the leaving one below it
+exactly as they rest, links, keys and focus change the section,
 the switch returns to the flow and back with the form's state kept and no pixel of the
 stage changed, a short window keeps the flow, and reduced motion only fades.
 

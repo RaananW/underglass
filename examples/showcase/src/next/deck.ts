@@ -7,30 +7,33 @@
  * one window tall per section scrolls past, and the scroll position decides what is on stage.
  *
  * - Around each section's place in the track is a **rest band**: there the section is alone on stage, untransformed
- *   and interactive. Between two bands the two sections are both on stage and `pose` moves them. Only matrices are
- *   written (`setTransform`), so scrolling through a change captures nothing. Nothing in the document changes during
- *   a change either: a layer that is not seen is shrunk away by its matrix, so that it takes no click meant for the
- *   layer under it.
+ *   and interactive. Between two bands the two sections are both on stage and `pose` runs the change between them
+ *   (`transitions.ts`: one per boundary). Only matrices (`setTransform`) and effect parameters (`handle.update`) are
+ *   written, so scrolling through a change captures nothing. Nothing in the document changes during a change
+ *   either: a layer that is not seen is shrunk away by its matrix, so that it takes no click meant for the layer
+ *   under it.
  * - Only the sections on stage are enrolled as layers (`controller.enroll`). The view (`view.ts`) tells React which to
  *   park, inside `flushSync`, so a change starts in the frame its sections are enrolled.
  * - The layout changes to the deck before `enable()` and back to the flow whenever the mode returns to `dom` (a
  *   refusal, `disable()`, a lost GPU). The section in the window stays the same across both changes.
+ * - A custom effect's shader is compiled when it is first used, which stalls the page for a few frames. So after the
+ *   deck has started, each change's chain is put once on an empty layer in the stage's corner, in idle moments, and
+ *   the first scroll into a change finds its shader ready (`warm`).
  * - Links to a section, focus moving into a parked section, and Page Up, Page Down, Space, Home and End bring that
  *   section on stage.
  *
  * The deck needs a wide window in which every section fits the stage; otherwise the page stays the flow.
  */
 import { flushSync } from "react-dom";
-import type { CanvasController, CanvasStatus, Transform } from "@underglass/react";
+import type { CanvasController, CanvasStatus, EffectHandle, Transform } from "@underglass/react";
 import { flowIndex } from "./flow";
 import { figureId } from "./page";
+import { fade, transitions, type StageLayer, type Transition } from "./transitions";
 import { flow, viewStore, type View } from "./view";
 
 /** The part of a step, on each side of a section's place, where that section is at rest. */
 const band = 0.14;
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
-const ease = (value: number) => value * value * (3 - 2 * value);
-const round = (value: number) => Math.round(value * 100) / 100;
 
 export interface Deck {
   /** Lays the page out as the deck and enables GPU presentation. Resolves to whether the deck is on. */
@@ -45,13 +48,15 @@ export interface Deck {
   idle(): Promise<void>;
   /** The scroll position as the deck reads it: the section at rest or leaving, the one arriving, and the progress between them. */
   place(): { from: number; to: number | null; t: number };
+  /** Resolves when the changes' shaders have been compiled ahead of use, or at once when they will not be (for tests). */
+  warmed(): Promise<void>;
   /** Tell the driver the runtime status changed (`onStatusChange`): a mode that fell back to `dom` returns the page to the flow. */
   modeChanged(mode: CanvasStatus["mode"]): void;
   /** Errors from the driver's controller calls: none are expected. */
   errors: string[];
 }
 
-export function createDeck({ controller, ids, track, onChange }: {
+export function createDeck({ controller, ids, track, onChange, onTransition }: {
   controller: CanvasController;
   /** The sections' ids in page order; a section's layers are `id` and, where it has a specimen of its own, `figureId(id)`. */
   ids: readonly string[];
@@ -59,6 +64,8 @@ export function createDeck({ controller, ids, track, onChange }: {
   track: HTMLElement;
   /** Called when another section becomes the current one. */
   onChange(current: number): void;
+  /** Called when a change between two sections starts, with its name, and with null when the stage comes to rest. */
+  onTransition?(name: string | null): void;
 }): Deck {
   const root = document.documentElement, count = ids.length;
   const wide = matchMedia("(min-width: 1180px)"), reduced = matchMedia("(prefers-reduced-motion: reduce)");
@@ -112,10 +119,26 @@ export function createDeck({ controller, ids, track, onChange }: {
     if (value.opacity !== undefined && value.opacity <= 0) value = { opacity: 0, scaleX: 0.01, scaleY: 0.01 };
     try { controller.setTransform(id, value); } catch (error) { errors.push(`setTransform ${id}: ${String(error)}`); }
   }
-  /** Ends the poses of the sections on stage, before they change or come to rest. */
+  /** The change between the two sections on stage: its layers at rest, and the effect chains they carry. */
+  let change: { transition: Transition; layers: StageLayer[]; handles: Map<string, EffectHandle> } | undefined;
+  /** Ends the effects and the poses of the sections on stage, before they change or come to rest. */
   function release() {
+    for (const handle of change?.handles.values() ?? []) { try { handle.cancel(); } catch { /* already ended */ } }
+    change = undefined;
     // In the flow nothing is enrolled, so there is nothing to release.
     if (view.deck) for (const index of [view.from, view.to]) if (index !== null) for (const id of layers(index)) transform(id, {});
+  }
+  /** Describes the change for the two sections now on stage (none at rest). Their layers are untransformed: measured as they rest. */
+  function prepare() {
+    const { from, to } = view;
+    if (!view.deck || to === null) { change = undefined; onTransition?.(null); return; }
+    const describe = (index: number, leaving: boolean) => layers(index).map((id, part): StageLayer => {
+      const layer = element(id), stage = layer.offsetParent as HTMLElement;
+      return { id, leaving, figure: part === 1, x: layer.offsetLeft, y: layer.offsetTop, width: layer.offsetWidth, height: layer.offsetHeight,
+        stageWidth: stage.clientWidth, stageHeight: stage.clientHeight };
+    });
+    change = { transition: reduced.matches ? fade : transitions[from] ?? fade, layers: [...describe(from, true), ...describe(to, false)], handles: new Map() };
+    onTransition?.(change.transition.name);
   }
   /** The layers enrolled now, each with the call that ends its enrolment. */
   const enrolled = new Map<string, () => void>();
@@ -135,6 +158,7 @@ export function createDeck({ controller, ids, track, onChange }: {
       if (enrolled.has(id)) continue;
       try { enrolled.set(id, controller.enroll(element(id), { id, origin: "center" })); } catch (error) { errors.push(`enroll ${id}: ${String(error)}`); }
     }
+    prepare();
   }
   /** Changes between the flow and the deck, keeping section `index` in the window. */
   function layout(deck: boolean, index: number) {
@@ -145,34 +169,71 @@ export function createDeck({ controller, ids, track, onChange }: {
     schedule();
   }
   /**
-   * Poses the two sections on stage for progress `t` between them. The texts change places in turn: one is gone at
-   * the middle, where the other starts, so they never read through each other. The specimens overlap: the one leaving
-   * tilts back into the stage while the next rises over it. With reduced motion everything only fades.
+   * Runs the change between the two sections on stage at progress `t`: each layer gets its transform and, where the
+   * change has effects, its chain's parameters. A chain is attached on the first frame the runtime takes it; until
+   * then an arriving layer is held unseen, so it never shows whole before its effect does. Returns true while a chain
+   * is still to be attached.
    */
   function pose(t: number) {
-    const { from, to } = view;
-    if (to === null || !gpu()) return;
-    const leaving = parts[from]!, arriving = parts[to]!;
-    const textOut = clamp(t / 0.5), textIn = clamp((t - 0.5) / 0.5);
-    if (reduced.matches) {
-      for (const id of layers(from)) transform(id, { opacity: round(1 - textOut) });
-      for (const id of layers(to)) transform(id, { opacity: round(textIn) });
-      return;
+    if (!change || !gpu()) return false;
+    const { transition, handles } = change;
+    let pending = false;
+    for (const layer of change.layers) {
+      if (!enrolled.has(layer.id)) continue;
+      let handle = handles.get(layer.id);
+      if (transition.chain && !handle) {
+        try {
+          const attached = controller.setEffects(layer.id, transition.chain(layer));
+          handles.set(layer.id, handle = attached);
+          void attached.finished.then(() => { if (change?.handles.get(layer.id) === attached) change.handles.delete(layer.id); });
+        } catch (error) {
+          // Not ready for effects in this frame (admission or a swap is in progress): tried again in the next.
+          if (/idle DOM or admitted GPU|mount has not completed/.test(String(error))) pending = true;
+          else errors.push(`setEffects ${layer.id}: ${String(error)}`);
+        }
+      }
+      if (transition.chain && !handle) { if (!layer.leaving) transform(layer.id, { opacity: 0 }); continue; }
+      const { transform: value, parameters } = transition.frame(t, layer);
+      transform(layer.id, value);
+      if (parameters && handle) { try { handle.update(parameters); } catch (error) { handles.delete(layer.id); errors.push(`update ${layer.id}: ${String(error)}`); } }
     }
-    transform(leaving.text, { y: round(-48 * ease(textOut)), opacity: round(1 - textOut) });
-    transform(arriving.text, { y: round(56 * (1 - ease(textIn))), opacity: round(textIn) });
-    if (leaving.figure) {
-      // A tilted layer is not clipped by the stage, so it stays inside it: it rises no further than the room above it.
-      const back = ease(clamp(t / 0.75)), rise = Math.max(0, Math.min(56, element(leaving.figure).offsetTop - 8));
-      transform(leaving.figure, { y: round(-rise * back), tiltX: round(50 * back), scaleX: round(1 - 0.18 * back), scaleY: round(1 - 0.18 * back),
-        opacity: round(1 - clamp((t - 0.35) / 0.4)), perspective: 1000 });
-    }
-    if (arriving.figure) {
-      // Flat, so the stage may cut it off as it comes up from below.
-      const up = ease(clamp((t - 0.2) / 0.8));
-      transform(arriving.figure, { y: round(180 * (1 - up)), scaleX: round(0.94 + 0.06 * up), scaleY: round(0.94 + 0.06 * up), opacity: round(clamp((t - 0.2) / 0.3)) });
+    return pending;
+  }
+  /**
+   * Compiles the changes' shaders ahead of their first use: each chain is put on the empty layer `deck-warm` for as
+   * long as the runtime takes to present it, one per idle moment. Started when the deck is at rest, and started again
+   * from the next rest if GPU presentation ended or was busy meanwhile. With reduced motion no change has a chain.
+   */
+  let warm: "no" | "running" | "done" = "no";
+  const warmWaiters: (() => void)[] = [];
+  async function warmUp() {
+    if (warm !== "no" || !view.deck || !gpu()) return;
+    if (reduced.matches) { warm = "done"; for (const done of warmWaiters.splice(0)) done(); return; }
+    warm = "running";
+    const layer = element("deck-warm"), stage = layer.offsetParent as HTMLElement | null;
+    let end: (() => void) | undefined, complete = false;
+    try {
+      end = controller.enroll(layer, { id: layer.id });
+      const stand: StageLayer = { id: layer.id, leaving: true, figure: false, x: 0, y: 0, width: 16, height: 16, stageWidth: stage?.clientWidth ?? 16, stageHeight: stage?.clientHeight ?? 16 };
+      for (const transition of transitions) {
+        if (!transition.chain) continue;
+        await new Promise<void>(resolve => { if ("requestIdleCallback" in window) requestIdleCallback(() => resolve(), { timeout: 600 }); else setTimeout(resolve, 100); });
+        if (!view.deck || !gpu()) return;
+        const handle = controller.setEffects(layer.id, transition.chain(stand));
+        await controller.settle();
+        try { handle.cancel(); } catch { /* ended with GPU presentation */ }
+      }
+      complete = true;
+    } catch (error) {
+      // Busy with admission or a swap: tried again from the next rest. Anything else is the driver's error.
+      if (!/idle DOM or admitted GPU|mount has not completed/.test(String(error))) { errors.push(`warm: ${String(error)}`); complete = true; }
+    } finally {
+      try { end?.(); } catch { /* the runtime is gone */ }
+      warm = complete ? "done" : "no";
+      if (complete) for (const done of warmWaiters.splice(0)) done();
     }
   }
+  const warmed = () => warm === "done" ? Promise.resolve() : new Promise<void>(resolve => { warmWaiters.push(resolve); });
   /** Reads the scroll position, changes what is on stage when it crosses into or out of a band, and poses it. */
   let reported = -1;
   function update() {
@@ -180,7 +241,8 @@ export function createDeck({ controller, ids, track, onChange }: {
       const { from, to, t } = place();
       show({ deck: true, from, to });
       front = to !== null && t >= 0.5 ? to : from;
-      pose(t);
+      if (pose(t)) schedule();
+      if (to === null && warm === "no") void warmUp();
     }
     const now = current();
     if (now !== reported) onChange(reported = now);
@@ -239,7 +301,8 @@ export function createDeck({ controller, ids, track, onChange }: {
     else if (view.deck && view.to === null) go(view.from);
     else schedule();
   });
-  reduced.addEventListener("change", schedule);
+  // The preference decides which change runs: the one on stage starts over as the other.
+  reduced.addEventListener("change", () => { if (change) { release(); prepare(); } schedule(); });
   // A link to a place in the page: in the deck its target is stacked on the stage, so the driver scrolls to its section.
   document.addEventListener("click", event => {
     const link = (event.target as Element).closest?.<HTMLAnchorElement>("a[href^='#']");
@@ -283,5 +346,5 @@ export function createDeck({ controller, ids, track, onChange }: {
     await frames(2);
   }
   schedule();
-  return { start, stop, blocked, go, idle, modeChanged, place: () => view.deck ? place() : { from: flowIndex(), to: null, t: 0 }, errors };
+  return { start, stop, blocked, go, idle, warmed, modeChanged, place: () => view.deck ? place() : { from: flowIndex(), to: null, t: 0 }, errors };
 }

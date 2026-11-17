@@ -98,7 +98,8 @@ export function Header({ base }: { base: string }) {
       <a className="brand" href={base}><Mark />Underglass</a>
       <div className="readout" role="group" aria-label="Presentation">
         <button id="deck-switch" type="button" aria-pressed="false" disabled><i aria-hidden="true" /><span id="deck-mode">Ordinary DOM</span></button>
-        <p id="deck-figures" hidden><span><b id="deck-layers">0</b> layers</span><span><b id="deck-captures">0</b> captures</span><span><b id="deck-frame">0.0</b> ms a frame</span></p>
+        <p id="deck-figures" hidden><span><b id="deck-layers">0</b> layers</span><span><b id="deck-captures">0</b> captures</span><span><b id="deck-frame">0.0</b> ms a frame</span>
+          <span id="deck-change" className="change" hidden /></p>
         <p id="deck-note" className="visually-hidden" role="status" />
       </div>
       <nav aria-label="Site"><a href="#transitions">Transitions</a><a href="#examples-title">Examples</a><a href={site.docs}>Docs</a>
@@ -121,6 +122,8 @@ export function Footer() {
 export function Stage({ base }: { base: string }) {
   const docs = site.docs;
   return <>
+    {/* Nothing to see: the deck compiles its changes' shaders on this layer before they are first used (`deck.ts`). */}
+    <div id="deck-warm" className="warm" aria-hidden="true" inert />
     {/* The cover is one layer: the headline runs across the page, with the text and the specimen under it. */}
     <Slide id="cover" label="A GPU-first React framework">
       <h1 id="cover-title">Real React controls.<br /><span className="glass">Painted by the GPU<i>.</i></span></h1>

@@ -184,7 +184,8 @@ try {
   // The preview home page (`/next`). Its content and its stylesheet are in the served HTML, inside prerendered
   // Underglass hosts, and it is kept out of search and the sitemap. As ordinary DOM it is a flowing page whose controls
   // work and which fits a desktop and a phone; where the deck cannot run, the Underglass runtime is never requested.
-  // With GPU presentation it is a deck: starting it changes no pixel of the stage, the stage stays in the window, the scroll position
+  // With GPU presentation it is a deck with a different change between each two sections, some of them shader effects
+  // on the live layers: starting it changes no pixel of the stage, the stage stays in the window, the scroll position
   // changes the section on it, pixels are fresh, native hits land where a layer is drawn, and scrolling through a
   // change captures nothing.
   {
@@ -298,6 +299,8 @@ try {
         return { mode: state.mode, reason: state.reason, layers: state.layers.map(layer => layer.id), captures: state.metrics.captures,
           perLayer: Object.fromEntries(Object.entries(state.metrics.perLayer).map(([id, layer]) => [id, layer.captures])),
           place: window.nextDeck.place(), deck: document.documentElement.classList.contains("deck"), errors: [...window.nextDeck.errors],
+          effects: state.decorativeEffects.map(effect => `${effect.id}:${effect.effects.map(item => item.kind).join("+")}`),
+          change: document.getElementById("deck-change").hidden ? null : document.getElementById("deck-change").textContent,
           canvasShown: !document.querySelector('[data-underglass-host="output"]').hidden, scrollY };
       });
       const go = index => page.evaluate(value => window.nextDeck.go(value), index);
@@ -305,20 +308,32 @@ try {
       const scrub = position => page.evaluate(value => { scrollTo({ top: value * innerHeight, behavior: "instant" }); return window.nextDeck.idle(); }, position);
       const status = () => page.locator('.live-row [role="status"]').innerText();
 
+      // The changes' shaders are compiled ahead of use, on a layer of their own that is gone again afterwards.
+      await page.evaluate(() => window.nextDeck.warmed().then(() => window.nextDeck.idle()));
+      assert.ok(await page.evaluate(() => window.nextDeck.state().metrics.effectShaderCompilations) >= 5, "the custom effects are compiled before their first use");
       // It starts by itself, as the deck, with only the cover enrolled.
       let state = await snapshot();
       assert.deepEqual({ mode: state.mode, deck: state.deck, layers: state.layers, from: state.place.from, canvasShown: state.canvasShown },
         { mode: "gpu", deck: true, layers: ["cover"], from: 0, canvasShown: true }, state.reason);
       assert.equal(await page.locator("#deck-switch").getAttribute("aria-pressed"), "true");
-      assert.equal(await page.locator("#deck-layers").innerText(), "1");
+      // The readout is filled twice a second: it counted the shader layer too until a moment ago.
+      await page.locator("#deck-layers").filter({ hasText: /^1$/ }).waitFor();
       assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById("pin")).position), "sticky");
       await page.screenshot({ path: join(run, "next-deck-cover.png") });
+
+      // Into the first change, the burn: every layer on stage carries its effect chain and the readout names the
+      // change. At the next rest the chains are gone, and the controls take input again (the click below).
+      await scrub(0.5);
+      state = await snapshot();
+      assert.deepEqual([state.mode, state.effects, state.change, state.errors], ["gpu", ["cover:custom", "dom:custom", "dom-figure:custom"], "burn", []]);
+      await page.screenshot({ path: join(run, "next-deck-burn.png") });
 
       // The second section, at rest: its two layers. The controls are the served elements, the GPU draws what they
       // show now, and a real click lands on the button.
       await go(1);
       state = await snapshot();
       assert.deepEqual(state.layers, ["dom", "dom-figure"]);
+      assert.deepEqual([state.effects, state.change], [[], null]);
       assert.equal(await page.evaluate(() => window.servedPress === document.querySelector(".live-row button")), true, "the served button is the one on stage");
       const statusBox = await page.locator('.live-row [role="status"]').boundingBox();
       const before = await page.screenshot({ clip: statusBox });
@@ -362,6 +377,41 @@ try {
       await scrub(1.8);
       assert.equal(await page.evaluate(() => { const box = document.querySelector("#transitions h2").getBoundingClientRect();
         return document.elementFromPoint(box.x + 20, box.y + box.height / 2)?.closest("[data-section]")?.id; }), "transitions");
+
+      // The change to the fifth section is a scan: a bar of light crosses the stage, with the arriving section above it
+      // and the leaving one below. The mask is in stage coordinates and hides one section exactly where it shows the
+      // other: at the middle, the upper part of the stage is the arriving section as it rests and the lower part the
+      // leaving one. Scrolling through it captures nothing either.
+      const region = async (top, bottom) => PNG.sync.read(await page.screenshot({ clip: { x: 72, y: top, width: 1440 - 72, height: bottom - top } }));
+      const differing = (a, b) => {
+        let count = 0;
+        for (let offset = 0; offset < a.data.length; offset += 4) if ([0, 1, 2].some(channel => Math.abs(a.data[offset + channel] - b.data[offset + channel]) > 24)) count++;
+        return count / (a.width * a.height);
+      };
+      await go(3);
+      const leavingLower = await region(570, 880);
+      await go(4);
+      const arrivingUpper = await region(90, 400);
+      await scrub(3.5);
+      state = await snapshot();
+      assert.deepEqual([state.mode, state.effects, state.change, state.errors], ["gpu", ["motion:custom", "motion-figure:custom", "shaders:custom", "shaders-figure:custom"], "scan", []]);
+      const scanUpper = differing(await region(90, 400), arrivingUpper), scanLower = differing(await region(570, 880), leavingLower);
+      assert.ok(scanUpper < 0.002, `above the bar the stage is the arriving section (${scanUpper})`);
+      assert.ok(scanLower < 0.002, `below the bar the stage is the leaving section (${scanLower})`);
+      await page.screenshot({ path: join(run, "next-deck-scan.png") });
+      const scanCaptures = (await snapshot()).perLayer;
+      for (const position of [3.4, 3.6, 3.7, 3.45]) await scrub(position);
+      state = await snapshot();
+      assert.deepEqual(state.perLayer, scanCaptures, "scrolling through an effect change captured a layer");
+      // Every other change runs too, and GPU presentation stays on through all of them.
+      for (const [from, name] of [[2, "water"], [4, "iris"], [5, "mosaic"], [6, "exposure"]]) {
+        await scrub(from + 0.5);
+        state = await snapshot();
+        assert.deepEqual([state.mode, state.effects.length, state.change, state.errors], ["gpu", 4, name, []], name);
+        await page.screenshot({ path: join(run, `next-deck-${name}.png`) });
+      }
+      await go(1);
+      assert.deepEqual((await snapshot()).effects, []);
 
       // A link to a section, a paging key and focus moving into a parked section each bring that section on stage.
       await page.locator('.rail a[href="#shaders"]').click();
@@ -434,6 +484,7 @@ try {
       await calmPage.goto(`${url}next`);
       await calmPage.waitForFunction(() => window.nextDeck?.state().mode === "gpu", null, { timeout: 30_000 });
       await calmPage.evaluate(() => { scrollTo({ top: 1.3 * innerHeight, behavior: "instant" }); return window.nextDeck.idle(); });
+      assert.deepEqual(await calmPage.evaluate(() => [window.nextDeck.state().decorativeEffects.length, document.getElementById("deck-change").textContent]), [0, "fade"], "no effect with reduced motion");
       const calmLayers = await calmPage.evaluate(() => window.nextDeck.state().layers.map(layer => ({ id: layer.id, ...layer.transform })));
       assert.equal(calmLayers.length, 4);
       // A layer either fades in place or, unseen, is shrunk out of the pointer's way: none is moved or tilted.
