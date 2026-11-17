@@ -77,6 +77,10 @@ code { font-family: var(--mono); font-size: .92em; }
   .readout p { display: flex; gap: 18px; margin: 0; white-space: nowrap; }
   .readout p[hidden] { display: none; }
   .readout b { font-weight: 400; color: var(--text); font-variant-numeric: tabular-nums; }
+  /* The change that is running between two sections, by name. */
+  .readout .change { color: var(--signal); }
+  .readout .change::before { content: "\2192\00a0"; color: var(--quiet); }
+  .readout .change[hidden] { display: none; }
 }
 /* The mark: three panes of glass, one of them lit. */
 .mark { position: relative; display: inline-block; width: 26px; height: 24px; flex: none; }
@@ -152,6 +156,8 @@ html.deck #stage .app-container { grid-template-rows: minmax(0, 1fr); }
 html.deck .app-container > * { grid-row: 1; margin-block: var(--lift) 24px; }
 html.deck .app-container > .specimen { margin-top: calc(var(--lift) + 20px + var(--space)); }
 html.deck .parked { opacity: 0; pointer-events: none; }
+/* The layer the deck compiles shaders on: empty, in the stage's corner, out of the grid and of the pointer's way. */
+.app-container > .warm { position: absolute; left: 0; top: 0; width: 16px; height: 16px; margin: 0; pointer-events: none; }
 
 .slide-text > :last-child { margin-bottom: 0; }
 .label { display: flex; align-items: center; gap: 14px; height: 12px; margin: 0 0 var(--space); font: 12px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
