@@ -27,7 +27,12 @@ const controller = mountCanvasApp({
   ...createCanvasHosts($("stage")), hydrate: true,
   // Four layers at most are on stage (two sections of two); the budget covers them on a dense display.
   budgets: { layers: 16, pixels: 8_000_000 },
-  onStatusChange(value) { status = value; driver?.modeChanged(value.mode); if (driver) render(); },
+  onStatusChange(value) {
+    const lost = status?.mode === "gpu" && value.mode === "dom" && !/^Explicit disable/.test(value.reason);
+    status = value; driver?.modeChanged(value.mode);
+    if (driver) render();
+    if (lost) recover(value.reason);
+  },
 }, <Stage base={import.meta.env.BASE_URL} />);
 const deck = driver = createDeck({ controller, ids, track: $("track"), onChange(current) {
   markRail(current);
@@ -59,6 +64,21 @@ function render() {
     $("deck-frame").textContent = work.length ? (work.reduce((sum, value) => sum + value, 0) / work.length).toFixed(1) : "0.0";
   }
   note(on ? "" : blocked ?? reason);
+}
+/**
+ * GPU presentation ended by itself (a lost device, a paint that timed out): the page is the flow in ordinary DOM by
+ * now. It is started again after a moment, twice at most in half a minute, so that a GPU that keeps failing is left
+ * alone.
+ */
+const recoveries: number[] = [];
+function recover(why: string) {
+  console.info(`GPU presentation ended: ${why}`);
+  reason = explain(why).title;
+  const now = performance.now();
+  while (recoveries.length && now - recoveries[0]! > 30_000) recoveries.shift();
+  if (recoveries.length >= 2 || preference.off) return;
+  recoveries.push(now);
+  setTimeout(() => { if (!preference.off && status?.mode === "dom") void start(); }, 900);
 }
 async function start() {
   if (support !== "likely" || deck.blocked()) { render(); return; }

@@ -19,20 +19,27 @@
  * - A custom effect's shader is compiled when it is first used, which stalls the page for a few frames. So after the
  *   deck has started, each change's chain is put once on an empty layer in the stage's corner, in idle moments, and
  *   the first scroll into a change finds its shader ready (`warm`).
- * - Links to a section, focus moving into a parked section, and Page Up, Page Down, Space, Home and End bring that
- *   section on stage.
+ * - A link to a section and the paging keys (Page Up, Page Down, Space, Home, End) **jump**: the stage changes straight
+ *   from the section on it to the one asked for, in about a second, with one change, however many sections lie
+ *   between. The scroll position is set to the target at once and the change runs on the clock, so a jump over five
+ *   sections does not race through five changes. Scrolling during a jump ends it. Focus moving into a parked section
+ *   brings that section on stage at once.
+ * - A decorative layer under the sections carries a light that follows the pointer (`light.ts`).
  *
  * The deck needs a wide window in which every section fits the stage; otherwise the page stays the flow.
  */
 import { flushSync } from "react-dom";
 import type { CanvasController, CanvasStatus, EffectHandle, Transform } from "@underglass/react";
-import { flowIndex } from "./flow";
+import { flowIndex, holdTravel, travelAt, travelNow } from "./flow";
+import { createLight, LIGHT_ID } from "./light";
 import { figureId } from "./page";
 import { fade, transitions, type StageLayer, type Transition } from "./transitions";
 import { flow, viewStore, type View } from "./view";
 
 /** The part of a step, on each side of a section's place, where that section is at rest. */
 const band = 0.14;
+/** How long a jump's change takes, ms; with reduced motion it is a short fade. */
+const jumpMs = 950, calmJumpMs = 320;
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
 export interface Deck {
@@ -42,7 +49,7 @@ export interface Deck {
   stop(): Promise<void>;
   /** Why the deck cannot run in this window now, or null when it can. */
   blocked(): string | null;
-  /** Scrolls to a section, in either layout. */
+  /** Brings a section on stage: at once, or with `smooth` by a jump in the deck and a smooth scroll in the flow. */
   go(index: number, smooth?: boolean): void;
   /** Waits until the driver has nothing pending and the runtime has presented what it was given (for tests). */
   idle(): Promise<void>;
@@ -84,9 +91,27 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
   /** One window of scrolling per section. */
   const step = () => innerHeight;
   const trackTop = () => track.getBoundingClientRect().top + scrollY;
-  /** Where the scroll position is in the deck's track. */
+  /** How far down the track the page is, in sections (1.5 is half way from the second to the third). Kept through a resize. */
+  let position = 0;
+  /**
+   * A jump in progress: the stage is changing from `low` to `high` (or back, when not `forward`) on the clock, with
+   * the scroll position already at the target's (`offset`).
+   */
+  let jump: { low: number; high: number; forward: boolean; began: number; ms: number; offset: number; travelFrom: number } | undefined;
+  /** Ends a jump where it is: the scroll position decides again, and the background follows it again. */
+  function endJump() { if (jump) { jump = undefined; holdTravel(null); } }
+  /** Where the page is in the deck: by the clock during a jump, by the scroll position otherwise. */
   function place() {
-    const position = clamp((scrollY - trackTop()) / step(), 0, count - 1);
+    if (jump) {
+      const progress = clamp((performance.now() - jump.began) / jump.ms), eased = progress * progress * (3 - 2 * progress);
+      if (progress < 1) {
+        // The background's rings travel with the change, not all at once with the scroll position.
+        holdTravel(jump.travelFrom + (travelAt(jump.offset) - jump.travelFrom) * eased);
+        return { from: jump.low, to: jump.high as number | null, t: jump.forward ? eased : 1 - eased };
+      }
+      endJump();
+    }
+    position = clamp((scrollY - trackTop()) / step(), 0, count - 1);
     const nearest = Math.round(position);
     if (Math.abs(position - nearest) <= band) return { from: nearest, to: null, t: 0 };
     const from = Math.floor(position);
@@ -106,7 +131,18 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     return Math.max(0, Math.round(scrollY + text.getBoundingClientRect().top - parseFloat(getComputedStyle(text).marginTop)));
   }
   function go(index: number, smooth = false) {
-    scrollTo({ top: offset(clamp(index, 0, count - 1)), behavior: smooth && !reduced.matches ? "smooth" : "instant" });
+    const target = clamp(index, 0, count - 1), top = offset(target);
+    // In the deck a smooth move is a jump: one change from the section on stage to the target, on the clock.
+    if (smooth && view.deck && gpu() && target !== front) {
+      const travelFrom = travelNow();
+      jump = { low: Math.min(front, target), high: Math.max(front, target), forward: target > front, began: performance.now(), ms: reduced.matches ? calmJumpMs : jumpMs, offset: top, travelFrom };
+      holdTravel(travelFrom);
+      position = target;
+      scrollTo({ top, behavior: "instant" });
+    } else {
+      if (view.deck) { endJump(); position = target; }
+      scrollTo({ top, behavior: smooth && !view.deck && !reduced.matches ? "smooth" : "instant" });
+    }
     schedule();
   }
 
@@ -148,7 +184,8 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
       return { id, leaving, figure: part === 1, x: layer.offsetLeft, y: layer.offsetTop, width: layer.offsetWidth, height: layer.offsetHeight,
         stageWidth: stage.clientWidth, stageHeight: stage.clientHeight };
     });
-    change = { transition: reduced.matches ? fade : transitions[from] ?? fade, layers: [...describe(from, true), ...describe(to, false)], handles: new Map() };
+    // Two neighbours change as their boundary does; a jump over several sections uses the change that leads into the further one.
+    change = { transition: reduced.matches ? fade : transitions[to - 1] ?? fade, layers: [...describe(from, true), ...describe(to, false)], handles: new Map() };
     onTransition?.(change.transition.name);
   }
   /** The layers enrolled now, each with the call that ends its enrolment. */
@@ -171,11 +208,17 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     }
     prepare();
   }
+  /** The light under the sections, and the call that ends its layer's enrolment while the deck is on. */
+  const light = createLight(controller, element(LIGHT_ID), () => reduced.matches, errors);
+  let endLight: (() => void) | undefined;
   /** Changes between the flow and the deck, keeping section `index` in the window. */
   function layout(deck: boolean, index: number) {
     root.classList.toggle("deck", deck);
+    endJump();
+    if (!deck) { light.end(); try { endLight?.(); } catch { /* the runtime is gone */ } endLight = undefined; }
     show(deck ? { deck, from: index, to: null } : flow);
-    front = index;
+    if (deck && !endLight) { try { endLight = controller.enroll(element(LIGHT_ID), { id: LIGHT_ID, decorative: true, origin: "top-left" }); } catch (error) { errors.push(`enroll ${LIGHT_ID}: ${String(error)}`); } }
+    front = index; position = index;
     scrollTo({ top: offset(index), behavior: "instant" });
     schedule();
   }
@@ -252,8 +295,11 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
       const { from, to, t } = place();
       show({ deck: true, from, to });
       front = to !== null && t >= 0.5 ? to : from;
-      if (pose(t)) schedule();
+      // A jump runs on the clock: it needs every frame until it has arrived.
+      if (pose(t) || jump) schedule();
       if (to === null && warm === "no") void warmUp();
+      // With reduced motion an effect draws nothing, so the light is left off.
+      if (gpu() && endLight && !reduced.matches && light.frame()) schedule();
     }
     const now = current();
     if (now !== reported) onChange(reported = now);
@@ -304,13 +350,23 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     schedule();
   }
 
-  addEventListener("scroll", schedule, { passive: true });
+  addEventListener("scroll", () => {
+    // Scrolling during a jump takes the stage back: the jump ends and the scroll position decides again.
+    if (jump && Math.abs(scrollY - jump.offset) > 2) endJump();
+    schedule();
+  }, { passive: true });
+  addEventListener("pointermove", () => { if (view.deck && light.behind()) schedule(); }, { passive: true });
   addEventListener("resize", () => {
     // A window the deck no longer fits returns to the flow; the caller decides whether to start again later.
-    if (view.deck && blocked()) void stop();
-    // The track is one window per section, so a section at rest is at another offset in a window of another height.
-    else if (view.deck && view.to === null) go(view.from);
-    else schedule();
+    if (view.deck && blocked()) { void stop(); return; }
+    // The track is one window per section, so the same place in the deck is at another offset in a window of another
+    // height: the page stays where it was in sections, at rest or part way through a change.
+    if (view.deck) {
+      const top = trackTop() + position * step();
+      if (jump) jump.offset = top;
+      scrollTo({ top, behavior: "instant" });
+    }
+    schedule();
   });
   // The preference decides which change runs: the one on stage starts over as the other.
   reduced.addEventListener("change", () => { if (change) { release(new Set(enrolled.keys())); prepare(); } schedule(); });
@@ -327,13 +383,14 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
   // Back and forward between links followed in the deck.
   addEventListener("popstate", () => {
     const section = document.getElementById(location.hash.slice(1))?.closest<HTMLElement>("[data-section]");
-    if (view.deck && section) go(Number(section.dataset.section));
+    if (view.deck && section) go(Number(section.dataset.section), true);
   });
   // Focus moving into a parked section (Tab, a screen reader) brings that section on stage.
   document.addEventListener("focusin", event => {
     const index = Number((event.target as Element).closest?.<HTMLElement>("[data-section]")?.dataset.section ?? NaN);
     if (view.deck && Number.isInteger(index) && index !== view.from && index !== view.to) go(index);
   });
+  const paging = () => reduced.matches ? "instant" as const : "smooth" as const;
   // Paging keys move by one section, to its rest position. A control that uses the key itself keeps it.
   addEventListener("keydown", event => {
     if (!view.deck || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
@@ -345,7 +402,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     if (next === null) return;
     event.preventDefault();
     // At the last section the page scrolls on to the footer as usual.
-    if (next >= count) scrollTo({ top: document.documentElement.scrollHeight, behavior: reduced.matches ? "instant" : "smooth" });
+    if (next >= count) scrollTo({ top: document.documentElement.scrollHeight, behavior: paging() });
     else go(next, true);
   });
 

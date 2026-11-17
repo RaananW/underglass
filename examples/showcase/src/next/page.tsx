@@ -107,6 +107,13 @@ export function Header({ base }: { base: string }) {
     </header>
   </>;
 }
+/**
+ * The page's background: fixed in the window behind everything, in both presentations. Two pools of light, a faint
+ * grid and two lens rings, which travel down the page as it scrolls (`flow.ts` sets `--travel`).
+ */
+export function Backdrop() {
+  return <div id="backdrop" className="backdrop" aria-hidden="true"><i /><i /></div>;
+}
 /** The side scale: one numbered mark per section. */
 export function Rail() {
   return <nav className="rail" aria-label="Sections">
@@ -122,6 +129,8 @@ export function Footer() {
 export function Stage({ base }: { base: string }) {
   const docs = site.docs;
   return <>
+    {/* The light under the sections: empty, and drawn by a shader in the deck (`light.ts`). */}
+    <div id="deck-light" className="light" aria-hidden="true" inert />
     {/* Nothing to see: the deck compiles its changes' shaders on this layer before they are first used (`deck.ts`). */}
     <div id="deck-warm" className="warm" aria-hidden="true" inert />
     {/* The cover is one layer: the headline runs across the page, with the text and the specimen under it. */}
