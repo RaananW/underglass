@@ -127,6 +127,22 @@ The header, the side scale and the footer are static markup outside the root.
   stage and the driver runs the change between them. With reduced motion every
   change is a fade.
 
+### The background and the light
+
+The page's background (`.backdrop` in `next.css`) is ordinary DOM, fixed in the window
+behind everything, in both presentations: the output canvas is transparent where no
+layer is. It has two pools of light, a faint grid that fades toward the text, and two
+lens rings that travel down the right side as the page scrolls (`flow.ts` sets
+`--travel` on the backdrop itself, so nothing else restyles). During a jump the rings
+travel with the change.
+
+In the deck a light follows the pointer under the sections (`src/next/light.ts`): one
+decorative layer with a custom effect. Its element is empty and an eighth of the
+stage's size, drawn eight times larger, so its texture is a few thousand pixels
+whatever the stage's size: the shader computes the light. With the pointer off the
+stage it draws nothing, so the stage is then exactly what ordinary DOM shows, and no
+frame is drawn while nothing moves.
+
 ### The changes between sections
 
 `src/next/transitions.ts` has one change per boundary, each a different thing the GPU
@@ -174,8 +190,19 @@ Rules the deck keeps, most of them from the [probe](showcase-deck-probe.md):
 - The layout changes to the deck before `enable()`, and back to the flow whenever the
   mode returns to `dom` (a refusal, the readout's switch, a lost GPU). The section in
   the window stays the same both ways, and so does every control's state.
-- A link to a section, Back and Forward, focus moving into a parked section, and Page
-  Up, Page Down, Space, Home and End bring that section on stage.
+- A link to a section, Back and Forward, and Page Up, Page Down, Space, Home and End
+  **jump**: the stage changes straight from the section on it to the one asked for,
+  with one change (the one that leads into the further of the two), in 0.95 s, however
+  many sections lie between. The scroll position is set to the target's at once and the
+  change runs on the clock, so a jump over five sections does not race through five
+  changes. Scrolling during a jump ends it. Focus moving into a parked section brings
+  that section on stage at once.
+- A resize keeps the place, in sections, at rest or part way through a change: the
+  track is one window per section, so the same place is at another offset in a window
+  of another height.
+- When GPU presentation ends by itself (a lost device, a paint that timed out), the
+  page is the flow in ordinary DOM at once, and starts GPU presentation again 0.9 s
+  later, twice at most in half a minute.
 - Nothing overlays the stage: the header and the side scale sit beside it, so the
   admission probe is never covered.
 - The deck needs a window at least 1180 px wide in which every section fits the stage
@@ -252,8 +279,11 @@ scrolling through a change captures nothing (the tilt and an effect change), eve
 change runs with GPU presentation staying on and its chains gone at the next rest, the
 scan's mask shows the arriving section above the bar and the leaving one below it
 exactly as they rest, links, keys and focus change the section,
-the switch returns to the flow and back with the form's state kept and no pixel of the
-stage changed, a short window keeps the flow, and reduced motion only fades.
+a link jumps with one change in about a second, the lamp lights the background under
+the pointer and goes out off the stage, a resize keeps the place part way through a
+change, a destroyed GPU device is followed by a return to GPU presentation, the switch
+returns to the flow and back with the form's state kept and no pixel of the stage
+changed, a short window keeps the flow, and reduced motion only fades.
 
 ## Pages, search and social metadata
 

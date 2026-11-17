@@ -29,3 +29,23 @@ export function note(message: string) {
   const element = document.getElementById("deck-note")!;
   if (element.textContent !== message) element.textContent = message;
 }
+
+const backdrop = document.getElementById("backdrop");
+let travelled = -1, held: number | null = null;
+/** How far down the page a scroll offset is: 0 at the top of the page, 1 at its end. */
+export function travelAt(top: number) {
+  const range = document.documentElement.scrollHeight - innerHeight;
+  return range > 0 ? Math.min(1, Math.max(0, top / range)) : 0;
+}
+/** Moves the background's rings with the page, or to a held value. Only the backdrop's own style changes. */
+export function travel() {
+  const now = Math.round((held ?? travelAt(scrollY)) * 1000) / 1000;
+  if (now !== travelled) backdrop?.style.setProperty("--travel", String(travelled = now));
+}
+/** Holds the rings at `value` whatever the scroll position (a jump moves them on the clock), or with null lets them follow it again. */
+export function holdTravel(value: number | null) { held = value; travel(); }
+export const travelNow = () => Math.max(0, travelled);
+let travelFrame = 0;
+addEventListener("scroll", () => { travelFrame ||= requestAnimationFrame(() => { travelFrame = 0; travel(); }); }, { passive: true });
+addEventListener("resize", () => { travelFrame ||= requestAnimationFrame(() => { travelFrame = 0; travel(); }); });
+travel();
