@@ -181,48 +181,214 @@ try {
   for (const asset of html.matchAll(/(?:src|href)="(\/underglass\/assets\/[^"]+)"/g)) {
     assert.equal((await fetch(`http://127.0.0.1:${port}${asset[1]}`)).status, 200);
   }
-  // The preview home page (`/next`): its content is in the served HTML, it is kept out of search and the sitemap, it
-  // hydrates without a complaint from React, its controls work, and it fits a desktop and a phone without sideways scroll.
+  // The preview home page (`/next`). Its content is in the served HTML, inside prerendered Underglass hosts, and it is
+  // kept out of search and the sitemap. As ordinary DOM it is a flowing page whose controls work and which fits a
+  // desktop and a phone. With GPU presentation it is a deck: the stage stays in the window, the scroll position
+  // changes the section on it, pixels are fresh, native hits land where a layer is drawn, and scrolling through a
+  // change captures nothing.
   {
+    const sectionIds = ["cover", "dom", "transitions", "motion", "shaders", "depth", "everywhere", "start"];
     const response = await fetch(`${url}next`);
     assert.equal(response.status, 200);
     const served = await response.text();
     assert.match(served, /<meta name="robots" content="noindex">/);
     assert.match(served, /<h1 id="cover-title">Real React controls\./);
-    for (const id of ["cover", "dom", "transitions", "motion", "shaders", "depth", "everywhere", "start"]) assert.match(served, new RegExp(`<section class="slide slide-${id}" id="${id}"`), id);
+    for (const id of sectionIds) assert.match(served, new RegExp(`<section class="slide-text slide-${id}" id="${id}"`), id);
+    for (const host of ["output", "ordinary", "overlay"]) assert.match(served, new RegExp(`data-underglass-host="${host}"`), host);
     assert.match(served, /href="\/underglass\/examples\/instrument"/);
     assert.doesNotMatch(await (await fetch(`${url}sitemap.xml`)).text(), /next/);
-    const browser = await chromium.launch(browserLaunchOptions({ native: "none" }));
+    // Chrome's warning about a WebGPU option on Windows is not the page's.
+    const watch = page => {
+      const problems = [];
+      page.on("pageerror", error => problems.push(`pageerror: ${error.message}`));
+      page.on("console", message => { if ((message.type() === "error" || message.type() === "warning") && !/powerPreference option is currently ignored/.test(message.text())) problems.push(`${message.type()}: ${message.text()}`); });
+      return problems;
+    };
+    const browser = await chromium.launch(browserLaunchOptions({ native: true }));
     try {
       const still = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 1280, height: 800 } });
       const stillPage = await still.newPage();
       await stillPage.goto(`${url}next`);
       assert.equal(await stillPage.locator("h1").innerText(), "Real React controls.\nPainted by the GPU.");
       assert.equal(await stillPage.locator("main section").count(), 8);
+      assert.equal(await stillPage.locator("#transitions").evaluate(node => node.getBoundingClientRect().height > 200), true, "without JavaScript the sections are laid out");
       await stillPage.screenshot({ path: join(run, "next-no-javascript.png") });
       await still.close();
+
+      // Ordinary DOM: the visitor's choice is recorded, as the readout's switch does, so the deck does not start.
       for (const [name, viewport] of [["desktop", { width: 1280, height: 800 }], ["phone", { width: 390, height: 780 }]]) {
         const context = await browser.newContext({ viewport });
+        await context.addInitScript(() => { try { sessionStorage.setItem("underglass-deck", "off"); } catch { /* opaque origin */ } });
         const page = await context.newPage();
-        const problems = [];
-        page.on("pageerror", error => problems.push(`pageerror: ${error.message}`));
-        page.on("console", message => { if (message.type() === "error" || message.type() === "warning") problems.push(`${message.type()}: ${message.text()}`); });
+        const problems = watch(page);
         await page.goto(`${url}next`);
+        await page.waitForFunction(() => window.nextDeck);
         await page.getByLabel("Name").fill("Grace");
         await page.getByRole("button", { name: "Press" }).click();
         assert.equal(await page.locator('.live-row [role="status"]').innerText(), "Hello, Grace. Pressed 1 time.");
         assert.equal(await page.getByLabel("Level").evaluate(input => input.closest("label").querySelector("output").textContent), "60");
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, `${name}: sideways scroll`);
+        assert.equal(await page.evaluate(() => window.nextDeck.state().mode), "dom", `${name}: ordinary DOM`);
+        assert.equal(await page.evaluate(() => document.documentElement.classList.contains("deck")), false, `${name}: the flow`);
         if (name === "desktop") {
-          // Each section fills the window, and the side scale marks the one in view.
-          assert.equal(await page.locator("#transitions").evaluate(node => node.getBoundingClientRect().height >= innerHeight), true);
+          // The sections follow each other down the page, each in a row at least a window tall (a section is centred in
+          // its row, so their tops are about a window apart), and the side scale marks the one in view.
+          const tops = await page.evaluate(ids => ids.map(id => document.getElementById(id).getBoundingClientRect().top + scrollY), sectionIds);
+          for (let index = 1; index < tops.length; index++) assert.ok(tops[index] - tops[index - 1] >= 600, `section ${sectionIds[index]} follows about a window below the one before`);
+          assert.ok(tops.at(-1) >= 7 * 800 - 400, "the page is at least a window tall per section");
           await page.locator("#shaders").scrollIntoViewIfNeeded();
           await page.locator('.rail a[href="#shaders"][aria-current]').waitFor({ state: "attached" });
+          assert.equal(await page.locator("#deck-switch").getAttribute("aria-pressed"), "false");
         }
         await page.screenshot({ path: join(run, `next-${name}.png`), fullPage: true });
         assert.deepEqual(problems, [], `${name}: the preview page reported problems`);
         await context.close();
       }
+
+      // GPU presentation: the deck.
+      const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+      const page = await context.newPage();
+      const problems = watch(page);
+      await page.goto(`${url}next`);
+      // The elements the page was served with, before the deck moves them into the canvas.
+      await page.evaluate(() => { window.servedPress = document.querySelector(".live-row button"); });
+      await page.waitForFunction(() => window.nextDeck?.state().mode === "gpu", null, { timeout: 30_000 });
+      await page.evaluate(() => window.nextDeck.idle());
+      const snapshot = () => page.evaluate(() => {
+        const state = window.nextDeck.state();
+        return { mode: state.mode, reason: state.reason, layers: state.layers.map(layer => layer.id), captures: state.metrics.captures,
+          perLayer: Object.fromEntries(Object.entries(state.metrics.perLayer).map(([id, layer]) => [id, layer.captures])),
+          place: window.nextDeck.place(), deck: document.documentElement.classList.contains("deck"), errors: [...window.nextDeck.errors],
+          canvasShown: !document.querySelector('[data-underglass-host="output"]').hidden, scrollY };
+      });
+      const go = index => page.evaluate(value => window.nextDeck.go(value), index);
+      /** Scrolls to `position` sections down the track (1.5 is half way from the second section to the third). */
+      const scrub = position => page.evaluate(value => { scrollTo({ top: value * innerHeight, behavior: "instant" }); return window.nextDeck.idle(); }, position);
+      const status = () => page.locator('.live-row [role="status"]').innerText();
+
+      // It starts by itself, as the deck, with only the cover enrolled.
+      let state = await snapshot();
+      assert.deepEqual({ mode: state.mode, deck: state.deck, layers: state.layers, from: state.place.from, canvasShown: state.canvasShown },
+        { mode: "gpu", deck: true, layers: ["cover"], from: 0, canvasShown: true }, state.reason);
+      assert.equal(await page.locator("#deck-switch").getAttribute("aria-pressed"), "true");
+      assert.equal(await page.locator("#deck-layers").innerText(), "1");
+      assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById("pin")).position), "sticky");
+      await page.screenshot({ path: join(run, "next-deck-cover.png") });
+
+      // The second section, at rest: its two layers. The controls are the served elements, the GPU draws what they
+      // show now, and a real click lands on the button.
+      await go(1);
+      state = await snapshot();
+      assert.deepEqual(state.layers, ["dom", "dom-figure"]);
+      assert.equal(await page.evaluate(() => window.servedPress === document.querySelector(".live-row button")), true, "the served button is the one on stage");
+      const statusBox = await page.locator('.live-row [role="status"]').boundingBox();
+      const before = await page.screenshot({ clip: statusBox });
+      await page.getByLabel("Name").fill("Grace");
+      await page.getByRole("button", { name: "Press" }).click();
+      assert.equal(await status(), "Hello, Grace. Pressed 1 time.");
+      await page.evaluate(() => window.nextDeck.idle());
+      assert.equal(before.equals(await page.screenshot({ clip: statusBox })), false, "the GPU drew the new text");
+      // A parked section is not drawn and takes no hit, although it is stacked on the same place.
+      assert.equal(await page.evaluate(() => { const box = document.querySelector(".live-row button").getBoundingClientRect();
+        return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)?.closest("[data-section]")?.id; }), "dom-figure");
+      await page.screenshot({ path: join(run, "next-deck-dom.png") });
+
+      // Into the change to the third section: both sections are on stage, the leaving specimen is tilted, and a real
+      // click still lands on its button where it is drawn.
+      await page.evaluate(() => document.activeElement?.blur());
+      await scrub(1.26);
+      state = await snapshot();
+      assert.deepEqual(state.layers, ["dom", "dom-figure", "transitions", "transitions-figure"]);
+      assert.equal(state.place.to, 2);
+      const tilted = await page.evaluate(() => window.nextDeck.state().layers.find(layer => layer.id === "dom-figure").transform.tiltX);
+      assert.ok(tilted > 2, `the leaving specimen is tilted (${tilted})`);
+      await page.getByRole("button", { name: "Press" }).click();
+      assert.equal(await status(), "Hello, Grace. Pressed 2 times.");
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.screenshot({ path: join(run, "next-deck-change-early.png") });
+
+      // Scrolling through the change, forwards and backwards and across its middle, captures nothing. (The pointer is
+      // moved off the stage first: a control that passes under it changes its hover state, which is a repaint.)
+      await page.mouse.move(30, 880);
+      await scrub(1.3);
+      const captures = (await snapshot()).perLayer;
+      for (const position of [1.4, 1.5, 1.6, 1.7, 1.8, 1.6, 1.45, 1.3]) await scrub(position);
+      state = await snapshot();
+      assert.deepEqual(state.perLayer, captures, "scrolling through a change captured a layer");
+      assert.deepEqual(state.errors, []);
+      // (A screenshot hides the caret with a style of its own, which repaints the form: taken after the count.)
+      await scrub(1.5);
+      await page.screenshot({ path: join(run, "next-deck-change-middle.png") });
+      // Past the middle the arriving section takes the pointer: the leaving one, unseen by now, is out of its way.
+      await scrub(1.8);
+      assert.equal(await page.evaluate(() => { const box = document.querySelector("#transitions h2").getBoundingClientRect();
+        return document.elementFromPoint(box.x + 20, box.y + box.height / 2)?.closest("[data-section]")?.id; }), "transitions");
+
+      // A link to a section, a paging key and focus moving into a parked section each bring that section on stage.
+      await page.locator('.rail a[href="#shaders"]').click();
+      await page.waitForFunction(() => window.nextDeck.place().from === 4 && window.nextDeck.place().to === null);
+      await page.evaluate(() => window.nextDeck.idle());
+      state = await snapshot();
+      assert.deepEqual(state.layers, ["shaders", "shaders-figure"]);
+      await page.locator('.rail a[href="#shaders"][aria-current]').waitFor({ state: "attached" });
+      assert.equal(new URL(page.url()).hash, "#shaders");
+      await page.evaluate(() => document.activeElement?.blur());
+      await page.keyboard.press("PageDown");
+      await page.waitForFunction(() => window.nextDeck.place().from === 5 && window.nextDeck.place().to === null);
+      await page.keyboard.press("Home");
+      await page.waitForFunction(() => window.nextDeck.place().from === 0 && window.nextDeck.place().to === null);
+      await page.evaluate(() => { document.querySelector("#start a").focus(); return window.nextDeck.idle(); });
+      state = await snapshot();
+      assert.deepEqual([state.place.from, state.layers], [7, ["start", "start-figure"]]);
+      await page.screenshot({ path: join(run, "next-deck-start.png") });
+
+      // The readout's switch returns to ordinary DOM: the flow again, with the same section in the window and the
+      // form as it was. It switches back to the deck the same way.
+      await go(1);
+      await page.locator("#deck-switch").click();
+      await page.waitForFunction(() => window.nextDeck.state().mode === "dom" && !document.documentElement.classList.contains("deck"));
+      await page.evaluate(() => window.nextDeck.idle());
+      assert.equal(await status(), "Hello, Grace. Pressed 2 times.");
+      assert.equal(await page.getByLabel("Name").inputValue(), "Grace");
+      assert.equal(await page.evaluate(() => window.servedPress === document.querySelector(".live-row button")), true);
+      assert.equal(await page.evaluate(() => { const box = document.getElementById("dom").getBoundingClientRect(); return box.top >= 0 && box.bottom <= innerHeight; }), true, "the section is in the window in the flow");
+      assert.equal(await page.locator("#deck-switch").getAttribute("aria-pressed"), "false");
+      await page.locator("#deck-switch").click();
+      await page.waitForFunction(() => window.nextDeck.state().mode === "gpu", null, { timeout: 30_000 });
+      await page.evaluate(() => window.nextDeck.idle());
+      state = await snapshot();
+      assert.deepEqual({ deck: state.deck, from: state.place.from, layers: state.layers, errors: state.errors }, { deck: true, from: 1, layers: ["dom", "dom-figure"], errors: [] });
+      assert.equal(await status(), "Hello, Grace. Pressed 2 times.");
+      assert.deepEqual(problems, [], "the deck reported problems");
+      await context.close();
+
+      // A window too short for the deck keeps the flow in ordinary DOM, and says why.
+      const short = await browser.newContext({ viewport: { width: 1280, height: 520 } });
+      const shortPage = await short.newPage();
+      const shortProblems = watch(shortPage);
+      await shortPage.goto(`${url}next`);
+      await shortPage.waitForFunction(() => window.nextDeck);
+      await shortPage.waitForTimeout(500);
+      assert.equal(await shortPage.evaluate(() => window.nextDeck.state().mode), "dom");
+      assert.equal(await shortPage.locator("#deck-note").textContent(), "GPU presentation needs a taller window.");
+      assert.equal(await shortPage.locator("#deck-switch").isDisabled(), true);
+      assert.deepEqual(shortProblems, [], "the short window reported problems");
+      await short.close();
+
+      // With reduced motion the deck still runs: the sections fade, and nothing is moved or tilted.
+      const calm = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
+      const calmPage = await calm.newPage();
+      const calmProblems = watch(calmPage);
+      await calmPage.goto(`${url}next`);
+      await calmPage.waitForFunction(() => window.nextDeck?.state().mode === "gpu", null, { timeout: 30_000 });
+      await calmPage.evaluate(() => { scrollTo({ top: 1.3 * innerHeight, behavior: "instant" }); return window.nextDeck.idle(); });
+      const calmLayers = await calmPage.evaluate(() => window.nextDeck.state().layers.map(layer => ({ id: layer.id, ...layer.transform })));
+      assert.equal(calmLayers.length, 4);
+      // A layer either fades in place or, unseen, is shrunk out of the pointer's way: none is moved or tilted.
+      for (const layer of calmLayers) assert.deepEqual(Object.keys(layer).filter(key => !["id", "opacity", ...(layer.opacity === 0 ? ["scaleX", "scaleY"] : [])].includes(key)), [], `${layer.id} only fades`);
+      assert.equal(await calmPage.evaluate(() => window.nextDeck.state().mode), "gpu");
+      assert.deepEqual(calmProblems, [], "reduced motion reported problems");
+      await calm.close();
     } finally { await browser.close(); }
     result.next = "passed";
   }
