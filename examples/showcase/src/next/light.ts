@@ -37,6 +37,8 @@ export function createLight(controller: CanvasController, element: HTMLElement, 
   const drawn = { x: 0, y: 0, lamp: 0 };
   let written = "";
   addEventListener("pointermove", event => {
+    // A finger hides what is under it, and lifts: the lamp is for a pointer that hovers.
+    if (event.pointerType === "touch") return;
     const stage = element.offsetParent?.getBoundingClientRect();
     if (!stage) return;
     pointer.x = event.clientX - stage.left; pointer.y = event.clientY - stage.top;

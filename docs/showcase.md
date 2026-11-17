@@ -119,13 +119,25 @@ The header, the side scale and the footer are static markup outside the root.
   is served: a CSS grid with one row per section, at least a window tall on a wide
   screen and a single column on a narrow one (a phone). Nothing is enrolled as a
   layer. Sections start at the same height in their rows, as slides do.
-- **The deck** is the page with GPU presentation. `html.deck` makes the stage stick to
-  the window under the header, with every section in its one row, while a track one
-  window tall per section scrolls past. `src/next/deck.ts` reads the scroll position:
-  around each section's place is a rest band (14% of a window each way) where that
-  section is alone on stage and untransformed; between two bands both sections are on
-  stage and the driver runs the change between them. With reduced motion every
-  change is a fade.
+- **The deck** is the page with GPU presentation, at every window size, a phone's
+  included. `html.deck` makes the stage stick to the window, with every section in the
+  one grid cell, while a track scrolls past, and `src/next/deck.ts` reads the scroll
+  position. The deck is the flow with the crossing from one section to the next
+  replaced by a change:
+  - A section taller than the stage **pans**. While the scroll position is inside the
+    section's own length, the section moves up the stage exactly as the flow would
+    scroll it, by its matrix (`setTransform`), on whole pixels. A section that fits
+    the stage does not pan.
+  - Then comes one window of scrolling for the change to the next section. At each
+    end of it is a rest band (14% of a window) where one section is alone on stage and
+    interactive; between the bands both sections are on stage and the driver runs the
+    change between them. With reduced motion every change is a fade.
+  - The track is as long as the sections' pans and the changes together, which is the
+    length of the flow. The driver measures it (parked sections are laid out for the
+    measurement, with nothing painted meanwhile) and sets it as `--track`.
+  - In one column (a window 920 px wide or less) the specimen is under its text. In
+    the flow that is the next grid row. In the deck, with every section in one cell,
+    the driver tells each specimen the height of the text above it (`--above`).
 
 ### The background and the light
 
@@ -205,10 +217,19 @@ Rules the deck keeps, most of them from the [probe](showcase-deck-probe.md):
   later, twice at most in half a minute.
 - Nothing overlays the stage: the header and the side scale sit beside it, so the
   admission probe is never covered.
-- The deck needs a window at least 1180 px wide in which every section fits the stage
-  (about 650 px tall at 1366 px wide; type and spacing scale with the window's height
-  there). Otherwise the page stays the flow, and the readout says why. The stage is
-  the window under the header and beside the side scale, at most 2560 CSS px wide.
+- On a wide screen the stage is the window under the fixed header and beside the side
+  scale, at most 2560 CSS px wide. Below 1180 px the header scrolls away with the
+  page, as in the flow, and the stage is the whole window; only the header's links
+  take the pointer there, so the admission probe in the stage's corner is not covered.
+- The tilt needs every layer inside the stage (the stage cuts a flat layer off at its
+  edge, but not a tilted one). Where a section is taller than the stage or has panned,
+  that change is the flat `slide` instead.
+- A parked section has no height and is clipped (`overflow: clip`), so that it does
+  not reach past the stage. Not `overflow: hidden`: a box with hidden overflow scrolls
+  when focus moves into it, and a scroll inside the root that is not a layer's ends
+  GPU presentation.
+- Page Up, Page Down and Space page through a section that is taller than the stage,
+  and jump from its end.
 - The frame loop never calls `controller.state()`: it copies every metric and measures
   every layer. The driver keeps the mode from `onStatusChange`, and the readout reads
   the state twice a second.
@@ -219,10 +240,22 @@ APIs the deck starts by itself; a visitor who switches it off stays in the flow 
 the rest of the session (`sessionStorage`, `underglass-deck`).
 
 Not built yet: the live transitions section, changes that displace pixels with custom
-WGSL (a custom effect changes colour and alpha only), sections taller than the stage, a deck for
-phones and other touch screens (they get the flow in ordinary DOM), and scroll
-snapping. In the deck, the browser's find-in-page can match text in a parked
-section, which is not painted.
+WGSL (a custom effect changes colour and alpha only), and scroll snapping. In the
+deck, the browser's find-in-page can match text in a parked section, which is not
+painted.
+
+**Not tried on a real phone.** The deck on a phone is checked in Chrome's emulation
+on a desktop: a 390 by 780 window at three device pixels per pixel, with touch. That
+proves the layout, the panning, taps and the changes. It does not prove a finger's
+scrolling (a synthesised touch gesture does not scroll the emulated page at all, in
+either presentation), the browser's toolbar hiding and showing, or the memory a
+phone's GPU has for layers that are several screens of pixels (the capture budget is
+16 million pixels; a refusal leaves the flow in ordinary DOM).
+
+On a narrow window that is taller than a section (a tablet held upright), the flow
+shows the start of the next section under a short one and the deck does not, and
+the two are at different scroll positions; the change of layout keeps the section in
+place.
 
 ### The first load
 
@@ -237,11 +270,10 @@ The first frame needs one request, the HTML (about 10 kB compressed), and no scr
 - The stylesheet is **in the HTML**: `inline-css.ts`, another plugin, replaces the
   page's stylesheet link with a `<style>` element. The page loads no font and no image.
 - The entry script, `src/next/main.ts`, is about 1 kB and only decides what to load:
-  - `gpu.tsx` where the deck can run: a browser with the APIs, unless it is a narrow
-    window with a coarse pointer (a phone has the APIs in Chrome, but no window the
-    deck fits; a desktop window can be made wider). It adopts the prerendered hosts
-    (`createCanvasHosts`), hydrates with `mountCanvasApp({ hydrate: true })` and starts
-    the deck. About 258 kB of JavaScript, compressed.
+  - `gpu.tsx` in a browser with the APIs, at any window size. It adopts the
+    prerendered hosts (`createCanvasHosts`), hydrates with
+    `mountCanvasApp({ hydrate: true })` and starts the deck. About 260 kB of
+    JavaScript, compressed.
   - `dom.tsx` everywhere else: React alone hydrates the same markup, in the root
     container the hosts were served with, and the Underglass runtime is never
     requested. About 81 kB.
@@ -249,10 +281,11 @@ The first frame needs one request, the HTML (about 10 kB compressed), and no scr
 **Starting GPU presentation changes no pixel of the stage.** Three things make that so
 (`next.css`), and `npm run test:showcase` compares the pixels:
 
-- The flow and the deck put a section at the same place. On a wide screen the flow's
-  top margin is the deck's plus the header, so where the deck fits every row of the
-  flow is one window tall, like the deck's track, and the scroll position is the same
-  in both.
+- The flow and the deck put a section at the same place, at the same scroll
+  position. A section has the same margins in both (on a wide screen the flow's top
+  margin is the deck's plus the header the stage starts under), a row of the flow is
+  as long as the section's pan and its change together, and the deck pans a section
+  as the flow scrolls it.
 - Every layer is on whole device pixels, with a size in whole pixels. The GPU draws a
   layer on whole pixels, so a layer between two pixels in ordinary DOM would have its
   text move by one. Whatever places a layer (the gutters, the gap, the first column,
@@ -272,8 +305,8 @@ readout's own text in the header.
 `npm run test:showcase` checks the served HTML (the content, the inlined stylesheet,
 the small entry script) and the page without JavaScript; the flow at a desktop and a
 phone width (hydration, the controls, no sideways scroll); the React-only path in a
-browser without the APIs and on a phone (the driver is not loaded and the scripts are
-under 400 kB uncompressed); and the deck: it starts by itself, the GPU draws what a
+browser without the APIs (the driver is not loaded and the scripts are under 400 kB
+uncompressed); and the deck: it starts by itself, the GPU draws what a
 control shows after it changes, a real click lands on a button in a tilted layer,
 scrolling through a change captures nothing (the tilt and an effect change), every
 change runs with GPU presentation staying on and its chains gone at the next rest, the
@@ -283,7 +316,11 @@ a link jumps with one change in about a second, the lamp lights the background u
 the pointer and goes out off the stage, a resize keeps the place part way through a
 change, a destroyed GPU device is followed by a return to GPU presentation, the switch
 returns to the flow and back with the form's state kept and no pixel of the stage
-changed, a short window keeps the flow, and reduced motion only fades.
+changed, and reduced motion only fades. In a short desktop window and on an emulated
+phone it also checks that a tall section pans by exactly the scroll distance with no
+capture, that the change follows the pan, that a click or a tap lands on a button far
+down a panned section, and that ordinary DOM is the same picture at the same scroll
+position.
 
 ## Pages, search and social metadata
 

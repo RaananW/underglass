@@ -32,6 +32,8 @@ export interface Pose { transform: Transform; parameters?: Record<string, number
 export interface Transition {
   /** Shown in the readout while the change runs. */
   name: string;
+  /** The change tilts a layer, so every layer must be inside the stage: the driver runs `slide` instead where one is not. */
+  needsRoom?: boolean;
   /** The effect chain the layer carries through the change; without it the change is matrices only. */
   chain?(layer: StageLayer): EffectDescriptor[];
   frame(t: number, layer: StageLayer): Pose;
@@ -141,7 +143,7 @@ export const transitions: readonly Transition[] = [
   // The texts change places in turn, so they never read through each other. The specimens overlap: the one leaving
   // tilts back into the stage (a tilted layer is not clipped by the stage, so it rises no further than the room above
   // it) while the next comes up over it, flat, from below.
-  { name: "tilt",
+  { name: "tilt", needsRoom: true,
     frame(t, layer) {
       if (!layer.figure) {
         const out = clamp(t / 0.5), into = clamp((t - 0.5) / 0.5);
@@ -187,6 +189,26 @@ export const transitions: readonly Transition[] = [
     chain: layer => custom(exposure, { amount: layer.leaving ? 0 : 1 }),
     frame: (t, layer) => ({ transform: still, parameters: [{ amount: round(layer.leaving ? clamp(t / 0.5) : 1 - clamp((t - 0.5) / 0.5)) }] }) },
 ];
+
+/**
+ * The tilt's stand-in where a section is taller than the stage, or has panned: matrices only and flat, so the stage
+ * may cut the layers off. The texts change places in turn and the specimens cross, one sinking as the next comes up.
+ */
+export const slide: Transition = {
+  name: "slide",
+  frame(t, layer) {
+    if (!layer.figure) {
+      const out = clamp(t / 0.5), into = clamp((t - 0.5) / 0.5);
+      return { transform: layer.leaving ? { y: round(-48 * ease(out)), opacity: round(1 - out) } : { y: round(56 * (1 - ease(into))), opacity: round(into) } };
+    }
+    if (layer.leaving) {
+      const away = ease(clamp(t / 0.7));
+      return { transform: { y: round(-64 * away), scaleX: round(1 - 0.06 * away), scaleY: round(1 - 0.06 * away), opacity: round(1 - clamp((t - 0.25) / 0.4)) } };
+    }
+    const up = ease(clamp((t - 0.2) / 0.8));
+    return { transform: { y: round(140 * (1 - up)), scaleX: round(0.94 + 0.06 * up), scaleY: round(0.94 + 0.06 * up), opacity: round(clamp((t - 0.2) / 0.3)) } };
+  },
+};
 
 /** With reduced motion every change is this one: the sections fade, one after the other, and nothing moves. */
 export const fade: Transition = {
