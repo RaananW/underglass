@@ -97,6 +97,28 @@ The default base is `/underglass/`. Override `CANVAS_SHOWCASE_BASE` with an abso
 directory path ending in `/` for a different project/domain (in Git Bash on Windows, also set
 `MSYS2_ENV_CONV_EXCL=CANVAS_SHOWCASE_BASE`, or Git Bash turns `/` into a Windows path).
 
+## The preview home page (`/next`)
+
+`next.html` is the next home page, built beside the current one until it replaces it.
+It is `noindex`, its canonical URL is the home page, and it is not in the sitemap.
+`src/next/page.tsx` is a flowing document of eight sections, each making one claim
+about the framework (the DOM stays the DOM, page transitions, motion, shaders,
+components, ordinary DOM everywhere, getting started) beside a "specimen" panel of
+ordinary HTML: real controls, tables and code. `src/next/next.css` is its whole
+stylesheet (near-black ground, engraved type, hairline rules and one indicator
+colour); the page loads none of the gallery's CSS or JavaScript.
+
+The page is **prerendered**: `prerender.ts`, a Vite plugin, loads
+`src/next/prerender.tsx` in Node when the site is built (or served by the dev server)
+and writes the page's markup into `next.html`, and `src/next/main.tsx` hydrates it. So
+the text is in the file a browser, a crawler or an agent is served, and the page is
+readable before any script runs.
+
+It is plain React today. GPU presentation, the scroll-driven deck
+([probe](showcase-deck-probe.md)) and the live transitions are added to this page in
+later steps; `npm run test:showcase` checks the served HTML, hydration, the controls
+and that nothing scrolls sideways at a desktop and a phone width.
+
 ## Pages, search and social metadata
 
 The base is the home page, whose stage shows the hero scene; each example has its own

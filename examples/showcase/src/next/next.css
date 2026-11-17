@@ -1,0 +1,207 @@
+/*
+ * The preview home page (`/next`). An "optical instrument": near-black ground, engraved white type, hairline rules and
+ * one indicator colour. No decoration that is not a rule, a scale or a pane of glass. System fonts only.
+ * The page is a flowing document: each section is at least one viewport tall on a wide screen and stacks on a narrow one.
+ */
+:root {
+  --ground: #07080a; --panel: #0d0f13; --panel-raised: #13161b;
+  --rule: rgb(255 255 255 / 9%); --rule-strong: rgb(255 255 255 / 20%);
+  --text: #eceef2; --dim: #a3aab6; --quiet: #7d8590;
+  --signal: #ff5a36; --signal-wash: rgb(255 90 54 / 12%);
+  --display: "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+  --gutter: clamp(20px, 5vw, 88px);
+  --rail: 0px;
+  color-scheme: dark;
+  font-family: var(--display); font-synthesis: none; -webkit-font-smoothing: antialiased;
+  color: var(--text); background: var(--ground);
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; }
+a { color: inherit; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+code { font-family: var(--mono); font-size: .92em; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip { position: absolute; left: 16px; top: -100px; z-index: 10; padding: 10px 14px; background: var(--text); color: var(--ground); border-radius: 6px; }
+.skip:focus { top: 12px; }
+
+/* ---------- Header, side scale, footer ---------- */
+.top { position: absolute; z-index: 3; inset: 0 0 auto 0; display: flex; align-items: center; justify-content: space-between; gap: 24px;
+  height: 72px; padding-inline: var(--gutter); padding-left: calc(var(--gutter) + var(--rail)); }
+.top a { text-decoration: none; }
+.top nav { display: flex; gap: clamp(14px, 2.4vw, 32px); font-size: 14px; color: var(--dim); }
+.top nav a:hover { color: var(--text); }
+.brand { display: inline-flex; align-items: center; gap: 12px; font-weight: 650; font-size: 18px; letter-spacing: -.02em; }
+/* The mark: three panes of glass, one of them lit. */
+.mark { position: relative; display: inline-block; width: 26px; height: 24px; flex: none; }
+.mark i { position: absolute; left: 0; top: 0; width: 17px; height: 13px; border: 1.5px solid var(--text); border-radius: 3px; background: var(--ground); }
+.mark i:nth-child(2) { left: 4.5px; top: 5.5px; }
+.mark i:nth-child(3) { left: 9px; top: 11px; border-color: var(--signal); background: var(--signal); }
+
+.rail { display: none; }
+@media (min-width: 1180px) {
+  :root { --rail: 72px; }
+  /* A graduated scale down the left edge: one numbered mark per section. */
+  .rail { display: block; position: fixed; z-index: 2; inset: 0 auto 0 0; width: var(--rail); border-right: 1px solid var(--rule);
+    background: repeating-linear-gradient(to bottom, var(--rule) 0 1px, transparent 1px 12px) right / 7px 100% no-repeat; }
+  .rail ol { list-style: none; margin: 0; padding: 0; height: 100%; display: flex; flex-direction: column; justify-content: center; gap: 22px; }
+  .rail a { position: relative; display: block; padding: 4px 0 4px 20px; font: 11px/1 var(--mono); letter-spacing: .08em; text-decoration: none;
+    color: transparent; white-space: nowrap; }
+  .rail a span { margin-right: 12px; color: var(--quiet); }
+  .rail a::after { content: ""; position: absolute; right: 0; top: 50%; width: 14px; height: 1px; background: var(--rule-strong); }
+  .rail a:hover, .rail a:focus-visible { color: var(--text); }
+  .rail a:hover span, .rail a[aria-current] span { color: var(--signal); }
+  .rail a[aria-current]::after { background: var(--signal); width: 24px; }
+  /* The name appears beside the number, over the page, when a mark is pointed at. */
+  .rail a:hover, .rail a:focus-visible { z-index: 1; width: max-content; padding-right: 14px; background: var(--ground); }
+  .rail a:hover::after, .rail a:focus-visible::after { display: none; }
+}
+.bottom { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; padding: 32px var(--gutter); padding-left: calc(var(--gutter) + var(--rail));
+  border-top: 1px solid var(--rule); color: var(--dim); font-size: 14px; }
+.bottom span { display: inline-flex; align-items: center; gap: 12px; }
+.bottom span:last-child { gap: 22px; }
+.bottom a { text-decoration: none; }
+.bottom a:hover { color: var(--text); }
+
+/* ---------- Sections ---------- */
+.slide { position: relative; display: grid; align-items: center; min-height: 100svh; padding: 112px var(--gutter) 80px; padding-left: calc(var(--gutter) + var(--rail)); }
+.slide + .slide { border-top: 1px solid var(--rule); }
+.slide-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: clamp(32px, 6vw, 96px); align-items: center;
+  width: 100%; max-width: 1240px; margin-inline: auto; }
+/* The cover: the headline runs across the page, with the text and the figure under it. */
+.cover { width: 100%; max-width: 1240px; margin-inline: auto; }
+.cover h1 { font-size: clamp(44px, 6.9vw, 104px); margin-bottom: clamp(28px, 3.6vw, 52px); }
+.cover .slide-grid { align-items: start; }
+.slide-text > :first-child { margin-top: 0; }
+.slide-text > :last-child { margin-bottom: 0; }
+.label { display: flex; align-items: center; gap: 14px; margin: 0 0 28px; font: 12px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+.label-number { color: var(--signal); }
+.label::after { content: ""; flex: 0 1 56px; height: 1px; background: var(--rule-strong); }
+h1, h2 { margin: 0 0 28px; font-weight: 640; text-wrap: balance; }
+h1 { font-size: clamp(44px, 6.4vw, 96px); line-height: .96; letter-spacing: -.045em; }
+h2 { font-size: clamp(32px, 4.1vw, 60px); line-height: 1.02; letter-spacing: -.036em; }
+h3 { margin: 36px 0 14px; font: 12px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); font-weight: 400; }
+/* The second line of the headline: light falling off across glass, and a lit full stop. */
+.glass { background: linear-gradient(100deg, #ffffff 10%, #8b93a1 95%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.glass i { font-style: normal; color: var(--signal); -webkit-text-fill-color: var(--signal); }
+.lede { max-width: 52ch; margin: 0 0 28px; font-size: clamp(17px, 1.35vw, 20px); line-height: 1.55; color: var(--dim); text-wrap: pretty; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 24px; }
+.button { display: inline-flex; align-items: center; min-height: 46px; padding: 0 22px; border: 1px solid var(--rule-strong); border-radius: 8px;
+  font-weight: 600; font-size: 15px; text-decoration: none; }
+.button:hover { border-color: var(--text); }
+.button.primary { background: var(--signal); border-color: var(--signal); color: #120703; }
+.button.primary:hover { background: #ff7150; border-color: #ff7150; }
+.install { margin: 0 0 20px; }
+.install code { display: inline-block; padding: 10px 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); font-size: 14px; color: var(--text); }
+.install code::before { content: "$ "; color: var(--quiet); }
+.chip { display: flex; align-items: center; gap: 10px; margin: 0; font: 12px/1.5 var(--mono); color: var(--quiet); }
+.chip i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 0 4px var(--signal-wash); }
+.facts { list-style: none; margin: 0 0 24px; padding: 0; max-width: 56ch; border-top: 1px solid var(--rule); }
+.facts li { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr); gap: 4px 20px; padding: 14px 0; border-bottom: 1px solid var(--rule); font-size: 15px; line-height: 1.5; }
+.facts strong { font-weight: 600; }
+.facts span { color: var(--dim); }
+.links { display: flex; flex-wrap: wrap; gap: 10px 24px; margin: 0 0 8px; font-size: 15px; }
+.links a { text-decoration: none; border-bottom: 1px solid var(--signal); padding-bottom: 2px; }
+.links a:hover { color: var(--signal); }
+.note { max-width: 56ch; margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--quiet); }
+
+/* ---------- Specimens: the panel beside each section's text ---------- */
+.specimen { position: relative; margin: 0; min-width: 0; border: 1px solid var(--rule); border-radius: 14px;
+  background: linear-gradient(180deg, var(--panel-raised), var(--panel)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%), 0 40px 80px -40px #000; }
+/* Corner marks, as on a slide under a microscope. */
+.specimen::before, .specimen::after { content: ""; position: absolute; width: 14px; height: 14px; border: solid var(--rule-strong); pointer-events: none; }
+.specimen::before { left: -7px; top: -7px; border-width: 1px 0 0 1px; }
+.specimen::after { right: -7px; bottom: -7px; border-width: 0 1px 1px 0; }
+.specimen figcaption { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid var(--rule);
+  font: 11px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--quiet); }
+.specimen figcaption span { color: var(--signal); white-space: nowrap; }
+.specimen-body { padding: clamp(18px, 2.4vw, 28px); }
+.specimen-body > :first-child { margin-top: 0; }
+.specimen-body > :last-child { margin-bottom: 0; }
+
+/* Cover: three panes, each lying a little further down and to the right. */
+.stack { list-style: none; margin: 0; padding: clamp(18px, 2.4vw, 28px); display: grid; gap: 12px; }
+.stack li { position: relative; padding: 14px 18px 14px 58px; border: 1px solid var(--rule); border-radius: 10px; background: rgb(255 255 255 / 2.5%); }
+.stack li:nth-child(2) { margin-left: clamp(0px, 2vw, 28px); }
+.stack li:nth-child(3) { margin-left: clamp(0px, 4vw, 56px); border-color: rgb(255 90 54 / 45%); background: var(--signal-wash); }
+.stack span { position: absolute; left: 18px; top: 17px; font: 12px/1 var(--mono); color: var(--signal); }
+.stack strong { display: block; margin-bottom: 6px; font-weight: 600; }
+.stack p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--dim); }
+.stack code { color: var(--text); }
+
+/* The form of real controls. */
+.live-form { display: grid; gap: 16px; }
+.live-form label { display: grid; gap: 7px; font: 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--quiet); }
+.live-form input:not([type]), .live-form select { min-height: 42px; padding: 0 12px; border: 1px solid var(--rule-strong); border-radius: 8px; background: var(--ground);
+  font: 15px var(--display); letter-spacing: 0; text-transform: none; color: var(--text); }
+.live-form .live-range { grid-template-columns: 1fr auto; align-items: center; }
+.live-form .live-range input { grid-column: 1; width: 100%; accent-color: var(--signal); }
+.live-form .live-range output { grid-column: 2; grid-row: 2; min-width: 3ch; text-align: right; font-size: 13px; color: var(--text); }
+.live-form .live-range { grid-template-rows: auto auto; }
+.live-form .live-check { display: flex; align-items: center; gap: 10px; font: 14px var(--display); letter-spacing: 0; text-transform: none; color: var(--dim); }
+.live-form .live-check input { width: 16px; height: 16px; accent-color: var(--signal); }
+.live-row { display: flex; align-items: center; gap: 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.live-row button { min-height: 40px; padding: 0 18px; border: 1px solid var(--rule-strong); border-radius: 8px; background: var(--panel-raised); font-weight: 600; cursor: pointer; }
+.live-row button:hover { border-color: var(--text); }
+.live-row button:active { background: var(--signal-wash); border-color: var(--signal); }
+.live-row p { margin: 0; font-size: 14px; color: var(--dim); }
+
+/* Comparison tables. */
+.compare { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.45; }
+.compare th, .compare td { padding: 12px 14px 12px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.compare tr:last-child > * { border-bottom: 0; }
+.compare thead th { padding-top: 0; font: 11px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--quiet); font-weight: 400; }
+.compare thead th:last-child { color: var(--signal); }
+.compare tbody th { width: 26%; font: 11px/1.6 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--quiet); font-weight: 400; }
+.compare td { color: var(--dim); }
+.compare td:last-child { color: var(--text); padding-right: 0; }
+.compare td[colspan] { color: var(--text); }
+
+/* The frame pipeline: four stages struck out, one lit. */
+.pipeline { list-style: none; margin: 0 0 20px; padding: 0; display: grid; gap: 6px; }
+.pipeline li { display: flex; justify-content: space-between; gap: 16px; padding: 10px 14px; border: 1px solid var(--rule); border-radius: 8px; font-size: 14px; }
+.pipeline em { font: 11px/1.6 var(--mono); letter-spacing: .08em; text-transform: uppercase; font-style: normal; color: var(--quiet); }
+.pipeline .skipped span { color: var(--quiet); text-decoration: line-through; text-decoration-color: var(--rule-strong); }
+.pipeline .done { border-color: rgb(255 90 54 / 45%); background: var(--signal-wash); }
+.pipeline .done em { color: var(--signal); }
+
+/* Code. */
+.code { margin: 0; padding: 18px 20px; overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--ground);
+  font: 12.5px/1.65 var(--mono); font-variant-ligatures: none; color: #d6dae1; tab-size: 2; }
+.code code { font-size: inherit; }
+.code .comment { color: var(--quiet); }
+.specimen-body > .code:only-child { border: 0; padding: 0; background: none; }
+
+/* The four levels, as steps. */
+.levels { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; counter-reset: level; }
+.levels li { display: grid; grid-template-columns: 8.5em minmax(0, 1fr); gap: 16px; align-items: baseline; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 8px; }
+.levels li:nth-child(2) { margin-left: 3%; }
+.levels li:nth-child(3) { margin-left: 6%; }
+.levels li:nth-child(4) { margin-left: 9%; border-color: rgb(255 90 54 / 45%); background: var(--signal-wash); }
+.levels span { font: 12px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--text); }
+.levels li:nth-child(4) span { color: var(--signal); }
+.levels p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--dim); }
+
+/* The examples, as an index. */
+.examples { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; max-width: 56ch; }
+.examples a { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 14.5px; text-decoration: none; }
+.examples a span { font: 11px/1.8 var(--mono); color: var(--quiet); }
+.examples a:hover { color: var(--signal); }
+
+/* ---------- Narrow screens: one column, sections as tall as their content ---------- */
+@media (max-width: 920px) {
+  .slide { min-height: 0; padding-block: 96px 64px; }
+  .slide-cover { min-height: 100svh; }
+  .slide-grid { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  .facts li { grid-template-columns: minmax(0, 1fr); }
+  .top nav a:nth-child(-n+2) { display: none; }
+  .levels li { grid-template-columns: minmax(0, 1fr); gap: 6px; margin-left: 0 !important; }
+  .stack li { margin-left: 0 !important; }
+}
+@media (max-width: 420px) {
+  .examples { grid-template-columns: minmax(0, 1fr); }
+  .compare tbody th { width: 30%; }
+}
