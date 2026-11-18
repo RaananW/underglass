@@ -155,6 +155,36 @@ whatever the stage's size: the shader computes the light. With the pointer off t
 stage it draws nothing, so the stage is then exactly what ordinary DOM shows, and no
 frame is drawn while nothing moves.
 
+### The live demonstration
+
+The "Transitions" section shows what it says. Its specimen is one panel (the
+comparison with View Transitions), and a second panel lies in the same place: both
+are direct children of the root, so both are layers. Controls in the section's text
+turn one into the other: seven buttons pick the change, a slider scrubs it, and Play
+runs it on the clock in 1.3 s.
+
+- `src/next/demo.ts` is the demonstration's state: `t` from 0 (the first panel) to 1
+  (the second), and which change. It imports nothing of Underglass.
+- While the section is at rest, the deck's driver poses the two panels from that
+  state with the same changes it runs between sections (`transitions.ts`): the first
+  panel is the leaving layer and the second the arriving one. At either end the
+  other panel is hidden by its matrix.
+- Each panel has a clock that counts in tenths of a second, to show that neither is
+  a picture while it changes. The clocks start at the first use of the controls and
+  count only while the section is at rest on stage, so a page nobody touches
+  repaints nothing.
+- The controls are in the section's text, another layer, so they go on working while
+  the panels carry an effect (a layer with an effect takes no input).
+- When the section leaves its rest part way through a change, the demonstration
+  settles on the nearer panel, and the other stays hidden through the section's own
+  change.
+- In ordinary DOM the panel that is not showing is `visibility: hidden`, and the
+  panels swap at the middle of the slider. On the GPU no class changes while the
+  slider moves.
+- In one column a section's text and its specimen are two grid rows. The rows are
+  named (`--row`), so that the second panel shares its specimen's row, and in the
+  deck the driver gives it the specimen's height (`--match`).
+
 ### The changes between sections
 
 `src/next/transitions.ts` has one change per boundary, each a different thing the GPU
@@ -239,7 +269,7 @@ stage, the captures so far and the runtime's work per frame. Where the browser h
 APIs the deck starts by itself; a visitor who switches it off stays in the flow for
 the rest of the session (`sessionStorage`, `underglass-deck`).
 
-Not built yet: the live transitions section, changes that displace pixels with custom
+Not built yet: changes that displace pixels with custom
 WGSL (a custom effect changes colour and alpha only), and scroll snapping. In the
 deck, the browser's find-in-page can match text in a parked section, which is not
 painted.
@@ -316,7 +346,11 @@ a link jumps with one change in about a second, the lamp lights the background u
 the pointer and goes out off the stage, a resize keeps the place part way through a
 change, a destroyed GPU device is followed by a return to GPU presentation, the switch
 returns to the flow and back with the form's state kept and no pixel of the stage
-changed, and reduced motion only fades. In a short desktop window and on an emulated
+changed, and reduced motion only fades. For the live demonstration it checks that the
+slider puts the chosen change's effect on both panels, that another change picked
+part way through takes over, that the second panel's button takes a click, that Play
+runs the change back, that scrolling on settles it, and that in ordinary DOM the
+panels swap at the middle. In a short desktop window and on an emulated
 phone it also checks that a tall section pans by exactly the scroll distance with no
 capture, that the change follows the pan, that a click or a tap lands on a button far
 down a panned section, and that ordinary DOM is the same picture at the same scroll

@@ -199,6 +199,7 @@ try {
     for (const host of ["output", "ordinary", "overlay"]) assert.match(served, new RegExp(`data-underglass-host="${host}"`), host);
     assert.match(served, /href="\/underglass\/examples\/instrument"/);
     assert.match(served, /<div id="backdrop" class="backdrop" aria-hidden="true">/);
+    assert.match(served, /<figure class="specimen second unseen" id="transitions-second"/);
     // The first frame needs the HTML alone: the stylesheet is in it, and the one script it names only decides what to load.
     assert.doesNotMatch(served, /<link rel="stylesheet"/);
     assert.match(served, /<style>[^<]*--ground:/);
@@ -277,6 +278,13 @@ try {
           assert.ok(bytes > 100_000 && bytes < 400_000, `${name}: ${bytes} bytes of script (React and the page, not the runtime)`);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, `${name}: sideways scroll`);
           if (name === "no APIs") {
+            // The live demonstration without the GPU: the panels swap at the middle of the slider, and their clocks count.
+            await page.locator("#demo-scrub").fill("60");
+            assert.deepEqual(await page.evaluate(() => ["transitions-figure", "transitions-second"].map(id => getComputedStyle(document.getElementById(id)).visibility)), ["hidden", "visible"]);
+            assert.equal(await page.getByRole("button", { name: "burn", exact: true }).isDisabled(), true);
+            await page.waitForFunction(() => document.querySelector("#transitions-second [data-demo-clock]").textContent !== "00:00.0");
+            await page.locator("#demo-scrub").fill("0");
+            assert.deepEqual(await page.evaluate(() => ["transitions-figure", "transitions-second"].map(id => getComputedStyle(document.getElementById(id)).visibility)), ["visible", "hidden"]);
             assert.equal(await page.locator("#deck-note").textContent(), "GPU presentation needs Chrome or Edge 157 or later. This is the same page as ordinary DOM.");
             assert.equal(await page.locator("#deck-switch").isDisabled(), true);
             await page.locator("#shaders").scrollIntoViewIfNeeded();
@@ -407,7 +415,7 @@ try {
       await page.evaluate(() => document.activeElement?.blur());
       await scrub(1.26);
       state = await snapshot();
-      assert.deepEqual(state.layers, ["dom", "dom-figure", "transitions", "transitions-figure"]);
+      assert.deepEqual(state.layers, ["dom", "dom-figure", "transitions", "transitions-figure", "transitions-second"]);
       assert.equal(state.place.to, 2);
       const tilted = await page.evaluate(() => window.nextDeck.state().layers.find(layer => layer.id === "dom-figure").transform.tiltX);
       assert.ok(tilted > 2, `the leaving specimen is tilted (${tilted})`);
@@ -432,6 +440,46 @@ try {
       await scrub(1.8);
       assert.equal(await page.evaluate(() => { const box = document.querySelector("#transitions h2").getBoundingClientRect();
         return document.elementFromPoint(box.x + 20, box.y + box.height / 2)?.closest("[data-section]")?.id; }), "transitions");
+
+      // The live demonstration in the "Transitions" section: two panels in one place, each a layer of its own. At rest
+      // the second is hidden. The slider scrubs the chosen change between them, both carrying its effect, and their
+      // clocks count from the first use of the controls. At the end the second panel is the one shown, and its own
+      // button takes a real click. Play runs the change back on the clock.
+      await go(2);
+      const panels = () => page.evaluate(() => {
+        const layers = window.nextDeck.state().layers, shown = id => layers.find(layer => layer.id === id).transform.scaleX === 0.01 ? "hidden" : "shown";
+        return [shown("transitions-figure"), shown("transitions-second")];
+      });
+      assert.deepEqual([(await snapshot()).layers, await panels()], [["transitions", "transitions-figure", "transitions-second"], ["shown", "hidden"]]);
+      await page.getByRole("button", { name: "iris", exact: true }).click();
+      await page.locator("#demo-scrub").fill("50");
+      await page.evaluate(() => window.nextDeck.idle());
+      state = await snapshot();
+      assert.deepEqual([state.mode, state.effects, await panels(), state.errors], ["gpu", ["transitions-figure:custom", "transitions-second:custom"], ["shown", "shown"], []]);
+      await page.waitForFunction(() => document.querySelector("#transitions-second [data-demo-clock]").textContent !== "00:00.0");
+      await page.screenshot({ path: join(run, "next-deck-demo.png") });
+      await page.getByRole("button", { name: "tilt", exact: true }).click();
+      await page.evaluate(() => window.nextDeck.idle());
+      assert.deepEqual([(await snapshot()).effects, await panels()], [[], ["shown", "shown"]], "another change, picked part way through, takes over");
+      await page.locator("#demo-scrub").fill("100");
+      await page.evaluate(() => window.nextDeck.idle());
+      assert.deepEqual([(await snapshot()).effects, await panels()], [[], ["hidden", "shown"]]);
+      await page.getByRole("button", { name: "Lap" }).click();
+      assert.equal(await page.locator(".lap-row output").innerText(), "1 lap");
+      await page.locator("#demo-play").click();
+      await page.waitForFunction(() => document.getElementById("demo-scrub").value === "0");
+      await page.evaluate(() => window.nextDeck.idle());
+      assert.deepEqual([(await snapshot()).effects, await panels()], [[], ["shown", "hidden"]]);
+      // Scrolling on part way through settles the demonstration: the next change runs with the panel that was nearer
+      // showing and the other hidden, and the clocks stop.
+      await page.locator("#demo-scrub").fill("40");
+      await scrub(2.5);
+      state = await snapshot();
+      assert.deepEqual([state.mode, state.change, state.effects.length, await panels(), state.errors], ["gpu", "water", 4, ["shown", "hidden"], []]);
+      const stopped = await page.locator("#transitions-second [data-demo-clock]").textContent();
+      await page.waitForTimeout(350);
+      assert.equal(await page.locator("#transitions-second [data-demo-clock]").textContent(), stopped, "the clocks stop when the section leaves its rest");
+      await page.mouse.move(30, 880);
 
       // The change to the fifth section is a scan: a bar of light crosses the stage, with the arriving section above it
       // and the leaving one below. The mask is in stage coordinates and hides one section exactly where it shows the
@@ -631,7 +679,7 @@ try {
       await calmPage.evaluate(() => { scrollTo({ top: 1.3 * innerHeight, behavior: "instant" }); return window.nextDeck.idle(); });
       assert.deepEqual(await calmPage.evaluate(() => [window.nextDeck.state().decorativeEffects.length, document.getElementById("deck-change").textContent]), [0, "fade"], "no effect with reduced motion");
       const calmLayers = await calmPage.evaluate(() => window.nextDeck.state().layers.filter(layer => layer.id !== "deck-light").map(layer => ({ id: layer.id, ...layer.transform })));
-      assert.equal(calmLayers.length, 4);
+      assert.equal(calmLayers.length, 5);
       // A layer either fades in place or, unseen, is shrunk out of the pointer's way: none is moved or tilted.
       for (const layer of calmLayers) assert.deepEqual(Object.keys(layer).filter(key => !["id", "opacity", ...(layer.opacity === 0 ? ["scaleX", "scaleY"] : [])].includes(key)), [], `${layer.id} only fades`);
       assert.equal(await calmPage.evaluate(() => window.nextDeck.state().mode), "gpu");
