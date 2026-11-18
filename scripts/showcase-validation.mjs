@@ -256,13 +256,12 @@ try {
         await context.close();
       }
 
-      // Where the deck cannot run, React alone hydrates the page and the Underglass runtime is never requested: a browser
-      // without the APIs, and a phone (Chrome there has them, but no window the deck fits). The whole page's scripts
-      // are then about a third of what the deck loads.
+      // Where the deck cannot run, in a browser without the APIs, React alone hydrates the page and the Underglass runtime
+      // is never requested. The whole page's scripts are then about a third of what the deck loads.
       const withoutApis = await chromium.launch(browserLaunchOptions({ native: false }));
       try {
         for (const [name, from, options] of [["no APIs", withoutApis, { viewport: { width: 1440, height: 900 } }],
-          ["phone", browser, { viewport: { width: 390, height: 780 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 }]]) {
+          ["no APIs, phone", withoutApis, { viewport: { width: 390, height: 780 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 }]]) {
           const context = await from.newContext(options);
           const page = await context.newPage();
           const problems = watch(page);
@@ -557,18 +556,71 @@ try {
       assert.deepEqual(problems.filter(problem => !/device (was )?(lost|destroyed)/i.test(problem)), [], "the deck reported problems");
       await context.close();
 
-      // A window too short for the deck keeps the flow in ordinary DOM, and says why.
-      const short = await browser.newContext({ viewport: { width: 1280, height: 520 } });
-      const shortPage = await short.newPage();
-      const shortProblems = watch(shortPage);
-      await shortPage.goto(`${url}next`);
-      await shortPage.waitForFunction(() => window.nextDeck);
-      await shortPage.waitForTimeout(500);
-      assert.equal(await shortPage.evaluate(() => window.nextDeck.state().mode), "dom");
-      assert.equal(await shortPage.locator("#deck-note").textContent(), "GPU presentation needs a taller window.");
-      assert.equal(await shortPage.locator("#deck-switch").isDisabled(), true);
-      assert.deepEqual(shortProblems, [], "the short window reported problems");
-      await short.close();
+      // The deck runs at every window size. A section taller than the stage pans: while the scroll position is inside the
+      // section's own length the section moves up the stage, by its matrix, exactly as the flow would scroll it, and
+      // the change to the next section comes after that. Checked in a short desktop window and on a phone (emulated:
+      // a narrow window at three device pixels per pixel, with touch).
+      for (const [name, options] of [["short window", { viewport: { width: 1280, height: 520 } }],
+        ["phone", { viewport: { width: 390, height: 780 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 }]]) {
+        const tall = await browser.newContext(options);
+        const tallPage = await tall.newPage();
+        const tallProblems = watch(tallPage);
+        await tallPage.goto(`${url}next`);
+        await tallPage.waitForFunction(() => window.nextDeck?.state().mode === "gpu", null, { timeout: 30_000 });
+        await tallPage.evaluate(() => window.nextDeck.warmed().then(() => window.nextDeck.idle()));
+        const lengths = await tallPage.evaluate(() => window.nextDeck.lengths());
+        assert.ok(lengths.pans.some(pan => pan > 40), `${name}: some sections are taller than the stage (${lengths.pans})`);
+        // The longest pan, of a section that is not the last: panned half way, then to its end.
+        const index = lengths.pans.indexOf(Math.max(...lengths.pans.slice(0, -1)));
+        const pan = lengths.pans[index], start = lengths.starts[index], id = sectionIds[index];
+        const at = offset => tallPage.evaluate(async ([top, section]) => {
+          scrollTo({ top, behavior: "instant" });
+          await window.nextDeck.idle();
+          const state = window.nextDeck.state(), place = window.nextDeck.place();
+          return { mode: state.mode, from: place.from, to: place.to, pan: Math.round(place.panFrom), top: Math.round(document.getElementById(section).getBoundingClientRect().top),
+            layers: state.layers.map(layer => layer.id).filter(layer => layer !== "deck-light"),
+            captures: Object.fromEntries(Object.entries(state.metrics.perLayer).map(([layer, counts]) => [layer, counts.captures])), errors: [...window.nextDeck.errors] };
+        }, [offset, id]);
+        const top = await at(start);
+        assert.deepEqual([top.mode, top.from, top.to, top.pan, top.errors], ["gpu", index, null, 0, []], name);
+        const half = await at(start + Math.round(pan / 2));
+        assert.deepEqual([half.from, half.to, half.pan], [index, null, Math.round(pan / 2)], `${name}: half way through the pan`);
+        assert.equal(top.top - half.top, Math.round(pan / 2), `${name}: the section is drawn that much further up`);
+        const end = await at(start + pan);
+        assert.deepEqual([end.from, end.to, end.pan, top.top - end.top], [index, null, pan, pan], `${name}: at the end of the pan`);
+        // Panning writes matrices: nothing is captured.
+        assert.deepEqual(end.captures, top.captures, `${name}: panning captured a layer`);
+        // The change to the next section starts from where the section has panned to.
+        const changing = await at(start + pan + Math.round(lengths.change / 2));
+        assert.deepEqual([changing.mode, changing.from, changing.to, changing.errors], ["gpu", index, index + 1, []], `${name}: the change after the pan`);
+        // A control far down a tall section takes a real click, or tap, where panning has put it.
+        const second = await tallPage.evaluate(() => window.nextDeck.lengths());
+        await at(second.starts[1] + second.pans[1]);
+        const press = tallPage.getByRole("button", { name: "Press" });
+        if (name === "phone") await press.tap(); else await press.click();
+        assert.equal(await tallPage.locator('.live-row [role="status"]').innerText(), "Hello, Ada. Pressed 1 time.", name);
+        // Ordinary DOM is the same picture at the same scroll position: the flow scrolls a section as the deck pans it.
+        // (The pointer is moved off the stage first: the lamp under it is drawn on the GPU only. On the phone the
+        // browser's tap highlight on the button is given time to end.)
+        if (name === "phone") await tallPage.waitForTimeout(700); else await tallPage.mouse.move(30, 400);
+        await tallPage.waitForFunction(() => !window.nextDeck.state().decorativeEffects.some(effect => effect.id === "deck-light" && effect.effects[0].parameters.lamp > 0));
+        await tallPage.evaluate(() => { document.activeElement?.blur(); return window.nextDeck.idle(); });
+        const tallScroll = await tallPage.evaluate(() => Math.round(scrollY));
+        const onGpu = PNG.sync.read(await tallPage.screenshot({ path: join(run, `next-${name.replace(" ", "-")}-gpu.png`) }));
+        await tallPage.evaluate(() => window.nextDeck.stop());
+        assert.equal(await tallPage.evaluate(() => Math.round(scrollY)), tallScroll, `${name}: the flow is at the same scroll position`);
+        const inDom = PNG.sync.read(await tallPage.screenshot({ path: join(run, `next-${name.replace(" ", "-")}-dom.png`) }));
+        // In the short window the header and the side scale are beside the stage, and the readout in the header changes.
+        const skip = name === "phone" ? 0 : 72;
+        let moved = 0;
+        for (let y = skip; y < onGpu.height; y++) for (let x = skip; x < onGpu.width; x++) {
+          const offset = (y * onGpu.width + x) * 4;
+          if ([0, 1, 2].some(channel => Math.abs(onGpu.data[offset + channel] - inDom.data[offset + channel]) > 24)) moved++;
+        }
+        assert.ok(moved <= onGpu.width * onGpu.height / 10_000, `${name}: ${moved} pixels differ between the deck and the flow`);
+        assert.deepEqual(tallProblems, [], `${name}: the page reported problems`);
+        await tall.close();
+      }
 
       // With reduced motion the deck still runs: the sections fade, and nothing is moved or tilted.
       const calm = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });

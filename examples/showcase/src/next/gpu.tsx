@@ -25,8 +25,9 @@ let status: CanvasStatus | undefined;
 let driver: Deck | undefined;
 const controller = mountCanvasApp({
   ...createCanvasHosts($("stage")), hydrate: true,
-  // Four layers at most are on stage (two sections of two); the budget covers them on a dense display.
-  budgets: { layers: 16, pixels: 8_000_000 },
+  // Four layers at most are on stage (two sections of two), each as tall as its section: the budget covers them on a
+  // phone's dense display, where a section is several screens of pixels.
+  budgets: { layers: 16, pixels: 16_000_000 },
   onStatusChange(value) {
     const lost = status?.mode === "gpu" && value.mode === "dom" && !/^Explicit disable/.test(value.reason);
     status = value; driver?.modeChanged(value.mode);
@@ -51,7 +52,7 @@ let reason = support === "likely" ? "" : "GPU presentation needs Chrome or Edge 
 function render() {
   const state = controller.state(), on = state.mode === "gpu";
   // Why the deck cannot start, when it is off: the browser, or a window it does not fit.
-  const blocked = on ? null : support !== "likely" ? reason : deck.blocked();
+  const blocked = on || support === "likely" ? null : reason;
   switcher.setAttribute("aria-pressed", String(on));
   switcher.disabled = blocked !== null;
   modeText.textContent = on ? "GPU" : "Ordinary DOM";
@@ -81,7 +82,7 @@ function recover(why: string) {
   setTimeout(() => { if (!preference.off && status?.mode === "dom") void start(); }, 900);
 }
 async function start() {
-  if (support !== "likely" || deck.blocked()) { render(); return; }
+  if (support !== "likely") { render(); return; }
   let on = await deck.start();
   // An admission check that timed out (a busy machine, a tab that was just opened) is tried once more.
   if (!on && /timed out/.test(status?.reason ?? "")) on = await deck.start();
@@ -108,4 +109,4 @@ if (!preference.off) void start(); else render();
 declare global { interface Window { nextDeck: unknown } }
 // For the site's checks (`scripts/showcase-validation.mjs`).
 window.nextDeck = { state: () => controller.state(), place: deck.place, go: (index: number) => { deck.go(index); return deck.idle(); }, idle: deck.idle,
-  start: () => deck.start().then(() => deck.idle()), stop: () => deck.stop().then(() => deck.idle()), blocked: deck.blocked, warmed: deck.warmed, errors: deck.errors };
+  start: () => deck.start().then(() => deck.idle()), stop: () => deck.stop().then(() => deck.idle()), lengths: deck.lengths, warmed: deck.warmed, errors: deck.errors };
