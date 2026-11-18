@@ -449,6 +449,26 @@ canonical URL in step when examples switch in place.
 `npm run build:site` adds the documentation pages to `sitemap.xml` (below), so the one
 sitemap `robots.txt` names lists the whole site.
 
+Each URL in the deployed sitemap has a date (`<lastmod>`): the day the page's indexed
+text last changed, which is what tells a search engine to fetch it again. A date that
+moves when nothing changed is soon ignored, so it is not the build's date:
+
+- `scripts/sitemap-dates.mjs` takes a fingerprint of each built page: its title, its
+  description and the text of its `<main>`, without markup, scripts, styles or asset
+  names. A build that changed only code or styling gives the same fingerprint.
+- The build publishes `sitemap-dates.json` beside the sitemap, with each URL's
+  fingerprint and date. The next build reads the published file from
+  `https://underglass.dev/sitemap-dates.json`, keeps the date of every page whose
+  fingerprint is the same and gives the others the day of the build (UTC). Vercel builds
+  without `.git`, so the site carries this history itself.
+- Only a deployed build does this (`VERCEL=1`), or one given an earlier record in
+  `UNDERGLASS_SITEMAP_DATES` (a URL or a file). Every other build, the GitHub Pages copy
+  included, writes the sitemap without dates.
+- Where no earlier record can be read (the first deployment, the site not reachable
+  from the build) every URL gets the day of the build, and the build's log says so.
+- An example's page has little text of its own (its title, its summary and the list
+  of examples), so a change to an example's code alone does not move its date.
+
 ## Documentation site
 
 <https://underglass.dev/docs> is the private `examples/docs` workspace, an

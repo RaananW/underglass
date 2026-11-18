@@ -13,6 +13,7 @@
 /scripts/*
 !/scripts/check-showcase-assets.mjs
 !/scripts/assemble-site.mjs
+!/scripts/sitemap-dates.mjs
 !/scripts/release-policy.mjs
 node_modules
 dist
