@@ -777,8 +777,11 @@ footer a:hover { color: var(--text); }
   .stage-frame:has(.stage-fluid) .stage-chrome { padding: 2px 8px 6px; }
   .stage-frame:has(.stage-fluid) .stage-scroll { border-radius: 6px; }
   .stage-fluid .app-container { padding: 8px; gap: 8px; }
-  /* The stage may be at most 4,096 CSS px tall at DPR 2 (the device limit of 8,192 px), and the synthesiser is the tallest page: the intro goes. */
+  /* The stage is one canvas, at most 8,192 device px tall on most GPUs: the intro goes, and one content panel of a group is on the stage at
+     a time (`instrument.tsx`: the bar's Panel switch). */
   .stage-fluid .ig-lede { display: none; }
+  .ig-pages { margin-top: var(--strata-gap-group, 16px); }
+  .ig-notes [hidden] { display: none; }
   .stage-fluid .ug-panel { padding: 12px; }
 }
 .ig-note { margin: 0; color: var(--strata-colour-muted); font-size: var(--strata-font-size-small, 13px); }
