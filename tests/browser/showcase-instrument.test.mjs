@@ -46,8 +46,8 @@ async function autoAdmission(page) {
  * Opens the gallery with the stage in view and waits for GPU mode to start by itself, or with `gpu: false` records the
  * visitor's **Use ordinary DOM** choice first (as the page does), so it stays in DOM.
  */
-async function open(browser, { dpr = 1, width = 1280, height = 900, gpu = true, colorScheme = "light", reducedMotion = "no-preference" } = {}) {
-  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr, colorScheme, reducedMotion });
+async function open(browser, { dpr = 1, width = 1280, height = 900, gpu = true, colorScheme = "light", reducedMotion = "no-preference", touch = false } = {}) {
+  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: dpr, colorScheme, reducedMotion, hasTouch: touch });
   if (!gpu) await context.addInitScript(() => { try { sessionStorage.setItem("underglass-showcase-dom", "1"); } catch { /* opaque origin */ } });
   const page = await context.newPage();
   const errors = [];
@@ -440,8 +440,11 @@ test("axe on the stage in light and dark, at the CSS and Instrument levels", asy
 test("at 320 px the page reflows: no sideways scroll, every control keeps a 24 px target, GPU stays on", async ({ browser }) => {
   test.setTimeout(300000);
   const { context, page } = await open(browser, { dpr: 2, width: 320, height: 700 });
-  for (const tab of tabs) {
+  // On a phone one panel of a group is on the stage at a time: every one is visited.
+  const panels = await page.evaluate(() => window.instrumentGallery.panels);
+  for (const tab of tabs) for (let panel = 0; panel < panels[tab].length; panel++) {
     await select(page, tab, "instrument");
+    if (panel) { await gallery(page, "setPanel", panel); await page.waitForFunction(index => window.instrumentGallery.page === index, panel); await page.waitForTimeout(300); await settle(page); }
     const geometry = await page.evaluate(() => {
       const small = [];
       for (const control of document.querySelectorAll(".stage :is(input:not([type=hidden]), select, button, meter, a[href])")) {
@@ -452,15 +455,76 @@ test("at 320 px the page reflows: no sideways scroll, every control keeps a 24 p
       const scroll = document.querySelector(".stage-scroll");
       return { page: document.documentElement.scrollWidth - document.documentElement.clientWidth, region: scroll.scrollWidth - scroll.clientWidth, small };
     });
-    expect(geometry.page, `${tab}: the page does not scroll sideways`).toBeLessThanOrEqual(0);
-    expect(geometry.region, `${tab}: the stage does not scroll sideways`).toBeLessThanOrEqual(0);
+    const name = `${tab} / ${panels[tab][panel]}`;
+    expect(geometry.page, `${name}: the page does not scroll sideways`).toBeLessThanOrEqual(0);
+    expect(geometry.region, `${name}: the stage does not scroll sideways`).toBeLessThanOrEqual(0);
     // Inline links in running text are exempt from the target size (WCAG 2.5.8); controls are not.
-    expect(geometry.small.filter(entry => !/^A /.test(entry)), `${tab}: targets under 24 px`).toEqual([]);
-    expect((await stateOf(page)).mode).toBe("gpu");
+    expect(geometry.small.filter(entry => !/^A /.test(entry)), `${name}: targets under 24 px`).toEqual([]);
+    expect((await stateOf(page)).mode, name).toBe("gpu");
     await mkdir(evidence, { recursive: true });
-    await page.locator(".stage").screenshot({ path: `${evidence}/phone-${tab}.png` });
+    await page.locator(".stage").screenshot({ path: `${evidence}/phone-${tab}-${panel}.png` });
   }
   await context.close();
+});
+
+test("on a phone one panel of a group is on the stage: GPU starts by itself and stays at 3.5 device pixels per pixel, and the synthesiser keeps its settings", async ({ browser }) => {
+  // A whole group in one column was up to 3,084 CSS px tall at 412 px wide: past the largest texture (8,192 px) at a phone's three or more
+  // device pixels per pixel, so GPU presentation was refused there, and where it fitted every frame drew that many pixels.
+  test.setTimeout(300000);
+  const { context, page, errors } = await open(browser, { dpr: 3.5, width: 412, height: 800, touch: true });
+  const panels = await page.evaluate(() => window.instrumentGallery.panels);
+  const limit = await page.evaluate(async () => (await (await navigator.gpu.requestAdapter()).requestDevice()).limits.maxTextureDimension2D);
+  const seen = () => page.evaluate(() => {
+    const state = window.showcase.state(), canvas = document.querySelector("canvas.output"), tab = document.querySelector('.ig-bar [role="tab"][aria-selected="true"]');
+    const panel = document.getElementById(tab.getAttribute("aria-controls"));
+    return { mode: state.mode, reason: state.mode === "gpu" ? "" : state.reason, height: canvas.height, stage: document.querySelector(".stage").offsetHeight,
+      content: [...document.querySelectorAll(".ig-content")].map(element => element.className.match(/ig-(?!content)([\w-]+)/)[1]),
+      tabpanel: panel?.getAttribute("role") === "tabpanel" && panel.getAttribute("aria-labelledby") === tab.id,
+      pressed: [...document.querySelectorAll(".ig-pages button")].map(button => button.getAttribute("aria-pressed")).indexOf("true"),
+      pending: (state.instrument?.layers ?? []).filter(layer => layer.status !== "ready").map(layer => layer.id) };
+  });
+  const tallest = { height: 0, name: "" };
+  for (const tab of tabs) {
+    await select(page, tab, "instrument");
+    for (let panel = 0; panel < panels[tab].length; panel++) {
+      // A real tap on the bar's Panel switch.
+      if (panel) { await page.locator(`#ig-panel-${panel}`).tap(); await page.waitForFunction(index => window.instrumentGallery.page === index, panel); await page.waitForTimeout(300); await settle(page); }
+      const now = await seen(), name = `${tab} / ${panels[tab][panel]}`;
+      expect(now.mode, `${name}: ${now.reason}`).toBe("gpu");
+      expect(now.height, `${name}: the canvas fits the largest texture`).toBeLessThanOrEqual(limit);
+      expect(now.stage, `${name}: the stage is no taller than 2,100 CSS px`).toBeLessThanOrEqual(2100);
+      // One content panel, and for the synthesiser its master with it; the notes are one panel in two halves.
+      expect(now.content.length, `${name}: ${now.content.join()}`).toBe(tab === "showpiece" ? 2 : 1);
+      expect(now.tabpanel, `${name}: the selected tab controls a tab panel that is on the stage`).toBe(true);
+      expect(now.pressed, `${name}: the switch shows the panel`).toBe(panel);
+      expect(now.pending, `${name}: every layer is built`).toEqual([]);
+      if (now.height > tallest.height) Object.assign(tallest, { height: now.height, name });
+    }
+  }
+  console.log(`phone pages at DPR 3.5: the tallest canvas is ${tallest.height} px (${tallest.name}), the limit ${limit}`);
+  // The synthesiser's state is the voice's, not a panel's: a module keeps its settings while another is on the stage.
+  await select(page, "showpiece", "instrument");
+  await page.locator("#ig-panel-1").tap();
+  await page.waitForFunction(() => document.getElementById("syn-level"));
+  await page.locator("#syn-level").focus();
+  for (let press = 0; press < 5; press++) await page.keyboard.press("ArrowDown");
+  const level = await page.locator("#syn-level").inputValue();
+  await page.locator("#ig-panel-0").tap();
+  await page.waitForFunction(() => document.getElementById("syn-tune") && !document.getElementById("syn-level"));
+  await page.locator("#ig-panel-1").tap();
+  await page.waitForFunction(() => document.getElementById("syn-level"));
+  expect(await page.locator("#syn-level").inputValue(), "the Level fader is where it was left").toBe(level);
+  expect(level).not.toBe("70");
+  await settle(page);
+  expect((await seen()).mode).toBe("gpu");
+  expect(errors).toEqual([]);
+  await context.close();
+  // A wider screen has every panel of a group, and no switch.
+  const wide = await open(browser);
+  await select(wide.page, "showpiece", "instrument");
+  expect(await wide.page.evaluate(() => [window.showcase.state().mode, window.instrumentGallery.page, document.querySelectorAll(".ig-content").length, document.querySelectorAll(".ig-pages").length]))
+    .toEqual(["gpu", null, 5, 0]);
+  await wide.context.close();
 });
 
 test("reduced motion and more contrast are respected: GPU stays, the pointer light is off under more contrast", async ({ browser }) => {

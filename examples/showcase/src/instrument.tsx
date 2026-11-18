@@ -10,8 +10,13 @@
  * `pointer-light.ts`, a wrapper round the controller the helper is given. The stage is fluid (see `.stage-fluid`), so the page
  * reflows down to 320 px.
  *
- * The panels in play are the wall (a decorative layer), the bar, and one of the content panels, so the stage holds three layers
- * and the parts and emitters of one panel at a time: the notes tab states the totals.
+ * The panels in play are the wall (a decorative layer), the bar, and one group's content panels, so the stage holds the parts and
+ * emitters of one group at a time: the notes tab states the totals.
+ *
+ * On a phone (600 px or less) a group is one column, three thousand CSS px tall for the synthesiser. The stage is one canvas: at a
+ * phone's three or more device pixels per pixel that is past the GPU's largest texture (8,192 px), so GPU presentation was refused,
+ * and where it fitted every frame drew eight million pixels. So there one content panel is on the stage at a time, picked by the
+ * bar's **Panel** switch (`panels`); the synthesiser keeps its master panel with the one picked.
  */
 import "@underglass/ui/css";
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
@@ -35,17 +40,28 @@ export const characters = [["premium", "Premium"], ["studio", "Studio"], ["hifi"
 export type InstrumentCharacter = typeof characters[number][0];
 export const tabs = [["showpiece", "Synthesiser"], ["wave1", "Wave 1"], ["wave2", "Wave 2"], ["wave3", "Wave 3"], ["everyday", "Everyday forms"], ["inputs", "Input forms"], ["notes", "Notes"]] as const;
 export type InstrumentTab = typeof tabs[number][0];
+/** Each group's content panels by name, in order: on a phone the bar's Panel switch shows one (the synthesiser's master is always there). */
+export const panels: Record<InstrumentTab, readonly string[]> = {
+  showpiece: ["Sound", "Output", "Pads", "Modulation"], wave1: ["Knob, fader", "Switches"], wave2: ["Lamps, meters", "Selector, displays"], wave3: ["Jog, patch bay", "Pads, keypad"],
+  everyday: ["Sliders, badges", "Progress, plates"], inputs: ["Checks, keys", "Select, tabs"], notes: ["The showpiece", "The details"],
+};
+/** Which of a group's panels are on the stage: all of them (`null`), or on a phone the one with this index. */
+type Paging = number | null;
+const on = (page: Paging, index: number) => page === null || page === index;
 
 /**
  * Whether the screen is a phone's (480 px or less): the few components with a width of their own (a meter's segments, a needle's dial, a horizontal
  * fader's travel) take a smaller size or fewer parts, so every panel's content fits the stage at 320 px.
  */
-function useCompact() {
+const useCompact = () => useMedia("(max-width: 480px)");
+/** Whether a group's panels are shown one at a time: a phone's screen (600 px or less, the stylesheet's phone rule). */
+const usePaged = () => useMedia("(max-width: 600px)");
+function useMedia(media: string) {
   return useSyncExternalStore(listener => {
-    const query = matchMedia("(max-width: 480px)");
+    const query = matchMedia(media);
     query.addEventListener("change", listener);
     return () => query.removeEventListener("change", listener);
-  }, () => matchMedia("(max-width: 480px)").matches, () => false);
+  }, () => matchMedia(media).matches, () => false);
 }
 
 /** The anatomy pages on the documentation site (`docs/ui-library/components/` in the repository). */
@@ -77,6 +93,11 @@ export function InstrumentGallery() {
   const [character, setCharacter] = useState<InstrumentCharacter>("premium");
   const [pointer, setPointer] = useState(true);
   const [tab, setTab] = useState<InstrumentTab>("showpiece");
+  // On a phone one content panel is on the stage at a time: `panel` is its index in the group, and a new group starts at its first.
+  const paged = usePaged();
+  const [panel, setPanel] = useState(0);
+  const page: Paging = paged ? Math.min(panel, panels[tab].length - 1) : null;
+  const openTab = (value: InstrumentTab) => { setTab(value); setPanel(0); };
   const [light, setLight] = useState<PointerLight>();
   const [root, setRoot] = useState<HTMLElement | null>(null);
   const [dialog, setDialog] = useState(false);
@@ -122,19 +143,19 @@ export function InstrumentGallery() {
     observer.observe(stage);
     measure();
     return () => { observer.disconnect(); stage.style.removeProperty("--ig-stage-height"); };
-  }, [root, tab]);
+  }, [root, tab, page]);
   Object.assign(window, { instrumentGallery: {
-    level, theme, character, tab, pointer, budgets, materials,
+    level, theme, character, tab, pointer, budgets, materials, panels, page, setPanel,
     scene: (element: HTMLElement) => strata.current?.scene(element), diagnostics: (element: HTMLElement) => strata.current?.diagnostics(element), refresh: () => strata.current?.refresh(), light: () => light?.stats(),
-    setLevel, setTheme, setCharacter, setPointer, setTab, build: (element: HTMLElement) => strataScene(element, { level: "instrument" }),
+    setLevel, setTheme, setCharacter, setPointer, setTab: openTab, build: (element: HTMLElement) => strataScene(element, { level: "instrument" }),
   } });
-  const content = tab === "showpiece" ? <Synth />
-    : tab === "wave1" ? <WaveOne />
-      : tab === "wave2" ? <WaveTwo />
-        : tab === "wave3" ? <WaveThree />
-          : tab === "everyday" ? <Everyday onDialog={() => setDialog(true)} onDrawer={() => setDrawer(true)} />
-            : tab === "inputs" ? <InputForms />
-              : <Notes />;
+  const content = tab === "showpiece" ? <Synth page={page} />
+    : tab === "wave1" ? <WaveOne page={page} />
+      : tab === "wave2" ? <WaveTwo page={page} />
+        : tab === "wave3" ? <WaveThree page={page} />
+          : tab === "everyday" ? <Everyday page={page} onDialog={() => setDialog(true)} onDrawer={() => setDrawer(true)} />
+            : tab === "inputs" ? <InputForms page={page} />
+              : <Notes page={page} />;
   return <>
     <Wall />
     <Panel id="ig-bar" className="ig-bar" title="Instrument" form="plate" aria-describedby="ig-bar-lede">
@@ -152,11 +173,16 @@ export function InstrumentGallery() {
         </ButtonGroup>
         <ToggleButton id="ig-pointer" pressed={pointer} onPressedChange={setPointer}>Pointer light</ToggleButton>
       </div>
-      <Tabs id="ig-tabs" value={tab} onChange={value => setTab(value as InstrumentTab)}>
+      <Tabs id="ig-tabs" value={tab} onChange={value => openTab(value as InstrumentTab)}>
         <TabList label="Instrument groups">
           {tabs.map(([value, label]) => <Tab key={value} value={value}>{label}</Tab>)}
         </TabList>
       </Tabs>
+      {page !== null && <div className="ig-pages">
+        <ButtonGroup label="Panel">
+          {panels[tab].map((name, index) => <ToggleButton key={name} id={`ig-panel-${index}`} pressed={page === index} onPressedChange={() => setPanel(index)}>{name}</ToggleButton>)}
+        </ButtonGroup>
+      </div>}
     </Panel>
     {content}
     {root && <Dialog open={dialog} onClose={() => setDialog(false)} container={root} form="plate" title="Output stage" description="A machined plate that rises out of the chassis." id="ig-dialog"
@@ -171,9 +197,18 @@ export function InstrumentGallery() {
 /**
  * One panel of a group: a layer of its own. A scene holds at most 16 materials (core's `INSTRUMENT_MATERIALS`) and every component brings
  * its own (a knob four, a fader three, the switch forms eight, a meter its glass and a lens per zone colour), so a group is split into
- * panels that fit, and each is a plate. The first panel of a tab is the tab's panel (`aria-controls`), the others are regions.
+ * panels that fit, and each is a plate. The first panel of a tab is the tab's panel (`aria-controls`), the others are regions. On a phone one
+ * panel of a group is on the stage (`off` leaves the others out), and a panel shown without the group's first is given `tab`: it is the tab's panel then.
  */
-function Unit({ id, title, tab, wide, form = "plate", children }: { id: string; title: string; tab?: InstrumentTab; wide?: boolean; form?: "plate" | "tray"; children: ReactNode }) {
+interface UnitProps { id: string; title: string; tab?: InstrumentTab; wide?: boolean; form?: "plate" | "tray"; children: ReactNode }
+/**
+ * `off`: not on the stage (a phone shows one panel of a group at a time), so nothing is rendered. The panel is a component of its own so
+ * that leaving the stage unmounts it: React then runs its cleanup, which lets the layer go, before it removes the element.
+ */
+function Unit({ off = false, ...props }: UnitProps & { off?: boolean }) {
+  return off ? null : <UnitPanel {...props} />;
+}
+function UnitPanel({ id, title, tab, wide, form = "plate", children }: UnitProps) {
   const panel = useRef<HTMLElement>(null);
   // A presented layer is never removed while it is enrolled: the panel is let go before React takes it out (a tab changes the set of panels).
   useLayoutEffect(() => {
@@ -187,11 +222,11 @@ function Unit({ id, title, tab, wide, form = "plate", children }: { id: string; 
 
 // ---- Wave 1 ----
 
-function WaveOne() {
+function WaveOne({ page }: { page: Paging }) {
   const [volume, setVolume] = useState(62);
   const compact = useCompact();
   return <>
-    <Unit id="w1-dials" tab="wave1" title="Knob and Fader">
+    <Unit id="w1-dials" tab="wave1" off={!on(page, 0)} title="Knob and Fader">
       <div className="ig-grid">
         <Entry id="knob" name="Knob" summary="A machined cylinder: a chamfered cap with a pointer, a skirt, the scale printed on the faceplate. Drag, click the ring, tap the cap or use the keys."
           native={<code>&lt;input type="range"&gt;</code>} page="knob">
@@ -205,7 +240,7 @@ function WaveOne() {
         </Entry>
       </div>
     </Unit>
-    <Unit id="w1-switches" title="Switches">
+    <Unit id="w1-switches" tab={page === 1 ? "wave1" : undefined} off={!on(page, 1)} title="Switches">
       <div className="ig-grid">
         <Entry id="switch" name="Switch forms" summary="The same switch as hardware: a flush slide, a rocker on a pivot, a bat lever that snaps over centre and a wall plate with a paddle."
           native={<code>&lt;input type="checkbox" role="switch"&gt;</code>} page="switch">
@@ -223,10 +258,10 @@ function WaveOne() {
 
 // ---- Wave 2 ----
 
-function WaveTwo() {
+function WaveTwo({ page }: { page: Paging }) {
   const compact = useCompact();
   return <>
-    <Unit id="w2-lights" tab="wave2" title="Lamps, lights and meters">
+    <Unit id="w2-lights" tab="wave2" off={!on(page, 0)} title="Lamps, lights and meters">
       <div className="ig-grid">
         <Entry id="lamp" name="Lamp" summary="A lens on a bezel: a dark glass dome off, glowing and lighting the faceplate on. A momentary lamp is lit while it is held."
           native={<code>&lt;input type="checkbox" role="switch"&gt;</code>} page="lamp">
@@ -258,7 +293,7 @@ function WaveTwo() {
         </Entry>
       </div>
     </Unit>
-    <Unit id="w2-controls" title="Selector, buttons and displays">
+    <Unit id="w2-controls" tab={page === 1 ? "wave2" : undefined} off={!on(page, 1)} title="Selector, buttons and displays">
       <div className="ig-grid">
         <Entry id="rotary" name="RotarySelector" summary="A knob with a pointer over a ring of printed positions, one detent for each option. The native popup stays in the overlay host."
           native={<code>&lt;select&gt;</code>} page="rotary-selector">
@@ -285,11 +320,11 @@ function WaveTwo() {
 
 // ---- Wave 3 ----
 
-function WaveThree() {
+function WaveThree({ page }: { page: Paging }) {
   const [jog, setJog] = useState(12);
   const compact = useCompact();
   return <>
-  <Unit id="w3" tab="wave3" wide title="JogWheel and PatchBay">
+  <Unit id="w3" tab="wave3" wide off={!on(page, 0)} title="JogWheel and PatchBay">
     <div className="ig-grid">
       <Entry id="jog-wheel" name="JogWheel" summary="A large flat wheel in a bearing recess with a finger dimple: an endless encoder, a flick coasts. Tap the upper or lower half to step."
         native={<><code>&lt;input type="range"&gt;</code> with wrap</>} page="jog-wheel">
@@ -306,7 +341,7 @@ function WaveThree() {
       </Entry>
     </div>
   </Unit>
-  <Unit id="w3-pads" title="Pad and Keypad">
+  <Unit id="w3-pads" tab={page === 1 ? "wave3" : undefined} off={!on(page, 1)} title="Pad and Keypad">
     <div className="ig-grid">
       <Entry id="pad" name="Pad and PadGrid" summary="A soft square cap lit from below, in a grid: held it glows, latching it stays lit. The arrow keys move between pads; the press velocity is optional."
         native={<><code>&lt;button&gt;</code> (<code>aria-pressed</code> when latching) in a <code>&lt;div role="group"&gt;</code></>} page="pad">
@@ -335,11 +370,11 @@ const keypad: readonly (readonly [string, string])[] = [["1", ""], ["2", "ABC"],
 
 // ---- Everyday forms ----
 
-function Everyday({ onDialog, onDrawer }: { onDialog(): void; onDrawer(): void }) {
+function Everyday({ page, onDialog, onDrawer }: { page: Paging; onDialog(): void; onDrawer(): void }) {
   const [score, setScore] = useState(4);
   const compact = useCompact();
   return <>
-    <Unit id="e-sliders" tab="everyday" title="Sliders, ratings and badges">
+    <Unit id="e-sliders" tab="everyday" off={!on(page, 0)} title="Sliders, ratings and badges">
       <div className="ig-grid">
         <Entry id="slider" name="Slider forms" summary="The Slider as the Knob's or the Fader's object over its own native input: the premium default is the fader, a knob is one prop away."
           native={<code>&lt;input type="range"&gt;</code>} page="slider#11-hardware-forms-knob-fader-and-wheel">
@@ -361,7 +396,7 @@ function Everyday({ onDialog, onDrawer }: { onDialog(): void; onDrawer(): void }
         </Entry>
       </div>
     </Unit>
-    <Unit id="e-plates" form="tray" title="Progress, plates and trays">
+    <Unit id="e-plates" form="tray" tab={page === 1 ? "everyday" : undefined} off={!on(page, 1)} title="Progress, plates and trays">
       <div className="ig-grid">
         <Entry id="progress" name="ProgressBar and Spinner" summary="A segment meter lit from the value, and a ring of LEDs that chases while it waits (steady under reduced motion)."
           native={<><code>&lt;progress&gt;</code> and <code>&lt;span role="status"&gt;</code></>} page="progress-bar#11-indicator-form-meter">
@@ -396,9 +431,9 @@ function Everyday({ onDialog, onDrawer }: { onDialog(): void; onDrawer(): void }
 
 // ---- Input forms ----
 
-function InputForms() {
+function InputForms({ page }: { page: Paging }) {
   return <>
-    <Unit id="i-latching" tab="inputs" title="Checkbox, radio bank and segmented control">
+    <Unit id="i-latching" tab="inputs" off={!on(page, 0)} title="Checkbox, radio bank and segmented control">
       <div className="ig-grid">
         <Entry id="checkbox" name="Checkbox" summary="The same native checkbox as a small latching square key whose ring lights while it is checked."
           native={<code>&lt;input type="checkbox"&gt;</code>} page="checkbox#11-latching-form-latching">
@@ -422,7 +457,7 @@ function InputForms() {
         </Entry>
       </div>
     </Unit>
-    <Unit id="e-select" title="Select and tabs forms">
+    <Unit id="e-select" tab={page === 1 ? "inputs" : undefined} off={!on(page, 1)} title="Select and tabs forms">
       <div className="ig-grid">
         <Entry id="select" name="Select forms" summary="The same native select as a rotary selector's dial, or as a display window with two step buttons. The browser's own list stays."
           native={<code>&lt;select&gt;</code>} page="select#11-hardware-forms-selector-and-display">
@@ -474,12 +509,13 @@ export const pitchOf = (tune: number) => 261.63 * 2 ** (tune / 12);
 export const cutoffHz = (value: number) => Math.round(20 * 1000 ** (value / 100));
 
 /**
- * The synthesiser voice: real controls wired to each other, on four module panels (a layer holds at most 16 materials, so the voice cannot
- * be one panel). The power switch gates everything; the gate (a held Trigger or the latching Hold) lights its LED and opens the output; the
+ * The synthesiser voice: real controls wired to each other, on a master panel and four module panels (a layer holds at most 16 materials, so
+ * the voice cannot be one panel). Its state is here, so on a phone, where one module is on the stage with the master, a module keeps its
+ * settings while it is away. The power switch gates everything; the gate (a held Trigger or the latching Hold) lights its LED and opens the output; the
  * Level fader, the filter and the resonance set the output meter and the Clip light; a patch jack opens the filter by a step on the gauge
  * and lights its LED; the wheel loads a patch into the knobs, faders and rotary; the display prints the pitch.
  */
-function Synth() {
+function Synth({ page }: { page: Paging }) {
   const compact = useCompact();
   const [voice, setVoice] = useState<Voice>(() => presetOf(2));
   const [patch, setPatch] = useState(2);
@@ -527,7 +563,7 @@ function Synth() {
         </div>
       </div>
     </Unit>
-    <Unit id="syn-sound" title="Voice-1 · Sound">
+    <Unit id="syn-sound" off={!on(page, 0)} title="Voice-1 · Sound">
       <div className="syn">
         <div className="syn-body">
           <section className="syn-group" aria-label="Oscillator">
@@ -553,7 +589,7 @@ function Synth() {
         </div>
       </div>
     </Unit>
-    <Unit id="syn-output" title="Voice-1 · Output">
+    <Unit id="syn-output" off={!on(page, 1)} title="Voice-1 · Output">
       <div className="syn">
         <div className="syn-body">
           <section className="syn-group" aria-label="Power">
@@ -573,7 +609,7 @@ function Synth() {
         </div>
       </div>
     </Unit>
-    <Unit id="syn-pads" title="Voice-1 · Pads and keys">
+    <Unit id="syn-pads" off={!on(page, 2)} title="Voice-1 · Pads and keys">
       <div className="syn">
         <div className="syn-body">
           <PadGrid label="Scale pads" columns={4} size={compact ? "small" : undefined}>
@@ -586,7 +622,7 @@ function Synth() {
         </div>
       </div>
     </Unit>
-    <Unit id="syn-patch" title="Voice-1 · Modulation">
+    <Unit id="syn-patch" off={!on(page, 3)} title="Voice-1 · Modulation">
       <div className="syn">
         <div className="syn-body">
           <PatchBay legend="Mod bay" columns={2} className="syn-bay">
@@ -621,42 +657,45 @@ export const materials: Record<string, [title: string, count: number]> = {
   "ig-tabs-panel-inputs": ["Checkbox, radio bank and segmented control", 7], "e-select": ["Select and tabs forms", 13], "ig-tabs-panel-notes": ["Notes", 2],
 };
 
-function Notes() {
+function Notes({ page }: { page: Paging }) {
+  // One panel of text: on a phone its sections are shown in two halves.
+  const first = !on(page, 0), second = !on(page, 1);
   return <Unit id="notes" tab="notes" wide title="Notes"><div className="ig-notes">
-    <section aria-labelledby="ig-notes-decision">
+    <section hidden={first} aria-labelledby="ig-notes-decision">
       <h3 id="ig-notes-decision">The showpiece: a synthesiser, not a smart-home wall</h3>
       <p>The plan lists both. The synthesiser won because what main supports best today is the hardware that a voice is made of: knobs, faders, switches, lamps, a meter, a gauge, a display,
         a jog wheel, a patch bay, push buttons, rotary selectors, pads and a keypad are all there, and they wire to each other the way a real panel does. A smart-home wall wants a
         thermostat dial, which does not exist.</p>
     </section>
-    <section aria-labelledby="ig-notes-wiring">
+    <section hidden={first} aria-labelledby="ig-notes-wiring">
       <h3 id="ig-notes-wiring">What is wired to what</h3>
       <p>All of it is ordinary React state over the native controls. The power switch gates the display, the lights and the meter; the gate lamp follows a held Trigger or the latching Hold;
         the Level fader, Cutoff and Reso set the output meter and the Clip light; a patch jack opens the filter by a step on the gauge and lights its LED; the wheel loads a patch into the
         knobs, faders and rotary; a held scale pad opens the gate and plays at its note; the keypad types a patch number into the display and # loads it; the display prints the pitch of the Tune knob; the LFO light blinks at the rate the second rotary selects; and the wall-plate lock disables the controls
         through a disabled fieldset.</p>
     </section>
-    <section aria-labelledby="ig-notes-budgets">
+    <section hidden={first} aria-labelledby="ig-notes-budgets">
       <h3 id="ig-notes-budgets">Budgets</h3>
-      <p>One content panel is on the stage at a time, with the bar and the wall. The plan's budgets are 2,048 parts and 64 emitters per layer and 6,000 parts on the stage. Measured in the
+      <p>One group is on the stage at a time, with the bar and the wall. The plan's budgets are 2,048 parts and 64 emitters per layer and 6,000 parts on the stage. Measured in the
         browser test at the Instrument level (the bar adds 19 parts to every tab, and the pointer light one emitter to every panel): the synthesiser {budgets.showpiece.parts} parts and {budgets.showpiece.emitters} emitters, wave 1 {budgets.wave1.parts} and {budgets.wave1.emitters},
         wave 2 {budgets.wave2.parts} and {budgets.wave2.emitters}, wave 3 {budgets.wave3.parts} and {budgets.wave3.emitters}, the everyday forms {budgets.everyday.parts} and {budgets.everyday.emitters}, the input forms {budgets.inputs.parts} and {budgets.inputs.emitters}.
         A scene holds at most 16 materials, so each group is split into panels; the helper's own count (<code>StrataGpu.diagnostics</code>) for each is:</p>
       <ul>{Object.entries(materials).map(([id, [title, count]]) => <li key={id}>{title}: {count} of 16 materials</li>)}</ul>
-      <p>On a phone the stage is at most 4,096 CSS px tall (one canvas, 8,192 device px at DPR 2), so at 320 px the intro is hidden.</p>
+      <p>On a phone one content panel is on the stage at a time (the bar's Panel switch). The stage is one canvas, at most 8,192 device px tall on most GPUs, and a phone has
+        three or more device pixels per pixel: a whole group in one column was past that, and where it fitted every frame drew three times the pixels.</p>
     </section>
-    <section aria-labelledby="ig-notes-keys">
+    <section hidden={second} aria-labelledby="ig-notes-keys">
       <h3 id="ig-notes-keys">Keys on a plinth are one construction</h3>
       <p>The radio bank, the segmented control and the tabs' rail are three components with one scene: a polished plinth part, and for each key a body with a captured cap, an LED lens with its emitter and the
         same registry calls, so a tab and a bank key of the same size and state are the same parts and share their materials.</p>
     </section>
-    <section aria-labelledby="ig-notes-light">
+    <section hidden={second} aria-labelledby="ig-notes-light">
       <h3 id="ig-notes-light">The pointer light and the characters</h3>
       <p>The pointer light is the plan's: an additive emitter you carry (never a second key light), with the contrast guard on every text run, only with a fine pointer, off under more contrast and forced
         colours, kept without its fade under reduced motion. The Strata helper does not own it yet, so this page does what the helper will: it wraps the controller and writes the light into each scene.
         The characters (studio, hi-fi, playful) are scopes (<code>data-strata-character</code>) on the document element: the same markup, different proportions, finishes and springs.</p>
     </section>
-    <section aria-labelledby="ig-notes-next">
+    <section hidden={second} aria-labelledby="ig-notes-next">
       <h3 id="ig-notes-next">Not here yet</h3>
       <p>Every Instrument component and character on main is in this gallery. Not wired: the Slider's <code>wheel</code> form (reserved) and the characters' geometry (larger parts), which the runtime does not read yet.</p>
     </section>
