@@ -241,6 +241,12 @@ Rules the deck keeps, most of them from the [probe](showcase-deck-probe.md):
 - When a change ends, the layers that leave the stage are hidden, not put back as they
   rest. The GPU still draws a layer for a frame or more after its enrolment ends, until
   the stage without it is ready, and a layer put back would show whole for that long.
+- When a change starts, a layer that rests hidden (the demonstration's second panel)
+  is written hidden, never as it rests, before the arriving layers are enrolled. The
+  runtime draws at every write, and after an enrolment it holds the last complete
+  frame until the new layers are captured. So a pose written before the enrolment is
+  on screen for those frames, and one written after it is not seen until they are
+  over: the order of the writes around an enrolment is what the visitor sees.
 - The layout changes to the deck before `enable()`, and back to the flow whenever the
   mode returns to `dom` (a refusal, the readout's switch, a lost GPU). The section in
   the window stays the same both ways, and so does every control's state.

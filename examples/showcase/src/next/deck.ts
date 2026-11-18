@@ -231,6 +231,11 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
    * instead, and keeps its effect until its enrolment ends. The GPU goes on drawing it for a frame or more after
    * that, until the stage without it is ready, and an undone pose would show it whole for that long: a flash of the
    * section that had just gone.
+   *
+   * The same holds for a layer that rests hidden (the demonstration's panel that is not showing): it is written
+   * hidden here, never as it rests. The runtime draws at each write, and once `show` enrols the arriving layers it
+   * holds the last complete frame until they are captured. A pose written here is in that frame; one written after
+   * the enrolment is not seen until the hold ends, a few frames later.
    */
   function release(staying: ReadonlySet<string>) {
     const handles = change?.handles;
@@ -241,7 +246,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     for (const index of [view.from, view.to]) if (index !== null) for (const id of layers(index)) {
       if (!staying.has(id)) { transform(id, { opacity: 0 }); continue; }
       try { handles?.get(id)?.cancel(); } catch { /* already ended */ }
-      transform(id, {});
+      transform(id, demoHidden(id) ? { opacity: 0 } : {});
     }
   }
   /** A layer where it rests, which for a section that has panned by `pan` is that much further up the stage. */
