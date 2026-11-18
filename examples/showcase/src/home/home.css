@@ -5,7 +5,8 @@
  * One document, two layouts (`deck.ts`). The flow is the page as served: a grid with one row per section, at least one
  * window tall on a wide screen, and one column on a narrow one. The deck (`html.deck`, GPU presentation) keeps the same
  * grid in a stage that sticks to the window, with every section in its one row. A section is two grid items, its text
- * and its specimen, because each is a GPU layer and a layer is a direct child of the Underglass root.
+ * and its specimen, because each is a GPU layer and a layer is a direct child of the Underglass root. In one column the
+ * deck shows them one after the other, each a page of its own that fits the screen.
  */
 :root {
   --ground: #07080a; --panel: #0d0f13; --panel-raised: #13161b;
@@ -179,9 +180,18 @@ html.deck .app-container > [data-section] { grid-row: 1; }
   html.deck .app-container > [data-section] { margin-block: var(--lift) 24px; }
   html.deck .app-container > .specimen { margin-top: calc(var(--lift) + 20px + var(--space)); }
 }
-/* In one column the specimen is under its text. In the flow that is the next grid row; here, with every section in one
-   cell, the driver tells each specimen the height of the text above it. */
-@media (max-width: 920px) { html.deck .app-container > .specimen { margin-top: calc(96px + var(--above, 0px) + 40px); } }
+/* In one column the deck shows a section as two pages, its text and then its specimen, each starting at the same
+   height near the top of the stage so that it fits a phone's screen. The cover's text starts lower: the header lies over
+   the top of the page there. Where the demonstration's controls lie above its panels, the driver tells each panel
+   their height (`--above`). */
+@media (max-width: 920px) {
+  html.deck .app-container > [data-section] { margin-block: 56px 24px; }
+  html.deck .app-container > .slide-cover { margin-top: 96px; }
+  html.deck .app-container > .specimen { margin-top: calc(56px + var(--above, 0px)); }
+}
+/* Parts that are layers in one column only: the cover's specimen, which is inside the cover's layer where there are two
+   columns, and the demonstration's controls above its panels. */
+@media (min-width: 921px) { .narrow-only { display: none !important; } }
 /* A second panel in the specimen's place (the live demonstration's): at least as tall as the specimen, which it covers.
    In ordinary DOM the one that is not showing is unseen; on the GPU both are drawn and the driver hides one. */
 .app-container > .specimen.second { min-height: var(--match, 0px); }
@@ -368,23 +378,38 @@ h2 { line-height: round(1.02em, 1px); }
 .levels span { line-height: 21px; }
 .examples a, .examples a span { line-height: 20px; }
 
+/* The demonstration's controls as a layer of their own above its panels (one column): the same controls, without their
+   frame, title and note. */
+.demo-bar { grid-column: 1; min-width: 0; }
+.demo-bar .demo { max-width: none; margin: 0; padding: 0; border: 0; background: none; }
+.demo-bar .demo-title, .demo-bar .demo-note { display: none; }
+.demo-bar .demo-run { margin: 0; }
+
 /* ---------- Narrow screens: one column, sections as tall as their content ---------- */
 @media (max-width: 920px) {
   #stage .app-container { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; }
-  /* One column: a section's text in one row and its specimen in the next. The rows are named, not left to the order of
-     the elements, so that a second panel shares its specimen's row. */
-  .app-container > [data-section] { grid-column: 1; grid-row: calc(var(--row) * 2 - 1); }
-  .app-container > .specimen { grid-column: 1; grid-row: calc(var(--row) * 2); }
+  /* One column: a section's text in one row, the demonstration's controls in the next and its specimen in a third. The
+     rows are named, not left to the order of the elements, so that a second panel shares its specimen's row. */
+  .app-container > [data-section] { grid-column: 1; grid-row: calc(var(--row) * 3 - 2); }
+  .app-container > .demo-bar { grid-row: calc(var(--row) * 3 - 1); margin-block: 32px 0; }
+  .app-container > .specimen { grid-column: 1; grid-row: calc(var(--row) * 3); }
   .app-container > .slide-text { margin-block: 96px 0; }
   .app-container > .specimen { margin-block: 40px 64px; }
-  .app-container > .slide-cover { margin-bottom: 64px; }
-  .cover-grid { grid-template-columns: minmax(0, 1fr); row-gap: 40px; }
+  html:not(.deck) .app-container > .demo-bar + .specimen, html:not(.deck) .app-container > .demo-bar + .specimen + .specimen { margin-top: 12px; }
+  /* The controls are above the panels here, so the ones in the text are not shown; their title and note stay. */
+  .slide-text .demo-kinds, .slide-text .demo-run { display: none; }
+  .slide-text .demo-title { margin-bottom: 8px; }
+  /* The cover's specimen follows the cover as a layer of its own. */
+  .cover-grid > .specimen { display: none; }
+  .cover-grid { grid-template-columns: minmax(0, 1fr); }
+  .compare th, .compare td { padding-block: 9px; }
   .facts li { grid-template-columns: minmax(0, 1fr); }
   .top nav a:nth-child(-n+2) { display: none; }
   .levels li { grid-template-columns: minmax(0, 1fr); gap: 6px; margin-left: 0 !important; }
   .stack li { margin-left: 0 !important; }
 }
 @media (max-width: 420px) {
-  .examples { grid-template-columns: minmax(0, 1fr); }
+  .examples { gap: 0 14px; }
+  .examples a { gap: 8px; font-size: 13.5px; }
   .compare tbody th { width: 30%; }
 }

@@ -141,7 +141,7 @@ try {
       else {
         // The pages and site files `seo.ts` writes, the icons and social card, hashed JS/CSS and the JPEG
         // previews of GPU mode shown to browsers that cannot run it.
-        assert.ok(/^(?:(?:index|404|next)\.html|robots\.txt|sitemap\.xml|favicon\.svg|og\.jpg|apple-touch-icon\.png|examples\/[\w-]+\.html|assets\/[\w.-]+\.(?:js|css|jpg))$/.test(name),
+        assert.ok(/^(?:(?:index|examples|404)\.html|robots\.txt|llms\.txt|sitemap\.xml|favicon\.svg|og\.jpg|apple-touch-icon\.png|examples\/[\w-]+\.html|assets\/[\w.-]+\.(?:js|css|jpg))$/.test(name),
           `Unexpected public asset: ${name}`);
         const bytes = await readFile(path);
         if (name.endsWith(".jpg")) assert.ok(bytes[0] === 0xff && bytes[1] === 0xd8, `Public image is not a JPEG: ${name}`);
@@ -176,13 +176,19 @@ try {
     assert.equal(response.status, 200);
     assert.match(await response.text(), new RegExp(`<link rel="canonical" href="https://underglass.dev/examples/${example}">`));
   }
-  for (const file of ["sitemap.xml", "robots.txt", "favicon.svg", "og.jpg", "apple-touch-icon.png"]) assert.equal((await fetch(`${url}${file}`)).status, 200, file);
+  // The examples' index is served with and without a trailing slash.
+  for (const path of ["examples", "examples/"]) {
+    const response = await fetch(`${url}${path}`);
+    assert.equal(response.status, 200, path);
+    assert.match(await response.text(), /<link rel="canonical" href="https:\/\/underglass\.dev\/examples">/, path);
+  }
+  for (const file of ["sitemap.xml", "robots.txt", "llms.txt", "favicon.svg", "og.jpg", "apple-touch-icon.png"]) assert.equal((await fetch(`${url}${file}`)).status, 200, file);
   // Every script and stylesheet the page references must be served.
   for (const asset of html.matchAll(/(?:src|href)="(\/underglass\/assets\/[^"]+)"/g)) {
     assert.equal((await fetch(`http://127.0.0.1:${port}${asset[1]}`)).status, 200);
   }
-  // The preview home page (`/next`). Its content and its stylesheet are in the served HTML, inside prerendered
-  // Underglass hosts, and it is kept out of search and the sitemap. As ordinary DOM it is a flowing page whose controls
+  // The home page. Its content and its stylesheet are in the served HTML, inside prerendered Underglass hosts, with
+  // the head a search engine and a social card need. As ordinary DOM it is a flowing page whose controls
   // work and which fits a desktop and a phone; where the deck cannot run, the Underglass runtime is never requested.
   // With GPU presentation it is a deck with a different change between each two sections, some of them shader effects
   // on the live layers: starting it changes no pixel of the stage, the stage stays in the window, the scroll position
@@ -190,10 +196,13 @@ try {
   // change captures nothing.
   {
     const sectionIds = ["cover", "dom", "transitions", "motion", "shaders", "depth", "everywhere", "start"];
-    const response = await fetch(`${url}next`);
+    const response = await fetch(url);
     assert.equal(response.status, 200);
     const served = await response.text();
-    assert.match(served, /<meta name="robots" content="noindex">/);
+    assert.match(served, /<meta name="robots" content="index, follow, max-image-preview:large">/);
+    assert.match(served, /<link rel="canonical" href="https:\/\/underglass\.dev\/">/);
+    assert.match(served, /<meta property="og:image" content="https:\/\/underglass\.dev\/og\.jpg">/);
+    assert.match(served, /"@type":"SoftwareSourceCode"/);
     assert.match(served, /<h1 id="cover-title">Real React controls\./);
     for (const id of sectionIds) assert.match(served, new RegExp(`<section class="slide-text slide-${id}" id="${id}"`), id);
     for (const host of ["output", "ordinary", "overlay"]) assert.match(served, new RegExp(`data-underglass-host="${host}"`), host);
@@ -206,7 +215,9 @@ try {
     const entry = /<script type="module" crossorigin src="(\/underglass\/assets\/[^"]+\.js)">/.exec(served);
     assert.ok(entry, "the page names its entry script");
     assert.ok((await (await fetch(`http://127.0.0.1:${port}${entry[1]}`)).text()).length < 4000, "the entry script is small");
-    assert.doesNotMatch(await (await fetch(`${url}sitemap.xml`)).text(), /next/);
+    const sitemap = await (await fetch(`${url}sitemap.xml`)).text();
+    for (const page of ["", "examples", "examples/instrument"]) assert.ok(sitemap.includes(`<loc>https://underglass.dev/${page}</loc>`), `the sitemap lists /${page}`);
+    assert.match(await (await fetch(`${url}llms.txt`)).text(), /^# Underglass\n/);
     // Chrome's warning about a WebGPU option on Windows is not the page's.
     const watch = page => {
       const problems = [];
@@ -218,7 +229,7 @@ try {
     try {
       const still = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 1280, height: 800 } });
       const stillPage = await still.newPage();
-      await stillPage.goto(`${url}next`);
+      await stillPage.goto(url);
       assert.equal(await stillPage.locator("h1").innerText(), "Real React controls.\nPainted by the GPU.");
       assert.equal(await stillPage.locator("main section").count(), 8);
       assert.equal(await stillPage.locator("#transitions").evaluate(node => node.getBoundingClientRect().height > 200), true, "without JavaScript the sections are laid out");
@@ -231,14 +242,14 @@ try {
         await context.addInitScript(() => { try { sessionStorage.setItem("underglass-deck", "off"); } catch { /* opaque origin */ } });
         const page = await context.newPage();
         const problems = watch(page);
-        await page.goto(`${url}next`);
-        await page.waitForFunction(() => window.nextDeck);
+        await page.goto(url);
+        await page.waitForFunction(() => window.homeDeck);
         await page.getByLabel("Name").fill("Grace");
         await page.getByRole("button", { name: "Press" }).click();
         assert.equal(await page.locator('.live-row [role="status"]').innerText(), "Hello, Grace. Pressed 1 time.");
         assert.equal(await page.getByLabel("Level").evaluate(input => input.closest("label").querySelector("output").textContent), "60");
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, `${name}: sideways scroll`);
-        assert.equal(await page.evaluate(() => window.nextDeck.state().mode), "dom", `${name}: ordinary DOM`);
+        assert.equal(await page.evaluate(() => window.homeDeck.state().mode), "dom", `${name}: ordinary DOM`);
         assert.equal(await page.evaluate(() => document.documentElement.classList.contains("deck")), false, `${name}: the flow`);
         if (name === "desktop") {
           // The sections follow each other down the page, each in a row at least a window tall (a section is centred in
@@ -268,16 +279,26 @@ try {
           const problems = watch(page);
           const scripts = [];
           page.on("response", response => { if (/\/assets\/[^/]+\.js$/.test(response.url())) scripts.push(response.body().then(body => body.length)); });
-          await page.goto(`${url}next`);
+          await page.goto(url);
           await page.getByRole("button", { name: "Press" }).click();
           await page.locator('.live-row [role="status"]').filter({ hasText: "Pressed 1 time." }).waitFor();
           await page.getByLabel("Name").fill("Grace");
           assert.equal(await page.locator('.live-row [role="status"]').innerText(), "Hello, Grace. Pressed 1 time.");
-          assert.equal(await page.evaluate(() => "nextDeck" in window), false, `${name}: the deck's driver is not loaded`);
+          assert.equal(await page.evaluate(() => "homeDeck" in window), false, `${name}: the deck's driver is not loaded`);
           const bytes = (await Promise.all(scripts)).reduce((sum, size) => sum + size, 0);
           assert.ok(bytes > 100_000 && bytes < 400_000, `${name}: ${bytes} bytes of script (React and the page, not the runtime)`);
           assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, `${name}: sideways scroll`);
+          if (name === "no APIs, phone") {
+            // In one column the demonstration's controls lie above its panels, with ids of their own; the ones in the text are not shown.
+            assert.deepEqual(await page.evaluate(() => [getComputedStyle(document.getElementById("transitions-controls")).display !== "none", document.getElementById("demo-scrub").offsetParent === null,
+              getComputedStyle(document.getElementById("cover-figure")).display !== "none"]), [true, true, true]);
+            await page.locator("#demo-scrub-bar").fill("60");
+            assert.deepEqual(await page.evaluate(() => ["transitions-figure", "transitions-second"].map(id => getComputedStyle(document.getElementById(id)).visibility)), ["hidden", "visible"]);
+            await page.locator("#demo-scrub-bar").fill("0");
+          }
           if (name === "no APIs") {
+            // Where there are two columns the parts that are layers in one column only are not shown.
+            assert.deepEqual(await page.evaluate(() => ["transitions-controls", "cover-figure"].map(id => getComputedStyle(document.getElementById(id)).display)), ["none", "none"]);
             // The live demonstration without the GPU: the panels swap at the middle of the slider, and their clocks count.
             await page.locator("#demo-scrub").fill("60");
             assert.deepEqual(await page.evaluate(() => ["transitions-figure", "transitions-second"].map(id => getComputedStyle(document.getElementById(id)).visibility)), ["hidden", "visible"]);
@@ -299,31 +320,31 @@ try {
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
       const page = await context.newPage();
       const problems = watch(page);
-      await page.goto(`${url}next`);
+      await page.goto(url);
       // The elements the page was served with, before the deck moves them into the canvas.
       await page.evaluate(() => { window.servedPress = document.querySelector(".live-row button"); });
-      await page.waitForFunction(() => window.nextDeck?.state().mode === "gpu", null, { timeout: 30_000 });
-      await page.evaluate(() => window.nextDeck.idle());
+      await page.waitForFunction(() => window.homeDeck?.state().mode === "gpu", null, { timeout: 30_000 });
+      await page.evaluate(() => window.homeDeck.idle());
       const snapshot = () => page.evaluate(() => {
-        const state = window.nextDeck.state();
+        const state = window.homeDeck.state();
         // The light under the sections is a layer with an effect of its own for as long as the deck is on: counted apart.
         return { mode: state.mode, reason: state.reason, layers: state.layers.map(layer => layer.id).filter(id => id !== "deck-light"), captures: state.metrics.captures,
           light: state.layers.some(layer => layer.id === "deck-light"),
           lamp: state.decorativeEffects.find(effect => effect.id === "deck-light")?.effects[0]?.parameters.lamp ?? null,
           perLayer: Object.fromEntries(Object.entries(state.metrics.perLayer).map(([id, layer]) => [id, layer.captures])),
-          place: window.nextDeck.place(), deck: document.documentElement.classList.contains("deck"), errors: [...window.nextDeck.errors],
+          place: window.homeDeck.place(), deck: document.documentElement.classList.contains("deck"), errors: [...window.homeDeck.errors],
           effects: state.decorativeEffects.filter(effect => effect.id !== "deck-light").map(effect => `${effect.id}:${effect.effects.map(item => item.kind).join("+")}`),
           change: document.getElementById("deck-change").hidden ? null : document.getElementById("deck-change").textContent,
           canvasShown: !document.querySelector('[data-underglass-host="output"]').hidden, scrollY };
       });
-      const go = index => page.evaluate(value => window.nextDeck.go(value), index);
+      const go = index => page.evaluate(value => window.homeDeck.go(value), index);
       /** Scrolls to `position` sections down the track (1.5 is half way from the second section to the third). */
-      const scrub = position => page.evaluate(value => { scrollTo({ top: value * innerHeight, behavior: "instant" }); return window.nextDeck.idle(); }, position);
+      const scrub = position => page.evaluate(value => { scrollTo({ top: value * innerHeight, behavior: "instant" }); return window.homeDeck.idle(); }, position);
       const status = () => page.locator('.live-row [role="status"]').innerText();
 
       // The changes' shaders are compiled ahead of use, on a layer of their own that is gone again afterwards.
-      await page.evaluate(() => window.nextDeck.warmed().then(() => window.nextDeck.idle()));
-      assert.ok(await page.evaluate(() => window.nextDeck.state().metrics.effectShaderCompilations) >= 5, "the custom effects are compiled before their first use");
+      await page.evaluate(() => window.homeDeck.warmed().then(() => window.homeDeck.idle()));
+      assert.ok(await page.evaluate(() => window.homeDeck.state().metrics.effectShaderCompilations) >= 5, "the custom effects are compiled before their first use");
       // It starts by itself, as the deck, with only the cover enrolled.
       let state = await snapshot();
       assert.deepEqual({ mode: state.mode, deck: state.deck, layers: state.layers, from: state.place.from, canvasShown: state.canvasShown, light: state.light },
@@ -337,16 +358,16 @@ try {
       const spot = { x: 700, y: 800, width: 120, height: 60 };
       const brightness = async () => { const image = PNG.sync.read(await page.screenshot({ clip: spot })); let sum = 0; for (let offset = 0; offset < image.data.length; offset += 4) sum += image.data[offset] + image.data[offset + 1] + image.data[offset + 2]; return sum / (image.data.length / 4) / 3; };
       await page.mouse.move(30, 880);
-      await page.waitForFunction(() => window.nextDeck.state().decorativeEffects.some(effect => effect.id === "deck-light"));
+      await page.waitForFunction(() => window.homeDeck.state().decorativeEffects.some(effect => effect.id === "deck-light"));
       const dark = await brightness();
       await page.mouse.move(760, 830, { steps: 6 });
-      await page.waitForFunction(() => window.nextDeck.state().decorativeEffects.find(effect => effect.id === "deck-light")?.effects[0]?.parameters.lamp === 1);
-      await page.evaluate(() => window.nextDeck.idle());
+      await page.waitForFunction(() => window.homeDeck.state().decorativeEffects.find(effect => effect.id === "deck-light")?.effects[0]?.parameters.lamp === 1);
+      await page.evaluate(() => window.homeDeck.idle());
       const lit = await brightness();
       assert.ok(lit - dark > 6, `the lamp lights the background under the pointer (${dark.toFixed(1)} to ${lit.toFixed(1)})`);
       await page.mouse.move(30, 880);
-      await page.waitForFunction(() => window.nextDeck.state().decorativeEffects.find(effect => effect.id === "deck-light")?.effects[0]?.parameters.lamp === 0);
-      await page.evaluate(() => window.nextDeck.idle());
+      await page.waitForFunction(() => window.homeDeck.state().decorativeEffects.find(effect => effect.id === "deck-light")?.effects[0]?.parameters.lamp === 0);
+      await page.evaluate(() => window.homeDeck.idle());
       assert.ok(Math.abs(await brightness() - dark) < 0.5, "the lamp is out with the pointer off the stage");
       assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById("pin")).position), "sticky");
       await page.screenshot({ path: join(run, "next-deck-cover.png") });
@@ -429,7 +450,7 @@ try {
       await page.getByLabel("Name").fill("Grace");
       await page.getByRole("button", { name: "Press" }).click();
       assert.equal(await status(), "Hello, Grace. Pressed 1 time.");
-      await page.evaluate(() => window.nextDeck.idle());
+      await page.evaluate(() => window.homeDeck.idle());
       assert.equal(before.equals(await page.screenshot({ clip: statusBox })), false, "the GPU drew the new text");
       // A parked section is not drawn and takes no hit, although it is stacked on the same place.
       assert.equal(await page.evaluate(() => { const box = document.querySelector(".live-row button").getBoundingClientRect();
@@ -443,7 +464,7 @@ try {
       state = await snapshot();
       assert.deepEqual(state.layers, ["dom", "dom-figure", "transitions", "transitions-figure", "transitions-second"]);
       assert.equal(state.place.to, 2);
-      const tilted = await page.evaluate(() => window.nextDeck.state().layers.find(layer => layer.id === "dom-figure").transform.tiltX);
+      const tilted = await page.evaluate(() => window.homeDeck.state().layers.find(layer => layer.id === "dom-figure").transform.tiltX);
       assert.ok(tilted > 2, `the leaving specimen is tilted (${tilted})`);
       await page.getByRole("button", { name: "Press" }).click();
       assert.equal(await status(), "Hello, Grace. Pressed 2 times.");
@@ -473,28 +494,28 @@ try {
       // button takes a real click. Play runs the change back on the clock.
       await go(2);
       const panels = () => page.evaluate(() => {
-        const layers = window.nextDeck.state().layers, shown = id => layers.find(layer => layer.id === id).transform.scaleX === 0.01 ? "hidden" : "shown";
+        const layers = window.homeDeck.state().layers, shown = id => layers.find(layer => layer.id === id).transform.scaleX === 0.01 ? "hidden" : "shown";
         return [shown("transitions-figure"), shown("transitions-second")];
       });
       assert.deepEqual([(await snapshot()).layers, await panels()], [["transitions", "transitions-figure", "transitions-second"], ["shown", "hidden"]]);
       await page.getByRole("button", { name: "iris", exact: true }).click();
       await page.locator("#demo-scrub").fill("50");
-      await page.evaluate(() => window.nextDeck.idle());
+      await page.evaluate(() => window.homeDeck.idle());
       state = await snapshot();
       assert.deepEqual([state.mode, state.effects, await panels(), state.errors], ["gpu", ["transitions-figure:custom+custom", "transitions-second:custom+custom"], ["shown", "shown"], []]);
       await page.waitForFunction(() => document.querySelector("#transitions-second [data-demo-clock]").textContent !== "00:00.0");
       await page.screenshot({ path: join(run, "next-deck-demo.png") });
       await page.getByRole("button", { name: "tilt", exact: true }).click();
-      await page.evaluate(() => window.nextDeck.idle());
+      await page.evaluate(() => window.homeDeck.idle());
       assert.deepEqual([(await snapshot()).effects, await panels()], [[], ["shown", "shown"]], "another change, picked part way through, takes over");
       await page.locator("#demo-scrub").fill("100");
-      await page.evaluate(() => window.nextDeck.idle());
+      await page.evaluate(() => window.homeDeck.idle());
       assert.deepEqual([(await snapshot()).effects, await panels()], [[], ["hidden", "shown"]]);
       await page.getByRole("button", { name: "Lap" }).click();
       assert.equal(await page.locator(".lap-row output").innerText(), "1 lap");
       await page.locator("#demo-play").click();
       await page.waitForFunction(() => document.getElementById("demo-scrub").value === "0");
-      await page.evaluate(() => window.nextDeck.idle());
+      await page.evaluate(() => window.homeDeck.idle());
       assert.deepEqual([(await snapshot()).effects, await panels()], [[], ["shown", "hidden"]]);
       // Scrolling on part way through settles the demonstration: the next change runs with the panel that was nearer
       // showing and the other hidden, and the clocks stop.
@@ -549,26 +570,26 @@ try {
       await go(0);
       const jumpBegan = Date.now();
       await page.locator('.rail a[href="#shaders"]').click();
-      await page.waitForFunction(() => window.nextDeck.place().to === 4 && !document.getElementById("deck-change").hidden);
+      await page.waitForFunction(() => window.homeDeck.place().to === 4 && !document.getElementById("deck-change").hidden);
       state = await snapshot();
       assert.deepEqual([state.layers, state.change, state.scrollY, state.place.from], [["cover", "shaders", "shaders-figure"], "scan", 4 * 900, 0]);
-      await page.waitForFunction(() => window.nextDeck.place().from === 4 && window.nextDeck.place().to === null);
+      await page.waitForFunction(() => window.homeDeck.place().from === 4 && window.homeDeck.place().to === null);
       const jumpTook = Date.now() - jumpBegan;
       assert.ok(jumpTook > 800 && jumpTook < 3000, `the jump took ${jumpTook} ms`);
       // A paging key and focus moving into a parked section each bring that section on stage too.
       await page.locator('.rail a[href="#shaders"]').click();
-      await page.waitForFunction(() => window.nextDeck.place().from === 4 && window.nextDeck.place().to === null);
-      await page.evaluate(() => window.nextDeck.idle());
+      await page.waitForFunction(() => window.homeDeck.place().from === 4 && window.homeDeck.place().to === null);
+      await page.evaluate(() => window.homeDeck.idle());
       state = await snapshot();
       assert.deepEqual(state.layers, ["shaders", "shaders-figure"]);
       await page.locator('.rail a[href="#shaders"][aria-current]').waitFor({ state: "attached" });
       assert.equal(new URL(page.url()).hash, "#shaders");
       await page.evaluate(() => document.activeElement?.blur());
       await page.keyboard.press("PageDown");
-      await page.waitForFunction(() => window.nextDeck.place().from === 5 && window.nextDeck.place().to === null);
+      await page.waitForFunction(() => window.homeDeck.place().from === 5 && window.homeDeck.place().to === null);
       await page.keyboard.press("Home");
-      await page.waitForFunction(() => window.nextDeck.place().from === 0 && window.nextDeck.place().to === null);
-      await page.evaluate(() => { document.querySelector("#start a").focus(); return window.nextDeck.idle(); });
+      await page.waitForFunction(() => window.homeDeck.place().from === 0 && window.homeDeck.place().to === null);
+      await page.evaluate(() => { document.querySelector("#start a").focus(); return window.homeDeck.idle(); });
       state = await snapshot();
       assert.deepEqual([state.place.from, state.layers], [7, ["start", "start-figure"]]);
       await page.screenshot({ path: join(run, "next-deck-start.png") });
@@ -577,8 +598,8 @@ try {
       // form as it was. It switches back to the deck the same way.
       await go(1);
       await page.locator("#deck-switch").click();
-      await page.waitForFunction(() => window.nextDeck.state().mode === "dom" && !document.documentElement.classList.contains("deck"));
-      await page.evaluate(() => window.nextDeck.idle());
+      await page.waitForFunction(() => window.homeDeck.state().mode === "dom" && !document.documentElement.classList.contains("deck"));
+      await page.evaluate(() => window.homeDeck.idle());
       assert.equal(await status(), "Hello, Grace. Pressed 2 times.");
       assert.equal(await page.getByLabel("Name").inputValue(), "Grace");
       assert.equal(await page.evaluate(() => window.servedPress === document.querySelector(".live-row button")), true);
@@ -591,8 +612,8 @@ try {
       const flowScroll = await page.evaluate(() => scrollY);
       const flowPixels = PNG.sync.read(await page.screenshot({ clip: stageClip, path: join(run, "next-stage-dom.png") }));
       await page.locator("#deck-switch").click();
-      await page.waitForFunction(() => window.nextDeck.state().mode === "gpu", null, { timeout: 30_000 });
-      await page.evaluate(() => { document.activeElement?.blur(); return window.nextDeck.idle(); });
+      await page.waitForFunction(() => window.homeDeck.state().mode === "gpu", null, { timeout: 30_000 });
+      await page.evaluate(() => { document.activeElement?.blur(); return window.homeDeck.idle(); });
       assert.equal(await page.evaluate(() => scrollY), flowScroll, "the scroll position is the same in the deck");
       const deckPixels = PNG.sync.read(await page.screenshot({ clip: stageClip, path: join(run, "next-stage-gpu.png") }));
       let changedPixels = 0;
@@ -609,52 +630,123 @@ try {
       await scrub(3.5);
       const placed = (await snapshot()).place;
       await page.setViewportSize({ width: 1500, height: 820 });
-      await page.evaluate(() => window.nextDeck.idle());
+      await page.evaluate(() => window.homeDeck.idle());
       state = await snapshot();
       assert.deepEqual([state.mode, state.place.from, state.place.to], ["gpu", 3, 4]);
       assert.ok(Math.abs(state.place.t - placed.t) < 0.02, `the change is where it was (${placed.t} to ${state.place.t})`);
       await page.setViewportSize({ width: 1440, height: 900 });
-      await page.evaluate(() => window.nextDeck.idle());
+      await page.evaluate(() => window.homeDeck.idle());
       assert.ok(Math.abs((await snapshot()).place.t - placed.t) < 0.02);
 
       // GPU presentation that ends by itself (here the device is destroyed) returns the page to the flow in ordinary DOM,
       // and the page starts it again a moment later.
       await go(1);
       await page.evaluate(() => document.querySelector('[data-underglass-host="output"]').getContext("webgpu").getConfiguration().device.destroy());
-      await page.waitForFunction(() => window.nextDeck.state().mode === "dom");
-      await page.waitForFunction(() => window.nextDeck.state().mode === "gpu", null, { timeout: 30_000 });
-      await page.evaluate(() => window.nextDeck.idle());
+      await page.waitForFunction(() => window.homeDeck.state().mode === "dom");
+      await page.waitForFunction(() => window.homeDeck.state().mode === "gpu", null, { timeout: 30_000 });
+      await page.evaluate(() => window.homeDeck.idle());
       state = await snapshot();
-      assert.deepEqual({ deck: state.deck, from: state.place.from, layers: state.layers, errors: state.errors, losses: await page.evaluate(() => window.nextDeck.state().metrics.deviceLosses.length) },
+      assert.deepEqual({ deck: state.deck, from: state.place.from, layers: state.layers, errors: state.errors, losses: await page.evaluate(() => window.homeDeck.state().metrics.deviceLosses.length) },
         { deck: true, from: 1, layers: ["dom", "dom-figure"], errors: [], losses: 1 });
       assert.equal(await status(), "Hello, Grace. Pressed 2 times.");
       assert.deepEqual(problems.filter(problem => !/device (was )?(lost|destroyed)/i.test(problem)), [], "the deck reported problems");
       await context.close();
 
-      // The deck runs at every window size. A section taller than the stage pans: while the scroll position is inside the
-      // section's own length the section moves up the stage, by its matrix, exactly as the flow would scroll it, and
-      // the change to the next section comes after that. Checked in a short desktop window and on a phone (emulated:
-      // a narrow window at three device pixels per pixel, with touch).
-      for (const [name, options] of [["short window", { viewport: { width: 1280, height: 520 } }],
-        ["phone", { viewport: { width: 390, height: 780 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 }]]) {
+      // On a phone (emulated: one column at three device pixels per pixel, with touch) a section is two stops of the
+      // deck, its text and then its specimen, so that each is a page that fits the screen: a change lands on a whole
+      // page, with nothing to scroll after it. The cover's specimen and the demonstration's controls are layers of
+      // their own there.
+      {
+        const phone = await browser.newContext({ viewport: { width: 384, height: 700 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
+        const phonePage = await phone.newPage();
+        const phoneProblems = watch(phonePage);
+        await phonePage.goto(url);
+        await phonePage.waitForFunction(() => window.homeDeck?.state().mode === "gpu", null, { timeout: 30_000 });
+        await phonePage.evaluate(() => window.homeDeck.warmed().then(() => window.homeDeck.idle()));
+        const stops = await phonePage.evaluate(() => window.homeDeck.stops()), lengths = await phonePage.evaluate(() => window.homeDeck.lengths());
+        assert.deepEqual(stops.map(stop => stop.ids.join("+")), ["cover", "cover-figure", "dom", "dom-figure", "transitions", "transitions-controls+transitions-figure+transitions-second",
+          "motion", "motion-figure", "shaders", "shaders-figure", "depth", "depth-figure", "everywhere", "everywhere-figure", "start", "start-figure"]);
+        assert.deepEqual(stops.map(stop => stop.section), [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]);
+        assert.deepEqual(lengths.pans, stops.map(() => 0), "phone: every page fits the screen, so none pans");
+        const seen = () => phonePage.evaluate(() => {
+          const state = window.homeDeck.state(), place = window.homeDeck.place();
+          return { mode: state.mode, from: place.from, to: place.to, layers: state.layers.map(layer => layer.id).filter(layer => layer !== "deck-light"),
+            effects: state.decorativeEffects.filter(effect => effect.id !== "deck-light").map(effect => `${effect.id}:${effect.effects.map(item => item.kind).join("+")}`),
+            captures: Object.fromEntries(Object.entries(state.metrics.perLayer).map(([layer, counts]) => [layer, counts.captures])), errors: [...window.homeDeck.errors] };
+        });
+        const scrollTo = top => phonePage.evaluate(value => { scrollTo({ top: value, behavior: "instant" }); return window.homeDeck.idle(); }, top);
+        // A text's page, then the change to its specimen's page (another of the deck's changes), then that page.
+        await phonePage.evaluate(() => window.homeDeck.goStop(2));
+        let now = await seen();
+        assert.deepEqual([now.mode, now.from, now.to, now.layers, now.errors], ["gpu", 2, null, ["dom"], []]);
+        await scrollTo(lengths.starts[2] + lengths.change * 0.4);
+        const early = await seen();
+        assert.deepEqual([early.mode, early.from, early.to, early.layers, early.effects.length, early.errors], ["gpu", 2, 3, ["dom", "dom-figure"], 2, []]);
+        await scrollTo(lengths.starts[2] + lengths.change * 0.6);
+        assert.deepEqual((await seen()).captures, early.captures, "phone: scrolling through a change captured a layer");
+        await scrollTo(lengths.starts[3]);
+        now = await seen();
+        assert.deepEqual([now.from, now.to, now.layers, now.effects], [3, null, ["dom-figure"], []]);
+        // The page's control takes a real tap.
+        await phonePage.getByRole("button", { name: "Press" }).tap();
+        assert.equal(await phonePage.locator('.live-row [role="status"]').innerText(), "Hello, Ada. Pressed 1 time.");
+        await phonePage.screenshot({ path: join(run, "home-phone-page.png") });
+        // The demonstration's page: its controls above its two panels. A tap picks a change, the slider scrubs it with
+        // its effect on both panels, and at the end the second panel's own button takes a tap.
+        await phonePage.evaluate(() => window.homeDeck.goStop(5));
+        const shown = () => phonePage.evaluate(() => {
+          const layers = window.homeDeck.state().layers, is = id => layers.find(layer => layer.id === id).transform.scaleX === 0.01 ? "hidden" : "shown";
+          return [is("transitions-figure"), is("transitions-second")];
+        });
+        assert.deepEqual([(await seen()).layers, await shown()], [["transitions-controls", "transitions-figure", "transitions-second"], ["shown", "hidden"]]);
+        await phonePage.locator("#transitions-controls").getByRole("button", { name: "iris", exact: true }).tap();
+        await phonePage.locator("#demo-scrub-bar").fill("50");
+        await phonePage.evaluate(() => window.homeDeck.idle());
+        now = await seen();
+        assert.deepEqual([now.mode, now.effects, await shown(), now.errors], ["gpu", ["transitions-figure:custom+custom", "transitions-second:custom+custom"], ["shown", "shown"], []]);
+        await phonePage.screenshot({ path: join(run, "home-phone-demo.png") });
+        await phonePage.locator("#demo-scrub-bar").fill("100");
+        await phonePage.evaluate(() => window.homeDeck.idle());
+        assert.deepEqual(await shown(), ["hidden", "shown"]);
+        await phonePage.getByRole("button", { name: "Lap" }).tap();
+        assert.equal(await phonePage.locator(".lap-row output").innerText(), "1 lap");
+        await phonePage.locator("#demo-scrub-bar").fill("0");
+        // A link to a section jumps to its first page.
+        await phonePage.evaluate(() => window.homeDeck.goStop(0));
+        await phonePage.getByRole("link", { name: "See the transitions" }).tap();
+        await phonePage.waitForFunction(() => { const place = window.homeDeck.place(); return place.from === 4 && place.to === null; });
+        // Ordinary DOM again: the same part of the page is at the top of the window, and every part is laid out.
+        await phonePage.evaluate(() => window.homeDeck.goStop(7));
+        await phonePage.evaluate(() => window.homeDeck.stop());
+        const flowed = await phonePage.evaluate(() => ({ deck: document.documentElement.classList.contains("deck"), top: Math.round(document.getElementById("motion-figure").getBoundingClientRect().top),
+          parked: document.querySelectorAll(".parked").length }));
+        assert.ok(!flowed.deck && flowed.parked === 0 && flowed.top >= 0 && flowed.top <= 120, `phone: back in the flow the specimen is at the top of the window (${JSON.stringify(flowed)})`);
+        assert.deepEqual(phoneProblems, [], "phone: the page reported problems");
+        await phone.close();
+      }
+
+      // The deck runs at every window size. A stop taller than the stage pans: while the scroll position is inside its
+      // own length it moves up the stage, by its matrix, exactly as the flow would scroll it, and the change to the
+      // next stop comes after that. Checked in a short desktop window.
+      for (const [name, options] of [["short window", { viewport: { width: 1280, height: 520 } }]]) {
         const tall = await browser.newContext(options);
         const tallPage = await tall.newPage();
         const tallProblems = watch(tallPage);
-        await tallPage.goto(`${url}next`);
-        await tallPage.waitForFunction(() => window.nextDeck?.state().mode === "gpu", null, { timeout: 30_000 });
-        await tallPage.evaluate(() => window.nextDeck.warmed().then(() => window.nextDeck.idle()));
-        const lengths = await tallPage.evaluate(() => window.nextDeck.lengths());
+        await tallPage.goto(url);
+        await tallPage.waitForFunction(() => window.homeDeck?.state().mode === "gpu", null, { timeout: 30_000 });
+        await tallPage.evaluate(() => window.homeDeck.warmed().then(() => window.homeDeck.idle()));
+        const lengths = await tallPage.evaluate(() => window.homeDeck.lengths());
         assert.ok(lengths.pans.some(pan => pan > 40), `${name}: some sections are taller than the stage (${lengths.pans})`);
         // The longest pan, of a section that is not the last: panned half way, then to its end.
         const index = lengths.pans.indexOf(Math.max(...lengths.pans.slice(0, -1)));
         const pan = lengths.pans[index], start = lengths.starts[index], id = sectionIds[index];
         const at = offset => tallPage.evaluate(async ([top, section]) => {
           scrollTo({ top, behavior: "instant" });
-          await window.nextDeck.idle();
-          const state = window.nextDeck.state(), place = window.nextDeck.place();
+          await window.homeDeck.idle();
+          const state = window.homeDeck.state(), place = window.homeDeck.place();
           return { mode: state.mode, from: place.from, to: place.to, pan: Math.round(place.panFrom), top: Math.round(document.getElementById(section).getBoundingClientRect().top),
             layers: state.layers.map(layer => layer.id).filter(layer => layer !== "deck-light"),
-            captures: Object.fromEntries(Object.entries(state.metrics.perLayer).map(([layer, counts]) => [layer, counts.captures])), errors: [...window.nextDeck.errors] };
+            captures: Object.fromEntries(Object.entries(state.metrics.perLayer).map(([layer, counts]) => [layer, counts.captures])), errors: [...window.homeDeck.errors] };
         }, [offset, id]);
         const top = await at(start);
         assert.deepEqual([top.mode, top.from, top.to, top.pan, top.errors], ["gpu", index, null, 0, []], name);
@@ -669,7 +761,7 @@ try {
         const changing = await at(start + pan + Math.round(lengths.change / 2));
         assert.deepEqual([changing.mode, changing.from, changing.to, changing.errors], ["gpu", index, index + 1, []], `${name}: the change after the pan`);
         // A control far down a tall section takes a real click, or tap, where panning has put it.
-        const second = await tallPage.evaluate(() => window.nextDeck.lengths());
+        const second = await tallPage.evaluate(() => window.homeDeck.lengths());
         await at(second.starts[1] + second.pans[1]);
         const press = tallPage.getByRole("button", { name: "Press" });
         if (name === "phone") await press.tap(); else await press.click();
@@ -678,11 +770,11 @@ try {
         // (The pointer is moved off the stage first: the lamp under it is drawn on the GPU only. On the phone the
         // browser's tap highlight on the button is given time to end.)
         if (name === "phone") await tallPage.waitForTimeout(700); else await tallPage.mouse.move(30, 400);
-        await tallPage.waitForFunction(() => !window.nextDeck.state().decorativeEffects.some(effect => effect.id === "deck-light" && effect.effects[0].parameters.lamp > 0));
-        await tallPage.evaluate(() => { document.activeElement?.blur(); return window.nextDeck.idle(); });
+        await tallPage.waitForFunction(() => !window.homeDeck.state().decorativeEffects.some(effect => effect.id === "deck-light" && effect.effects[0].parameters.lamp > 0));
+        await tallPage.evaluate(() => { document.activeElement?.blur(); return window.homeDeck.idle(); });
         const tallScroll = await tallPage.evaluate(() => Math.round(scrollY));
         const onGpu = PNG.sync.read(await tallPage.screenshot({ path: join(run, `next-${name.replace(" ", "-")}-gpu.png`) }));
-        await tallPage.evaluate(() => window.nextDeck.stop());
+        await tallPage.evaluate(() => window.homeDeck.stop());
         assert.equal(await tallPage.evaluate(() => Math.round(scrollY)), tallScroll, `${name}: the flow is at the same scroll position`);
         const inDom = PNG.sync.read(await tallPage.screenshot({ path: join(run, `next-${name.replace(" ", "-")}-dom.png`) }));
         // In the short window the header and the side scale are beside the stage, and the readout in the header changes.
@@ -701,19 +793,19 @@ try {
       const calm = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
       const calmPage = await calm.newPage();
       const calmProblems = watch(calmPage);
-      await calmPage.goto(`${url}next`);
-      await calmPage.waitForFunction(() => window.nextDeck?.state().mode === "gpu", null, { timeout: 30_000 });
-      await calmPage.evaluate(() => { scrollTo({ top: 1.3 * innerHeight, behavior: "instant" }); return window.nextDeck.idle(); });
-      assert.deepEqual(await calmPage.evaluate(() => [window.nextDeck.state().decorativeEffects.length, document.getElementById("deck-change").textContent]), [0, "fade"], "no effect with reduced motion");
-      const calmLayers = await calmPage.evaluate(() => window.nextDeck.state().layers.filter(layer => layer.id !== "deck-light").map(layer => ({ id: layer.id, ...layer.transform })));
+      await calmPage.goto(url);
+      await calmPage.waitForFunction(() => window.homeDeck?.state().mode === "gpu", null, { timeout: 30_000 });
+      await calmPage.evaluate(() => { scrollTo({ top: 1.3 * innerHeight, behavior: "instant" }); return window.homeDeck.idle(); });
+      assert.deepEqual(await calmPage.evaluate(() => [window.homeDeck.state().decorativeEffects.length, document.getElementById("deck-change").textContent]), [0, "fade"], "no effect with reduced motion");
+      const calmLayers = await calmPage.evaluate(() => window.homeDeck.state().layers.filter(layer => layer.id !== "deck-light").map(layer => ({ id: layer.id, ...layer.transform })));
       assert.equal(calmLayers.length, 5);
       // A layer either fades in place or, unseen, is shrunk out of the pointer's way: none is moved or tilted.
       for (const layer of calmLayers) assert.deepEqual(Object.keys(layer).filter(key => !["id", "opacity", ...(layer.opacity === 0 ? ["scaleX", "scaleY"] : [])].includes(key)), [], `${layer.id} only fades`);
-      assert.equal(await calmPage.evaluate(() => window.nextDeck.state().mode), "gpu");
+      assert.equal(await calmPage.evaluate(() => window.homeDeck.state().mode), "gpu");
       assert.deepEqual(calmProblems, [], "reduced motion reported problems");
       await calm.close();
     } finally { await browser.close(); }
-    result.next = "passed";
+    result.home = "passed";
   }
   // The same scenario runs twice: `dom` (no HTML-in-Canvas flags, and the visitor's DOM choice recorded, as
   // **Use ordinary DOM** does; the examples must stay on DOM) and `native` (flags on; GPU starts by itself when the
@@ -1088,6 +1180,7 @@ try {
       // An old `#/effects` link opens the same page and moves to its path.
       await page.goto("about:blank");
       await page.goto(`${url}#/effects`);
+      await page.waitForURL(`${url}examples/effects`);
       await studioButton("Apply chromatic effect").waitFor();
       assert.equal(await page.evaluate(() => location.pathname + location.hash), "/underglass/examples/effects");
       assert.equal(await page.title(), "Shader lab | Underglass examples");
@@ -1159,7 +1252,7 @@ try {
       const homeContext = await laneContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
       const home = await homeContext.newPage();
       home.on("pageerror", error => errors.push(String(error)));
-      await home.goto(url);
+      await home.goto(`${url}examples`);
       await home.waitForFunction(() => window.showcase && document.getElementById("hero-card"));
       const homeState = () => home.evaluate(() => window.showcase.state());
       const sheen = id => home.evaluate(layer => window.showcase.state().decorativeEffects.find(entry => entry.id === layer)

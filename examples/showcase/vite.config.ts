@@ -13,9 +13,9 @@ import { join } from "node:path";
 
 export default defineConfig({
   root: import.meta.dirname,
-  // One HTML page per URL with its own metadata, plus sitemap, robots and 404 (`seo.ts`); `prerender.ts` renders
-  // the preview home page's React tree into `next.html`, and `inline-css.ts` writes its stylesheet into it.
-  plugins: [seo(), prerender(), inlineCss(["next.html"])],
+  // One HTML page per URL with its own metadata, plus sitemap, robots, llms.txt and 404 (`seo.ts`); `prerender.ts`
+  // renders the home page's React tree into `index.html`, and `inline-css.ts` writes its stylesheet into it.
+  plugins: [seo(), prerender(), inlineCss(["index.html"])],
   // Vercel sets `VERCEL=1` in its builds: only those load Vercel Web Analytics (`analytics.ts`), which is
   // served from the deployment's own `/_vercel/insights/`.
   define: { __VERCEL_ANALYTICS__: JSON.stringify(process.env.VERCEL === "1") },
@@ -26,13 +26,14 @@ export default defineConfig({
   // for it, the library and this app.
   resolve: { dedupe: ["react", "react-dom"] },
   // No source maps in the public build; the asset check refuses source-map references.
-  // The page loads with only React and the catalog; Underglass and each example are chunks loaded on demand
+  // The example studio loads with only React and the catalog; Underglass and each example are chunks loaded on demand
   // (`examples.ts`). Two of those are single libraries over Vite's default 500 kB warning: Fluent UI (about
   // 535 kB, only for the Fluent example) and the Underglass runtime with Babylon Lite (about 525 kB, after the
   // page has rendered). The limit sits just above them, so a new oversized chunk still warns.
   build: { sourcemap: false, outDir: "dist", chunkSizeWarningLimit: 600, rolldownOptions: {
-    // Two pages: the site (`index.html`, which `seo.ts` copies per example) and the preview home page at `/next`.
-    input: { index: join(import.meta.dirname, "index.html"), next: join(import.meta.dirname, "next.html") },
+    // Two pages: the home page (`index.html`) and the example studio (`examples.html`, which `seo.ts` copies to
+    // `examples/index.html` and once per example).
+    input: { index: join(import.meta.dirname, "index.html"), examples: join(import.meta.dirname, "examples.html") },
     // Fluent UI and Radix mark their modules "use client" (a React Server Components directive), and the
     // bundler warns once per module (about 950 warnings) that it drops it. This is a browser-only bundle, so
     // dropping it changes nothing; every other warning still prints.

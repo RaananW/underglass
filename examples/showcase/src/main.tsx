@@ -1,5 +1,6 @@
 /**
- * Entry point of the showcase site. `App` is ordinary React page chrome (hero, catalog, status,
+ * Entry point of the example studio (`examples.html`: `/examples` and each example's page; the home page is
+ * `src/home`). `App` is ordinary React page chrome (hero, catalog, status,
  * browser help) that lives outside the Underglass root. Its effect loads Underglass, `demos.tsx` and the
  * opening example (separate chunks, so the page itself loads with only React and the catalog), then creates
  * the canvas hosts and mounts a second tree with `mountCanvasApp`, which renders `Demo`. The two sides
@@ -10,7 +11,7 @@ import { createRoot } from "react-dom/client";
 import { version as reactDOMVersion } from "react-dom";
 import type { CanvasController } from "@underglass/react";
 import { loadExample } from "./examples";
-import { examplePath, exampleFromPath, examples, hero, pageMeta, previews as previewNames, route, searchExamples, site, type ExampleId, type SceneId } from "./catalog";
+import { examplePath, examplesPath, exampleFromPath, examples, hero, pageMeta, previews as previewNames, searchExamples, site, type ExampleId, type SceneId } from "./catalog";
 import { detectSupport, explain, flags, type Support } from "./support";
 import { analyticsEnabled, startAnalytics, track, trackSupport, type Api } from "./analytics";
 import { installPolyfill, polyfillExcluded, polyfillLinks, polyfillOffers, polyfillPossible, removePolyfill } from "./polyfill";
@@ -20,18 +21,15 @@ import "./style.css";
 const previewFiles = import.meta.glob<string>("./previews/*.jpg", { eager: true, import: "default" });
 const previews = Object.fromEntries(Object.entries(previewNames).map(([id, name]) => [id, previewFiles[`./previews/${name}.jpg`]])) as Partial<Record<ExampleId, string>>;
 
-// Routing: the home page is the site base and shows the hero scene (`hero.tsx`) on the stage; each example has its own page,
-// `<base>examples/<id>`, which the build writes as static HTML with its own metadata (`seo.ts`). Links
-// switch examples in place with `history.pushState`, so the running runtime and its GPU mode survive.
+// Routing: the examples' index is `<base>examples` and shows the overview scene (`hero.tsx`) on the stage; each
+// example has its own page, `<base>examples/<id>`. The build writes each as static HTML with its own metadata
+// (`seo.ts`). Links switch examples in place with `history.pushState`, so the running runtime and its GPU mode
+// survive. The site's home page (`<base>`) is another document.
 const base = import.meta.env.BASE_URL;
-/** The example the current URL names, or `undefined` on the home page. */
+/** The example the current URL names, or `undefined` on the examples' index. */
 const pageExample = () => exampleFromPath(location.pathname, base);
-/** The URL of the home page (no id, or the hero scene) or an example's page. */
-const pageURL = (id?: SceneId) => id && id !== hero.id ? `${base}${examplePath(id)}` : base;
-/** Moves an old `#/motion` link (the site's first URLs) to the example's own page, keeping history clean. */
-function upgradeHashLink() {
-  if (location.hash.startsWith("#/")) history.replaceState(null, "", pageURL(route(location.hash)));
-}
+/** The URL of the examples' index (no id, or the overview scene) or an example's page. */
+const pageURL = (id?: SceneId) => `${base}${id && id !== hero.id ? examplePath(id) : examplesPath}`;
 /** Keeps the title, description and canonical URL in step with the page in the URL. */
 function applyHead(id?: ExampleId) {
   const meta = pageMeta(id);
@@ -39,8 +37,6 @@ function applyHead(id?: ExampleId) {
   document.querySelector('meta[name="description"]')?.setAttribute("content", meta.description);
   document.querySelector('link[rel="canonical"]')?.setAttribute("href", `${site.origin}/${meta.path}`);
 }
-// An old hash link loads the home page's HTML, so its head is set for the example it moved to.
-upgradeHashLink();
 applyHead(pageExample());
 /** True for a click the browser should handle itself: another button, or a modifier that opens a new tab or window. */
 const ownClick = (event: MouseEvent) => event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
@@ -102,7 +98,7 @@ function App() {
   // called once on registration too, in case the URL changed while the root was loading.
   const change = useRef<(id: SceneId) => void>(undefined);
   const ready = useCallback((update: (id: SceneId) => void) => { change.current = update; update(shown.current); }, []);
-  // The example on stage, or `undefined` on the home page, where the stage shows the hero scene.
+  // The example on stage, or `undefined` on the examples' index, where the stage shows the overview scene.
   const current = examples.find(example => example.id === selected);
   const home = !current;
   useEffect(() => {
@@ -113,7 +109,6 @@ function App() {
     // `#examples` also fire `popstate`; they leave the path, and so the example, as it is.
     const show = () => {
       if (retired.current) return;
-      upgradeHashLink();
       const page = pageExample(), id: SceneId = page ?? hero.id;
       applyHead(page);
       if (id === shown.current) return;
@@ -167,15 +162,13 @@ function App() {
       setDiagnostic(`The live example failed to load: ${String(error)}`);
       console.error("Showcase failed to load", error);
     });
-    // `hashchange` catches a `#/motion` typed into the address bar of an open page.
     window.addEventListener("popstate", show);
-    window.addEventListener("hashchange", show);
     window.addEventListener("pagehide", close);
     window.addEventListener("pageshow", restore);
-    return () => { cancelled = true; window.removeEventListener("popstate", show); window.removeEventListener("hashchange", show);
+    return () => { cancelled = true; window.removeEventListener("popstate", show);
       window.removeEventListener("pagehide", close); window.removeEventListener("pageshow", restore); close(); };
   }, [ready]);
-  // Opens the home page (no id) or an example's page in place.
+  // Opens the examples' index (no id) or an example's page in place.
   function go(id?: SceneId) {
     history.pushState(null, "", pageURL(id));
     navigate.current?.();
@@ -266,7 +259,7 @@ function App() {
   // The studio's own controls: the example picker, the mode and the lifecycle buttons.
   const picker = <label className="example-switch">{home ? "Open" : "Example"}
     <select aria-label="Example" value={selected} disabled={disposed} onChange={event => go(event.target.value as SceneId)}>
-      <option value={hero.id}>{hero.number} · Home</option>
+      <option value={hero.id}>{hero.number} · Overview</option>
       {examples.map(example => <option key={example.id} value={example.id}>{example.number} · {example.title}</option>)}
     </select></label>;
   const modePill = <span className={`mode-pill ${gpu ? "active" : ""}`}><span className="dot" aria-hidden="true" />{gpu ? polyfilled ? "GPU active · polyfill" : "GPU active" : disposed ? "Disposed" : "Ordinary DOM"}</span>;
@@ -277,8 +270,9 @@ function App() {
   return <>
     <a className="skip-link" href="#studio">Skip to the live stage</a>
     <div className="hero-shell">
-      <header className="site-header"><a className="brand" href={base} onClick={event => follow(event)}><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>Underglass<span className="tag">EXPERIMENTAL</span></a>
-        <nav aria-label="Site"><a href="#examples">Examples</a><a href="#about">About the experiment</a><a href={site.docs}>Docs</a>
+      {/* The brand goes to the site's home page, another document. */}
+      <header className="site-header"><a className="brand" href={base}><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>Underglass<span className="tag">CHROME · EDGE 157+</span></a>
+        <nav aria-label="Site"><a href={base}>Home</a><a href="#examples">Examples</a><a href="#about">About the experiment</a><a href={site.docs}>Docs</a>
           <a href={site.repository} onClick={() => track("Outbound Link", { target: "github" })}>GitHub <span aria-hidden="true">&#8599;</span></a></nav></header>
       {/* The live stage is the top of every page. On the home page it shows the hero scene, whose headline (the
           page's h1) is inside the stage; on an example's page the example's title is the h1. */}

@@ -7,7 +7,7 @@
  * - `dom.tsx` everywhere else: React alone hydrates the same markup. The runtime and its engine, two thirds of the
  *   page's JavaScript, are never downloaded.
  */
-import "./next.css";
+import "./home.css";
 import { detectSupport } from "../support";
 
 void (detectSupport() === "likely" ? import("./gpu") : import("./dom"));

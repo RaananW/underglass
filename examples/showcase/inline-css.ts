@@ -1,6 +1,6 @@
 /**
  * Vite plugin that writes a page's stylesheet into the page itself, so its first frame needs one request: the HTML.
- * Used for the preview home page (`next.html`), whose whole stylesheet is a few kilobytes. The stylesheet file is
+ * Used for the home page (`index.html`), whose whole stylesheet is a few kilobytes. The stylesheet file is
  * dropped from the build when no other page or script refers to it.
  */
 import type { Plugin } from "vite";
