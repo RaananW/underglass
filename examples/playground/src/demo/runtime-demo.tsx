@@ -171,8 +171,8 @@ window.runtimeProbe = { state, animate, dispose,
   effects: (id: string, chain: EffectDescriptor[]) => controller.setEffects(id, chain),
   material: (id: string, material: MaterialDescriptor) => controller.setMaterial(id, material),
   // Trusted test WGSL for custom effects and materials, one parameter `strength` unless `parameters` says otherwise.
-  define: (name: string, wgsl: string, parameters: Record<string, ParameterRange> = { strength: { min: -4, max: 4 } }) =>
-    defineEffect({ name, wgsl, parameters, geometry: "color", bounds: "layer", capabilities: ["webgpu"] }),
+  define: (name: string, wgsl: string, parameters: Record<string, ParameterRange> = { strength: { min: -4, max: 4 } }, geometry: ApplicationEffect["geometry"] = "color") =>
+    defineEffect({ name, wgsl, parameters, geometry, bounds: "layer", capabilities: ["webgpu"] }),
   invalidate: (id?: string) => controller.invalidate(id),
   async cycle() {
     const retired = await dispose();

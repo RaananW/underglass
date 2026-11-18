@@ -74,7 +74,7 @@ test("a pass's custom definitions are interned, so equal pairs compare by identi
   assert.equal(passShaders(), undefined);
   assert.equal(passShaders(effect, definition), passShaders(effect, definition));
   assert.notEqual(passShaders(effect, definition), passShaders(effect));
-  assert.deepEqual(passShaders(undefined, definition), { effect: undefined, material: definition, relief: false });
+  assert.deepEqual(passShaders(undefined, definition), { effect: undefined, displacement: undefined, material: definition, relief: false });
   const both = layerShader(effect, undefined, definition).fragmentWGSL;
   assert.match(both, /fn custom0\(/);
   assert.match(both, /fn material0\(/);
@@ -128,7 +128,7 @@ test("the relief binding packs derived values per primitive, and relief passes a
   assert.match(shader.fragmentWGSL, /\* compiledOpacity \* drawCoverage\);/);
   assert.doesNotMatch(layerShader().fragmentWGSL, /let draw = /);
   assert.equal(passShaders(undefined, "relief"), passShaders(undefined, "relief"));
-  assert.deepEqual(passShaders(undefined, "relief"), { effect: undefined, material: undefined, relief: true });
+  assert.deepEqual(passShaders(undefined, "relief"), { effect: undefined, displacement: undefined, material: undefined, relief: true });
 });
 
 test("a relief outset grows the drawn rectangle only on sides the clip does not cut", () => {

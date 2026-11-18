@@ -10,7 +10,7 @@
 import type { EffectWrapperOptions } from "@babylonjs/lite";
 import { homography, invertRows, validateGeometry } from "./native.js";
 import type { Ripple } from "./ripple.js";
-import { effectUniforms, isSceneMaterial, materialUniforms, MATERIAL_INTERIOR_CEILING, type EffectDescriptor, type ApplicationEffect, type MaterialDescriptor } from "./effects.js";
+import { customDefinition, effectUniforms, isSceneMaterial, materialUniforms, MATERIAL_INTERIOR_CEILING, type EffectDescriptor, type ApplicationEffect, type MaterialDescriptor } from "./effects.js";
 import { LAYER_BLOCK_FLOATS, LAYER_PASS_FLOATS, type CompiledMotion } from "./compiled.js";
 import { RELIEF_VEC4S, reliefWGSL } from "./relief.js";
 
@@ -41,19 +41,23 @@ const BLOCK = LAYER_BLOCK_FLOATS;
 const BLOCK_VEC4S = BLOCK / 4;
 
 /**
- * What a layer pass is built with beyond the plain layer program: its effect chain's custom definition, and its
- * material, either a custom definition or the built-in relief (which adds the relief uniform binding). Interned by
- * `passShaders`, so passes built for the same combination compare with `===`.
+ * What a layer pass is built with beyond the plain layer program: its effect chain's custom definitions (a color
+ * function as `effect`, a displacement), and its material, either a custom definition or the built-in relief (which
+ * adds the relief uniform binding). Interned by `passShaders`, so passes built for the same combination compare
+ * with `===`.
  */
-export interface PassShaders { readonly effect?: ApplicationEffect; readonly material?: ApplicationEffect; readonly relief: boolean }
-const interned = new Map<ApplicationEffect | undefined, Map<ApplicationEffect | "relief" | undefined, PassShaders>>();
-/** The interned combination for `effect` and `material`, or undefined when the pass needs neither. */
-export function passShaders(effect?: ApplicationEffect, material?: ApplicationEffect | "relief"): PassShaders | undefined {
-  if (!effect && !material) return undefined;
+export interface PassShaders { readonly effect?: ApplicationEffect; readonly displacement?: ApplicationEffect; readonly material?: ApplicationEffect; readonly relief: boolean }
+type Interned<K, V> = Map<K | undefined, V>;
+const interned: Interned<ApplicationEffect, Interned<ApplicationEffect | "relief", Interned<ApplicationEffect, PassShaders>>> = new Map();
+/** The interned combination for `effect`, `material` and `displacement`, or undefined when the pass needs none of them. */
+export function passShaders(effect?: ApplicationEffect, material?: ApplicationEffect | "relief", displacement?: ApplicationEffect): PassShaders | undefined {
+  if (!effect && !material && !displacement) return undefined;
   let row = interned.get(effect);
   if (!row) interned.set(effect, row = new Map());
-  let shaders = row.get(material);
-  if (!shaders) row.set(material, shaders = Object.freeze({ effect, material: material === "relief" ? undefined : material, relief: material === "relief" }));
+  let cell = row.get(material);
+  if (!cell) row.set(material, cell = new Map());
+  let shaders = cell.get(displacement);
+  if (!shaders) cell.set(displacement, shaders = Object.freeze({ effect, displacement, material: material === "relief" ? undefined : material, relief: material === "relief" }));
   return shaders;
 }
 
@@ -74,7 +78,7 @@ export function drawRectangle(clip: { x: number; y: number; width: number; heigh
 
 /** Writes one layer's 14-vec4 uniform block at `offset` and returns its canvas-space matrix and clip. */
 function writeLayerBlock(values: Float32Array, offset: number, layer: CompositeLayer, shift: number, customIndex: number, compiled: boolean,
-  materialIndex = -1) {
+  materialIndex = -1, displacementIndex = -1) {
   // Compiled motion is evaluated in the shader, so the matrix only carries the motion's origin.
   const motion = compiled ? layer.compiledMotion?.() : undefined;
   const base = motion ? new DOMMatrix().translate(motion.origin.x, motion.origin.y) : layer.matrix();
@@ -98,7 +102,7 @@ function writeLayerBlock(values: Float32Array, offset: number, layer: CompositeL
     layer.ripple?.()?.amplitude ?? 0, (layer.ripple?.()?.seconds ?? 0) % 1000, content.pixelWidth, content.pixelHeight,
   ], offset);
   // vec4 4-9: the effect chain, left empty while effects are disabled for the layer.
-  values.set(effectUniforms(layer.effectsEnabled?.() === false ? [] : layer.effects?.()), offset + 16);
+  values.set(effectUniforms(layer.effectsEnabled?.() === false ? [] : layer.effects?.(), displacementIndex), offset + 16);
   // vec4 10: clip rectangle in layer-local pixels; defaults to the whole content.
   const clip = layer.clip?.(new DOMMatrix().translate(shift, 0).multiply(layer.matrix())) ?? { x: 0, y: 0, width: content.width, height: content.height };
   values.set([clip.x, clip.y, clip.width, clip.height], offset + 40);
@@ -116,7 +120,8 @@ function writeLayerBlock(values: Float32Array, offset: number, layer: CompositeL
 /**
  * Uniforms for the single-pass compositor: a 4-float header (`dpr`, `tint`), then `capacity` layer
  * blocks, then (when `compiled`) one 4-float motion slot per layer. `custom` lists the registered
- * custom effects; each block stores its layer's index into it, or -1 when none applies.
+ * custom effects, color functions and displacements; each block stores its layer's index into it for each, or -1
+ * when none applies.
  */
 export function compositionUniforms(layers: CompositeLayer[], dpr: number, shift = 0, tint = 0, capacity = layers.length,
   custom: readonly (ApplicationEffect | undefined)[] = [], compiled = false) {
@@ -124,7 +129,7 @@ export function compositionUniforms(layers: CompositeLayer[], dpr: number, shift
   values.set([dpr, tint, 0, 0]);
   layers.forEach((layer, index) => {
     const { motion } = writeLayerBlock(values, 4 + index * BLOCK, layer, shift,
-      custom.indexOf(layer.effects?.().find(value => value.kind === "custom")?.definition), compiled);
+      custom.indexOf(customDefinition(layer.effects?.(), "color")), compiled, -1, custom.indexOf(customDefinition(layer.effects?.(), "displacement")));
     if (compiled) values.set([motion ? motion.index + 1 : 0, motion?.phase ?? 0, 0, 0], 4 + capacity * BLOCK + index * 4);
   });
   return values;
@@ -175,6 +180,7 @@ function layerBody(index: number, base: number, playback: number | undefined, cu
         var redAt = warp(local, extent, wave.x, wave.y);
         var greenAt = redAt;
         var blueAt = redAt;
+        ${custom.some(displaces) ? "var displaced = false;" : ""}
         for (var operation = 0u; operation < 3u; operation++) {
           let control = state[${base + 4}u + operation * 2u];
           let parameters = state[${base + 5}u + operation * 2u];
@@ -188,6 +194,16 @@ function layerBody(index: number, base: number, playback: number | undefined, cu
             redAt += delta;
             blueAt -= delta;
           }
+          ${custom.map((definition, customIndex) => displaces(definition)
+            ? `if (control.x == 5.0 && control.z == ${customIndex}.0) {
+            // The three channels sample one position unless a chromatic operation has parted them.
+            let before = greenAt;
+            greenAt = custom${customIndex}(before, extent, control.y, parameters);
+            if (all(redAt == before)) { redAt = greenAt; } else { redAt = custom${customIndex}(redAt, extent, control.y, parameters); }
+            if (all(blueAt == before)) { blueAt = greenAt; } else { blueAt = custom${customIndex}(blueAt, extent, control.y, parameters); }
+            displaced = true;
+          }`
+            : "").join("\n          ")}
         }
         let grid = vec2f(state[${base}].w, state[${base + 1}].w);
         let captured = wave.zw;
@@ -195,6 +211,12 @@ function layerBody(index: number, base: number, playback: number | undefined, cu
         let green = filtered(layer${index}, sampler${index}, greenAt * grid, captured);
         let blue = filtered(layer${index}, sampler${index}, blueAt * grid, captured);
         var sample = vec4f(red.r, green.g, blue.b, green.a);
+        ${custom.some(displaces) ? `// A displacement draws nothing from outside the layer's visible box: the edge is one captured pixel wide,
+        // and an identity displacement leaves every pixel of an aligned layer whole.
+        if (displaced) {
+          let room = min(greenAt - low, high - greenAt) * grid;
+          sample.a *= clamp(min(room.x, room.y) + 0.5, 0.0, 1.0);
+        }` : ""}
         ${materials.some(Boolean) ? `// The material: one brightness factor per point, from the material on a neutral input (never the
         // captured colour), within interior.max, so text and its face change together (Strata Rendering Model 2.9).
         let materialControl = state[${base + 11}];
@@ -217,7 +239,7 @@ function layerBody(index: number, base: number, playback: number | undefined, cu
             let alpha = select(select(smoothstep(parameters.x - 0.03, parameters.x + 0.03, noise), 1.0, parameters.x == 0.0), 0.0, parameters.x == 1.0);
             sample.a *= alpha;
           }
-          ${custom.map((definition, customIndex) => definition
+          ${custom.map((definition, customIndex) => definition && !displaces(definition)
             ? `if (control.x == 4.0 && state[${base + 2}].w == ${customIndex}.0) { sample = clamp(custom${customIndex}(sample, local, extent, control.y, parameters), vec4f(0.0), vec4f(1.0)); }`
             : "").join("\n")}
         }
@@ -229,10 +251,12 @@ function layerBody(index: number, base: number, playback: number | undefined, cu
     }\n`;
 }
 
+const displaces = (definition: ApplicationEffect | undefined) => definition?.geometry === "displacement";
 /** WGSL functions for the application's custom effects (or materials), named `${prefix}${index}` to match `layerBody`. */
 function customDeclarations(custom: readonly (ApplicationEffect | undefined)[], prefix = "custom") {
-  return custom.map((definition, index) => definition
-    ? `fn ${prefix}${index}(color: vec4f, local: vec2f, extent: vec2f, seconds: f32, parameters: vec4f) -> vec4f { ${definition.wgsl} }\n` : "").join("");
+  return custom.map((definition, index) => !definition ? ""
+    : displaces(definition) ? `fn ${prefix}${index}(local: vec2f, extent: vec2f, seconds: f32, parameters: vec4f) -> vec2f { ${definition.wgsl} }\n`
+    : `fn ${prefix}${index}(color: vec4f, local: vec2f, extent: vec2f, seconds: f32, parameters: vec4f) -> vec4f { ${definition.wgsl} }\n`).join("");
 }
 
 /** Shared WGSL helpers: edge falloff, the ripple `warp` and premultiplied bilinear `filtered` sampling. */
@@ -314,8 +338,10 @@ export const layerBlend: GPUBlendState = {
  * single triangle covering the layer's canvas-space bounding box, so a layer only
  * shades the pixels it can touch; fragments outside the layer are discarded.
  */
-export function layerShader(custom?: ApplicationEffect, compiledWGSL?: string, material?: ApplicationEffect | "relief"): Pick<EffectWrapperOptions, "bindings" | "fragmentWGSL" | "vertexWGSL"> {
-  const definitions = custom ? [custom] : [];
+export function layerShader(custom?: ApplicationEffect, compiledWGSL?: string, material?: ApplicationEffect | "relief",
+  displacement?: ApplicationEffect): Pick<EffectWrapperOptions, "bindings" | "fragmentWGSL" | "vertexWGSL"> {
+  // Fixed slots: the color function is custom 0 and the displacement custom 1 (`layerUniforms` writes the same).
+  const definitions = displacement ? [custom, displacement] : custom ? [custom] : [];
   const relief = material === "relief";
   const materials = material && material !== "relief" ? [material] : [];
   return {
@@ -359,12 +385,14 @@ export function layerShader(custom?: ApplicationEffect, compiledWGSL?: string, m
 export function layerUniforms(layer: CompositeLayer, dpr: number, frame: { width: number; height: number }, shift = 0, tint = 0,
   shaders?: PassShaders, compiled = false) {
   const values = new Float32Array(LAYER_PASS_FLOATS);
-  // The per-layer pass only binds its own custom effect and material, so each slot is 0 when it matches and -1 otherwise.
-  const definition = layer.effects?.().find(value => value.kind === "custom")?.definition;
+  // The per-layer pass only binds its own custom effects and material, so each slot is its fixed index (0, or 1 for
+  // the displacement) when it matches and -1 otherwise.
+  const definition = customDefinition(layer.effects?.(), "color");
+  const displacement = customDefinition(layer.effects?.(), "displacement");
   const assigned = layer.material?.();
   const material = assigned?.kind === "custom" ? assigned.definition : undefined;
   const { matrix, motion, draw } = writeLayerBlock(values, LAYER_HEADER, layer, shift, shaders?.effect && definition === shaders.effect ? 0 : -1, compiled,
-    shaders?.material && material === shaders.material ? 0 : -1);
+    shaders?.material && material === shaders.material ? 0 : -1, shaders?.displacement && displacement === shaders.displacement ? 1 : -1);
   if (compiled) values.set([motion ? motion.index + 1 : 0, motion?.phase ?? 0, 0, 0], LAYER_HEADER + BLOCK);
   // Compiled motion moves the layer inside the shader, so it may cover the whole frame.
   const corners = motion ? [] : [[draw.x0, draw.y0], [draw.x1, draw.y0], [draw.x0, draw.y1], [draw.x1, draw.y1]]

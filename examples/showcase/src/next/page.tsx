@@ -284,7 +284,7 @@ export function Stage({ base }: { base: string }) {
       <p className="lede">Write a fragment function and hand it a layer. It runs on the rendered pixels of real HTML: text, form
         controls, video, a camera feed.</p>
       <Facts items={[
-        ["Built in.", "Ripple and refraction, chromatic split and noise dissolve, chained with your own."],
+        ["Built in.", "Ripple, chromatic split and dissolve, chained with your own: colour functions and displacements."],
         ["Materials.", "Relight a layer of working controls without moving a pixel, with its contrast protected."],
         ["Live parameters.", "Change them every frame. Nothing recompiles and nothing is captured again."],
       ]} />

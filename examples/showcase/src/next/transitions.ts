@@ -7,11 +7,15 @@
  *
  * - **tilt** is matrices only: the layers stay interactive while they move, so a control can be clicked mid-change.
  * - The others put an effect chain on each layer (`interaction: "inert"`: the content takes no input until the chain
- *   ends, at the next rest). **burn**, **scan**, **iris** and **mosaic** are masks: the two sections stay in place and
- *   the same field, in stage coordinates, hides one exactly where it shows the other. **water** and **exposure** hand
- *   over in the middle.
+ *   ends, at the next rest). **burn**, **scan**, **iris** and **mosaic** hand over along a field in stage coordinates:
+ *   the two sections stay in place and the field hides one exactly where it shows the other. **water** and
+ *   **exposure** hand over in the middle.
+ * - **scan**, **iris** and **mosaic** also move pixels, with a custom displacement before the colour function: the
+ *   scan's bar is a glass rod that magnifies what it crosses, the iris opens behind a shock wave that bends the page
+ *   around its rim, and the mosaic's tiles turn over, each squeezing to a line and opening again as the next section.
  *
- * A custom effect changes colour and alpha only, takes up to four parameters, and is written so that the ends of the
+ * A custom effect is a colour function (colour and alpha) or a displacement (which position of the layer a pixel is
+ * drawn from, inside the layer's own box). Each takes up to four parameters, and is written so that the ends of the
  * change are exact: the leaving layer untouched at 0 and gone at 1, the arriving one the reverse.
  */
 import { defineEffect, type EffectDescriptor, type Transform } from "@underglass/react";
@@ -47,9 +51,11 @@ const round = (value: number) => Math.round(value * 1000) / 1000;
 /** 0 for the leaving layer, 1 for the arriving one: the `side` parameter of the masks. */
 const side = (layer: StageLayer) => layer.leaving ? 0 : 1;
 const still: Transform = {};
+/** One custom operation of a chain. */
+const operation = (definition: ReturnType<typeof defineEffect>, parameters: Record<string, number>): EffectDescriptor =>
+  ({ kind: "custom", definition, parameters, time: { seconds: 0 }, ...inert });
 /** A custom effect as the only operation of a chain. */
-const custom = (definition: ReturnType<typeof defineEffect>, parameters: Record<string, number>): EffectDescriptor[] =>
-  [{ kind: "custom", definition, parameters, time: { seconds: 0 }, ...inert }];
+const custom = (definition: ReturnType<typeof defineEffect>, parameters: Record<string, number>): EffectDescriptor[] => [operation(definition, parameters)];
 
 /** Value noise over `p` (two octaves), as WGSL statements that leave the result in `n`. `local` plus the origin is the stage position. */
 const noise = `
@@ -88,6 +94,21 @@ const scan = defineEffect({
     let light = exp(-abs(d) * 0.05);
     return vec4f(color.rgb + vec3f(1.0, 0.5, 0.32) * light * 0.9, color.a * keep);`,
 });
+/**
+ * The scan's bar as a glass rod: within `ROD` px of the bar each side is drawn from nearer the bar, so the page is
+ * magnified up to 2.6 times where the bar crosses it. Each side samples its own side, so the handover stays on the bar.
+ */
+const ROD = 40;
+const rod = defineEffect({
+  name: "next-rod",
+  parameters: { edge: { min: -8192, max: 8192 }, originY: { min: -8192, max: 8192 } },
+  geometry: "displacement", bounds: "layer", capabilities: ["webgpu"],
+  wgsl: `
+    let d = local.y + parameters.y - parameters.x;
+    let r = clamp(d / ${ROD}.0, -1.0, 1.0);
+    let bend = 1.0 - r * r;
+    return vec2f(local.x, local.y - d * 0.62 * bend * bend);`,
+});
 /** An aperture opens from a point: `side` 0 is kept outside it, `side` 1 inside. The centre is in the layer's own pixels. */
 const iris = defineEffect({
   name: "next-iris",
@@ -100,19 +121,64 @@ const iris = defineEffect({
     let ring = exp(-abs(d) * 0.07) * step(0.5, parameters.x);
     return vec4f(color.rgb + vec3f(1.0, 0.5, 0.32) * ring * 0.8, color.a * keep);`,
 });
-/** Tiles of the stage change hands one by one, each lit just before it goes. */
+/**
+ * The iris's rim as a shock wave: within `WAVE` px of the rim each side is drawn from nearer the rim, by `strength`
+ * (0 is no wave). Each side samples its own side, so the handover stays on the rim.
+ */
+const WAVE = 56;
+const wave = defineEffect({
+  name: "next-wave",
+  parameters: { radius: { min: 0, max: 8192 }, strength: { min: 0, max: 1 }, centreX: { min: -8192, max: 8192 }, centreY: { min: -8192, max: 8192 } },
+  geometry: "displacement", bounds: "layer", capabilities: ["webgpu"],
+  wgsl: `
+    let v = local - parameters.zw;
+    let rho = max(length(v), 0.001);
+    let d = rho - parameters.x;
+    let r = clamp(d / ${WAVE}.0, -1.0, 1.0);
+    let bend = 1.0 - r * r;
+    return local - v / rho * d * parameters.y * bend * bend;`,
+});
+/**
+ * The tiles of the mosaic, `TILE` px squares of the stage, turn over one after the other along a diagonal: as WGSL
+ * statements that leave a tile's column and row in `cell` and how far it has turned (0..1) in `turn`.
+ */
+const TILE = 72;
+const turning = `
+    let cell = floor((local + parameters.zw) / ${TILE}.0);
+    let order = fract(sin(dot(cell, vec2f(12.9898, 78.233))) * 43758.5453) * 0.35 + fract((cell.x + cell.y) * 0.047) * 0.65;
+    let turn = clamp((parameters.x * 1.6 - order) / 0.6, 0.0, 1.0);
+    let facing = abs(cos(turn * 3.14159265));`;
+/**
+ * A tile turns about its vertical middle: it is squeezed to a line, then opens again. `side` 0 is on its front (the
+ * first half of the turn) and `side` 1 on its back; the other half of the time a side draws nothing.
+ */
+const flip = defineEffect({
+  name: "next-flip",
+  parameters: { amount: { min: 0, max: 1 }, side: { min: 0, max: 1 }, originX: { min: -8192, max: 8192 }, originY: { min: -8192, max: 8192 } },
+  geometry: "displacement", bounds: "layer", capabilities: ["webgpu"],
+  wgsl: `${turning}
+    let middle = (cell.x + 0.5) * ${TILE}.0 - parameters.z;
+    let x = middle + (local.x - middle) / max(facing, 0.001);
+    if ((turn < 0.5) != (parameters.y < 0.5) || abs(x - middle) > ${TILE / 2}.0) { return vec2f(-65536.0); }
+    return vec2f(x, local.y);`,
+});
+/**
+ * The light on a turning tile: it darkens as it turns away, with a glint as it passes edge on. While a tile turns,
+ * the side that shows also draws its face under the content, a faint card, so that a tile of bare text reads as a tile.
+ */
 const mosaic = defineEffect({
   name: "next-mosaic",
   parameters: { amount: { min: 0, max: 1 }, side: { min: 0, max: 1 }, originX: { min: -8192, max: 8192 }, originY: { min: -8192, max: 8192 } },
   geometry: "color", bounds: "layer", capabilities: ["webgpu"],
-  wgsl: `
-    let cell = floor((local + parameters.zw) / 36.0);
-    let order = fract(sin(dot(cell, vec2f(12.9898, 78.233))) * 43758.5453) * 0.55 + fract((cell.x + cell.y) * 0.031) * 0.45;
-    let d = order - (parameters.x * 1.2 - 0.1);
-    let waiting = step(0.0, d);
-    let keep = mix(waiting, 1.0 - waiting, parameters.y);
-    let next = (1.0 - smoothstep(0.0, 0.06, d)) * waiting * (1.0 - parameters.y);
-    return vec4f(color.rgb + vec3f(1.0, 0.5, 0.32) * next * 0.5, color.a * keep);`,
+  wgsl: `${turning}
+    let moving = step(0.001, turn) * step(turn, 0.999);
+    let middle = (cell.x + 0.5) * ${TILE}.0 - parameters.z;
+    let shows = f32((turn < 0.5) == (parameters.y < 0.5)) * step(abs(local.x - middle), ${TILE / 2}.0 * facing);
+    let face = 0.34 * sin(turn * 3.14159265) * moving * shows;
+    let alpha = color.a + face * (1.0 - color.a);
+    let lit = color.rgb * (0.4 + 0.6 * facing) * color.a + vec3f(0.2, 0.21, 0.25) * (0.3 + 0.7 * facing) * face * (1.0 - color.a);
+    let glint = pow(1.0 - facing, 4.0) * moving * 0.6;
+    return vec4f(lit / max(alpha, 0.0001) + vec3f(1.0, 0.5, 0.32) * glint, alpha);`,
 });
 /**
  * The layer is overexposed until nothing is left of it: `amount` 0 is the layer, 1 is gone. The light multiplies what
@@ -171,18 +237,27 @@ export const transitions: readonly Transition[] = [
         parameters: [{ amplitude: round(12 * depth) }, { displacement: round(10 * depth) }] };
     } },
 
+  // The bar starts and ends its own reach outside the stage, so that neither end of the change bends anything.
   { name: "scan",
-    chain: layer => custom(scan, { edge: -40, side: side(layer), originY: round(layer.y) }),
-    frame: (t, layer) => ({ transform: still, parameters: [{ edge: round(-40 + (layer.stageHeight + 80) * t), side: side(layer), originY: round(layer.y) }] }) },
+    chain: layer => [operation(rod, { edge: -ROD, originY: round(layer.y) }), operation(scan, { edge: -ROD, side: side(layer), originY: round(layer.y) })],
+    frame(t, layer): Pose {
+      const edge = round(-ROD + (layer.stageHeight + 2 * ROD) * t), originY = round(layer.y);
+      return { transform: still, parameters: [{ edge, originY }, { edge, side: side(layer), originY }] };
+    } },
 
+  // The wave rises as the iris opens and has died away when its rim has left the stage.
   { name: "iris",
-    chain: layer => custom(iris, { radius: 0, side: side(layer), centreX: round(layer.stageWidth / 2 - layer.x), centreY: round(layer.stageHeight / 2 - layer.y) }),
-    frame: (t, layer) => ({ transform: still, parameters: [{ radius: round(ease(t) * (Math.hypot(layer.stageWidth, layer.stageHeight) / 2 + 24)), side: side(layer),
-      centreX: round(layer.stageWidth / 2 - layer.x), centreY: round(layer.stageHeight / 2 - layer.y) }] }) },
+    chain: layer => { const centreX = round(layer.stageWidth / 2 - layer.x), centreY = round(layer.stageHeight / 2 - layer.y);
+      return [operation(wave, { radius: 0, strength: 0, centreX, centreY }), operation(iris, { radius: 0, side: side(layer), centreX, centreY })]; },
+    frame(t, layer): Pose {
+      const radius = round(ease(t) * (Math.hypot(layer.stageWidth, layer.stageHeight) / 2 + 24));
+      const centreX = round(layer.stageWidth / 2 - layer.x), centreY = round(layer.stageHeight / 2 - layer.y);
+      return { transform: still, parameters: [{ radius, strength: round(0.72 * clamp(t * 6) * clamp((1 - t) * 5)), centreX, centreY }, { radius, side: side(layer), centreX, centreY }] };
+    } },
 
   { name: "mosaic",
-    chain: layer => custom(mosaic, field(0, layer)),
-    frame: (t, layer) => ({ transform: still, parameters: [field(t, layer)] }) },
+    chain: layer => [operation(flip, field(0, layer)), operation(mosaic, field(0, layer))],
+    frame: (t, layer) => ({ transform: still, parameters: [field(t, layer), field(t, layer)] }) },
 
   // Light floods the leaving section until it is gone, at the middle, and the next one comes out of the same light.
   { name: "exposure",

@@ -22,15 +22,15 @@ handle.pause(); handle.seek(1.5); handle.play(); handle.cancel();
 `bounds`, `interaction`, `media` and `fallback` are explicit on purpose: they state
 that the effect stays inside the layer, never touches interactive content, keeps
 the media as is, and falls back to the static original. A chain has 1–3 effects,
-each kind once. Sampling effects (ripple, chromatic) come before colour effects
-(dissolve, custom).
+each kind once. Sampling effects (ripple, chromatic, a custom displacement) come
+before colour effects (dissolve, a custom colour function).
 
 | Effect | Parameters | What it does |
 | --- | --- | --- |
 | `ripple` | `amplitude` 0–12 px | Radial wave that displaces where pixels sample from (refraction) |
 | `chromatic` | `displacement` 0–12 px | Shifts the red and blue channels apart |
 | `dissolve` | `amount` 0–1, `speed` 0–4 | Animated noise mask over alpha |
-| `custom` | your own, up to 4 | Your WGSL colour function (below) |
+| `custom` | your own, up to 4 | Your WGSL: a colour function, or a displacement (below) |
 
 `gpu.setRipple(id, { amplitude, seconds, playing })` is a shortcut for a single
 ripple; `setRipple(id, null)` clears it.
@@ -62,8 +62,43 @@ The body is the inside of
 - `local` is its position in CSS pixels; `extent` is the layer size.
 - `parameters` holds your values in declaration order.
 
-It may change colour and alpha but not geometry: use `ripple` or `chromatic` before
-it for displacement.
+It may change colour and alpha but not where a pixel is drawn. For that, define a
+displacement.
+
+### Moving pixels
+
+A definition with `geometry: "displacement"` says where each pixel comes from. Its
+body is the inside of
+`fn(local: vec2f, extent: vec2f, seconds: f32, parameters: vec4f) -> vec2f`: for the
+pixel drawn at `local`, it returns the position in the layer (CSS pixels) to draw
+there. Returning `local` changes nothing.
+
+```ts
+// Venetian blinds: 24 px slats, each sliding out to the right in turn.
+export const blinds = defineEffect({
+  name: "blinds",
+  parameters: { amount: { min: 0, max: 1 } },
+  geometry: "displacement", bounds: "layer", capabilities: ["webgpu"],
+  wgsl: `
+    let slat = floor(local.y / 24.0);
+    let turn = fract(slat * 0.37);
+    let gone = clamp(parameters.x * 2.0 - turn, 0.0, 1.0);
+    return local - vec2f(gone * extent.x, 0.0);`,
+});
+```
+
+- A position outside the layer draws nothing, so a displacement can also take pixels
+  away (the slats above leave gaps). Nothing is ever drawn outside the layer's box.
+- It is a sampling effect: it goes before colour effects, and a chain may hold one
+  displacement and one colour function.
+- Displaced pixels no longer sit where their controls are. Use it on a decorative
+  layer, or on any layer with `interaction: "inert"` for the length of a transition:
+  the layer's content takes no input until the effect ends.
+- Sampling is bilinear with no mipmaps: magnifying is smooth, strong minification
+  can shimmer.
+- A material cannot use a displacement.
+
+Both kinds share the rest:
 
 - Definitions are **trusted application code**: up to 4 parameters and 4096
   characters. Never build WGSL from user input.

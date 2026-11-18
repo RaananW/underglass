@@ -195,20 +195,32 @@ can do to a live page. The readout names the one that is running.
 | Cover | burn | A noise front with a glowing edge burns the section away, and the next one is what it leaves |
 | The DOM | tilt | Matrices only: the texts change places, the specimen tilts back and the next rises over it. The layers stay interactive: a button can be clicked mid-change |
 | Transitions | water | The built-in ripple and chromatic split: the section goes under water and the next settles out of it. The ripple keeps moving when the scroll stops |
-| Motion | scan | A bar of light crosses the stage, with the next section above it |
-| Shaders | iris | An aperture opens from the middle of the stage onto the next section |
-| Components | mosaic | Tiles of the stage change hands one by one |
+| Motion | scan | A bar of light crosses the stage, with the next section above it. The bar is a glass rod: it magnifies the page where it crosses |
+| Shaders | iris | An aperture opens from the middle of the stage onto the next section, behind a shock wave that bends the page around its rim |
+| Components | mosaic | Tiles of the stage turn over one after the other: each is squeezed to a line and opens again as the next section |
 | Everywhere | exposure | The section is overexposed until it is gone, and the next comes out of the light |
 
 - Every change but the tilt puts an effect chain on each layer on stage, with
   `interaction: "inert"`: the content takes no input until the chain ends, at the
   next rest. The driver writes the chain's parameters each frame (`handle.update`),
   which repaints nothing, like a transform.
-- Burn, scan, iris and mosaic are **masks**. The two sections stay in place, and one
-  field hides the leaving section exactly where it shows the arriving one. The field
-  is in stage coordinates (each layer is told its own origin), so it runs unbroken
-  across a section's layers. Their WGSL is written so that both ends are exact: the
-  layer untouched at one, gone at the other.
+- Burn, scan, iris and mosaic hand over along a **field**. The two sections stay in
+  place, and the field hides the leaving section exactly where it shows the arriving
+  one. The field is in stage coordinates (each layer is told its own origin), so it
+  runs unbroken across a section's layers. Their WGSL is written so that both ends
+  are exact: the layer untouched at one, gone at the other.
+- Scan, iris and mosaic also **move pixels**. Their chains start with a custom
+  displacement (`defineEffect` with `geometry: "displacement"`: a function that says
+  which position of the layer each pixel is drawn from), followed by the colour
+  function. The rod and the shock wave draw each side of the handover from nearer
+  the line, so a side never shows the other's pixels and the handover stays where the
+  mask puts it. A tile of the mosaic is squeezed about its middle, and each section
+  draws it for half of its turn (a position outside the layer draws nothing). The
+  colour function adds the light: the bar, the rim, a tile's face darkening as it
+  turns away.
+- A displacement moves pixels inside its layer's own box, never outside it. So these
+  changes distort the sections where they are; one that carried a section's content
+  across the stage would be cut off at each layer's edge.
 - A custom effect's shader is compiled when it is first used, which stalled the page
   for 60 to 85 ms once per effect when I measured it. So after the deck starts, the
   driver puts each change's chain once on an empty 16 px layer in the stage's corner
@@ -229,6 +241,12 @@ Rules the deck keeps, most of them from the [probe](showcase-deck-probe.md):
 - When a change ends, the layers that leave the stage are hidden, not put back as they
   rest. The GPU still draws a layer for a frame or more after its enrolment ends, until
   the stage without it is ready, and a layer put back would show whole for that long.
+- When a change starts, a layer that rests hidden (the demonstration's second panel)
+  is written hidden, never as it rests, before the arriving layers are enrolled. The
+  runtime draws at every write, and after an enrolment it holds the last complete
+  frame until the new layers are captured. So a pose written before the enrolment is
+  on screen for those frames, and one written after it is not seen until they are
+  over: the order of the writes around an enrolment is what the visitor sees.
 - The layout changes to the deck before `enable()`, and back to the flow whenever the
   mode returns to `dom` (a refusal, the readout's switch, a lost GPU). The section in
   the window stays the same both ways, and so does every control's state.
@@ -269,8 +287,7 @@ stage, the captures so far and the runtime's work per frame. Where the browser h
 APIs the deck starts by itself; a visitor who switches it off stays in the flow for
 the rest of the session (`sessionStorage`, `underglass-deck`).
 
-Not built yet: changes that displace pixels with custom
-WGSL (a custom effect changes colour and alpha only), and scroll snapping. In the
+Not built yet: scroll snapping. In the
 deck, the browser's find-in-page can match text in a parked section, which is not
 painted.
 
@@ -341,7 +358,8 @@ control shows after it changes, a real click lands on a button in a tilted layer
 scrolling through a change captures nothing (the tilt and an effect change), every
 change runs with GPU presentation staying on and its chains gone at the next rest, the
 scan's mask shows the arriving section above the bar and the leaving one below it
-exactly as they rest, links, keys and focus change the section,
+exactly as they rest (its glass rod moves nothing beyond its own 40 px), the scan's
+chains are a displacement and a colour function on every layer, links, keys and focus change the section,
 a link jumps with one change in about a second, the lamp lights the background under
 the pointer and goes out off the stage, a resize keeps the place part way through a
 change, a destroyed GPU device is followed by a return to GPU presentation, the switch

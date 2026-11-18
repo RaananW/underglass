@@ -389,6 +389,32 @@ try {
         const later = Math.max(0, ...distances.slice(arrived + 1));
         assert.ok(later < 0.003, `after the change from ${leaving} to ${arriving} a frame differs from the resting section in ${(later * 100).toFixed(2)}% of the stage: the section that left showed again`);
       }
+      // When a change starts, a layer that rests hidden must not show. The third section has one, the second panel of
+      // its demonstration, in the place of its specimen. The runtime holds the last complete frame while the arriving
+      // layers are captured, so a pose written just before that is on screen for several frames. Every frame is
+      // recorded while the page scrolls out of the section's rest: once the stage has left the look of its rest, it
+      // may not come back to it, which is what a flash followed by the real start of the change looks like.
+      {
+        await go(2);
+        const rest = stageOf(PNG.sync.read(await page.screenshot()));
+        const frames = [];
+        const onFrame = event => { frames.push(event.data); cast.send("Page.screencastFrameAck", { sessionId: event.sessionId }).catch(() => {}); };
+        cast.on("Page.screencastFrame", onFrame);
+        await cast.send("Page.startScreencast", { format: "png", everyNthFrame: 1, maxWidth: 1440, maxHeight: 900 });
+        await page.evaluate(async () => {
+          const start = scrollY;
+          for (let moved = 0; moved <= innerHeight * 0.3; moved += 6) { scrollTo({ top: start + moved, behavior: "instant" }); await new Promise(resolve => requestAnimationFrame(resolve)); }
+        });
+        await page.waitForTimeout(300);
+        await cast.send("Page.stopScreencast");
+        cast.off("Page.screencastFrame", onFrame);
+        const distances = frames.map(data => apart(stageOf(PNG.sync.read(Buffer.from(data, "base64"))), rest));
+        const left = distances.findIndex(distance => distance > 0.01);
+        assert.ok(frames.length > 20 && left >= 0, `leaving the third section: ${frames.length} frames recorded, the change showed at frame ${left}`);
+        const back = distances.slice(left + 1).findIndex(distance => distance < 0.002);
+        assert.ok(back < 0, `leaving the third section, frame ${left} differs from the section at rest in ${(distances[left] * 100).toFixed(2)}% of the stage and frame ${left + 1 + back} does not: a hidden layer flashed before the change began`);
+        await go(2);
+      }
       await cast.detach();
 
       // The second section, at rest: its two layers. The controls are the served elements, the GPU draws what they
@@ -455,7 +481,7 @@ try {
       await page.locator("#demo-scrub").fill("50");
       await page.evaluate(() => window.nextDeck.idle());
       state = await snapshot();
-      assert.deepEqual([state.mode, state.effects, await panels(), state.errors], ["gpu", ["transitions-figure:custom", "transitions-second:custom"], ["shown", "shown"], []]);
+      assert.deepEqual([state.mode, state.effects, await panels(), state.errors], ["gpu", ["transitions-figure:custom+custom", "transitions-second:custom+custom"], ["shown", "shown"], []]);
       await page.waitForFunction(() => document.querySelector("#transitions-second [data-demo-clock]").textContent !== "00:00.0");
       await page.screenshot({ path: join(run, "next-deck-demo.png") });
       await page.getByRole("button", { name: "tilt", exact: true }).click();
@@ -483,8 +509,9 @@ try {
 
       // The change to the fifth section is a scan: a bar of light crosses the stage, with the arriving section above it
       // and the leaving one below. The mask is in stage coordinates and hides one section exactly where it shows the
-      // other: at the middle, the upper part of the stage is the arriving section as it rests and the lower part the
-      // leaving one. Scrolling through it captures nothing either.
+      // other. The bar is also a glass rod, a displacement before the mask in each layer's chain, which magnifies the
+      // page within 40 px of it and moves nothing further away: at the middle, the upper part of the stage is the
+      // arriving section as it rests and the lower part the leaving one. Scrolling through it captures nothing either.
       const region = async (top, bottom) => PNG.sync.read(await page.screenshot({ clip: { x: 72, y: top, width: 1440 - 72, height: bottom - top } }));
       const differing = (a, b) => {
         let count = 0;
@@ -497,7 +524,7 @@ try {
       const arrivingUpper = await region(90, 400);
       await scrub(3.5);
       state = await snapshot();
-      assert.deepEqual([state.mode, state.effects, state.change, state.errors], ["gpu", ["motion:custom", "motion-figure:custom", "shaders:custom", "shaders-figure:custom"], "scan", []]);
+      assert.deepEqual([state.mode, state.effects, state.change, state.errors], ["gpu", ["motion:custom+custom", "motion-figure:custom+custom", "shaders:custom+custom", "shaders-figure:custom+custom"], "scan", []]);
       const scanUpper = differing(await region(90, 400), arrivingUpper), scanLower = differing(await region(570, 880), leavingLower);
       assert.ok(scanUpper < 0.002, `above the bar the stage is the arriving section (${scanUpper})`);
       assert.ok(scanLower < 0.002, `below the bar the stage is the leaving section (${scanLower})`);
