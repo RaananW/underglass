@@ -277,6 +277,7 @@ function App() {
   const stageClass = selected === "instrument" ? "stage stage-fluid" : home ? "stage stage-hero" : "stage";
   return <>
     <a className="skip-link" href="#studio">Skip to the live stage</a>
+    <div className="page-backdrop" aria-hidden="true"><i /><i /></div>
     <div className="hero-shell">
       {/* The brand goes to the site's home page, another document. */}
       <header className="site-header"><a className="brand" href={base}><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>Underglass<span className="tag">CHROME · EDGE 157+</span></a>
@@ -288,7 +289,7 @@ function App() {
         aria-labelledby={home ? undefined : "studio-title-heading"} aria-label={home ? "Live stage" : undefined}>
         {current && <>
           <div className="studio-head">
-            <div><p className="eyebrow">LIVE STUDIO · {current.number}</p><h1 id="studio-title-heading">{current.title}</h1></div>
+            <div><p className="eyebrow"><b>{current.number}</b>Live studio</p><h1 id="studio-title-heading">{current.title}</h1></div>
             <div className="studio-actions">{picker}{modePill}</div>
           </div>
           <p className="studio-detail">{current.detail}</p>
@@ -367,7 +368,7 @@ function App() {
         </div>
       </section>
     </main>
-    <footer><span><span className="brand-mark small" aria-hidden="true"><i /><i /><i /></span>Underglass / Example studio</span>
+    <footer><span><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>Underglass / Example studio</span>
       <span><a href={site.docs}>Documentation</a> · <a href={site.repository} onClick={() => track("Outbound Link", { target: "github" })}>Source on GitHub</a> · <a href={site.npm}
         onClick={() => track("Outbound Link", { target: "npm" })}>@underglass/react on npm</a> · Apache-2.0.{analyticsEnabled && " Anonymous visit counts by Vercel Web Analytics, no cookies."}</span></footer>
   </>;
