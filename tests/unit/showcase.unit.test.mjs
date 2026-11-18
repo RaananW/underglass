@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { showcaseBase } from "../../examples/showcase/site-policy.mjs";
 import { route, searchExamples, examples, examplePath, exampleFromPath, pageMeta, site } from "../../examples/showcase/src/catalog.ts";
-import { headTags, noscriptBody, sitemap, robots, llms, notFoundPage, structuredData, defaultImage } from "../../examples/showcase/seo.ts";
+import { headTags, noscriptBody, sitemap, robots, notFoundPage, structuredData, defaultImage } from "../../examples/showcase/seo.ts";
 import { inlineCss } from "../../examples/showcase/inline-css.ts";
 
 test("showcase project base is deterministic and rejects unsafe URL shapes", () => {
@@ -66,11 +66,6 @@ test("every page has its own title, description, canonical URL and structured da
   // The home page is the software, the studio's pages are pages of the site under "Examples".
   assert.equal(structuredData("home")["@graph"][1]["@type"], "SoftwareSourceCode");
   assert.deepEqual(structuredData("motion")["@graph"][1].itemListElement.map(item => item.name), ["Underglass", "Examples", "Card deck"]);
-  // llms.txt names the site, the guide and every example by its canonical URL.
-  const map = llms();
-  assert.match(map, /^# Underglass\n\n> /);
-  assert.ok(map.includes(`${site.docs}/guide/getting-started`));
-  for (const example of examples) assert.ok(map.includes(`(${site.origin}/examples/${example.id})`));
   assert.equal(robots(), `User-agent: *\nAllow: /\n\nSitemap: ${site.origin}/sitemap.xml\n`);
   assert.match(notFoundPage("/"), /<meta name="robots" content="noindex">/);
 });
@@ -97,7 +92,7 @@ test("public output guard fails before an unexpected artifact can be uploaded", 
     await writeFile(join(root, "assets/index-abc.css"), "body{}");
     // The pages and site files `seo.ts` writes, and the icons and social card from `public/`.
     await mkdir(join(root, "examples"));
-    for (const name of ["404.html", "examples.html", "robots.txt", "llms.txt", "sitemap.xml", "favicon.svg", "examples/index.html", "examples/motion.html"]) await writeFile(join(root, name), "text");
+    for (const name of ["404.html", "examples.html", "robots.txt", "sitemap.xml", "favicon.svg", "examples/index.html", "examples/motion.html"]) await writeFile(join(root, name), "text");
     await writeFile(join(root, "og.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
     await writeFile(join(root, "apple-touch-icon.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
     // Runs the checker as a child process on the fake build output and returns its status and stderr.

@@ -11,7 +11,7 @@ import { createRoot } from "react-dom/client";
 import { version as reactDOMVersion } from "react-dom";
 import type { CanvasController } from "@underglass/react";
 import { loadExample } from "./examples";
-import { examplePath, examplesPath, exampleFromPath, examples, hero, pageMeta, previews as previewNames, searchExamples, site, type ExampleId, type SceneId } from "./catalog";
+import { examplePath, examplesPath, exampleFromPath, examples, hero, pageMeta, previews as previewNames, route, searchExamples, site, type ExampleId, type SceneId } from "./catalog";
 import { detectSupport, explain, flags, type Support } from "./support";
 import { analyticsEnabled, startAnalytics, track, trackSupport, type Api } from "./analytics";
 import { installPolyfill, polyfillExcluded, polyfillLinks, polyfillOffers, polyfillPossible, removePolyfill } from "./polyfill";
@@ -30,6 +30,10 @@ const base = import.meta.env.BASE_URL;
 const pageExample = () => exampleFromPath(location.pathname, base);
 /** The URL of the examples' index (no id, or the overview scene) or an example's page. */
 const pageURL = (id?: SceneId) => `${base}${id && id !== hero.id ? examplePath(id) : examplesPath}`;
+/** Moves a `#/motion` link (the site's first URLs, and the Strata example's breadcrumb) to the example's own page, keeping history clean. */
+function upgradeHashLink() {
+  if (location.hash.startsWith("#/")) history.replaceState(null, "", pageURL(route(location.hash)));
+}
 /** Keeps the title, description and canonical URL in step with the page in the URL. */
 function applyHead(id?: ExampleId) {
   const meta = pageMeta(id);
@@ -37,6 +41,7 @@ function applyHead(id?: ExampleId) {
   document.querySelector('meta[name="description"]')?.setAttribute("content", meta.description);
   document.querySelector('link[rel="canonical"]')?.setAttribute("href", `${site.origin}/${meta.path}`);
 }
+upgradeHashLink();
 applyHead(pageExample());
 /** True for a click the browser should handle itself: another button, or a modifier that opens a new tab or window. */
 const ownClick = (event: MouseEvent) => event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
@@ -109,6 +114,7 @@ function App() {
     // `#examples` also fire `popstate`; they leave the path, and so the example, as it is.
     const show = () => {
       if (retired.current) return;
+      upgradeHashLink();
       const page = pageExample(), id: SceneId = page ?? hero.id;
       applyHead(page);
       if (id === shown.current) return;
@@ -162,10 +168,12 @@ function App() {
       setDiagnostic(`The live example failed to load: ${String(error)}`);
       console.error("Showcase failed to load", error);
     });
+    // `hashchange` catches a `#/motion` link followed inside an open page.
     window.addEventListener("popstate", show);
+    window.addEventListener("hashchange", show);
     window.addEventListener("pagehide", close);
     window.addEventListener("pageshow", restore);
-    return () => { cancelled = true; window.removeEventListener("popstate", show);
+    return () => { cancelled = true; window.removeEventListener("popstate", show); window.removeEventListener("hashchange", show);
       window.removeEventListener("pagehide", close); window.removeEventListener("pageshow", restore); close(); };
   }, [ready]);
   // Opens the examples' index (no id) or an example's page in place.

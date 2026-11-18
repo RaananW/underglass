@@ -4,7 +4,7 @@
  * the built example studio (`examples.html`) into one page per URL: `examples.html` and `examples/index.html` for
  * the examples' index and `examples/<id>.html` for each example, each with its own title, description, canonical URL, Open
  * Graph and Twitter card, JSON-LD and a `<noscript>` summary with links to every page. It also writes
- * `sitemap.xml`, `robots.txt`, `llms.txt` and `404.html`. The dev server serves the studio under `/examples`.
+ * `sitemap.xml`, `robots.txt` and `404.html`. The dev server serves the studio under `/examples`.
  *
  * The pages mark where the tags go with `<!-- seo:head -->` and `<!-- seo:body -->`. Canonical,
  * sitemap and social URLs always use `site.origin` (underglass.dev), whatever `base` the build has, so a
@@ -104,32 +104,6 @@ export function sitemap() {
 /** `robots.txt`: everything may be crawled; names the one sitemap, which lists the documentation pages too. */
 export const robots = () => `User-agent: *\nAllow: /\n\nSitemap: ${site.origin}/sitemap.xml\n`;
 
-/**
- * `llms.txt`: what the site is and where its parts are, as plain Markdown for a language model or an agent
- * (https://llmstxt.org). The home page's own text is in its HTML; this is the map.
- */
-export function llms() {
-  return `# ${site.name}
-
-> ${site.description}
-
-Underglass is an experimental GPU-first React framework (there is a Vue adapter, and the core runs without a framework). GPU presentation needs Chrome or Edge 157 or later; without it the same components are ordinary DOM in every browser.
-
-## Start here
-
-- [Home page](${site.origin}/): what it is, with live transitions on the page itself
-- [Getting started](${site.docs}/guide/getting-started): install, mount a layer, enable the GPU
-- [API reference](${site.docs}/reference/api)
-- [Documentation](${site.docs})
-- [Source on GitHub](${site.repository})
-- [npm: @underglass/react](${site.npm})
-
-## Live examples
-
-${examples.map(example => `- [${example.title}](${canonical(example.id)}): ${example.summary}`).join("\n")}
-`;
-}
-
 /** `404.html`: a small static page, not indexed, with links back into the site. */
 export function notFoundPage(base: string) {
   return `<!doctype html>
@@ -193,7 +167,6 @@ export function seo(): Plugin {
       await writeFile(join(outDir, "index.html"), home.replace("<!-- seo:head -->", headTags("home", defaultImage)));
       await writeFile(join(outDir, "sitemap.xml"), sitemap());
       await writeFile(join(outDir, "robots.txt"), robots());
-      await writeFile(join(outDir, "llms.txt"), llms());
       await writeFile(join(outDir, "404.html"), notFoundPage(base));
     },
   };

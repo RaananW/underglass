@@ -13,8 +13,8 @@ import { join } from "node:path";
 
 export default defineConfig({
   root: import.meta.dirname,
-  // One HTML page per URL with its own metadata, plus sitemap, robots, llms.txt and 404 (`seo.ts`); `prerender.ts`
-  // renders the home page's React tree into `index.html`, and `inline-css.ts` writes its stylesheet into it.
+  // One HTML page per URL with its own metadata, plus sitemap, robots and 404 (`seo.ts`); `prerender.ts` renders
+  // the home page's React tree into `index.html`, and `inline-css.ts` writes its stylesheet into it.
   plugins: [seo(), prerender(), inlineCss(["index.html"])],
   // Vercel sets `VERCEL=1` in its builds: only those load Vercel Web Analytics (`analytics.ts`), which is
   // served from the deployment's own `/_vercel/insights/`.

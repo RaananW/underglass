@@ -141,7 +141,7 @@ try {
       else {
         // The pages and site files `seo.ts` writes, the icons and social card, hashed JS/CSS and the JPEG
         // previews of GPU mode shown to browsers that cannot run it.
-        assert.ok(/^(?:(?:index|examples|404)\.html|robots\.txt|llms\.txt|sitemap\.xml|favicon\.svg|og\.jpg|apple-touch-icon\.png|examples\/[\w-]+\.html|assets\/[\w.-]+\.(?:js|css|jpg))$/.test(name),
+        assert.ok(/^(?:(?:index|examples|404)\.html|robots\.txt|sitemap\.xml|favicon\.svg|og\.jpg|apple-touch-icon\.png|examples\/[\w-]+\.html|assets\/[\w.-]+\.(?:js|css|jpg))$/.test(name),
           `Unexpected public asset: ${name}`);
         const bytes = await readFile(path);
         if (name.endsWith(".jpg")) assert.ok(bytes[0] === 0xff && bytes[1] === 0xd8, `Public image is not a JPEG: ${name}`);
@@ -182,7 +182,7 @@ try {
     assert.equal(response.status, 200, path);
     assert.match(await response.text(), /<link rel="canonical" href="https:\/\/underglass\.dev\/examples">/, path);
   }
-  for (const file of ["sitemap.xml", "robots.txt", "llms.txt", "favicon.svg", "og.jpg", "apple-touch-icon.png"]) assert.equal((await fetch(`${url}${file}`)).status, 200, file);
+  for (const file of ["sitemap.xml", "robots.txt", "favicon.svg", "og.jpg", "apple-touch-icon.png"]) assert.equal((await fetch(`${url}${file}`)).status, 200, file);
   // Every script and stylesheet the page references must be served.
   for (const asset of html.matchAll(/(?:src|href)="(\/underglass\/assets\/[^"]+)"/g)) {
     assert.equal((await fetch(`http://127.0.0.1:${port}${asset[1]}`)).status, 200);
@@ -217,7 +217,6 @@ try {
     assert.ok((await (await fetch(`http://127.0.0.1:${port}${entry[1]}`)).text()).length < 4000, "the entry script is small");
     const sitemap = await (await fetch(`${url}sitemap.xml`)).text();
     for (const page of ["", "examples", "examples/instrument"]) assert.ok(sitemap.includes(`<loc>https://underglass.dev/${page}</loc>`), `the sitemap lists /${page}`);
-    assert.match(await (await fetch(`${url}llms.txt`)).text(), /^# Underglass\n/);
     // Chrome's warning about a WebGPU option on Windows is not the page's.
     const watch = page => {
       const problems = [];
@@ -1246,7 +1245,7 @@ try {
         assert.equal(await choice.evaluate(key => sessionStorage.getItem(key), domChoiceKey), null);
         await choiceContext.close();
       }
-      // The home page: the stage at the top holds the hero scene (src/hero.tsx). Its headline, links and the card's
+      // The examples' index: the stage at the top holds the overview scene (src/hero.tsx). Its headline, links and the card's
       // inputs are the original elements; in GPU mode the sky and the glass take their light, colour and ripples from
       // effect parameters. GPU starts by itself with nothing pressed or scrolled: the stage is in view on arrival.
       const homeContext = await laneContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
@@ -1257,7 +1256,7 @@ try {
       const homeState = () => home.evaluate(() => window.showcase.state());
       const sheen = id => home.evaluate(layer => window.showcase.state().decorativeEffects.find(entry => entry.id === layer)
         ?.effects.find(effect => effect.kind === "custom")?.parameters, id);
-      assert.equal(await home.locator("h1#hero-title").count(), 1, "The home page's h1 is the hero headline");
+      assert.equal(await home.locator("h1#hero-title").count(), 1, "The examples' index's h1 is the overview scene's headline");
       if (lane === "native") {
         record.home = { initial: await autoAdmission(home) };
         assert.equal((await home.evaluate(() => scrollY)), 0, "GPU started without scrolling");
