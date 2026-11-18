@@ -163,11 +163,33 @@ test("the rails pass axe in light, dark, face mode, forced colours and more cont
   }
   await page.evaluate(() => { document.documentElement.dataset.strataTheme = "light"; });
   await page.emulateMedia({ forcedColors: "active" });
-  const forced = await page.evaluate(() => ({ plinth: getComputedStyle(document.querySelector("#acct .ug-tabs__list")).borderTopWidth, cap: getComputedStyle(document.querySelector("#acct-tab-profile .ug-tab__cap")).backgroundColor,
-    other: getComputedStyle(document.querySelector("#acct-tab-security .ug-tab__cap")).backgroundColor, led: getComputedStyle(document.querySelector("#acct-tab-profile .ug-tab__led")).backgroundColor, shadow: getComputedStyle(document.querySelector("#acct-tab-profile .ug-tab__cap")).boxShadow }));
+  const forced = await page.evaluate(() => {
+    // What a system colour computes to on this build: `Highlight` is not opaque on every one (80% alpha on Chrome 160, issue #303).
+    const system = name => {
+      const probe = document.createElement("div");
+      probe.style.cssText = `forced-color-adjust: none; background: ${name}`;
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return colour;
+    };
+    const background = selector => getComputedStyle(document.querySelector(selector)).backgroundColor;
+    return { plinth: getComputedStyle(document.querySelector("#acct .ug-tabs__list")).borderTopWidth, cap: background("#acct-tab-profile .ug-tab__cap"), other: background("#acct-tab-security .ug-tab__cap"),
+      led: background("#acct-tab-profile .ug-tab__led"), unlit: background("#acct-tab-security .ug-tab__led"), shadow: getComputedStyle(document.querySelector("#acct-tab-profile .ug-tab__cap")).boxShadow,
+      highlight: system("Highlight"), face: system("ButtonFace"), canvas: system("Canvas"), text: system("HighlightText"), label: getComputedStyle(document.querySelector("#acct-tab-profile .ug-tab__cap")).color };
+  });
   expect(forced.plinth).toBe("1px");
-  expect(forced.cap, "the selected key is Highlight, the others ButtonFace").not.toBe(forced.other);
-  expect(forced.led).toMatch(/^rgb\(/);
+  expect([forced.cap, forced.other], "the selected key is Highlight, the others ButtonFace").toEqual([forced.highlight, forced.face]);
+  expect([forced.led, forced.unlit], "the selected key's LED is Highlight, the others' Canvas").toEqual([forced.highlight, forced.canvas]);
+  expect(forced.highlight, "and Highlight is told from both").not.toBe(forced.canvas);
+  expect(forced.highlight).not.toBe(forced.face);
+  // The selected key's label is HighlightText on Highlight over the rail's Canvas: legible also where Highlight is translucent.
+  const channels = colour => { const [r, g, b, a = 1] = colour.match(/[\d.]+/g).map(Number); return [r, g, b, a]; };
+  const luminance = ([r, g, b]) => [r, g, b].map(value => value / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+  const [top, under] = [channels(forced.highlight), channels(forced.canvas)], key = top.slice(0, 3).map((value, index) => value * top[3] + under[index] * (1 - top[3]));
+  const [light, dark] = [luminance(channels(forced.text)), luminance(key)].sort((a, b) => b - a);
+  expect(forced.label, "the selected key's label is HighlightText").toBe(forced.text);
+  expect((light + 0.05) / (dark + 0.05), `the label's contrast on the key (${forced.text} on ${forced.highlight} over ${forced.canvas})`).toBeGreaterThanOrEqual(7);
   expect(forced.shadow, "no shadow").toBe("none");
   const forcedResult = await new AxeBuilder({ page }).include("#tf-panel").withTags(tags).analyze();
   expect(summary(forcedResult.violations), "axe, forced colours").toEqual([]);
