@@ -485,7 +485,10 @@ gallery's anatomy-page links name headings that exist.
 
 Builds made on Vercel (`VERCEL=1`) load Vercel Web Analytics (`src/analytics.ts`);
 other builds, GitHub Pages included, load nothing and send nothing. It sets no
-cookies. Page views count each example's page. The custom events (a Pro plan feature)
+cookies. Page views count the home page and each example's page. The example studio
+loads the script with its page. The home page loads it as a chunk of its own once its
+entry script runs (`src/home/track.ts`), so its first frame and its entry are
+unchanged, and a build that sends nothing does not contain it. The custom events (a Pro plan feature)
 are `Browser Support` (once per visit, kept to one by a `sessionStorage` flag: the
 up-front guess of whether this browser can run GPU mode, `likely`, `chrome-flags` or
 `unsupported`), `GPU Enable` (result mode, the status line's headline, the up-front
@@ -494,8 +497,15 @@ started GPU mode by itself, `button` for a press), `GPU Lost` (GPU mode ended wi
 the visitor asking, with `api`), `Studio Action` (**Use ordinary DOM**, **Dispose
 example**), `GPU Help` (preview, copied flag, Chrome download link, polyfill button;
 the download link was the Canary link, action `canary`, until Chrome 157) and
-`Outbound Link` (GitHub, npm). `api` keeps polyfilled runs out of the native numbers. No event carries anything a visitor
-typed, searched or filmed. The footer says when analytics is on. The documentation
+`Outbound Link` (GitHub, npm). `api` keeps polyfilled runs out of the native numbers.
+The home page sends the same events with `example: "home"`: `GPU Enable` when its
+deck starts by itself (`auto`: at load, after a lost GPU, when a window grows; an
+attempt that ends as the one before it did is not sent again) or by the header's
+switch (`button`), `GPU Lost`, `Studio Action` (`disable`: the switch turned off) and
+`Outbound Link`. It adds `Home Demo`: the live demonstration was used (`play`, or
+`scrub` once per change and page load), with the change picked and whether the page
+was drawn by the GPU. No event carries anything a visitor
+typed, searched or filmed. Both footers say when analytics is on. The documentation
 site's Vercel builds load the same script in each page's head and count page views
 only, with no custom events.
 

@@ -6,8 +6,13 @@
  *   Underglass runtime hydrates the stage and starts GPU presentation.
  * - `dom.tsx` everywhere else: React alone hydrates the same markup. The runtime and its engine, two thirds of the
  *   page's JavaScript, are never downloaded.
+ *
+ * In a build that sends analytics it also starts them, as a chunk of their own (`track.ts`).
  */
 import "./home.css";
 import { detectSupport } from "../support";
+import { startHomeAnalytics } from "./track";
 
-void (detectSupport() === "likely" ? import("./gpu") : import("./dom"));
+const support = detectSupport();
+void (support === "likely" ? import("./gpu") : import("./dom"));
+startHomeAnalytics(support);
