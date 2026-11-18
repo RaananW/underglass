@@ -174,6 +174,8 @@ window.runtimeProbe = { state, animate, dispose,
   define: (name: string, wgsl: string, parameters: Record<string, ParameterRange> = { strength: { min: -4, max: 4 } }, geometry: ApplicationEffect["geometry"] = "color") =>
     defineEffect({ name, wgsl, parameters, geometry, bounds: "layer", capabilities: ["webgpu"] }),
   invalidate: (id?: string) => controller.invalidate(id),
+  // Runs `work` and commits the React updates it makes before returning, so a test can enrol a layer between two writes of one task.
+  sync: (work: () => void) => { flushSync(work); },
   async cycle() {
     const retired = await dispose();
     const frame = document.querySelector("#frame")!;
@@ -224,7 +226,7 @@ declare global {
     cycle(): Promise<{ retired: ReturnType<typeof state>; active: ReturnType<typeof state> }>;
     enable(): ReturnType<CanvasController["enable"]>; disable(): ReturnType<CanvasController["disable"]>;
     settle(): Promise<void>; transform(id: string, transform: Transform): void;
-    origin(id: string, origin?: TransformOrigin): void; invalidate(id?: string): void;
+    origin(id: string, origin?: TransformOrigin): void; invalidate(id?: string): void; sync(work: () => void): void;
     effects(id: string, chain: EffectDescriptor[]): EffectHandle;
     material(id: string, material: MaterialDescriptor): MaterialHandle;
     define(name: string, wgsl: string, parameters?: Record<string, ParameterRange>): ApplicationEffect;

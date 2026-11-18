@@ -92,8 +92,9 @@ Structural style/DOM-derived checks are cached and re-evaluated after
 mutations, resize, scroll, animation/transition events, input/focus,
 membership, ownership, effects and phase changes; ownership checks and
 transform-dependent geometry still run every frame. React commits coalesce
-reconciliation into one microtask (`CanvasRuntime.requestReconcile()`), giving
-one GPU frame per commit. Paint events upload only layers in `changedElements`
+reconciliation into one microtask (`CanvasRuntime.requestReconcile()`), and what
+a commit or a controller call writes is drawn once, with the frame
+([api](api.md#when-writes-are-drawn)). Paint events upload only layers in `changedElements`
 or stale ones (new slot, extent/grid change, invalidated, after a hidden-document
 pause). Declarative transitions pause while hidden and resume with the same
 progress; React transform/layout updates during a transition or ownership
