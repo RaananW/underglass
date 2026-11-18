@@ -243,8 +243,12 @@ effect, material and emitter update.
 - **Hits at once.** A transform's native geometry is applied in the call. Hit testing and
   `getBoundingClientRect()` follow it in the same task, before its pixels are drawn.
 - **Once per frame.** The draw is made by one frame callback shared by all writers. A
-  writer whose own frame callback runs after it is drawn when its task ends, so a frame
-  loop is drawn in the frame it wrote in, whichever way it asks for its frames.
+  writer whose own frame callback runs after it is drawn when its task ends, and core's
+  callback then moves behind that writer's. So a frame loop is drawn in the frame it
+  wrote in, whichever way it asks for its frames, and several loops in one frame (yours,
+  a transition, a component library's) share one draw from their second frame on.
+- **Between frames.** A write from a task that is not a frame callback (a timer, an
+  event) is drawn when that task ends, unless the frame's draw is already waiting.
 - **Around an enrolment.** A new layer holds the last complete frame until it is captured.
   What the same task wrote, before or after enrolling it, appears with the new layer.
 - **Across tasks.** Work split over tasks (an `await` between two writes) can be

@@ -1104,17 +1104,48 @@ test("a written transform moves native hits at once and is drawn once per frame,
     for (let index = 0; index < 3; index++) await next();
     const last = await loop("last");
     await probe.settle();
+    // Three writers with a frame callback each (two ask for it after writing, one before) and a watcher: the draws
+    // between one frame and the next. Each writer alone would be drawn when its task ends; together they share a draw.
+    for (let index = 0; index < 3; index++) await next();
+    const together = await new Promise(resolve => {
+      const counts = [];
+      let previous, ticks = 0, running = true;
+      const writer = (order, write) => {
+        const tick = () => {
+          if (!running) return;
+          if (order === "first") requestAnimationFrame(tick);
+          write();
+          if (order === "last") requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      };
+      writer("last", () => probe.transform("primary", { x: ticks }));
+      const watch = () => {
+        const now = frames();
+        if (previous !== undefined) counts.push(now - previous);
+        previous = now;
+        if (++ticks > 40) { running = false; resolve(counts); return; }
+        requestAnimationFrame(watch);
+      };
+      requestAnimationFrame(watch);
+      writer("first", () => probe.transform("stationary", { y: 90 + (ticks % 2) / 4 }));
+      writer("last", () => probe.origin("primary", ticks % 2 ? "center" : undefined));
+    });
+    probe.transform("stationary", { y: 90 });
+    probe.origin("primary", undefined);
+    await probe.settle();
     // A writer whose callback runs after core's: its write is drawn before the frame ends, not in the next one.
     for (let index = 0; index < 3; index++) await next();
     probe.transform("primary", { x: 5 });
-    await next();                                        // core's callback for this frame is asked for first, ours second
+    await Promise.resolve(); await Promise.resolve();    // drawn as the task ends, and core's next callback is asked for:
+    await next();                                        // ours is asked for after it, so in this frame it runs after core's
     const beforeLate = frames();
     probe.transform("primary", { x: 6 });
     await Promise.resolve(); await Promise.resolve();
     const late = frames() - beforeLate;
     await probe.settle();
     const state = probe.state();
-    return { sameTask, inTask, coalesced, first, last, late, mode: state.mode, reason: state.reason, controllerFrames: state.runtimeResources.controllerFrames };
+    return { sameTask, inTask, coalesced, first, last, together, late, mode: state.mode, reason: state.reason, controllerFrames: state.runtimeResources.controllerFrames };
   });
   await save("draw-once", report);
   expect(report.mode, report.reason).toBe("gpu");
@@ -1131,6 +1162,10 @@ test("a written transform moves native hits at once and is drawn once per frame,
     expect(Math.max(...counts), `asking for the frame ${order}: no frame is drawn twice`).toBeLessThanOrEqual(2);
     expect(counts.reduce((sum, count) => sum + count, 0), `asking for the frame ${order}: no frame is dropped`).toBeGreaterThanOrEqual(counts.length - 2);
   }
+  // Several writers in one frame are drawn together: after the first frames, never more draws than frames.
+  const shared = report.together.slice(3);
+  expect(Math.max(...shared), `three writers: draws per frame ${report.together.join("")}`).toBeLessThanOrEqual(1);
+  expect(shared.reduce((sum, count) => sum + count, 0), "three writers: no frame is dropped").toBeGreaterThanOrEqual(shared.length - 2);
   expect(report.late, "a write made after core's callback of the frame is drawn when its task ends").toBe(1);
   expect(report.controllerFrames, "no frame is left pending after settle").toBe(0);
   // The pixels and a real click follow the last writes.

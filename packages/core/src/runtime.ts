@@ -1010,20 +1010,23 @@ export class CanvasRuntime {
    * in. Where the document has no timeline, the frame's callback draws.
    *
    * After every draw one more frame is asked for (a lead frame, which draws only if something was written by then).
-   * A writer that asks for its own next frame before writing (the usual idiom) runs ahead of core's callback in every
-   * frame: the lead frame keeps core's callback pending when it writes, so it is drawn every frame, in the frame it
-   * wrote in, by the shared callback.
+   * It is asked for after the draw, and a draw made when a task ends asks for it anew: core's callback is then
+   * behind the callback every writer of this frame has asked for, whether a writer asks before it writes or after.
+   * From the next frame on, the writers of a frame (several loops, transitions, a component helper) run first and
+   * the one shared callback draws them together, once.
    */
   private requestDraw(lead = false) {
     if (!lead) this.drawWanted = true;
     if (this.stopped || !this.environment.visible || this.core?.phase() !== "gpu") return;
     const now = frameTime();
-    if (!lead && now !== undefined && (!this.drawFrame || this.drawAsked === now) && !this.drawQueued) {
+    if (!lead && now !== undefined && (!this.drawFrame || this.drawAsked === now)) {
+      if (this.drawQueued) return;
       this.drawQueued = true;
       queueMicrotask(() => {
         this.drawQueued = false;
-        if (this.drawWanted && !this.stopped && this.environment.visible && this.core?.phase() === "gpu") this.drawWritten();
+        if (this.drawWanted && !this.stopped && this.environment.visible && this.core?.phase() === "gpu") this.drawWritten(true);
       });
+      return;
     }
     if (this.drawFrame) return;
     this.drawAsked = now;
@@ -1034,10 +1037,18 @@ export class CanvasRuntime {
       if (this.drawWanted) this.drawWritten();
     });
   }
-  /** Draws what was written (`requestDraw`) and asks for the lead frame. */
-  private drawWritten() {
+  /**
+   * Draws what was written (`requestDraw`) and asks for the lead frame. `behind`: the draw is made as a task ends,
+   * so a lead frame that is already pending is asked for anew, behind the frame that task asked for.
+   */
+  private drawWritten(behind = false) {
     this.drawWanted = false;
     try { this.core?.draw(); } catch (error) { this.recover(`Geometry/draw failure: ${String(error)}`); return; }
+    if (behind && this.drawFrame) {
+      cancelAnimationFrame(this.drawFrame);
+      this.drawFrame = 0;
+      this.resources.controllerFrames--;
+    }
     this.requestDraw(true);
   }
   /**
