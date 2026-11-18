@@ -1,6 +1,7 @@
 /**
- * Vercel Web Analytics for the showcase: page views (each example is its own URL, so switching examples
- * counts as a page view) and the custom events below. Only builds made on Vercel load it
+ * Vercel Web Analytics for the showcase: page views (the home page, and each example at its own URL, so switching
+ * examples counts as a page view) and the custom events below. The example studio loads this module with its page;
+ * the home page loads it as a chunk of its own, after its first frame (`home/track.ts`). Only builds made on Vercel load it
  * (`__VERCEL_ANALYTICS__`, set in `vite.config.ts`); anywhere else `startAnalytics` and `track` do nothing.
  * Vercel Web Analytics sets no cookies. No event carries anything a visitor typed, searched or filmed:
  * only example ids, runtime modes and the status line's headline.
@@ -23,9 +24,13 @@ export const analyticsEnabled = __VERCEL_ANALYTICS__;
  *   line's headline), with the up-front browser guess (`support`), whether the browser's own API or the
  *   polyfill was admitted (`api`), so polyfilled runs never count as native ones, and what started it
  *   (`trigger`): `auto` when the stage came into view on a `likely` browser, `button` for a press of
- *   **Enable experimental GPU** (or **Run GPU mode on the polyfill**).
+ *   **Enable experimental GPU** (or **Run GPU mode on the polyfill**). On the home page (`example: "home"`) `auto` is
+ *   the deck starting by itself (at load, after a lost GPU, or when a window grows) and `button` the header's switch;
+ *   an automatic attempt that ends as the one before it did is not sent again.
  * - `GPU Lost`: GPU mode ended without the visitor asking (a revocation or fallback), with its headline and `api`.
- * - `Studio Action`: **Use ordinary DOM** or **Dispose example**.
+ * - `Studio Action`: **Use ordinary DOM** or **Dispose example**; on the home page, the header's switch turned off.
+ * - `Home Demo`: the home page's live demonstration was used: `Play` pressed (`play`) or the slider moved (`scrub`,
+ *   once per change and page load), with the change picked (`kind`) and how the page was drawn (`presentation`).
  * - `GPU Help`: the help panel was used (`action`: the preview image, a copied flag, the Chrome download link
  *   (`download`; `canary` before 157 shipped HTML-in-Canvas) or the polyfill button).
  * - `Outbound Link`: a link to the source or the npm package (`target`).
@@ -33,11 +38,15 @@ export const analyticsEnabled = __VERCEL_ANALYTICS__;
 /** Which HTML-in-Canvas implementation GPU mode ran on: the browser's own, or the opt-in polyfill. */
 export type Api = "native" | "polyfill";
 
+/** Where an event happened: an example's page (the examples' index is `hero`), or the home page. */
+export type Page = SceneId | "home";
+
 export interface Events {
   "Browser Support": { support: Support };
-  "GPU Enable": { example: SceneId; result: string; status: string; support: string; api: Api; trigger: "auto" | "button" };
-  "GPU Lost": { example: SceneId; status: string; api: Api };
-  "Studio Action": { example: SceneId; action: "disable" | "dispose" };
+  "GPU Enable": { example: Page; result: string; status: string; support: string; api: Api; trigger: "auto" | "button" };
+  "GPU Lost": { example: Page; status: string; api: Api };
+  "Studio Action": { example: Page; action: "disable" | "dispose" };
+  "Home Demo": { kind: string; action: "play" | "scrub"; presentation: "gpu" | "dom" };
   "GPU Help": { example: SceneId; action: "preview" | "copy-flag" | "download" | "polyfill" };
   "Outbound Link": { target: "github" | "npm" };
 }

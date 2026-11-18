@@ -18,7 +18,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { examples, site } from "../catalog";
 import { demoKinds, demoPlay, demoScrub, demoStore, type DemoState } from "./demo";
+import { homeTrack } from "./track";
 import { flow, viewStore } from "./view";
+
+declare const __VERCEL_ANALYTICS__: boolean;
 
 /** The sections in page order: `id` is the anchor and the text layer's id, `rail` the short name on the side scale. */
 export const sections = [
@@ -113,6 +116,12 @@ function DemoControls({ compact = false }: { compact?: boolean }) {
   const suffix = compact ? "-bar" : "";
   const kind = useDemo(state => state.kind), gpu = useDemo(state => state.gpu), second = useDemo(state => state.t >= 0.5);
   const range = useRef<HTMLInputElement>(null);
+  // Analytics: a press of Play, and the first move of the slider for each change.
+  const used = (action: "play" | "scrub") => {
+    const name = demoKinds[demoStore.get().kind]!;
+    if (action === "scrub") { if (scrubbed.has(name)) return; scrubbed.add(name); }
+    homeTrack("Home Demo", { kind: name, action, presentation: demoStore.get().gpu ? "gpu" : "dom" });
+  };
   // The slider follows a change that runs on the clock, without a render per frame.
   useEffect(() => demoStore.subscribe(() => {
     const value = String(Math.round(demoStore.get().t * 100));
@@ -123,8 +132,8 @@ function DemoControls({ compact = false }: { compact?: boolean }) {
     <div className="demo-kinds">{demoKinds.map((name, index) =>
       <button key={name} type="button" aria-pressed={kind === index} disabled={!gpu} onClick={() => demoStore.set({ kind: index })}>{name}</button>)}</div>
     <div className="demo-run">
-      <button type="button" id={`demo-play${suffix}`} onClick={demoPlay}>{second ? "Play back" : "Play"}</button>
-      <label>Scrub<input ref={range} id={`demo-scrub${suffix}`} type="range" min={0} max={100} defaultValue={0} onChange={event => demoScrub(Number(event.currentTarget.value) / 100)} /></label>
+      <button type="button" id={`demo-play${suffix}`} onClick={() => { used("play"); demoPlay(); }}>{second ? "Play back" : "Play"}</button>
+      <label>Scrub<input ref={range} id={`demo-scrub${suffix}`} type="range" min={0} max={100} defaultValue={0} onChange={event => { used("scrub"); demoScrub(Number(event.currentTarget.value) / 100); }} /></label>
     </div>
     <p className="demo-note">{gpu ? <>
       <span className="wide-text">Both panels are live layers. Their clocks keep counting while one turns into the other, forwards or backwards, and the change repaints neither: it writes matrices and shader parameters.</span>
@@ -134,6 +143,8 @@ function DemoControls({ compact = false }: { compact?: boolean }) {
     {!compact && <a className="demo-go" href="#transitions-controls">Go to the panels<span aria-hidden="true">&darr;</span></a>}
   </div>;
 }
+/** The changes whose slider has been reported to analytics in this page load. */
+const scrubbed = new Set<string>();
 /** In the demonstration's second panel: a control of its own, to show the panel is no picture. */
 function Laps() {
   const [laps, setLaps] = useState(0);
@@ -208,7 +219,9 @@ export function Rail() {
 }
 export function Footer() {
   return <footer className="bottom"><span><Mark />Underglass</span>
-    <span><a href={site.docs}>Documentation</a><a href={site.repository}>GitHub</a><a href={site.npm}>npm</a>Apache-2.0</span></footer>;
+    <span><a href={site.docs}>Documentation</a><a href={site.repository}>GitHub</a><a href={site.npm}>npm</a>Apache-2.0</span>
+    {/* Said only by a build that sends analytics (a Vercel build). */}
+    {__VERCEL_ANALYTICS__ && <p className="bottom-note">Anonymous visit counts by Vercel Web Analytics, no cookies.</p>}</footer>;
 }
 
 /** The stage's application: every section's text and specimen, in page order. `base` is the site's base path. */

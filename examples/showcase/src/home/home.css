@@ -128,7 +128,8 @@ code { font-family: var(--mono); font-size: .92em; }
 .bottom { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; padding: 32px var(--gutter); padding-left: calc(var(--gutter) + var(--rail));
   border-top: 1px solid var(--rule); color: var(--dim); font-size: 14px; }
 .bottom span { display: inline-flex; align-items: center; gap: 12px; }
-.bottom span:last-child { gap: 22px; }
+.bottom span:last-of-type { gap: 22px; }
+.bottom-note { flex-basis: 100%; margin: 0; color: var(--quiet); }
 .bottom a { text-decoration: none; }
 .bottom a:hover { color: var(--text); }
 

@@ -13,6 +13,7 @@ import { detectSupport, explain } from "../support";
 import { createDeck, type Deck } from "./deck";
 import { ids, markRail, note } from "./flow";
 import { Stage } from "./page";
+import { homeTrack } from "./track";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const switcher = $<HTMLButtonElement>("deck-switch"), modeText = $("deck-mode"), figures = $("deck-figures");
@@ -75,13 +76,16 @@ const recoveries: number[] = [];
 function recover(why: string) {
   console.info(`GPU presentation ended: ${why}`);
   reason = explain(why).title;
+  homeTrack("GPU Lost", { example: "home", status: reason, api: "native" });
   const now = performance.now();
   while (recoveries.length && now - recoveries[0]! > 30_000) recoveries.shift();
   if (recoveries.length >= 2 || preference.off) return;
   recoveries.push(now);
   setTimeout(() => { if (!preference.off && status?.mode === "dom") void start(); }, 900);
 }
-async function start() {
+/** The last automatic start that was reported, so that one repeated with the same end (a window resized again) is not. */
+let reported = "";
+async function start(trigger: "auto" | "button" = "auto") {
   if (support !== "likely") { render(); return; }
   let on = await deck.start();
   // An admission check that timed out (a busy machine, a tab that was just opened) is tried once more.
@@ -89,12 +93,16 @@ async function start() {
   // A refusal is explained in plain words; the runtime's own reason stays in the console.
   reason = on ? "" : explain(status?.reason ?? "").title;
   if (!on) console.info(`GPU presentation was refused: ${status?.reason ?? "unknown"}`);
+  const result = controller.state().mode, headline = explain(status?.reason ?? "").title;
+  if (trigger === "button" || reported !== `${result}:${headline}`) homeTrack("GPU Enable", { example: "home", result, status: headline, support, api: "native", trigger });
+  if (trigger === "auto") reported = `${result}:${headline}`;
   render();
 }
 switcher.addEventListener("click", () => {
   const on = controller.state().mode === "gpu";
   preference.off = on;
-  void (on ? deck.stop().then(render) : start());
+  if (on) homeTrack("Studio Action", { example: "home", action: "disable" });
+  void (on ? deck.stop().then(render) : start("button"));
 });
 // The figures change while the stage is idle too (a caret blinking is a capture), so they are read twice a second.
 setInterval(() => { if (status?.mode === "gpu" && !document.hidden) render(); }, 500);
