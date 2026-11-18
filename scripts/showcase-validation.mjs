@@ -690,6 +690,24 @@ try {
         await phonePage.getByRole("button", { name: "Press" }).tap();
         assert.equal(await phonePage.locator('.live-row [role="status"]').innerText(), "Hello, Ada. Pressed 1 time.");
         await phonePage.screenshot({ path: join(run, "home-phone-page.png") });
+        // The header lies over the stage's corner on a phone, where the browser check proves hits on a tilted layer:
+        // the check passed all the same, and the header's links take the pointer again.
+        assert.deepEqual(await phonePage.evaluate(() => [window.homeDeck.state().metrics.admission.last?.projective?.result, document.documentElement.classList.contains("checking"),
+          getComputedStyle(document.querySelector(".top .brand")).pointerEvents]), ["proven", false, "auto"], "phone: tilted layers are proven, and the header is back");
+        // So the change that leads into the "Transitions" section is the tilt, not a cut: the specimen leaving tilts back.
+        await scrollTo(lengths.starts[3] + lengths.change * 0.4);
+        const tilting = await phonePage.evaluate(() => { const state = window.homeDeck.state(), place = window.homeDeck.place();
+          return { from: place.from, to: place.to, tilt: state.layers.find(layer => layer.id === "dom-figure")?.transform.tiltX ?? 0, change: document.getElementById("deck-change").textContent, errors: [...window.homeDeck.errors] }; });
+        assert.deepEqual([tilting.from, tilting.to, tilting.change, tilting.errors], [3, 4, "tilt", []]);
+        assert.ok(tilting.tilt > 5, `phone: the specimen leaving is tilted (${tilting.tilt})`);
+        // The section's text has no panel beside it here: it says so, and its link leads to the panels' page.
+        await phonePage.evaluate(() => window.homeDeck.goStop(4));
+        const go = phonePage.locator("#transitions .demo-go");
+        assert.deepEqual([await go.isVisible(), await phonePage.locator("#transitions .demo-title").innerText(), await phonePage.locator("#transitions .demo-kinds").isVisible()], [true, "TRY IT", false]);
+        await go.tap();
+        await phonePage.waitForFunction(() => { const place = window.homeDeck.place(); return place.from === 5 && place.to === null; }, null, { timeout: 5000 });
+        await phonePage.evaluate(() => window.homeDeck.idle());
+        assert.deepEqual([(await seen()).layers, (await seen()).errors], [["transitions-controls", "transitions-figure", "transitions-second"], []]);
         // The demonstration's page: its controls above its two panels. A tap picks a change, the slider scrubs it with
         // its effect on both panels, and at the end the second panel's own button takes a tap.
         await phonePage.evaluate(() => window.homeDeck.goStop(5));

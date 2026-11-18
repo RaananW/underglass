@@ -158,6 +158,10 @@ The header, the side scale and the footer are static markup outside the root.
     layer above the panels (`transitions-controls`, with ids of their own), and the
     ones in the text are not shown. Each panel is told the controls' height
     (`--above`), because in the deck every layer lies in one grid cell.
+  - The text's page has no panel on it there. Its box says where the changes are to
+    be seen (every change between two pages is one, and scrolling scrubs it) and has
+    a link to the panels' page ("Go to the panels"), which the deck follows with a
+    jump.
   - An element the layout does not show (`display: none`) is no layer. The driver
     builds its stops from what is shown, and builds them again when the window
     crosses between one column and two.
@@ -225,6 +229,13 @@ can do to a live page. The readout names the one that is running.
 | Components | mosaic | Tiles of the stage turn over one after the other: each is squeezed to a line and opens again as the next section |
 | Everywhere | exposure | The section is overexposed until it is gone, and the next comes out of the light |
 
+- The tilt needs the browser's proof that native hits follow a tilted layer, which
+  `enable()` makes with a probe in the stage's top left corner. Below the wide
+  layout the header lies over that corner, and on a phone its brand link covered one
+  of the proof's points: the proof failed, the runtime refused every tilt, and the
+  change into the "Transitions" section did not run. So while the check runs the
+  header takes no pointer (`html.checking`). Where the proof fails all the same, the
+  driver runs a change that tilts as the flat slide.
 - Every change but the tilt puts an effect chain on each layer on stage, with
   `interaction: "inert"`: the content takes no input until the chain ends, at the
   next rest. The driver writes the chain's parameters each frame (`handle.update`),
@@ -320,7 +331,7 @@ painted.
 showed that a section was too long for the screen, which is why a section is now two
 pages there. The pages themselves are checked in Chrome's emulation on a desktop: a
 384 by 700 window at three device pixels per pixel, with touch. That proves the
-layout, that every page fits, taps and the changes. It does not prove a finger's
+layout, that every page fits, taps and the changes (the tilt among them). It does not prove a finger's
 scrolling (a synthesised touch gesture does not scroll the emulated page at all, in
 either presentation), the browser's toolbar hiding and showing, or the memory a
 phone's GPU has (the capture budget is 16 million pixels; a refusal leaves the flow in
