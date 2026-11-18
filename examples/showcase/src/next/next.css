@@ -182,6 +182,10 @@ html.deck .app-container > [data-section] { grid-row: 1; }
 /* In one column the specimen is under its text. In the flow that is the next grid row; here, with every section in one
    cell, the driver tells each specimen the height of the text above it. */
 @media (max-width: 920px) { html.deck .app-container > .specimen { margin-top: calc(96px + var(--above, 0px) + 40px); } }
+/* A second panel in the specimen's place (the live demonstration's): at least as tall as the specimen, which it covers.
+   In ordinary DOM the one that is not showing is unseen; on the GPU both are drawn and the driver hides one. */
+.app-container > .specimen.second { min-height: var(--match, 0px); }
+.unseen { visibility: hidden; }
 /* A parked section is in the document and the accessibility tree, unpainted, out of the pointer's way and with no
    height, so that it does not reach past the stage. It is clipped, not hidden: a box with hidden overflow scrolls when
    focus moves into it, and a scroll inside the root that is not a layer's ends GPU presentation. The driver lays a
@@ -269,6 +273,30 @@ h3 { margin: var(--space) 0 12px; font: 12px/1 var(--mono); letter-spacing: .16e
 .live-row button:active { background: var(--signal-wash); border-color: var(--signal); }
 .live-row p { margin: 0; font-size: 14px; color: var(--dim); }
 
+/* The live demonstration: its controls in the section's text, a clock in the first panel's caption, and the second panel. */
+.demo { max-width: 56ch; margin: 0 0 var(--space); padding: 16px; border: 1px solid var(--rule); border-radius: 12px; background: rgb(255 255 255 / 2.5%); }
+.demo-title { margin: 0 0 12px; font: 11px/16px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--signal); }
+.demo-kinds { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 12px; }
+.demo-kinds button { padding: 0 9px; }
+.demo-run button, .lap-row button { padding: 0 12px; }
+.demo-kinds button, .demo-run button, .lap-row button { min-height: 32px; border: 1px solid var(--rule-strong); border-radius: 999px; background: none;
+  font: 12px/20px var(--mono); letter-spacing: .06em; color: var(--dim); cursor: pointer; }
+.demo-kinds button:hover:not(:disabled), .demo-run button:hover, .lap-row button:hover { border-color: var(--text); color: var(--text); }
+.demo-kinds button[aria-pressed="true"] { border-color: var(--signal); background: var(--signal-wash); color: var(--text); }
+.demo-kinds button:disabled { cursor: default; border-color: var(--rule); color: var(--quiet); }
+.demo-run { display: flex; align-items: center; gap: 16px; margin: 0 0 12px; }
+.demo-run button { min-width: 96px; border-color: var(--signal); background: var(--signal); color: #120703; font-weight: 600; }
+.demo-run button:hover { background: #ff7150; border-color: #ff7150; color: #120703; }
+.demo-run label { flex: 1; display: flex; align-items: center; gap: 12px; font: 11px/16px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--quiet); }
+.demo-run input { flex: 1; min-width: 0; accent-color: var(--signal); }
+.demo-note { margin: 0; font-size: 13.5px; line-height: 20px; color: var(--quiet); }
+.specimen figcaption .clock { margin-left: auto; font-weight: 400; letter-spacing: .04em; color: var(--text); font-variant-numeric: tabular-nums; }
+.second-view { display: grid; gap: 16px; }
+.second-view p { margin: 0; font-size: 14px; line-height: 21px; color: var(--dim); }
+.second-view .second-clock { font: 600 clamp(40px, 4.6 * var(--u), 68px)/1 var(--mono); letter-spacing: -.02em; color: var(--text); font-variant-numeric: tabular-nums; }
+.lap-row { display: flex; align-items: center; gap: 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.lap-row output { font-size: 14px; line-height: 20px; color: var(--dim); }
+
 /* Comparison tables. */
 .compare { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.45; }
 .compare th, .compare td { padding: 12px 14px 12px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); }
@@ -343,7 +371,10 @@ h2 { line-height: round(1.02em, 1px); }
 /* ---------- Narrow screens: one column, sections as tall as their content ---------- */
 @media (max-width: 920px) {
   #stage .app-container { grid-template-columns: minmax(0, 1fr); grid-auto-rows: auto; }
-  .app-container > [data-section], .app-container > .specimen { grid-column: 1; grid-row: auto; }
+  /* One column: a section's text in one row and its specimen in the next. The rows are named, not left to the order of
+     the elements, so that a second panel shares its specimen's row. */
+  .app-container > [data-section] { grid-column: 1; grid-row: calc(var(--row) * 2 - 1); }
+  .app-container > .specimen { grid-column: 1; grid-row: calc(var(--row) * 2); }
   .app-container > .slide-text { margin-block: 96px 0; }
   .app-container > .specimen { margin-block: 40px 64px; }
   .app-container > .slide-cover { margin-bottom: 64px; }

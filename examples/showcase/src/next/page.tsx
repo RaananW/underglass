@@ -15,8 +15,9 @@
  *   that stays in the window, the sections on stage are enrolled as layers, and the others are parked: still in the
  *   document and the accessibility tree, unpainted (`view.ts`, `deck.ts`, `docs/showcase.md`).
  */
-import { useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { examples, site } from "../catalog";
+import { demoKinds, demoPlay, demoScrub, demoStore, type DemoState } from "./demo";
 import { flow, viewStore } from "./view";
 
 /** The sections in page order: `id` is the anchor and the text layer's id, `rail` the short name on the side scale. */
@@ -36,15 +37,19 @@ const number = (index: number) => String(index).padStart(2, "0");
 export const figureId = (id: string) => `${id}-figure`;
 
 /** A specimen's caption and body. */
-function Specimen({ index, caption, children }: { index: number; caption: string; children: ReactNode }) {
+function Specimen({ index, caption, children }: { index: number; caption: ReactNode; children: ReactNode }) {
   return <><figcaption><span>FIG. {number(index)}</span>{caption}</figcaption><div className="specimen-body">{children}</div></>;
 }
 /**
  * One section: its text and, with `specimen`, its specimen as a sibling. `--row` places both in the section's row of
  * the flow. While the section is on the deck's stage the driver enrols them as layers (`deck.ts`; the layer ids are the
  * element ids); in the deck, a section that is not on stage is parked.
+ *
+ * `second` is another panel in the specimen's place, a layer of its own (the live demonstration's). In ordinary DOM one
+ * of the two is `unseen`; on the GPU both are drawn and the driver hides one by its matrix.
  */
-function Slide({ id, label, children, specimen, figure }: { id: SectionId; label: string; children: ReactNode; specimen?: ReactNode; figure?: string }) {
+function Slide({ id, label, children, specimen, figure, second, unseen }: { id: SectionId; label: string; children: ReactNode; specimen?: ReactNode; figure?: ReactNode;
+  second?: { caption: ReactNode; content: ReactNode }; unseen?: "first" | "second" }) {
   const index = sections.findIndex(section => section.id === id);
   const view = useSyncExternalStore(viewStore.subscribe, viewStore.get, () => flow);
   const live = view.deck && (index === view.from || index === view.to);
@@ -55,8 +60,11 @@ function Slide({ id, label, children, specimen, figure }: { id: SectionId; label
       <p className="label"><span className="label-number">{number(index)}</span>{label}</p>
       {children}
     </section>
-    {specimen !== undefined && <figure className={`specimen${parked}`} id={figureId(id)} data-section={index} style={row}>
+    {specimen !== undefined && <figure className={`specimen${parked}${unseen === "first" ? " unseen" : ""}`} id={figureId(id)} data-section={index} style={row}>
       <Specimen index={index} caption={figure ?? ""}>{specimen}</Specimen>
+    </figure>}
+    {second && <figure className={`specimen second${parked}${unseen === "second" ? " unseen" : ""}`} id={`${id}-second`} data-section={index} style={row}>
+      <Specimen index={index} caption={second.caption}>{second.content}</Specimen>
     </figure>}
   </>;
 }
@@ -83,6 +91,65 @@ function LiveForm() {
     <div className="live-row"><button type="button" onClick={() => setPressed(value => value + 1)}>Press</button>
       <p role="status">Hello, {name || "nobody"}. Pressed {pressed} {pressed === 1 ? "time" : "times"}.</p></div>
   </form>;
+}
+
+/** One value of the live demonstration's state (`demo.ts`); the component renders again only when that value changes. */
+function useDemo<T>(select: (state: DemoState) => T) {
+  return useSyncExternalStore(demoStore.subscribe, () => select(demoStore.get()), () => select(demoStore.get()));
+}
+/**
+ * The demonstration's controls: which change, a slider that scrubs it, and a button that runs it on the clock. They are
+ * in the section's text, a layer of its own, so they go on working while the panels carry an effect.
+ */
+function DemoControls() {
+  const kind = useDemo(state => state.kind), gpu = useDemo(state => state.gpu), second = useDemo(state => state.t >= 0.5);
+  const range = useRef<HTMLInputElement>(null);
+  // The slider follows a change that runs on the clock, without a render per frame.
+  useEffect(() => demoStore.subscribe(() => {
+    const value = String(Math.round(demoStore.get().t * 100));
+    if (range.current && range.current.value !== value) range.current.value = value;
+  }), []);
+  return <div className="demo" role="group" aria-labelledby="demo-title">
+    <p className="demo-title" id="demo-title">Try it on the panel</p>
+    <div className="demo-kinds">{demoKinds.map((name, index) =>
+      <button key={name} type="button" aria-pressed={kind === index} disabled={!gpu} onClick={() => demoStore.set({ kind: index })}>{name}</button>)}</div>
+    <div className="demo-run">
+      <button type="button" id="demo-play" onClick={demoPlay}>{second ? "Play back" : "Play"}</button>
+      <label>Scrub<input ref={range} id="demo-scrub" type="range" min={0} max={100} defaultValue={0} onChange={event => demoScrub(Number(event.currentTarget.value) / 100)} /></label>
+    </div>
+    <p className="demo-note">{gpu ? "Both panels are live layers. Their clocks keep counting while one turns into the other, forwards or backwards, and the change repaints neither: it writes matrices and shader parameters."
+      : "In ordinary DOM the panels swap at the middle. With GPU presentation the change you pick runs between them, and both stay live."}</p>
+  </div>;
+}
+/** In the demonstration's second panel: a control of its own, to show the panel is no picture. */
+function Laps() {
+  const [laps, setLaps] = useState(0);
+  return <div className="lap-row"><button type="button" onClick={() => setLaps(value => value + 1)}>Lap</button><output>{laps} {laps === 1 ? "lap" : "laps"}</output></div>;
+}
+/** The "Transitions" section, with the live demonstration: its specimen is the first panel, and a second lies in the same place. */
+function TransitionsSlide() {
+  const gpu = useDemo(state => state.gpu), second = useDemo(state => state.t >= 0.5);
+  return <Slide id="transitions" label="Page transitions" unseen={gpu ? undefined : second ? "first" : "second"}
+    figure={<>A snapshot against the live page<b className="clock" data-demo-clock>00:00.0</b></>} specimen={
+      <table className="compare">
+        <thead><tr><th scope="col"><span className="visually-hidden">Question</span></th><th scope="col">View Transitions</th><th scope="col">Underglass</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">What moves</th><td>Images of the old and the new view</td><td>The page's own elements</td></tr>
+          <tr><th scope="row">While it runs</th><td>The view that leaves is a still image</td><td>Both views keep running: video plays, counters count</td></tr>
+          <tr><th scope="row">The effect</th><td>CSS animations on those images</td><td>Your shader on the pixels</td></tr>
+          <tr><th scope="row">You write</th><td>CSS for two pseudo-elements</td><td>Numbers, and WGSL when you want it</td></tr>
+        </tbody>
+      </table>}
+    second={{ caption: "The same place, another panel", content: <div className="second-view">
+      <p className="second-clock" data-demo-clock>00:00.0</p>
+      <p>This panel was under the first all along, as a layer of its own. The clock above and the button below are the page's elements, running, not a picture of them.</p>
+      <Laps />
+    </div> }}>
+    <h2 id="transitions-title">Transitions on the live page, not on a picture of it.</h2>
+    <p className="lede">A view transition animates images of the old and the new view, and the old one is a still. Underglass
+      animates the page itself: the view that leaves keeps running until it is gone.</p>
+    <DemoControls />
+  </Slide>;
 }
 
 const Mark = () => <span className="mark" aria-hidden="true"><i /><i /><i /></span>;
@@ -168,25 +235,7 @@ export function Stage({ base }: { base: string }) {
       ]} />
     </Slide>
 
-    <Slide id="transitions" label="Page transitions" figure="A snapshot against the live page" specimen={
-      <table className="compare">
-        <thead><tr><th scope="col"><span className="visually-hidden">Question</span></th><th scope="col">View Transitions</th><th scope="col">Underglass</th></tr></thead>
-        <tbody>
-          <tr><th scope="row">What moves</th><td>Images of the old and the new view</td><td>The page's own elements</td></tr>
-          <tr><th scope="row">While it runs</th><td>The view that leaves is a still image</td><td>Both views keep running: video plays, counters count</td></tr>
-          <tr><th scope="row">The effect</th><td>CSS animations on those images</td><td>Your shader on the pixels</td></tr>
-          <tr><th scope="row">You write</th><td>CSS for two pseudo-elements</td><td>Numbers, and WGSL when you want it</td></tr>
-        </tbody>
-      </table>}>
-      <h2 id="transitions-title">Transitions on the live page, not on a picture of it.</h2>
-      <p className="lede">A view transition animates images of the old and the new view, and the old one is a still. Underglass
-        animates the page itself: the view that leaves keeps running until it is gone.</p>
-      <Facts items={[
-        ["Per pixel.", "Burn a view away, ripple it, refract it, split its colour channels."],
-        ["Scrubbable.", "Tie a transition to the scroll position and run it forwards and backwards."],
-        ["No repaint.", "A transition writes matrices and shader parameters. It captures nothing of its own."],
-      ]} />
-    </Slide>
+    <TransitionsSlide />
 
     <Slide id="motion" label="Motion" figure="What a moving layer costs per frame" specimen={<>
       <ol className="pipeline" aria-label="Browser work per frame for a moving layer">

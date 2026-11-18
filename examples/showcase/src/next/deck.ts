@@ -29,12 +29,15 @@
  *   sections does not race through five changes. Scrolling during a jump ends it. Focus moving into a parked section
  *   brings that section on stage at once.
  * - A decorative layer under the sections carries a light that follows the pointer (`light.ts`).
+ * - The "Transitions" section holds a live demonstration (`demo.ts`): two panels in one place, each a layer, and
+ *   controls that turn one into the other. While that section is at rest the driver poses the two panels from the
+ *   demonstration's state, with the same changes it runs between sections.
  */
 import { flushSync } from "react-dom";
 import type { CanvasController, CanvasStatus, EffectHandle, Transform } from "@underglass/react";
+import { demoHidden, demoPanels, demoSettle, demoStore } from "./demo";
 import { flowIndex, holdTravel, travelAt, travelNow } from "./flow";
 import { createLight, LIGHT_ID } from "./light";
-import { figureId } from "./page";
 import { fade, slide, transitions, type StageLayer, type Transition } from "./transitions";
 import { flow, viewStore, type View } from "./view";
 
@@ -73,7 +76,7 @@ export interface Deck {
 
 export function createDeck({ controller, ids, track, onChange, onTransition }: {
   controller: CanvasController;
-  /** The sections' ids in page order; a section's layers are `id` and, where it has a specimen of its own, `figureId(id)`. */
+  /** The sections' ids in page order. A section's layers are the root's children marked with its index (`data-section`). */
   ids: readonly string[];
   /** The element as long as the scroll range of the sections; the pin and the stage are inside it. */
   track: HTMLElement;
@@ -90,12 +93,14 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
   let acting = false;
   let view = flow;
   const element = (id: string) => document.getElementById(id)!;
-  /** Each section's layers: its text and, where the section has one of its own, its specimen. */
-  const parts = ids.map(id => ({ text: id, figure: document.getElementById(figureId(id)) ? figureId(id) : null }));
-  const layers = (index: number) => { const { text, figure } = parts[index]!; return figure ? [text, figure] : [text]; };
+  /** Each section's layers, in page order: its text, then its specimen if it has one of its own, then a second panel in the specimen's place (the live demonstration's). */
+  const sectionLayers = ids.map((_, index) => [...document.querySelectorAll<HTMLElement>(`.app-container > [data-section="${index}"]`)].map(layer => layer.id));
+  const layers = (index: number) => sectionLayers[index]!;
   /** The runtime's mode, kept from its status reports: `state()` copies every metric and measures every layer, so the frame loop never calls it. */
   let mode = controller.state().mode;
   const gpu = () => mode === "gpu";
+  /** Takes the runtime's mode; the demonstration is told whether its panels are drawn by the GPU. */
+  function took(next: CanvasStatus["mode"]) { mode = next; demoStore.set({ gpu: gpu() }); }
   const trackTop = () => track.getBoundingClientRect().top + scrollY;
 
   /**
@@ -113,16 +118,18 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
   function measure(): Lengths {
     root.classList.add("measuring");
     try {
-      const container = element(parts[0]!.text).offsetParent as HTMLElement;
+      const container = element(layers(0)[0]!).offsetParent as HTMLElement;
       const stage = container.clientHeight, change = pin.clientHeight, top = new Map<string, number>();
-      const pan = parts.map(part => {
-        const text = element(part.text), figure = part.figure ? element(part.figure) : null;
-        if (figure) {
-          const above = stacked.matches ? `${text.offsetHeight}px` : "";
-          if (figure.style.getPropertyValue("--above") !== above) { if (above) figure.style.setProperty("--above", above); else figure.style.removeProperty("--above"); }
-        }
+      const give = (layer: HTMLElement, name: string, value: string) => {
+        if (layer.style.getPropertyValue(name) !== value) { if (value) layer.style.setProperty(name, value); else layer.style.removeProperty(name); }
+      };
+      const pan = ids.map((_, index) => {
+        const [text, ...panels] = layers(index).map(element) as [HTMLElement, ...HTMLElement[]];
+        for (const panel of panels) give(panel, "--above", stacked.matches ? `${text.offsetHeight}px` : "");
+        // A second panel in the specimen's place is at least as tall as the specimen: it covers it.
+        for (const panel of panels.slice(1)) give(panel, "--match", `${panels[0]!.offsetHeight}px`);
         let bottom = 0;
-        for (const layer of figure ? [text, figure] : [text]) {
+        for (const layer of [text, ...panels]) {
           top.set(layer.id, layer.offsetTop);
           bottom = Math.max(bottom, layer.offsetTop + layer.offsetHeight + parseFloat(getComputedStyle(layer).marginBottom));
         }
@@ -184,7 +191,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
   const panned = () => view.deck ? (front === view.from ? pans.from : pans.to) : 0;
   /** In the flow, the document offset of the top of a section's row: its text starts its top margin below that. */
   function flowTop(index: number) {
-    const text = element(parts[index]!.text);
+    const text = element(layers(index)[0]!);
     return scrollY + text.getBoundingClientRect().top - parseFloat(getComputedStyle(text).marginTop);
   }
   /** The document offset at which a section starts: in the deck where it is at rest at its top, in the flow its row's top. The two layouts give a section the same length, so this plus a pan is the same place in both. */
@@ -237,24 +244,24 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
       transform(id, {});
     }
   }
-  /**
-   * Describes the change for the two sections now on stage (none at rest): each layer where it rests, which for a
-   * section that has panned is that much further up the stage.
-   */
+  /** A layer where it rests, which for a section that has panned by `pan` is that much further up the stage. */
+  function describe(id: string, leaving: boolean, figure: boolean, pan: number): StageLayer {
+    const layer = element(id), stage = layer.offsetParent as HTMLElement;
+    return { id, leaving, figure, x: layer.offsetLeft, y: layer.offsetTop - Math.round(pan), width: layer.offsetWidth, height: layer.offsetHeight,
+      stageWidth: stage.clientWidth, stageHeight: stage.clientHeight };
+  }
+  /** The change to run between these layers: `wanted`, a fade with reduced motion, or the flat `slide` where the change tilts and a layer is not inside the stage (the stage cuts a flat layer off at its edge, but not a tilted one). */
+  function fitting(wanted: Transition | undefined, described: readonly StageLayer[]) {
+    const transition = reduced.matches ? fade : wanted ?? fade;
+    return transition.needsRoom && !described.every(layer => layer.y >= 0 && layer.y + layer.height <= layer.stageHeight) ? slide : transition;
+  }
+  /** Describes the change for the two sections now on stage (none at rest). */
   function prepare() {
     const { from, to } = view;
     if (!view.deck || to === null) { change = undefined; onTransition?.(null); return; }
-    const describe = (index: number, leaving: boolean) => layers(index).map((id, part): StageLayer => {
-      const layer = element(id), stage = layer.offsetParent as HTMLElement;
-      return { id, leaving, figure: part === 1, x: layer.offsetLeft, y: layer.offsetTop - Math.round(leaving ? pans.from : pans.to), width: layer.offsetWidth, height: layer.offsetHeight,
-        stageWidth: stage.clientWidth, stageHeight: stage.clientHeight };
-    });
-    const described = [...describe(from, true), ...describe(to, false)];
+    const described = [...layers(from).map((id, part) => describe(id, true, part > 0, pans.from)), ...layers(to).map((id, part) => describe(id, false, part > 0, pans.to))];
     // Two neighbours change as their boundary does; a jump over several sections uses the change that leads into the further one.
-    let transition = reduced.matches ? fade : transitions[to - 1] ?? fade;
-    // A change that tilts needs every layer inside the stage: the stage cuts a flat layer off at its edge, but not a tilted one.
-    if (transition.needsRoom && !described.every(layer => layer.y >= 0 && layer.y + layer.height <= layer.stageHeight)) transition = slide;
-    change = { transition, layers: described, handles: new Map() };
+    change = { transition: fitting(transitions[to - 1], described), layers: described, handles: new Map() };
     onTransition?.(change.transition.name);
   }
   /** The layers enrolled now, each with the call that ends its enrolment. */
@@ -266,6 +273,8 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
    */
   function show(next: View) {
     if (next.deck === view.deck && next.from === view.from && next.to === view.to) return;
+    // The demonstration's section leaves its rest: a change part way through is settled, and its panels are the deck's again.
+    if (view.deck && view.to === null && view.from === demoIndex) { endDemo(); demoSettle(); }
     const wanted = new Set(next.deck ? [next.from, next.to].flatMap(index => index === null ? [] : layers(index)) : []);
     release(wanted);
     for (const [id, end] of enrolled) if (!wanted.has(id)) { end(); enrolled.delete(id); }
@@ -285,7 +294,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     root.classList.toggle("deck", deck);
     endJump();
     lengths = undefined;
-    if (!deck) { light.end(); try { endLight?.(); } catch { /* the runtime is gone */ } endLight = undefined; track.style.removeProperty("--track"); }
+    if (!deck) { light.end(); try { endLight?.(); } catch { /* the runtime is gone */ } endLight = undefined; track.style.removeProperty("--track"); endDemo(); demoStore.set({ live: true }); }
     pans = { from: 0, to: 0 };
     show(deck ? { deck, from: index, to: null } : flow);
     if (deck && !endLight) { try { endLight = controller.enroll(element(LIGHT_ID), { id: LIGHT_ID, decorative: true, origin: "top-left" }); } catch (error) { errors.push(`enroll ${LIGHT_ID}: ${String(error)}`); } }
@@ -294,36 +303,74 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     schedule();
   }
   /**
-   * Runs the change between the two sections on stage at progress `t`: each layer gets its transform and, where the
-   * change has effects, its chain's parameters. A chain is attached on the first frame the runtime takes it; until
-   * then an arriving layer is held unseen, so it never shows whole before its effect does. Returns true while a chain
-   * is still to be attached.
+   * Gives one layer its place in a change at progress `t`: its transform, on top of where its section has panned to,
+   * and, where the change has effects, its chain's parameters. The chain is attached on the first frame the runtime
+   * takes it; until then an arriving layer is held unseen, so it never shows whole before its effect does. Returns
+   * true while the chain is still to be attached.
    */
+  function run(transition: Transition, handles: Map<string, EffectHandle>, layer: StageLayer, t: number, pan: number) {
+    if (!enrolled.has(layer.id)) return false;
+    let handle = handles.get(layer.id), pending = false;
+    if (transition.chain && !handle) {
+      try {
+        const attached = controller.setEffects(layer.id, transition.chain(layer));
+        handles.set(layer.id, handle = attached);
+        void attached.finished.then(() => { if (handles.get(layer.id) === attached) handles.delete(layer.id); });
+      } catch (error) {
+        // Not ready for effects in this frame (admission or a swap is in progress): tried again in the next.
+        if (/idle DOM or admitted GPU|mount has not completed/.test(String(error))) pending = true;
+        else errors.push(`setEffects ${layer.id}: ${String(error)}`);
+      }
+    }
+    if (transition.chain && !handle) { if (!layer.leaving) transform(layer.id, { opacity: 0 }); return pending; }
+    const { transform: value, parameters } = transition.frame(t, layer);
+    transform(layer.id, pan ? { ...value, y: (value.y ?? 0) - pan } : value);
+    if (parameters && handle) { try { handle.update(parameters); } catch (error) { handles.delete(layer.id); errors.push(`update ${layer.id}: ${String(error)}`); } }
+    return pending;
+  }
+  /** Runs the change between the two sections on stage at progress `t`. Returns true while a chain is still to be attached. */
   function pose(t: number) {
     if (!change || !gpu()) return false;
-    const { transition, handles } = change;
     let pending = false;
     for (const layer of change.layers) {
-      if (!enrolled.has(layer.id)) continue;
-      let handle = handles.get(layer.id);
-      if (transition.chain && !handle) {
-        try {
-          const attached = controller.setEffects(layer.id, transition.chain(layer));
-          handles.set(layer.id, handle = attached);
-          void attached.finished.then(() => { if (change?.handles.get(layer.id) === attached) change.handles.delete(layer.id); });
-        } catch (error) {
-          // Not ready for effects in this frame (admission or a swap is in progress): tried again in the next.
-          if (/idle DOM or admitted GPU|mount has not completed/.test(String(error))) pending = true;
-          else errors.push(`setEffects ${layer.id}: ${String(error)}`);
-        }
-      }
-      if (transition.chain && !handle) { if (!layer.leaving) transform(layer.id, { opacity: 0 }); continue; }
-      const { transform: value, parameters } = transition.frame(t, layer);
-      // The change's own movement is on top of where the section has panned to.
-      const pan = Math.round(layer.leaving ? pans.from : pans.to);
-      transform(layer.id, pan ? { ...value, y: (value.y ?? 0) - pan } : value);
-      if (parameters && handle) { try { handle.update(parameters); } catch (error) { handles.delete(layer.id); errors.push(`update ${layer.id}: ${String(error)}`); } }
+      // The demonstration's panel that is not showing stays hidden through the change.
+      if (demoHidden(layer.id)) { transform(layer.id, { opacity: 0 }); continue; }
+      if (run(change.transition, change.handles, layer, t, Math.round(layer.leaving ? pans.from : pans.to))) pending = true;
     }
+    return pending;
+  }
+  /** The live demonstration: its section, and the chains its two panels carry while one is turning into the other. */
+  const demoIndex = ids.indexOf(demoPanels.section), demoHandles = new Map<string, EffectHandle>();
+  /** What the demonstration last drew: nothing is written while that has not changed. */
+  let demoDrawn = "", demoKind = -1;
+  function endDemo() {
+    for (const handle of demoHandles.values()) { try { handle.cancel(); } catch { /* already ended */ } }
+    demoHandles.clear();
+    demoDrawn = ""; demoKind = -1;
+  }
+  /**
+   * Draws the demonstration while its section is at rest, panned by `pan`: at either end one panel is shown and the
+   * other hidden; between, the first is the leaving layer and the second the arriving one of the chosen change, at the
+   * demonstration's `t`. Returns true while a chain is still to be attached.
+   */
+  function drawDemo(pan: number) {
+    const { t, kind } = demoStore.get(), drawing = `${pan}:${t}:${kind}:${reduced.matches}`;
+    if (drawing === demoDrawn) return false;
+    const resting = pan ? { y: -pan } : {};
+    if (t <= 0 || t >= 1) {
+      endDemo();
+      transform(demoPanels.first, t >= 1 ? { opacity: 0 } : resting);
+      transform(demoPanels.second, t <= 0 ? { opacity: 0 } : resting);
+      demoDrawn = drawing;
+      return false;
+    }
+    const panels = [describe(demoPanels.first, true, true, pan), describe(demoPanels.second, false, true, pan)];
+    // Another change was picked part way through: the chains of the one before end first.
+    if (kind !== demoKind) { endDemo(); demoKind = kind; }
+    const transition = fitting(transitions[kind], panels);
+    let pending = false;
+    for (const panel of panels) if (run(transition, demoHandles, panel, t, pan)) pending = true;
+    if (!pending) demoDrawn = drawing;
     return pending;
   }
   /**
@@ -371,10 +418,16 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
       front = to !== null && t >= 0.5 ? to : from;
       // A jump runs on the clock: it needs every frame until it has arrived.
       if (pose(t) || jump) schedule();
+      demoStore.set({ live: to === null && from === demoIndex });
       if (to === null) {
         // At rest the section is where its pan puts it: moved by its matrix, on whole pixels, as the flow scrolls.
-        const pan = Math.round(panFrom), key = `${from}:${pan}`;
-        if (key !== rested && gpu()) { rested = key; for (const id of layers(from)) transform(id, pan ? { y: -pan } : {}); }
+        // The demonstration's two panels are posed by the demonstration.
+        const pan = Math.round(panFrom), key = `${from}:${pan}`, demo = from === demoIndex;
+        if (key !== rested && gpu()) {
+          rested = key; demoDrawn = "";
+          for (const id of layers(from)) if (!demo || (id !== demoPanels.first && id !== demoPanels.second)) transform(id, pan ? { y: -pan } : {});
+        }
+        if (demo && gpu() && drawDemo(pan)) schedule();
         if (warm === "no") void warmUp();
       }
       // With reduced motion an effect draws nothing, so the light is left off.
@@ -392,7 +445,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     try {
       const before = scrollY, index = flowIndex(), pan = before - flowTop(index);
       layout(true, index, pan);
-      mode = (await controller.enable()).mode;
+      took((await controller.enable()).mode);
       // Refused: the flow again, exactly where it was.
       if (!gpu()) { layout(false, index, pan); scrollTo({ top: before, behavior: "instant" }); }
     } finally { acting = false; }
@@ -404,14 +457,14 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     acting = true;
     try {
       const index = current(), pan = panned();
-      mode = (await controller.disable()).mode;
+      took((await controller.disable()).mode);
       if (view.deck) layout(false, index, pan);
     } finally { acting = false; }
     schedule();
   }
   /** GPU presentation ended by itself (a lost device, a diagnosed fallback): the page is the flow again. */
   function modeChanged(next: CanvasStatus["mode"]) {
-    mode = next;
+    took(next);
     if (view.deck && !acting) queueMicrotask(() => { if (view.deck && !acting && !gpu()) layout(false, current(), panned()); });
     schedule();
   }
@@ -435,7 +488,9 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     schedule();
   });
   // The preference decides which change runs: the one on stage starts over as the other.
-  reduced.addEventListener("change", () => { if (change) { release(new Set(enrolled.keys())); prepare(); } schedule(); });
+  reduced.addEventListener("change", () => { if (change) { release(new Set(enrolled.keys())); prepare(); } endDemo(); schedule(); });
+  // The demonstration's controls moved: a frame draws it.
+  demoStore.subscribe(schedule);
   // A link to a place in the page: in the deck its target is stacked on the stage, so the driver scrolls to its section.
   document.addEventListener("click", event => {
     const link = (event.target as Element).closest?.<HTMLAnchorElement>("a[href^='#']");
