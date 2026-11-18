@@ -569,3 +569,129 @@ test("transition effects run on an interactive layer: GPU stays on, content is i
   expect(Object.values(disposed.runtimeResources).every(value => value === 0)).toBe(true);
   expect(errors).toEqual([]);
 });
+
+// A custom displacement (`geometry: "displacement"`) returns, for each drawn pixel, the layer position to draw there.
+// The layer is 100x50 and blue with one button, over the primary layer. Pixels are decoded from the frame: an
+// identity displacement changes nothing, a shift of 20 px draws each pixel from 20 px to its right and nothing in
+// the last 20 px (what is under the layer shows), parameters animate without a new shader, and a colour function may
+// follow in the same chain. The content takes no input meanwhile and the hit stays on the layer's boundary.
+test("a custom displacement moves a live layer's pixels inside its box: GPU stays on, hits stay on the layer", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.goto("/runtime.html");
+  await page.waitForFunction(() => window.runtimeProbe?.state().mode === "gpu" && !window.runtimeProbe.state().initializing);
+  await page.locator("#third").click();
+  await page.locator("#third-control").waitFor();
+  await page.evaluate(() => { window.displacementClicks = 0; document.querySelector("#third-control").addEventListener("click", () => window.displacementClicks++); return window.runtimeProbe.settle(); });
+  const box = await page.locator("#third-layer").evaluate(node => {
+    const r = node.getBoundingClientRect(), f = document.querySelector("#frame").getBoundingClientRect();
+    return { x: r.x - f.x, y: r.y - f.y, width: r.width, height: r.height, frameWidth: f.width, centre: { x: r.x + r.width / 2, y: r.y + r.height / 2 } };
+  });
+  // The layer's pixels, row by row, as RGBA words; `scale` is device pixels per CSS pixel.
+  let scale = 1, width = 0, height = 0;
+  const pixels = async name => {
+    await page.evaluate(() => window.runtimeProbe.settle());
+    await mkdir(directory, { recursive: true });
+    const png = PNG.sync.read(await page.locator("#frame").screenshot({ path: `${directory}/${name}.png` }));
+    scale = png.width / box.frameWidth; width = Math.round(box.width * scale); height = Math.round(box.height * scale);
+    const left = Math.round(box.x * scale), top = Math.round(box.y * scale);
+    return Array.from({ length: width * height }, (_, index) => png.data.readUInt32BE(((top + Math.floor(index / width)) * png.width + left + index % width) * 4));
+  };
+  const differing = (a, b) => a.filter((value, index) => value !== b[index]).length;
+  const before = await pixels("displacement-before");
+  expect(Number.isInteger(box.x * scale) && Number.isInteger(box.y * scale), "the layer is on the pixel grid").toBe(true);
+  // What is under the layer: the layer hidden by its opacity.
+  await page.evaluate(() => window.runtimeProbe.transform("third-layer", { opacity: 0 }));
+  const under = await pixels("displacement-under");
+  await page.evaluate(() => window.runtimeProbe.transform("third-layer", {}));
+  expect(differing(before, await pixels("displacement-restored"))).toBe(0);
+  expect(differing(before, under), "the layer differs from what is under it").toBeGreaterThan(width * height * 0.8);
+
+  const policy = { bounds: "layer", interaction: "inert", media: "identity", fallback: "static", time: { seconds: 0 } };
+  // A new definition compiles as a successor pass while the previous frame keeps presenting.
+  const applied = () => page.evaluate(async () => {
+    const probe = window.runtimeProbe;
+    for (let i = 0; i < 120 && probe.state().publication.pending; i++) await new Promise(r => requestAnimationFrame(r));
+    await probe.settle();
+    const state = probe.state();
+    return { mode: state.mode, reason: state.reason, compilations: state.metrics.effectShaderCompilations, revision: state.registryRevision,
+      transitionEffects: state.runtimeResources.transitionEffects, controlInert: document.querySelector("#third-control").inert, boundaryInert: document.querySelector("#third-layer").inert };
+  });
+  const admitted = await applied();
+  await page.evaluate(policy => {
+    window.shift = window.runtimeProbe.define("shift-fixture", "return local + vec2f(parameters.x, 0.0);", { amount: { min: -200, max: 200 } }, "displacement");
+    window.invert = window.runtimeProbe.define("invert-fixture", "return vec4f(vec3f(1.0) - color.rgb, color.a);");
+    window.displacement = window.runtimeProbe.effects("third-layer", [{ kind: "custom", definition: window.shift, parameters: { amount: 0 }, ...policy }]);
+  }, policy);
+  const identity = await applied();
+  expect(identity.mode, identity.reason).toBe("gpu");
+  expect(identity).toMatchObject({ compilations: admitted.compilations + 1, transitionEffects: 1, controlInert: true, boundaryInert: false });
+  expect(differing(before, await pixels("displacement-identity")), "an identity displacement leaves every pixel as it was").toBe(0);
+
+  // Twenty pixels to the left: each pixel is the one that was 20 px to its right, and the last 20 px draw nothing.
+  await page.evaluate(() => window.displacement.update([{ amount: 20 }]));
+  const moved = await applied();
+  expect(moved).toMatchObject({ mode: "gpu", compilations: identity.compilations, revision: identity.revision });
+  const shifted = await pixels("displacement-shifted");
+  const by = Math.round(20 * scale);
+  let wrong = 0;
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    if (shifted[y * width + x] !== (x < width - by ? before[y * width + x + by] : under[y * width + x])) wrong++;
+  }
+  expect(wrong, "pixels are those 20 px to the right, and what is under the layer where there are none").toBe(0);
+  expect(differing(before, shifted)).toBeGreaterThan(by * height * 0.8);
+  // The content takes no input, and the click lands on the layer's boundary, not on the control or under the layer.
+  expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.id, box.centre)).toBe("third-layer");
+  const count = await page.locator("#count").innerText();
+  await page.mouse.click(box.centre.x, box.centre.y);
+  expect(await page.evaluate(() => window.displacementClicks)).toBe(0);
+  expect(await page.locator("#count").innerText()).toBe(count);
+
+  // A colour function may follow the displacement in the same chain: the moved pixels, inverted.
+  await page.evaluate(policy => {
+    window.displacement = window.runtimeProbe.effects("third-layer", [
+      { kind: "custom", definition: window.shift, parameters: { amount: 20 }, ...policy },
+      { kind: "custom", definition: window.invert, parameters: { strength: 0 }, ...policy }]);
+  }, policy);
+  const both = await applied();
+  expect(both.mode, both.reason).toBe("gpu");
+  expect(both.compilations).toBe(moved.compilations + 1);
+  const inverted = await pixels("displacement-inverted");
+  wrong = 0;
+  for (let y = 0; y < height; y++) for (let x = 0; x < width - by; x++) {
+    const from = before[y * width + x + by], to = inverted[y * width + x];
+    // Red, green and blue are inverted (to within one step of rounding); alpha is not.
+    for (const bits of [24, 16, 8]) if (Math.abs(255 - ((from >>> bits) & 255) - ((to >>> bits) & 255)) > 1) { wrong++; break; }
+  }
+  expect(wrong, "the colour function runs on the displaced pixels").toBe(0);
+
+  // Refused before anything changes: a colour operation before the displacement, a second displacement, a displacement as a material.
+  const refused = await page.evaluate(policy => {
+    const failures = [];
+    const moved = { kind: "custom", definition: window.shift, parameters: { amount: 4 }, ...policy };
+    const again = window.runtimeProbe.define("shift-again", "return local;", { amount: { min: -200, max: 200 } }, "displacement");
+    for (const attempt of [
+      () => window.runtimeProbe.effects("third-layer", [{ kind: "custom", definition: window.invert, parameters: { strength: 0 }, ...policy }, moved]),
+      () => window.runtimeProbe.effects("third-layer", [moved, { ...moved, definition: again }]),
+      () => window.runtimeProbe.material("third-layer", { kind: "custom", definition: window.shift, parameters: { amount: 4 }, interior: { max: 0.05 },
+        bounds: "layer", interaction: "material", media: "identity", fallback: "static" }),
+    ]) { try { attempt(); failures.push("accepted"); } catch (error) { failures.push(String(error)); } }
+    return { failures, active: window.displacement.state().active };
+  }, policy);
+  expect(refused.failures[0]).toMatch(/Sampling effects must precede/);
+  expect(refused.failures[1]).toMatch(/only once per chain/);
+  expect(refused.failures[2]).toMatch(/color definition/);
+  expect(refused.active).toBe(true);
+
+  // Cancelling restores the original pixels and native input.
+  await page.evaluate(() => window.displacement.cancel());
+  expect(differing(before, await pixels("displacement-cancelled"))).toBe(0);
+  await page.locator("#third-control").click();
+  expect(await page.evaluate(() => window.displacementClicks)).toBe(1);
+  const final = await applied();
+  expect(final).toMatchObject({ mode: "gpu", transitionEffects: 0, controlInert: false });
+  const disposed = await page.evaluate(() => window.runtimeProbe.dispose());
+  expect(Object.values(disposed.runtimeResources).every(value => value === 0)).toBe(true);
+  expect(errors).toEqual([]);
+  await save("displacement", { admitted, identity, moved, both, scale, box });
+});

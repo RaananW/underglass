@@ -11,12 +11,14 @@ Native capture stays neutral: effects change only what the GPU draws, never the
 original elements. The [effects guide](guide/effects.md) introduces the same API
 with examples; this page is the full contract.
 
-The chosen extension is deliberately a **trusted application color function**,
-not a shader graph, sandbox, remote loader, geometry/sampling extension or
-resource allocator. An application supplies up to four bounded numeric
-parameters and a WGSL function body. It receives only sampled color, local
-coordinates, extent, seconds and a parameter vector. There are no engine objects
-in the public contract. A custom definition is compiled into its layer's own pass:
+The chosen extension is deliberately a **trusted application function**, of one
+of two shapes: a color function, or a displacement (which position of the layer a
+pixel is drawn from). It is not a shader graph, sandbox, remote loader, mesh or
+vertex extension, or resource allocator. An application supplies up to four
+bounded numeric parameters and a WGSL function body. A color function receives
+only sampled color, local coordinates, extent, seconds and a parameter vector; a
+displacement receives the same without the color, and never the texture. There are
+no engine objects in the public contract. A custom definition is compiled into its layer's own pass:
 during admission, or, when `setEffects` introduces a new definition while GPU
 presents, as a successor pass that is validated before it replaces the current one
 (the previous frame stays on screen meanwhile). A compile failure is a diagnosed GPU
@@ -50,12 +52,21 @@ ownership. Every descriptor explicitly declares `bounds: "layer"`,
 - `ripple`: `amplitude` 0..12 CSS pixels.
 - `chromatic`: `displacement` 0..12 CSS pixels; red/blue sample displacement.
 - `dissolve`: `amount` 0..1, `speed` 0..4; deterministic time-dependent alpha mask.
-- `custom`: a `defineEffect` definition and exactly its declared parameter keys.
+- `custom`: a `defineEffect` definition and exactly its declared parameter keys. The
+  definition's `geometry` makes it a color operation (`"color"`) or a sampling
+  operation (`"displacement"`).
 
-Sampling operations must precede color/alpha operations. Ripple/chromatic may
-appear in either order; order is significant. Custom/dissolve may appear in
-either order. No kind may repeat. Sampling clamps to the original layer and
-fades displacement at its boundary; no effect expands output bounds. Zero
+Sampling operations must precede color/alpha operations. Ripple, chromatic and a
+custom displacement may appear in any order; order is significant (each maps the
+position the previous one produced). A custom color function and dissolve may
+appear in either order. No kind may repeat, where a custom displacement and a
+custom color function count as two kinds, so one chain may hold both. Ripple and
+chromatic clamp sampling to the original layer and fade displacement at its
+boundary. A custom displacement may return any position: one outside the layer's
+visible box (its extent cut by its clip) draws nothing, with an edge one captured
+pixel wide, so content the layer's clip hides is never shown and an identity
+displacement leaves an aligned layer's pixels exactly as they were. No effect
+expands output bounds. Zero
 amplitude/displacement/amount is identity. Dissolve amount 1 is transparent:
 the output canvas is cleared to transparent, so the page behind it shows through,
 as it would in ordinary DOM.
@@ -126,8 +137,9 @@ exactly its parameters, and `interior: { max }` within 0..0.1.
   captured caps, analytic face shadows, the layer's clip and opacity. Parts never take hits; an object that would draw
   outside its `bounds` over its travel is drawn at the Relief level and reported. See [the API](api.md#the-instrument-material)
   and the [design note](ui-library/instrument-phase2.md); `tests/browser/core-instrument.test.mjs` checks it.
-- One pass may hold a custom effect and a custom material; a new definition is
-  compiled as a successor while the previous frame keeps presenting.
+- One pass may hold a custom color effect, a custom displacement and a custom
+  material; a new definition is compiled as a successor while the previous frame
+  keeps presenting.
 - Replacement resolves the previous handle as `replaced`. The material survives
   DOM presentation and readmission; unenrollment and runtime disposal resolve it as
   `disposed`. `runtimeResources.materials` counts active materials and
@@ -135,12 +147,17 @@ exactly its parameters, and `interior: { max }` within 0..0.1.
 
 ## Trusted custom authoring
 
-`defineEffect` freezes the schema and requires `geometry: "color"`,
-`bounds: "layer"`, `capabilities: ["webgpu"]`. Its WGSL body returns `vec4f`;
-parameter vector ordering is declaration insertion order. Results are clamped
-to 0..1. WGSL is trusted local application code, **not** made safe by TypeScript
+`defineEffect` freezes the schema and requires `geometry: "color"` or
+`geometry: "displacement"`, `bounds: "layer"`, `capabilities: ["webgpu"]`. A color
+body returns `vec4f` and its result is clamped to 0..1. A displacement body is the
+inside of `fn(local: vec2f, extent: vec2f, seconds: f32, parameters: vec4f) -> vec2f`
+and returns the layer position, in CSS pixels, whose pixel is drawn at `local`.
+It is evaluated once per pixel, or once per color channel after a chromatic
+operation has parted them. The capture is sampled bilinearly without mipmaps.
+A displacement is an effect only: `setMaterial` refuses it, because a material
+sits on live controls. Parameter vector ordering is declaration insertion order. WGSL is trusted local application code, **not** made safe by TypeScript
 or text validation. Do not load untrusted source. The supported body is a
-bounded pure color calculation, without external bindings or entry points.
+bounded pure calculation, without external bindings or entry points.
 Compilation uses bounded public configured-device shader diagnostics; actual shared
 pipeline validation occurs while output is hidden. Failure is diagnosed and
 recovers to DOM through the existing healthy-fence/loss lifecycle.
@@ -189,7 +206,9 @@ asynchronous pipeline check, refusing late changes before revealing output.
 `tests/browser/effects.test.mjs` checks this contract in Chrome Canary: atomic chain
 refusal and stale handles, reduced motion, visibility and forced colours, compiler and
 pipeline failures with usable DOM, retirement through device loss, StrictMode and HMR,
-successor compilation while GPU presents, and transition effects on interactive layers.
+successor compilation while GPU presents, transition effects on interactive layers,
+and a custom displacement (decoded pixels moved exactly, nothing drawn from outside
+the layer, inert content and hits on the layer's boundary).
 [CONTRIBUTING](../CONTRIBUTING.md) describes how to run it and the React 18 and 19
 matrices. GPU timestamps and driver memory are not measured, and screen readers, OS
 input methods, physical devices and real background throttling are not yet validated

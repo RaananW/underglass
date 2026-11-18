@@ -35,7 +35,7 @@ import { swapUnderCover, type SwapCover } from "./swap-cover.js";
 import { describeAdmissionError } from "./engine-failure.js";
 import { createAdmissionProbe, verifyFrameBounds, verifyProbeGeometry, verifyProbePixels, verifyProjectiveHits, type FrameBounds } from "./admission.js";
 import type { Ripple } from "./ripple.js";
-import { isSceneMaterial, type ApplicationEffect, type EffectDescriptor, type MaterialDescriptor } from "./effects.js";
+import { customDefinition, isSceneMaterial, type ApplicationEffect, type EffectDescriptor, type MaterialDescriptor } from "./effects.js";
 import type { CompiledMotion, CompiledProgramSet } from "./compiled.js";
 import { instrumentFaceScene, type InstrumentScene } from "./instrument.js";
 import { createInstrumentController, INSTRUMENT_SUCCESSOR_DEFERRAL_MS, type InstrumentController, type InstrumentLayerInput, type InstrumentTestHook } from "./instrument-pass.js";
@@ -302,13 +302,13 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       return program;
     }
     metrics.shaderSourceGenerations++;
-    return layerShader(custom?.effect, undefined, custom?.relief ? "relief" : custom?.material);
+    return layerShader(custom?.effect, undefined, custom?.relief ? "relief" : custom?.material, custom?.displacement);
   }
-  /** The layer's trusted custom effect and its material (a custom definition or the built-in relief), if any. */
+  /** The layer's trusted custom effects (a color function, a displacement) and its material (a custom definition or the built-in relief), if any. */
   function customOf(layer: EnrolledLayer) {
     const material = layer.material?.();
-    return passShaders(layer.effects?.().find(value => value.kind === "custom")?.definition,
-      isSceneMaterial(material) ? "relief" : material?.definition);
+    return passShaders(customDefinition(layer.effects?.(), "color"),
+      isSceneMaterial(material) ? "relief" : material?.definition, customDefinition(layer.effects?.(), "displacement"));
   }
   // Written to a relief pass whose layer no longer has a relief material, until the pass is rebuilt.
   const noRelief = new Float32Array(RELIEF_VEC4S * 4);
@@ -2048,7 +2048,10 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       if (next.length !== current.length || next.some((layer, index) => layer.id !== current[index]!.id || layer.element !== current[index]!.element)) membershipPending = true;
       current = next; geometry();
     },
-    acceptsCustom: (id: string, definition: ApplicationEffect) => admittedCustom[layers.findIndex(layer => layer.id === id)]?.effect === definition,
+    acceptsCustom: (id: string, definition: ApplicationEffect) => {
+      const shaders = admittedCustom[layers.findIndex(layer => layer.id === id)];
+      return (definition.geometry === "displacement" ? shaders?.displacement : shaders?.effect) === definition;
+    },
     acceptsMaterial: (id: string, material: ApplicationEffect | "relief") => {
       const shaders = admittedCustom[layers.findIndex(layer => layer.id === id)];
       return material === "relief" ? shaders?.relief === true : shaders?.material === material;

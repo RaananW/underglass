@@ -31,28 +31,35 @@ interface EffectPolicy {
 /** Inclusive numeric range for one custom-effect parameter. */
 export interface ParameterRange { min: number; max: number }
 /**
- * A trusted application color effect created by `defineEffect`. `wgsl` is the body of
- * `fn(color: vec4f, local: vec2f, extent: vec2f, seconds: f32, parameters: vec4f) -> vec4f`:
- * `color` is the layer's straight-alpha pixel, `local` its position and `extent` the layer size
- * in CSS pixels, and `parameters` holds the values in declaration order. It may change color and
- * alpha but not geometry. Never build `wgsl` from user input.
+ * A trusted application effect created by `defineEffect`. Its `geometry` says what `wgsl` is the body of:
+ *
+ * - `"color"`: `fn(color: vec4f, local: vec2f, extent: vec2f, seconds: f32, parameters: vec4f) -> vec4f`.
+ *   `color` is the layer's straight-alpha pixel, `local` its position and `extent` the layer size in CSS
+ *   pixels, and `parameters` holds the values in declaration order. It may change color and alpha but not
+ *   where a pixel is drawn.
+ * - `"displacement"`: `fn(local: vec2f, extent: vec2f, seconds: f32, parameters: vec4f) -> vec2f`. It returns
+ *   the position in the layer, in CSS pixels, whose pixel is drawn at `local`; returning `local` is identity.
+ *   A position outside the layer's visible box draws nothing, so the function can also take pixels away, and
+ *   nothing is ever drawn outside the layer. Only an effect chain takes it, never a material.
+ *
+ * Never build `wgsl` from user input.
  */
 export interface ApplicationEffect<P extends string = string> {
   /** 1..48 characters of lowercase letters, digits and hyphens, starting with a letter. */
   readonly name: string;
   /** 1..4 named parameters with their allowed ranges; order sets their `parameters` slot. */
   readonly parameters: Readonly<Record<P, ParameterRange>>;
-  readonly geometry: "color";
+  readonly geometry: "color" | "displacement";
   readonly bounds: "layer";
   readonly capabilities: readonly ["webgpu"];
   /** WGSL function body, at most 4096 characters. */
   readonly wgsl: string;
 }
 /**
- * One operation in a decorative layer's effect chain (1..3 operations, each kind once, sampling
- * effects `ripple`/`chromatic` before color effects `dissolve`/`custom`). Parameter ranges:
- * ripple `amplitude` 0..12 px, chromatic `displacement` 0..12 px, dissolve `amount` 0..1 and
- * `speed` 0..4; custom parameters use their definition's ranges.
+ * One operation in a layer's effect chain: 1..3 operations, each kind once (`custom` once per geometry),
+ * sampling effects (`ripple`, `chromatic`, a `custom` displacement) before color effects (`dissolve`, a
+ * `custom` color function). Parameter ranges: ripple `amplitude` 0..12 px, chromatic `displacement` 0..12 px,
+ * dissolve `amount` 0..1 and `speed` 0..4; custom parameters use their definition's ranges.
  */
 export type EffectDescriptor =
   | (EffectPolicy & { kind: "ripple"; parameters: { amplitude: number } })
@@ -90,8 +97,14 @@ export function effectNumber(value: number, min: number, max: number, name: stri
   if (!Number.isFinite(value) || value < min || value > max) throw new Error(`${name} requires ${min}..${max}`);
   return value;
 }
+/** The chain's custom definition of the given geometry, if it has one. */
+export function customDefinition(values: readonly EffectDescriptor[] | undefined, geometry: ApplicationEffect["geometry"]): ApplicationEffect | undefined {
+  for (const value of values ?? []) if (value.kind === "custom" && value.definition.geometry === geometry) return value.definition;
+  return undefined;
+}
 /**
- * Validates and freezes a trusted application color effect for use as a `custom` effect.
+ * Validates and freezes a trusted application effect for use as a `custom` effect: a color
+ * function, or a displacement (`geometry`).
  * Checks the name, the declared policy fields, 1..4 bounded parameter ranges and a non-empty
  * WGSL body of at most 4096 characters; it does not compile the WGSL. Compilation happens on
  * the device when the effect is first applied, and a compile error returns the surface to
@@ -99,10 +112,10 @@ export function effectNumber(value: number, min: number, max: number, name: stri
  */
 export function defineEffect<P extends string>(definition: ApplicationEffect<P>): ApplicationEffect<P> {
   if (!definition || !/^[a-z][a-z0-9-]{0,47}$/.test(definition.name)
-    || definition.geometry !== "color" || definition.bounds !== "layer"
+    || (definition.geometry !== "color" && definition.geometry !== "displacement") || definition.bounds !== "layer"
     || definition.capabilities.length !== 1 || definition.capabilities[0] !== "webgpu"
     || typeof definition.wgsl !== "string" || !definition.wgsl.trim() || definition.wgsl.length > 4096) {
-    throw new Error("Application effect requires a named bounded trusted WGSL color function and WebGPU");
+    throw new Error("Application effect requires a named bounded trusted WGSL color or displacement function and WebGPU");
   }
   const entries = Object.entries<ParameterRange>(definition.parameters);
   if (!entries.length || entries.length > 4) throw new Error("Application effect requires 1..4 numeric parameters");
@@ -130,11 +143,14 @@ export function validateEffects(values: readonly EffectDescriptor[]): EffectDesc
     if (!value || value.bounds !== "layer" || !["decorative", "inert"].includes(value.interaction) || value.media !== "identity"
       || value.fallback !== "static" || !value.time || !value.parameters) throw new Error("Effects require layer bounds, decorative or inert interaction, identity media and static DOM fallback");
     if (value.interaction !== interaction) throw new Error("Effect chain operations must share one interaction");
-    if (kinds.has(value.kind)) throw new Error("Effect kinds may occur only once per chain");
-    kinds.add(value.kind);
+    // A chain may hold one custom color function and one custom displacement: they are different operations.
+    const displaces = value.kind === "custom" && value.definition?.geometry === "displacement";
+    const kind = displaces ? "custom displacement" : value.kind;
+    if (kinds.has(kind)) throw new Error("Effect kinds may occur only once per chain");
+    kinds.add(kind);
     // The shader resolves all sampling displacements before it samples the texture, then applies
     // color/alpha operations to that sample, so declared order must match.
-    if (value.kind === "custom" || value.kind === "dissolve") colorOnly = true;
+    if ((value.kind === "custom" && !displaces) || value.kind === "dissolve") colorOnly = true;
     else if (colorOnly) throw new Error("Sampling effects must precede color/alpha effects");
     const seconds = effectNumber(value.time.seconds, 0, 1e6, "Effect seconds");
     if (value.time.playing !== undefined && typeof value.time.playing !== "boolean") throw new Error("Effect playback must be boolean");
@@ -157,17 +173,21 @@ export function validateEffects(values: readonly EffectDescriptor[]): EffectDesc
 }
 /**
  * Packs up to three effects into the 24 floats (six vec4s) of a layer's uniform block. Each
- * operation takes two vec4s: control `(kind code, seconds, 0, 0)` with codes ripple 1,
- * chromatic 2, dissolve 3, custom 4 (0 is an empty slot), then up to four parameters,
- * zero-padded. An empty chain yields all zeros, which the shader treats as no effect.
+ * operation takes two vec4s: control `(kind code, seconds, slot, 0)` with codes ripple 1,
+ * chromatic 2, dissolve 3, custom color 4, custom displacement 5 (0 is an empty slot), then up to
+ * four parameters, zero-padded. `slot` is 0 except for a custom displacement, where it is
+ * `displacement`: the index of its definition among those the pass was built with, or -1 (the
+ * custom color function's index is in the layer block itself). An empty chain yields all zeros,
+ * which the shader treats as no effect.
  */
-export function effectUniforms(values: readonly EffectDescriptor[] = []) {
+export function effectUniforms(values: readonly EffectDescriptor[] = [], displacement = -1) {
   const result = new Float32Array(24);
   values.forEach((value, index) => {
     // Custom parameters follow the definition's declared order, not the descriptor's key order.
     // Seconds wrap at 1000 so the f32 uniform keeps sub-frame resolution in long sessions.
     const parameters = value.kind === "custom" ? Object.keys(value.definition.parameters).map(name => value.parameters[name]!) : Object.values(value.parameters);
-    result.set([{ ripple: 1, chromatic: 2, dissolve: 3, custom: 4 }[value.kind], value.time.seconds % 1000, 0, 0,
+    const displaces = value.kind === "custom" && value.definition.geometry === "displacement";
+    result.set([displaces ? 5 : { ripple: 1, chromatic: 2, dissolve: 3, custom: 4 }[value.kind], value.time.seconds % 1000, displaces ? displacement : 0, 0,
       ...parameters, ...Array(4 - parameters.length).fill(0)], index * 8);
   });
   return result;
@@ -295,6 +315,8 @@ export function validateMaterial(value: MaterialDescriptor): MaterialDescriptor 
   if (value.kind !== "custom") throw new Error("Unsupported material kind");
   if (!value.parameters || !value.interior) throw new Error("Custom materials require parameters and an interior budget");
   if (!definitions.has(value.definition)) throw new Error("Custom materials must come from defineEffect");
+  // A material relights pixels where they are; a displacement would move them under live controls.
+  if (value.definition.geometry !== "color") throw new Error("Custom materials require a color definition");
   const names = Object.keys(value.definition.parameters);
   if (Object.keys(value.parameters).length !== names.length || Object.keys(value.parameters).some(name => !names.includes(name))) throw new Error("Material parameter keys must match the declared schema exactly");
   const parameters = Object.fromEntries(names.map(name => [name, effectNumber(value.parameters[name]!, value.definition.parameters[name]!.min, value.definition.parameters[name]!.max, name)]));

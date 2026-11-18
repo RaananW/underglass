@@ -1632,9 +1632,10 @@ export class CanvasRuntime {
     }
   }
   /**
-   * Validates and installs a decorative effect chain on a layer, replacing any previous one, and returns its
-   * handle. The layer must be enrolled as decorative. Custom effects need WebGPU and may rebuild the layer's
-   * pass. Ordinary DOM keeps only the static original, so effects finish as `fallback` there.
+   * Validates and installs an effect chain on a layer, replacing any previous one, and returns its handle. A
+   * `decorative` chain needs decorative enrollment; an `inert` one runs on any layer and holds its content inert
+   * meanwhile. Custom effects (a color function, a displacement) need WebGPU and may rebuild the layer's pass.
+   * Ordinary DOM keeps only the static original, so effects finish as `fallback` there.
    */
   setEffects(id: string, descriptors: readonly EffectDescriptor[]): EffectHandle {
     this.assertLive();

@@ -455,7 +455,7 @@ try {
       await page.locator("#demo-scrub").fill("50");
       await page.evaluate(() => window.nextDeck.idle());
       state = await snapshot();
-      assert.deepEqual([state.mode, state.effects, await panels(), state.errors], ["gpu", ["transitions-figure:custom", "transitions-second:custom"], ["shown", "shown"], []]);
+      assert.deepEqual([state.mode, state.effects, await panels(), state.errors], ["gpu", ["transitions-figure:custom+custom", "transitions-second:custom+custom"], ["shown", "shown"], []]);
       await page.waitForFunction(() => document.querySelector("#transitions-second [data-demo-clock]").textContent !== "00:00.0");
       await page.screenshot({ path: join(run, "next-deck-demo.png") });
       await page.getByRole("button", { name: "tilt", exact: true }).click();
@@ -483,8 +483,9 @@ try {
 
       // The change to the fifth section is a scan: a bar of light crosses the stage, with the arriving section above it
       // and the leaving one below. The mask is in stage coordinates and hides one section exactly where it shows the
-      // other: at the middle, the upper part of the stage is the arriving section as it rests and the lower part the
-      // leaving one. Scrolling through it captures nothing either.
+      // other. The bar is also a glass rod, a displacement before the mask in each layer's chain, which magnifies the
+      // page within 40 px of it and moves nothing further away: at the middle, the upper part of the stage is the
+      // arriving section as it rests and the lower part the leaving one. Scrolling through it captures nothing either.
       const region = async (top, bottom) => PNG.sync.read(await page.screenshot({ clip: { x: 72, y: top, width: 1440 - 72, height: bottom - top } }));
       const differing = (a, b) => {
         let count = 0;
@@ -497,7 +498,7 @@ try {
       const arrivingUpper = await region(90, 400);
       await scrub(3.5);
       state = await snapshot();
-      assert.deepEqual([state.mode, state.effects, state.change, state.errors], ["gpu", ["motion:custom", "motion-figure:custom", "shaders:custom", "shaders-figure:custom"], "scan", []]);
+      assert.deepEqual([state.mode, state.effects, state.change, state.errors], ["gpu", ["motion:custom+custom", "motion-figure:custom+custom", "shaders:custom+custom", "shaders-figure:custom+custom"], "scan", []]);
       const scanUpper = differing(await region(90, 400), arrivingUpper), scanLower = differing(await region(570, 880), leavingLower);
       assert.ok(scanUpper < 0.002, `above the bar the stage is the arriving section (${scanUpper})`);
       assert.ok(scanLower < 0.002, `below the bar the stage is the leaving section (${scanLower})`);
