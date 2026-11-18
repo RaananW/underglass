@@ -292,6 +292,10 @@ h3 { margin: var(--space) 0 12px; font: 12px/1 var(--mono); letter-spacing: .16e
 .code { margin: 0; padding: 18px 20px; overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--ground);
   font: 12.5px/1.65 var(--mono); font-variant-ligatures: none; color: #d6dae1; tab-size: 2; }
 .code code { font-size: inherit; }
+/* Code wider than its block scrolls, and a scrolling box with an opaque background is a compositing layer on which the
+   browser antialiases text per colour channel again (see the stage's own layer above). A background that is not quite
+   opaque keeps it grey, as the GPU draws it. */
+html.can-gpu .code { background: rgb(7 8 10 / 98%); }
 .code .comment { color: var(--quiet); }
 .specimen-body > .code:only-child { border: 0; padding: 0; background: none; }
 
