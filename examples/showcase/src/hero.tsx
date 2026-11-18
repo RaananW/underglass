@@ -1,10 +1,10 @@
 /**
- * The home page's scene: the stage at the top of the home page. The headline, its links and the glass panel's controls
- * are the original React elements on GPU-presented layers; the light, the colour and the ripples are drawn by the
- * shared compositor, on decorative layers only (effects never touch a layer with controls).
+ * The studio's overview scene: the stage at the top of the examples' index (`/examples`). The headline, its links and
+ * the glass panel's controls are the original React elements on GPU-presented layers; the light, the colour and the
+ * ripples are drawn by the shared compositor, on decorative layers only (effects never touch a layer with controls).
  *
- * - **The sky** (`hero-sky`, decorative) is a CSS night of colour blobs. Its custom shader (`heroSky`) turns its hue
- *   and lights it with a lamp that follows the pointer, with faint caustic rings around it.
+ * - **The sky** (`hero-sky`, decorative) is pools of light on the page's dark ground. Its custom shader (`heroSky`)
+ *   turns its hue and lights it with a lamp that follows the pointer, with faint caustic rings around it.
  * - **The glass** (`hero-pane-art`, `hero-pane-code` and `hero-card-glass`, decorative) are translucent panes. Each
  *   carries a ripple (at rest, amplitude 0), a slight chromatic split and the `heroGlass` sheen: a glint and a
  *   streak that slide with the pointer, and an edge that lights on the side facing it. The two floating panes drift
@@ -326,7 +326,7 @@ export function HeroScene() {
     <div ref={slabRef} id="hero-card-glass" className="hero-card-glass" aria-hidden="true" inert style={{ pointerEvents: "none" }} />
     <div ref={copyRef} id="hero-copy" className="hero-copy">
       <p className="hero-badge"><span className="dot" aria-hidden="true" />HTML-in-Canvas · WebGPU · React</p>
-      <h1 id="hero-title">Live examples.<br /><span className="hero-gradient">Real controls under glass.</span></h1>
+      <h1 id="hero-title">Live examples.<br /><span className="hero-gradient">Real controls under glass<i>.</i></span></h1>
       <p className="hero-lede">Every example here is its <em>original</em> React DOM, drawn into one shared WebGPU compositor through the browser's
         HTML-in-Canvas API. This header is one too: the light follows your pointer, the colour turns as you scroll, and every link here is the real element.</p>
       <div className="hero-cta"><a className="cta primary" href="#examples">Explore the examples</a><a className="cta ghost" href="#how-it-works">How it works</a></div>

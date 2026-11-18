@@ -13,8 +13,10 @@ Underglass package. It is two documents:
 The engineering playground remains separate; raw reports, probes, test evidence and
 private fixtures are not served.
 
-In the studio the live stage is the top of every page, right under the site header,
-on the dark band. On the examples' index it shows the overview scene (below); on an
+In the studio the live stage is the top of every page, right under the site header.
+The page around a stage has the home page's look (near-black ground, hairline rules,
+one indicator colour); what a stage holds is the example's own, with its own colours.
+On the examples' index it shows the overview scene (below); on an
 example's page it shows that example, with its title (the page's `h1`), the picker, the mode, the
 controls, the status line and the **Why the GPU here** panel around it. "How it
 works", the catalog and "About" follow.
@@ -28,7 +30,7 @@ its content (as the Instrument gallery's is):
 
 | Layer | Kind | What it is |
 | --- | --- | --- |
-| `hero-sky` | decorative | A night of colour blobs. Ripple (at rest), then the custom `showcase-hero-sky` shader: a hue turn and a lamp with faint caustic rings at the pointer. |
+| `hero-sky` | decorative | Pools of light on the page's dark ground, under a faint grid. Ripple (at rest), then the custom `showcase-hero-sky` shader: a hue turn and a lamp with faint caustic rings at the pointer. |
 | `hero-pane-art`, `hero-pane-code` | decorative | Translucent glass panes. Ripple (at rest), a 1 px chromatic split, then the custom `showcase-hero-glass` sheen: a glint and a streak that slide with the pointer and an edge lit on the side facing it. They drift away from the pointer (`setTransform`). |
 | `hero-card-glass` | decorative | The glass slab under the card, kept on the card's box, with the same chain. |
 | `hero-copy` | interactive | The page's `h1`, its lede, the two links and the highlights. |
