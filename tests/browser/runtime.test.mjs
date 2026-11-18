@@ -21,6 +21,7 @@ import { mkdir, writeFile, stat, utimes } from "node:fs/promises";
 import { PNG } from "pngjs";
 
 import { evidenceDirectory } from "../helpers/evidence.mjs";
+import { startRecording } from "../helpers/frame-recorder.mjs";
 const evidence = evidenceDirectory("runtime");
 /** Writes one named JSON report into this suite's evidence directory. */
 async function save(name, report) {
@@ -1009,6 +1010,136 @@ test("transforms set every frame through GPU admission keep GPU with fresh pixel
   expect(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.id, [box.x + box.width / 2, box.y + box.height / 2])).toBe("count");
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await expect(count).not.toHaveText(before);
+  expect((await page.evaluate(() => window.runtimeProbe.state())).mode).toBe("gpu");
+  zero(await page.evaluate(() => window.runtimeProbe.dispose()));
+  expect(errors).toEqual([]);
+});
+
+test("writes made in one task are drawn once with the state the task left, also around an enrolment", async ({ page }) => {
+  // Issue #314. A transform used to be drawn at once, and the renderer holds the last complete frame while a new layer
+  // is captured: a pose written before an enrolment stayed on screen for frames, though the same task replaced it.
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await ready(page);
+  // The stationary layer rests hidden.
+  await page.evaluate(async () => { window.runtimeProbe.transform("stationary", { opacity: 0 }); await window.runtimeProbe.settle(); });
+  expect((await snap(page, "one-task-hidden"))(500, 150)).not.toEqual([20, 200, 90, 255]);
+  const frame = await page.locator("#frame").boundingBox();
+  const recording = await startRecording(page, { width: 900, height: 750, dpr: 1 });
+  const run = await page.evaluate(async () => {
+    const probe = window.runtimeProbe, before = probe.state();
+    probe.transform("stationary", {});                                             // would show the layer
+    probe.sync(() => document.querySelector("#third").click());                    // a layer is enrolled: the frame is held
+    const enrolled = probe.state().layers.map(layer => layer.id);
+    probe.transform("stationary", { opacity: 0 });                                 // hidden again, in the same task
+    for (let index = 0; index < 40; index++) await new Promise(resolve => requestAnimationFrame(resolve));
+    await probe.settle();
+    const after = probe.state();
+    return { enrolled, mode: after.mode, reason: after.reason, skipped: after.metrics.incompleteFramesSkipped - before.metrics.incompleteFramesSkipped,
+      transform: after.layers.find(layer => layer.id === "stationary").transform };
+  });
+  await page.waitForTimeout(200);
+  const frames = await recording.stop();
+  expect(run.enrolled, "the layer was enrolled between the two writes").toContain("third-layer");
+  expect(run.mode, run.reason).toBe("gpu");
+  expect(run.transform).toEqual({ opacity: 0 });
+  // Every frame the browser presented: the hidden layer's place never holds its colour, and the new layer arrives.
+  const at = (png, x, y) => { const offset = (Math.round((frame.y + y) * png.height / 750) * png.width + Math.round((frame.x + x) * png.width / 900)) * 4; return [...png.data.subarray(offset, offset + 3)]; };
+  const decoded = frames.map(entry => PNG.sync.read(Buffer.from(entry.data, "base64")));
+  const shown = decoded.filter(png => at(png, 500, 150).join() === "20,200,90").length;
+  await save("one-task", { ...run, frames: frames.length, shown });
+  expect(frames.length, "frames were recorded").toBeGreaterThan(0);
+  expect(shown, `${shown} of ${frames.length} presented frames show the layer that the task left hidden`).toBe(0);
+  expect(at(decoded.at(-1), 450, 250), "the enrolled layer is presented").toEqual([30, 100, 220]);
+  const pixels = await snap(page, "one-task-after");
+  expect(pixels(500, 150)).not.toEqual([20, 200, 90, 255]);
+  expect(pixels(450, 250)).toEqual([30, 100, 220, 255]);
+  zero(await page.evaluate(() => window.runtimeProbe.dispose()));
+  expect(errors).toEqual([]);
+});
+
+test("a written transform moves native hits at once and is drawn once per frame, however the writer asks for its frames", async ({ page }) => {
+  // Issue #314. The geometry of a write is applied in the call (hits and getBoundingClientRect follow it in the same
+  // task); the pixels are drawn once for all writes of a task, in the frame the writer wrote in.
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await ready(page);
+  const report = await page.evaluate(async () => {
+    const probe = window.runtimeProbe, frames = () => probe.state().metrics.gpuFrames;
+    const next = () => new Promise(resolve => requestAnimationFrame(resolve));
+    const badge = document.querySelector("#badge"), centre = () => { const box = badge.getBoundingClientRect(); return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; };
+    await probe.settle();
+    for (let index = 0; index < 3; index++) await next();
+    // Hits in the task of the write: the layer moves 90 px down, and so do its box and what is under the point.
+    const from = centre(), drawnBefore = frames();
+    probe.transform("stationary", { y: 90 });
+    const to = centre();
+    const sameTask = { moved: to.y - from.y, hit: document.elementFromPoint(to.x, to.y)?.id, old: document.elementFromPoint(from.x, from.y)?.id ?? null, drawn: frames() - drawnBefore };
+    // Ten writes in one task: one draw.
+    for (let index = 0; index < 10; index++) probe.transform("primary", { x: index });
+    probe.origin("primary", "center");
+    probe.origin("primary", undefined);
+    const inTask = frames() - drawnBefore;
+    for (let index = 0; index < 3; index++) await next();
+    const coalesced = frames() - drawnBefore;
+    await probe.settle();
+    // A writer in a frame loop: the draws between one tick and the next. `first` asks for the next frame before it
+    // writes, `last` after it.
+    const loop = order => new Promise(resolve => {
+      const counts = [];
+      let previous, ticks = 0;
+      const tick = () => {
+        const now = frames();
+        if (previous !== undefined) counts.push(now - previous);
+        previous = now;
+        if (++ticks > 40) { resolve(counts); return; }
+        if (order === "first") requestAnimationFrame(tick);
+        probe.transform("primary", { x: ticks });
+        if (order === "last") requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    const first = await loop("first");
+    await probe.settle();
+    for (let index = 0; index < 3; index++) await next();
+    const last = await loop("last");
+    await probe.settle();
+    // A writer whose callback runs after core's: its write is drawn before the frame ends, not in the next one.
+    for (let index = 0; index < 3; index++) await next();
+    probe.transform("primary", { x: 5 });
+    await next();                                        // core's callback for this frame is asked for first, ours second
+    const beforeLate = frames();
+    probe.transform("primary", { x: 6 });
+    await Promise.resolve(); await Promise.resolve();
+    const late = frames() - beforeLate;
+    await probe.settle();
+    const state = probe.state();
+    return { sameTask, inTask, coalesced, first, last, late, mode: state.mode, reason: state.reason, controllerFrames: state.runtimeResources.controllerFrames };
+  });
+  await save("draw-once", report);
+  expect(report.mode, report.reason).toBe("gpu");
+  expect(report.sameTask.moved).toBeCloseTo(90, 1);
+  expect(report.sameTask.hit, "the hit is on the layer where it was written to, in the same task").toBe("badge");
+  expect(report.sameTask.old).not.toBe("badge");
+  expect(report.sameTask.drawn, "the write itself draws nothing").toBe(0);
+  expect(report.inTask, "writes draw nothing inside their task").toBe(0);
+  expect(report.coalesced, "thirteen writes in one task are one draw").toBe(1);
+  // A frame loop is drawn once per frame, whichever way it asks for its frames (the first ticks may find a lead frame missing).
+  for (const order of ["first", "last"]) {
+    const counts = report[order].slice(3);
+    expect(counts.filter(count => count === 1).length, `asking for the frame ${order}: draws per frame ${report[order].join("")}`).toBeGreaterThanOrEqual(counts.length - 2);
+    expect(Math.max(...counts), `asking for the frame ${order}: no frame is drawn twice`).toBeLessThanOrEqual(2);
+    expect(counts.reduce((sum, count) => sum + count, 0), `asking for the frame ${order}: no frame is dropped`).toBeGreaterThanOrEqual(counts.length - 2);
+  }
+  expect(report.late, "a write made after core's callback of the frame is drawn when its task ends").toBe(1);
+  expect(report.controllerFrames, "no frame is left pending after settle").toBe(0);
+  // The pixels and a real click follow the last writes.
+  const pixels = await snap(page, "draw-once");
+  expect(pixels(500, 100)).not.toEqual([20, 200, 90, 255]);
+  expect(pixels(500, 220)).toEqual([20, 200, 90, 255]);
+  const badge = page.locator("#badge"), box = await badge.boundingBox(), text = await badge.innerText();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(badge).not.toHaveText(text);
   expect((await page.evaluate(() => window.runtimeProbe.state())).mode).toBe("gpu");
   zero(await page.evaluate(() => window.runtimeProbe.dispose()));
   expect(errors).toEqual([]);

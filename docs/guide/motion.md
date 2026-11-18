@@ -60,6 +60,11 @@ buttons the whole time.
 - `controller.setTransform(id, transform)` sets a transform immediately. It is safe to
   call every frame (drag, springs, physics), including while `enable()` is admitting;
   admission presents the latest value.
+- Writes are drawn together. Every `setTransform`, effect or material update made in
+  one task (an event handler, a frame callback) shows in the same frame, in the state
+  the task left, so you can reset a layer and move it again without the reset showing.
+  Clicks and `getBoundingClientRect()` follow a transform as soon as it is written
+  ([reference](../api.md#when-writes-are-drawn)).
 - A `Surface`'s `transform` prop is the resting transform. React updates to it during
   a transition become the end state when that transition finishes.
 

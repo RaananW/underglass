@@ -120,9 +120,11 @@ export class CanvasRuntime {
   private readonly forced = matchMedia("(forced-colors: active)");
   /** Pending coalesced `requestDraw` RAF id; 0 when none. */
   private drawFrame = 0;
-  /** A light was written with `setEmitters` since the last draw (`requestDraw`'s lead frame). */
-  private lightWritten = false;
-  /** Someone other than a light asked for a draw since the last one (`requestDraw`). */
+  /** The frame time (`frameTime`) at which the pending `requestDraw` callback was asked for. */
+  private drawAsked: number | undefined;
+  /** Set while a draw is queued for the end of the current task (`requestDraw`). */
+  private drawQueued = false;
+  /** Something asked for a draw since the last one `requestDraw` made. */
   private drawWanted = false;
   /** The RAF currently awaited by `animate`/`advance`, with the rejecter `cancelMotion` uses to interrupt it. */
   private motionFrame: { id: number; reject(error: Error): void } | undefined;
@@ -939,7 +941,7 @@ export class CanvasRuntime {
     }
     layer.layout = layout;
     this.invalidatePolicy();
-    this.reconcile();
+    this.reconcile(true);
     this.checkPolicy();
     if (this.core?.phase() !== "gpu" && this.core?.phase() !== "admitting") this.presentation("dom");
     this.core?.invalidate(layer.element);
@@ -947,8 +949,8 @@ export class CanvasRuntime {
   }
   /**
    * Controller call that replaces a layer's transform. Throws for an unknown layer, an invalid transform or a
-   * layer owned by an animation or transition. In GPU mode it reconciles geometry; otherwise it rewrites the
-   * DOM presentation.
+   * layer owned by an animation or transition. In GPU mode the layer's native geometry (its hits) moves at once
+   * and its pixels are drawn with the frame (`requestDraw`); otherwise it rewrites the DOM presentation.
    */
   setTransform(id: string, transform: Transform) {
     this.assertLive();
@@ -968,13 +970,14 @@ export class CanvasRuntime {
    * Presents a changed transform or origin. During admission the GPU already owns the
    * declarations and per-frame geometry updates would keep the native refresh from
    * settling, so only the value is recorded; admission draws the latest one, as it does
-   * for declarative motion.
+   * for declarative motion. On the GPU the geometry is applied at once and the pixels are
+   * drawn with the frame, so two writes in one task never show the first.
    */
   private presentTransform() {
     const phase = this.core?.phase();
     if (phase === "admitting") return;
     if (phase !== "gpu") this.presentation("dom");
-    else this.reconcile();
+    else this.reconcile(true);
   }
   /**
    * Changes the layer's static rotation/scale pivot. Applies immediately, also to a
@@ -996,27 +999,46 @@ export class CanvasRuntime {
     this.presentTransform();
   }
   /**
-   * Schedules one coalesced RAF `draw()` while GPU presents and the document is visible. After a draw that carried a light
-   * written with `setEmitters`, one more frame is asked for at once (a lead frame, which draws only if another light was
-   * written by then): a writer that asks for its own next frame before writing (the usual idiom) would otherwise run
-   * ahead of core's request in every frame, and core would draw every other frame. The lead frame keeps core's callback
-   * after the writer's in each frame, so a light moved every frame is drawn every frame, in the frame it was written.
+   * Asks for a draw of everything written so far. Writes made in one task are drawn once, with the state the task
+   * left: never one of them without the others. The draw is made by the callback of the frame, which is shared by
+   * every writer in it, where that callback is still to run in the frame being built; otherwise when the task ends.
+   *
+   * Which of the two is known from the frame time. A pending callback that was asked for at an earlier frame time
+   * runs in the frame now being built, after this task, and draws. With no callback pending, or with one asked for at
+   * this frame time (it runs in the next frame), nothing of core's runs before the browser presents: the draw is
+   * queued as a microtask, so that a writer whose own frame callback runs after core's is drawn in the frame it wrote
+   * in. Where the document has no timeline, the frame's callback draws.
+   *
+   * After every draw one more frame is asked for (a lead frame, which draws only if something was written by then).
+   * A writer that asks for its own next frame before writing (the usual idiom) runs ahead of core's callback in every
+   * frame: the lead frame keeps core's callback pending when it writes, so it is drawn every frame, in the frame it
+   * wrote in, by the shared callback.
    */
   private requestDraw(lead = false) {
-    // A request made while the lead frame is pending is folded into it, which then draws.
     if (!lead) this.drawWanted = true;
-    if (this.stopped || this.drawFrame || !this.environment.visible || this.core?.phase() !== "gpu") return;
+    if (this.stopped || !this.environment.visible || this.core?.phase() !== "gpu") return;
+    const now = frameTime();
+    if (!lead && now !== undefined && (!this.drawFrame || this.drawAsked === now) && !this.drawQueued) {
+      this.drawQueued = true;
+      queueMicrotask(() => {
+        this.drawQueued = false;
+        if (this.drawWanted && !this.stopped && this.environment.visible && this.core?.phase() === "gpu") this.drawWritten();
+      });
+    }
+    if (this.drawFrame) return;
+    this.drawAsked = now;
     this.resources.controllerFrames++;
     this.drawFrame = requestAnimationFrame(() => {
       this.drawFrame = 0;
       this.resources.controllerFrames--;
-      if (lead && !this.lightWritten && !this.drawWanted) return;
-      const written = this.lightWritten;
-      this.lightWritten = false;
-      this.drawWanted = false;
-      try { this.core?.draw(); } catch (error) { this.recover(`Geometry/draw failure: ${String(error)}`); return; }
-      if (written) this.requestDraw(true);
+      if (this.drawWanted) this.drawWritten();
     });
+  }
+  /** Draws what was written (`requestDraw`) and asks for the lead frame. */
+  private drawWritten() {
+    this.drawWanted = false;
+    try { this.core?.draw(); } catch (error) { this.recover(`Geometry/draw failure: ${String(error)}`); return; }
+    this.requestDraw(true);
   }
   /**
    * Coalesces reconciliation requests from one React commit (host, every Surface
@@ -1028,14 +1050,18 @@ export class CanvasRuntime {
     this.reconcileQueued = true;
     queueMicrotask(() => {
       this.reconcileQueued = false;
-      this.reconcile();
+      this.reconcile(true);
     });
   }
   /**
    * Applies registry, layout and transform changes while GPU presents or admits; does nothing in DOM. An
    * unchanged size signature only needs a draw, a changed one a full renderer reconcile. Errors recover to DOM.
+   *
+   * The draw is made at once for a change the browser made (a resize, a scroll, a new device pixel ratio): it is
+   * in the frame that shows the change. For a write of the application's (`written`: a transform, an origin, a
+   * commit) the native geometry is applied at once and the draw is the frame's (`requestDraw`).
    */
-  reconcile() {
+  reconcile(written = false) {
     if (this.stopped || !this.core || this.core.phase() !== "gpu" && this.core.phase() !== "admitting") return;
     try {
       this.refreshViewportGeometry();
@@ -1043,7 +1069,10 @@ export class CanvasRuntime {
       if (this.core.phase() === "admitting") { this.core.reconcileGeometry(); return; }
       if (this.membershipCommitPending) { this.core.reconcileGeometry(); return; }
       const signature = this.sizeSignature();
-      if (signature === this.admittedSize) { this.core.draw(); return; }
+      if (signature === this.admittedSize) {
+        if (written) { this.core.place(); this.requestDraw(); } else this.core.draw();
+        return;
+      }
       this.admittedSize = signature;
       this.core.reconcile();
     }
@@ -1193,7 +1222,8 @@ export class CanvasRuntime {
   async settle() {
     await new Promise<void>(resolve => queueMicrotask(resolve));
     this.reconcileProjection();
-    if (this.drawFrame) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    // The pending frame draws what was written and asks for its lead frame, which draws nothing more and ends.
+    for (let frames = 0; this.drawFrame && frames < 3; frames++) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
     await this.renderer().settle();
   }
   /** Marks one layer (or all when `id` is omitted) for recapture. */
@@ -1750,7 +1780,6 @@ export class CanvasRuntime {
         this.assertLive();
         if (!active || this.materials.get(id) !== entry) throw new Error("Material handle is no longer active");
         entry.value = withEmitters(entry.value, emitters);
-        this.lightWritten = true;
         this.requestDraw();
       },
       cancel: () => entry.finish({ status: "cancelled", reason: "Material cancelled" }),
@@ -1882,4 +1911,12 @@ function lockContent(boundary: HTMLElement, broken: () => void) {
     for (const node of owned) node.inert = false;
     owned.clear();
   };
+}
+/**
+ * The time of the frame the document is building, or built last (`document.timeline.currentTime`): the same in
+ * every callback of one frame. Undefined where the document has no timeline.
+ */
+function frameTime() {
+  const time = document.timeline?.currentTime;
+  return typeof time === "number" ? time : undefined;
 }

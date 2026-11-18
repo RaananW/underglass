@@ -221,7 +221,7 @@ Matching React 18 and 19 types/builds and actual mounted behavior are recorded i
 | `defineEffect(definition)` | Frozen trusted local WGSL schema, a color function (`geometry: "color"`) or a displacement (`geometry: "displacement"`, the layer position each pixel is drawn from; effects only), 1..4 bounded numeric parameters, layer bounds and WebGPU capability; compile before successor publication, never a remote loader/sandbox |
 | `enable()` | Serialized structural and functional admission; the owning native canvas is laid out but invisible (`opacity: 0`, `pointer-events: none`) for the functional probe while the ordinary DOM stays presented (mode `dom`, `initializing`), then one task moves the root in under a held DOM frame (`admitting`); every frame from `enable()` to `gpu` shows the content ([seamless first admission](architecture.md#seamless-first-admission); `metrics.admission.cover`/`swapMs`/`admittingMs`); only complete application capture establishes `gpu`. No automatic initial enable. Engine creation has no hard deadline: after 5 s `state().reason` reports "WebGPU initialization slow" (`metrics.admission.slowInits`), ordinary DOM stays presented, the engine is adopted when it arrives and `enable()` then resolves; only `disable()`/`dispose()` cancel a pending init (promptly, disposing the late engine); a rejected adapter/device request still falls back with a diagnosis ([admission](architecture.md#evidence-boundaries)) |
 | `disable()` | Cancels desired/retry/admission intent; same-root DOM recovery, geometry clearing and safe fenced GPU release; repeated calls are harmless |
-| `setTransform(id, transform)` | Replaces a layer's transform; GPU mode updates uniforms/native geometry without React reconciliation |
+| `setTransform(id, transform)` | Replaces a layer's transform, without React reconciliation. In GPU mode the native geometry (hits) moves in the call and the pixels are drawn with the frame ([when writes are drawn](#when-writes-are-drawn)) |
 | `setOrigin(id, origin)` | Replaces a layer's static rotation/scale pivot (`Surface` and `useSurfaceRef` call it when their `origin` changes); applies immediately, including to a running transition |
 | `animate(id, target, length)` | Interpolation of specified fields; unspecified fields stay at their starting values. A number is a fixed count of displayed frames (1..10000, refresh-rate dependent); `{ duration }` is time-based in milliseconds. Default 300 |
 | `requestReconcile()` (`CanvasRuntime`) | Public request to reconcile membership/geometry. React commits call it through layout effects and it coalesces into one microtask |
@@ -230,6 +230,28 @@ Matching React 18 and 19 types/builds and actual mounted behavior are recorded i
 | `settle()` | Bounded completion of already scheduled capture/draw work; not a promise that future browser paint cannot occur. Content that keeps changing (a `requestAnimationFrame` loop, a video) does not hold it: once a paint it waited for completes, a newer paint request is not awaited |
 | `state()` | Current capability/mode/reason, registry matrices, bounded telemetry and owned-resource ledgers. `htmlInCanvas` names the HTML-in-Canvas implementation the latest admission tested: `"native"` (the browser's own), `"polyfill"` ([`@underglass/html-in-canvas-polyfill`](https://github.com/RaananW/html-in-canvas-polyfill), read from its `HTMLInCanvasPolyfill` global, never imported) or `null` before the first admission |
 | `dispose()` | Serialized final unmount/observer/listener/canvas release; refuses while healthy GPU cleanup remains pending |
+
+### When writes are drawn
+
+In GPU mode a write changes state at once and is drawn with the frame. This holds for
+`setTransform`, `setOrigin`, a `Surface`'s committed layout and transform, and every
+effect, material and emitter update.
+
+- **One task, one picture.** Every write made in one task (an event handler, a frame
+  callback, a React commit) appears in the same frame, in the state the task left: never
+  one write without the others. Two writes to the same layer show only the second.
+- **Hits at once.** A transform's native geometry is applied in the call. Hit testing and
+  `getBoundingClientRect()` follow it in the same task, before its pixels are drawn.
+- **Once per frame.** The draw is made by one frame callback shared by all writers. A
+  writer whose own frame callback runs after it is drawn when its task ends, so a frame
+  loop is drawn in the frame it wrote in, whichever way it asks for its frames.
+- **Around an enrolment.** A new layer holds the last complete frame until it is captured.
+  What the same task wrote, before or after enrolling it, appears with the new layer.
+- **Across tasks.** Work split over tasks (an `await` between two writes) can be
+  presented between them.
+
+Changes the browser makes (a resize, a scroll, a new device pixel ratio) are drawn in
+the call that learns of them, so they are in the frame that shows the change.
 
 Editable and top-layer admission checks include the enrolled element itself,
 not just descendants. Native `contenteditable` (including empty and
@@ -748,8 +770,9 @@ them, and a version 4 scene without emitters shades as before.
 - **`handle.setEmitters(emitters)`** replaces a version 4 scene's emitters without validating, repacking or rebuilding
   anything else: the path for a light that moves every frame. It writes uniforms and clustered light data only: no
   capture, upload or hit-geometry change. On a version 4 scene that has no `emitters` field yet, `setEmitters` takes the
-  full validation path itself and adds the field (for an Instrument scene, one rebuild of its mesh scene). Core draws
-  every frame in which a light was written, whatever the writer's idiom (after such a draw it asks for a lead frame).
+  full validation path itself and adds the field (for an Instrument scene, one rebuild of its mesh scene). Like every
+  write it is drawn once per frame, in the frame it was written in, whatever the writer's idiom
+  ([when writes are drawn](#when-writes-are-drawn)).
 - **Diagnostics.** `state().emitters` has the budget (64), `order` (`"core"`, or why the face pools are off), the task
   timing status and, per layer with emitters or protected rects: `emitters`, `lit`, `outOfReach`, `drawn` (scene
   indices), `dropped` (`{ index, margin }`, margin in px of reach), `pass` (`drawn`, `idle` or `off`), `feather`,

@@ -2038,6 +2038,11 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       cancelAdmission("Runtime disposed: pending admission cancelled.");
       return serialize(dispose);
     }, invalidate: queueCapture, ignoreMutation, draw,
+    /**
+     * Applies the layers' native geometry now, without drawing: a transform the application wrote moves the layer's
+     * hits at once, and its pixels follow in the frame the runtime asks for. Skipped wherever `draw` would be.
+     */
+    place: () => { if (engine && registered && mode === "gpu" && !lostInfo && !options.isPaused?.()) geometry(); },
     reconcile: () => reconcile(),
     // The layer set or layout moved: refresh native geometry now and skip drawing until `reconcile` runs.
     reconcileGeometry: () => {
