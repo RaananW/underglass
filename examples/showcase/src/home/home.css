@@ -206,6 +206,9 @@ html.deck:not(.measuring) .parked { max-height: 0; overflow: clip; margin-block:
    its links take the pointer there, so the stage under the rest of it does (the GPU check draws and clicks a probe in
    the stage's corner). */
 @media (max-width: 1179px) { .top { pointer-events: none; } .top > * { pointer-events: auto; } }
+/* While that check runs, the links do not take it either: one of its points is under the brand on a phone, and a
+   check that misses it leaves tilted layers off (`deck.ts`). */
+html.checking .top > * { pointer-events: none; }
 /* The light's layer: an eighth of the stage, which the deck draws eight times larger (`light.ts`). */
 .app-container > .light { position: absolute; left: 0; top: 0; width: 12.5%; height: 12.5%; margin: 0; pointer-events: none; }
 html:not(.deck) .app-container > .light { display: none; }
@@ -300,6 +303,11 @@ h3 { margin: var(--space) 0 12px; font: 12px/1 var(--mono); letter-spacing: .16e
 .demo-run label { flex: 1; display: flex; align-items: center; gap: 12px; font: 11px/16px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--quiet); }
 .demo-run input { flex: 1; min-width: 0; accent-color: var(--signal); }
 .demo-note { margin: 0; font-size: 13.5px; line-height: 20px; color: var(--quiet); }
+/* Shown in one column only: the words for a text that has no panel beside it, and the link to the panels. */
+.narrow-text, .demo-go { display: none; }
+.demo-go { align-items: center; gap: 8px; min-height: 40px; margin-top: 14px; padding: 0 16px; border: 1px solid var(--signal); border-radius: 999px; background: var(--signal);
+  color: #120703; font: 600 13px/1 var(--mono); letter-spacing: .04em; text-decoration: none; }
+.demo-go:hover { background: #ff7150; border-color: #ff7150; }
 .specimen figcaption .clock { margin-left: auto; font-weight: 400; letter-spacing: .04em; color: var(--text); font-variant-numeric: tabular-nums; }
 .second-view { display: grid; gap: 16px; }
 .second-view p { margin: 0; font-size: 14px; line-height: 21px; color: var(--dim); }
@@ -396,9 +404,12 @@ h2 { line-height: round(1.02em, 1px); }
   .app-container > .slide-text { margin-block: 96px 0; }
   .app-container > .specimen { margin-block: 40px 64px; }
   html:not(.deck) .app-container > .demo-bar + .specimen, html:not(.deck) .app-container > .demo-bar + .specimen + .specimen { margin-top: 12px; }
-  /* The controls are above the panels here, so the ones in the text are not shown; their title and note stay. */
-  .slide-text .demo-kinds, .slide-text .demo-run { display: none; }
+  /* The controls are above the panels here, so the ones in the text are not shown. Their title and note stay, in
+     words for a reader who has no panel in sight (in the deck the panels are the next page), with a link to them. */
+  .slide-text .demo-kinds, .slide-text .demo-run, .slide-text .wide-text { display: none; }
   .slide-text .demo-title { margin-bottom: 8px; }
+  .slide-text .narrow-text { display: inline; }
+  .slide-text .demo-go { display: inline-flex; }
   /* The cover's specimen follows the cover as a layer of its own. */
   .cover-grid > .specimen { display: none; }
   .cover-grid { grid-template-columns: minmax(0, 1fr); }

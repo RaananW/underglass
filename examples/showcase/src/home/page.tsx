@@ -106,7 +106,8 @@ function useDemo<T>(select: (state: DemoState) => T) {
  * The demonstration's controls: which change, a slider that scrubs it, and a button that runs it on the clock. They are
  * in the section's text, a layer of its own, so they go on working while the panels carry an effect. In one column the
  * text and the panels are two stops of the deck, so there the controls are a layer above the panels (`compact`, with
- * ids of its own), and the ones in the text are not shown.
+ * ids of its own), and the ones in the text are not shown: the text says where the changes are to be seen (every
+ * change between two pages is one) and links to the panels.
  */
 function DemoControls({ compact = false }: { compact?: boolean }) {
   const suffix = compact ? "-bar" : "";
@@ -118,15 +119,19 @@ function DemoControls({ compact = false }: { compact?: boolean }) {
     if (range.current && range.current.value !== value) range.current.value = value;
   }), []);
   return <div className="demo" role="group" aria-labelledby={`demo-title${suffix}`}>
-    <p className="demo-title" id={`demo-title${suffix}`}>Try it on the panel</p>
+    <p className="demo-title" id={`demo-title${suffix}`}>Try it<span className="wide-text"> on the panel</span></p>
     <div className="demo-kinds">{demoKinds.map((name, index) =>
       <button key={name} type="button" aria-pressed={kind === index} disabled={!gpu} onClick={() => demoStore.set({ kind: index })}>{name}</button>)}</div>
     <div className="demo-run">
       <button type="button" id={`demo-play${suffix}`} onClick={demoPlay}>{second ? "Play back" : "Play"}</button>
       <label>Scrub<input ref={range} id={`demo-scrub${suffix}`} type="range" min={0} max={100} defaultValue={0} onChange={event => demoScrub(Number(event.currentTarget.value) / 100)} /></label>
     </div>
-    <p className="demo-note">{gpu ? "Both panels are live layers. Their clocks keep counting while one turns into the other, forwards or backwards, and the change repaints neither: it writes matrices and shader parameters."
-      : "In ordinary DOM the panels swap at the middle. With GPU presentation the change you pick runs between them, and both stay live."}</p>
+    <p className="demo-note">{gpu ? <>
+      <span className="wide-text">Both panels are live layers. Their clocks keep counting while one turns into the other, forwards or backwards, and the change repaints neither: it writes matrices and shader parameters.</span>
+      <span className="narrow-text">Every change between two pages here is one of these, run on the live page. Scroll slowly and you scrub it; scroll back and it runs backwards. On the next page you pick the change and run it between two live panels.</span>
+    </> : "In ordinary DOM the panels swap at the middle. With GPU presentation the change you pick runs between them, and both stay live."}</p>
+    {/* One column: the panels and their controls follow the text (in the deck, as the next page). */}
+    {!compact && <a className="demo-go" href="#transitions-controls">Go to the panels<span aria-hidden="true">&darr;</span></a>}
   </div>;
 }
 /** In the demonstration's second panel: a control of its own, to show the panel is no picture. */

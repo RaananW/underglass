@@ -23,6 +23,9 @@
  *   park, inside `flushSync`, so a change starts in the frame its sections are enrolled.
  * - The layout changes to the deck before `enable()` and back to the flow whenever the mode returns to `dom` (a
  *   refusal, `disable()`, a lost GPU). The section in the window, and how far it has scrolled, stay the same.
+ * - `enable()` proves in the stage's top left corner that native hits follow a tilted layer. Below the wide layout the
+ *   header lies over that corner, so while the check runs the header takes no pointer (`html.checking`). Where the
+ *   proof still fails, a change that tilts runs as the flat `slide`.
  * - A custom effect's shader is compiled when it is first used, which stalls the page for a few frames. So after the
  *   deck has started, each change's chain is put once on an empty layer in the stage's corner, in idle moments, and
  *   the first scroll into a change finds its shader ready (`warm`).
@@ -125,8 +128,14 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
   /** The runtime's mode, kept from its status reports: `state()` copies every metric and measures every layer, so the frame loop never calls it. */
   let mode = controller.state().mode;
   const gpu = () => mode === "gpu";
+  /** Whether the last check proved that native hits follow a tilted layer: the runtime refuses a tilt without it. */
+  let tilts = false;
   /** Takes the runtime's mode; the demonstration is told whether its panels are drawn by the GPU. */
-  function took(next: CanvasStatus["mode"]) { mode = next; demoStore.set({ gpu: gpu() }); }
+  function took(next: CanvasStatus["mode"]) {
+    mode = next;
+    if (next !== "admitting") tilts = gpu() && controller.state().metrics.admission.last?.projective?.result === "proven";
+    demoStore.set({ gpu: gpu() });
+  }
   const trackTop = () => track.getBoundingClientRect().top + scrollY;
 
   /**
@@ -287,10 +296,14 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     return { id, leaving, figure, x: layer.offsetLeft, y: layer.offsetTop - Math.round(pan), width: layer.offsetWidth, height: layer.offsetHeight,
       stageWidth: stage.clientWidth, stageHeight: stage.clientHeight };
   }
-  /** The change to run between these layers: `wanted`, a fade with reduced motion, or the flat `slide` where the change tilts and a layer is not inside the stage (the stage cuts a flat layer off at its edge, but not a tilted one). */
+  /**
+   * The change to run between these layers: `wanted`, a fade with reduced motion, or the flat `slide` where the change
+   * tilts and either a layer is not inside the stage (the stage cuts a flat layer off at its edge, but not a tilted
+   * one) or this browser's check did not prove hits on a tilted layer.
+   */
   function fitting(wanted: Transition | undefined, described: readonly StageLayer[]) {
     const transition = reduced.matches ? fade : wanted ?? fade;
-    return transition.needsRoom && !described.every(layer => layer.y >= 0 && layer.y + layer.height <= layer.stageHeight) ? slide : transition;
+    return transition.needsRoom && !(tilts && described.every(layer => layer.y >= 0 && layer.y + layer.height <= layer.stageHeight)) ? slide : transition;
   }
   /**
    * The change that leads into a stop: into a section's first stop, the one of the boundary before that section; into
@@ -507,7 +520,9 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
       restack();
       const before = scrollY, index = flowStop(), pan = before - flowTop(index);
       layout(true, index, pan);
-      took((await controller.enable()).mode);
+      // The check hit-tests a probe in the stage's corner: nothing of the header is to take those points.
+      root.classList.add("checking");
+      try { took((await controller.enable()).mode); } finally { root.classList.remove("checking"); }
       // Refused: the flow again, exactly where it was.
       if (!gpu()) { layout(false, index, pan); scrollTo({ top: before, behavior: "instant" }); }
     } finally { acting = false; }
