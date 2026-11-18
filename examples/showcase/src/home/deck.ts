@@ -3,14 +3,17 @@
  * `docs/showcase-deck-probe.md` proved.
  *
  * The page is one document with two layouts. The **flow** is ordinary DOM: the sections follow each other down the
- * page. The **deck** is the GPU presentation: `html.deck` makes the stage stick to the window (`next.css`) while a
+ * page. The **deck** is the GPU presentation: `html.deck` makes the stage stick to the window (`home.css`) while a
  * track scrolls past, and the scroll position decides what is on stage. The deck is the flow with the crossing from
  * one section to the next replaced by a change:
  *
- * - A section taller than the stage (on a phone, or in a short window) **pans**: while the scroll position is inside
- *   the section's own length, the section moves up the stage as the flow would scroll it, by its matrix. After that
- *   comes one window of scrolling for the change to the next section. A section that fits the stage has no pan, only
- *   the change.
+ * - The deck is a row of **stops**, each one stage's worth of the page. Where the page has two columns a stop is a
+ *   section: its text beside its specimen. Where it has one (a phone), a section is two stops, its text and then its
+ *   specimen, so that each fits the screen and a change always lands on a whole page; the change between the two is
+ *   another of the deck's.
+ * - A stop taller than the stage (in a short window) **pans**: while the scroll position is inside the stop's own
+ *   length, it moves up the stage as the flow would scroll it, by its matrix. After that comes one window of scrolling
+ *   for the change to the next stop. A stop that fits the stage has no pan, only the change.
  * - At each end of a change is a **rest band**: there one section is alone on stage and interactive. Between the bands
  *   the two sections are both on stage and `pose` runs the change between them (`transitions.ts`: one per boundary).
  *   Only matrices (`setTransform`) and effect parameters (`handle.update`) are written, so neither panning nor
@@ -48,7 +51,7 @@ const jumpMs = 950, calmJumpMs = 320;
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
 /**
- * Where the page is in the deck: the section at rest or leaving, the one arriving (null at rest), the progress of the
+ * Where the page is in the deck: the stop at rest or leaving, the one arriving (null at rest), the progress of the
  * change between them, and how far each has panned up the stage, CSS px.
  */
 export interface Place { from: number; to: number | null; t: number; panFrom: number; panTo: number }
@@ -58,13 +61,17 @@ export interface Deck {
   start(): Promise<boolean>;
   /** Returns to ordinary DOM and the flow. */
   stop(): Promise<void>;
-  /** Brings a section on stage: at once, or with `smooth` by a jump in the deck and a smooth scroll in the flow. */
+  /** Brings a section on stage (its first stop): at once, or with `smooth` by a jump in the deck and a smooth scroll in the flow. */
   go(index: number, smooth?: boolean): void;
+  /** Brings a stop on stage, at once (for tests). */
+  goStop(index: number): void;
+  /** The deck's stops: each one's section and layers (for tests). */
+  stops(): { section: number; ids: string[] }[];
   /** Waits until the driver has nothing pending and the runtime has presented what it was given (for tests). */
   idle(): Promise<void>;
   /** Where the page is, as the deck reads it. */
   place(): Place;
-  /** The deck's lengths, CSS px: how far each section pans, and the scroll offset in the track at which each starts (for tests). */
+  /** The deck's lengths, CSS px: how far each stop pans, and the scroll offset in the track at which each starts (for tests). */
   lengths(): { pans: number[]; starts: number[]; change: number } | null;
   /** Resolves when the changes' shaders have been compiled ahead of use, or at once when they will not be (for tests). */
   warmed(): Promise<void>;
@@ -85,7 +92,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
   /** Called when a change between two sections starts, with its name, and with null when the stage comes to rest. */
   onTransition?(name: string | null): void;
 }): Deck {
-  const root = document.documentElement, count = ids.length;
+  const root = document.documentElement;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)"), stacked = matchMedia("(max-width: 920px)");
   const pin = track.firstElementChild as HTMLElement;
   const errors: string[] = [];
@@ -93,9 +100,28 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
   let acting = false;
   let view = flow;
   const element = (id: string) => document.getElementById(id)!;
-  /** Each section's layers, in page order: its text, then its specimen if it has one of its own, then a second panel in the specimen's place (the live demonstration's). */
-  const sectionLayers = ids.map((_, index) => [...document.querySelectorAll<HTMLElement>(`.app-container > [data-section="${index}"]`)].map(layer => layer.id));
-  const layers = (index: number) => sectionLayers[index]!;
+  /**
+   * One stage's worth of the page: a section's layers, or in one column its text or its specimen (`first` is false for
+   * the specimen's stop). A section's layers are the root's children marked with its index (`data-section`), in page
+   * order: its text, then what belongs to its specimen (`data-part="figure"`: the specimen, a second panel in its place
+   * and, in one column, the demonstration's controls above them). An element the layout does not show is no layer.
+   */
+  interface Stop { section: number; ids: string[]; first: boolean }
+  const sectionElements = ids.map((_, index) => [...document.querySelectorAll<HTMLElement>(`.app-container > [data-section="${index}"]`)]);
+  function buildStops(): Stop[] {
+    return sectionElements.flatMap((all, section) => {
+      const shown = all.filter(layer => getComputedStyle(layer).display !== "none");
+      const text = shown.filter(layer => layer.dataset.part !== "figure").map(layer => layer.id), figure = shown.filter(layer => layer.dataset.part === "figure").map(layer => layer.id);
+      return stacked.matches && text.length && figure.length ? [{ section, ids: text, first: true }, { section, ids: figure, first: false }] : [{ section, ids: [...text, ...figure], first: true }];
+    });
+  }
+  let stops = buildStops(), builtStacked = stacked.matches;
+  const layers = (index: number) => stops[index]!.ids;
+  const firstStop = (section: number) => Math.max(0, stops.findIndex(stop => stop.section === section));
+  /** The stop a layer is in, or the first stop of its section when the layout does not show it. */
+  const stopOf = (layer: HTMLElement) => { const index = stops.findIndex(stop => stop.ids.includes(layer.id)); return index >= 0 ? index : firstStop(Number(layer.dataset.section)); };
+  /** The view of the deck with these stops on stage. */
+  const staged = (from: number, to: number | null): View => ({ deck: true, from, to, ids: to === null ? layers(from) : [...layers(from), ...layers(to)] });
   /** The runtime's mode, kept from its status reports: `state()` copies every metric and measures every layer, so the frame loop never calls it. */
   let mode = controller.state().mode;
   const gpu = () => mode === "gpu";
@@ -105,15 +131,15 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
 
   /**
    * The deck's lengths, CSS px. `stage` is the stage's height and `change` the scroll length of a change (one window).
-   * Section `i` starts at `start[i]` in the track, pans for `pan[i]` (how much taller than the stage it is, with its
-   * margins) and is followed by a change. `end` is where the last section has panned out: the track's scroll range.
+   * Stop `i` starts at `start[i]` in the track, pans for `pan[i]` (how much taller than the stage it is, with its
+   * margins) and is followed by a change. `end` is where the last stop has panned out: the track's scroll range.
    */
   interface Lengths { stage: number; change: number; pan: number[]; start: number[]; end: number; top: Map<string, number> }
   let lengths: Lengths | undefined;
   /**
-   * Measures the deck (only in the deck's layout). Parked sections are laid out for the measurement, and nothing is
-   * painted meanwhile. Where the specimen is under its text (a narrow window), each specimen is told the height of
-   * the text above it (`--above`): in the deck every section lies in one grid cell, so that cannot come from the grid.
+   * Measures the deck (only in the deck's layout). Parked layers are laid out for the measurement, and nothing is
+   * painted meanwhile. In one column the demonstration's controls lie above its panels: each panel is told their
+   * height (`--above`), because in the deck every layer lies in one grid cell and that cannot come from the grid.
    */
   function measure(): Lengths {
     root.classList.add("measuring");
@@ -123,13 +149,13 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
       const give = (layer: HTMLElement, name: string, value: string) => {
         if (layer.style.getPropertyValue(name) !== value) { if (value) layer.style.setProperty(name, value); else layer.style.removeProperty(name); }
       };
-      const pan = ids.map((_, index) => {
-        const [text, ...panels] = layers(index).map(element) as [HTMLElement, ...HTMLElement[]];
-        for (const panel of panels) give(panel, "--above", stacked.matches ? `${text.offsetHeight}px` : "");
+      const pan = stops.map(stop => {
+        const all = stop.ids.map(element), panels = all.filter(layer => layer.classList.contains("specimen")), bar = all.find(layer => layer.classList.contains("demo-bar"));
+        for (const panel of panels) give(panel, "--above", stacked.matches && bar ? `${bar.offsetHeight + 12}px` : "");
         // A second panel in the specimen's place is at least as tall as the specimen: it covers it.
         for (const panel of panels.slice(1)) give(panel, "--match", `${panels[0]!.offsetHeight}px`);
         let bottom = 0;
-        for (const layer of [text, ...panels]) {
+        for (const layer of all) {
           top.set(layer.id, layer.offsetTop);
           bottom = Math.max(bottom, layer.offsetTop + layer.offsetHeight + parseFloat(getComputedStyle(layer).marginBottom));
         }
@@ -138,7 +164,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
       const start: number[] = [];
       let at = 0;
       for (const length of pan) { start.push(at); at += length + change; }
-      const end = start[count - 1]! + pan[count - 1]!;
+      const end = start[stops.length - 1]! + pan[stops.length - 1]!;
       // The pin sticks while the track scrolls past it: the track is the scroll range and one window more.
       track.style.setProperty("--track", `${end + change}px`);
       return { stage, change, pan, start, end, top };
@@ -146,7 +172,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
   }
   const measured = () => lengths ??= measure();
 
-  /** Where the scroll position is, in a form that survives a resize: the section, how much of its pan is done (0 to 1), and how much of the change after it (null while it pans). */
+  /** Where the scroll position is, in a form that survives a resize: the stop, how much of its pan is done (0 to 1), and how much of the change after it (null while it pans). */
   let where = { index: 0, panned: 0, changed: null as number | null };
   /**
    * A jump in progress: the stage is changing between `low` and `high` on the clock (toward `high` when `forward`),
@@ -169,10 +195,10 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     }
     const { change, pan, start, end } = measured();
     const offset = clamp(scrollY - trackTop(), 0, end);
-    let index = count - 1;
+    let index = stops.length - 1;
     while (index > 0 && offset < start[index]!) index--;
     const within = offset - start[index]!, room = pan[index]!;
-    if (within <= room || index === count - 1) {
+    if (within <= room || index === stops.length - 1) {
       where = { index, panned: room ? Math.min(1, within / room) : 0, changed: null };
       return { from: index, to: null, t: 0, panFrom: Math.min(within, room), panTo: 0 };
     }
@@ -184,20 +210,26 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
   }
   /** How far the two sections on stage have panned, from the last `place`. */
   let pans = { from: 0, to: 0 };
-  /** In the deck, the section that reads as the current one: the one arriving from the middle of a change on. */
+  /** In the deck, the stop that reads as the current one: the one arriving from the middle of a change on. */
   let front = 0;
-  const current = () => view.deck ? front : flowIndex();
-  /** How far the current section has panned (0 in the flow's terms: its row's top is at the top of the window). */
-  const panned = () => view.deck ? (front === view.from ? pans.from : pans.to) : 0;
-  /** In the flow, the document offset of the top of a section's row: its text starts its top margin below that. */
-  function flowTop(index: number) {
-    const text = element(layers(index)[0]!);
-    return scrollY + text.getBoundingClientRect().top - parseFloat(getComputedStyle(text).marginTop);
+  /** In the flow, the stop whose part of the page the middle of the window is in. */
+  function flowStop() {
+    let index = 0;
+    for (let stop = 1; stop < stops.length; stop++) if (flowTop(stop) <= scrollY + innerHeight / 2) index = stop;
+    return index;
   }
-  /** The document offset at which a section starts: in the deck where it is at rest at its top, in the flow its row's top. The two layouts give a section the same length, so this plus a pan is the same place in both. */
+  const current = () => view.deck ? front : flowStop();
+  /** How far the current stop has panned (0 in the flow's terms: its top is at the top of the window). */
+  const panned = () => view.deck ? (front === view.from ? pans.from : pans.to) : 0;
+  /** In the flow, the document offset of the top of a stop: its first layer starts its top margin below that. */
+  function flowTop(index: number) {
+    const head = element(layers(index)[0]!);
+    return scrollY + head.getBoundingClientRect().top - parseFloat(getComputedStyle(head).marginTop);
+  }
+  /** The document offset at which a stop starts: in the deck where it is at rest at its top, in the flow its top. */
   const offset = (index: number) => view.deck ? trackTop() + measured().start[index]! : Math.max(0, Math.round(flowTop(index)));
   function go(index: number, smooth = false) {
-    const target = clamp(index, 0, count - 1), top = offset(target);
+    const target = clamp(index, 0, stops.length - 1), top = offset(target);
     // In the deck a smooth move is a jump: one change from the section on stage to the target, on the clock.
     if (smooth && view.deck && gpu() && target !== front) {
       const travelFrom = travelNow();
@@ -243,7 +275,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     rested = "";
     // In the flow nothing is enrolled, so there is nothing to release.
     if (!view.deck) return;
-    for (const index of [view.from, view.to]) if (index !== null) for (const id of layers(index)) {
+    for (const id of view.ids) {
       if (!staying.has(id)) { transform(id, { opacity: 0 }); continue; }
       try { handles?.get(id)?.cancel(); } catch { /* already ended */ }
       transform(id, demoHidden(id) ? { opacity: 0 } : {});
@@ -260,13 +292,19 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     const transition = reduced.matches ? fade : wanted ?? fade;
     return transition.needsRoom && !described.every(layer => layer.y >= 0 && layer.y + layer.height <= layer.stageHeight) ? slide : transition;
   }
-  /** Describes the change for the two sections now on stage (none at rest). */
+  /**
+   * The change that leads into a stop: into a section's first stop, the one of the boundary before that section; into
+   * its specimen's stop (one column), another of the deck's, chosen so that it differs from the two around it.
+   */
+  const changeInto = (index: number) => { const stop = stops[index]!; return transitions[stop.first ? stop.section - 1 : (stop.section + 4) % transitions.length]; };
+  /** Describes the change for the two stops now on stage (none at rest). */
   function prepare() {
     const { from, to } = view;
     if (!view.deck || to === null) { change = undefined; onTransition?.(null); return; }
-    const described = [...layers(from).map((id, part) => describe(id, true, part > 0, pans.from)), ...layers(to).map((id, part) => describe(id, false, part > 0, pans.to))];
-    // Two neighbours change as their boundary does; a jump over several sections uses the change that leads into the further one.
-    change = { transition: fitting(transitions[to - 1], described), layers: described, handles: new Map() };
+    const specimen = (id: string) => element(id).classList.contains("specimen");
+    const described = [...layers(from).map(id => describe(id, true, specimen(id), pans.from)), ...layers(to).map(id => describe(id, false, specimen(id), pans.to))];
+    // Two neighbours change as their boundary does; a jump over several stops uses the change that leads into the further one.
+    change = { transition: fitting(changeInto(to), described), layers: described, handles: new Map() };
     onTransition?.(change.transition.name);
   }
   /** The layers enrolled now, each with the call that ends its enrolment. */
@@ -277,10 +315,10 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
    * so a change starts in the frame its sections are on stage.
    */
   function show(next: View) {
-    if (next.deck === view.deck && next.from === view.from && next.to === view.to) return;
-    // The demonstration's section leaves its rest: a change part way through is settled, and its panels are the deck's again.
-    if (view.deck && view.to === null && view.from === demoIndex) { endDemo(); demoSettle(); }
-    const wanted = new Set(next.deck ? [next.from, next.to].flatMap(index => index === null ? [] : layers(index)) : []);
+    if (next.deck === view.deck && next.from === view.from && next.to === view.to && next.ids.join() === view.ids.join()) return;
+    // The demonstration's stop leaves its rest: a change part way through is settled, and its panels are the deck's again.
+    if (view.deck && view.to === null && view.ids.includes(demoPanels.first)) { endDemo(); demoSettle(); }
+    const wanted = new Set(next.ids);
     release(wanted);
     for (const [id, end] of enrolled) if (!wanted.has(id)) { end(); enrolled.delete(id); }
     view = next;
@@ -301,7 +339,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     lengths = undefined;
     if (!deck) { light.end(); try { endLight?.(); } catch { /* the runtime is gone */ } endLight = undefined; track.style.removeProperty("--track"); endDemo(); demoStore.set({ live: true }); }
     pans = { from: 0, to: 0 };
-    show(deck ? { deck, from: index, to: null } : flow);
+    show(deck ? staged(index, null) : flow);
     if (deck && !endLight) { try { endLight = controller.enroll(element(LIGHT_ID), { id: LIGHT_ID, decorative: true, origin: "top-left" }); } catch (error) { errors.push(`enroll ${LIGHT_ID}: ${String(error)}`); } }
     front = index;
     scrollTo({ top: offset(index) + (deck ? clamp(pan, 0, measured().pan[index]!) : Math.max(0, pan)), behavior: "instant" });
@@ -345,7 +383,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     return pending;
   }
   /** The live demonstration: its section, and the chains its two panels carry while one is turning into the other. */
-  const demoIndex = ids.indexOf(demoPanels.section), demoHandles = new Map<string, EffectHandle>();
+  const demoHandles = new Map<string, EffectHandle>();
   /** What the demonstration last drew: nothing is written while that has not changed. */
   let demoDrawn = "", demoKind = -1;
   function endDemo() {
@@ -419,15 +457,16 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     if (view.deck) {
       const { from, to, t, panFrom, panTo } = place();
       pans = { from: panFrom, to: panTo };
-      show({ deck: true, from, to });
+      show(staged(from, to));
       front = to !== null && t >= 0.5 ? to : from;
       // A jump runs on the clock: it needs every frame until it has arrived.
       if (pose(t) || jump) schedule();
-      demoStore.set({ live: to === null && from === demoIndex });
+      const demo = layers(from).includes(demoPanels.first);
+      demoStore.set({ live: to === null && demo });
       if (to === null) {
         // At rest the section is where its pan puts it: moved by its matrix, on whole pixels, as the flow scrolls.
         // The demonstration's two panels are posed by the demonstration.
-        const pan = Math.round(panFrom), key = `${from}:${pan}`, demo = from === demoIndex;
+        const pan = Math.round(panFrom), key = `${from}:${pan}`;
         if (key !== rested && gpu()) {
           rested = key; demoDrawn = "";
           for (const id of layers(from)) if (!demo || (id !== demoPanels.first && id !== demoPanels.second)) transform(id, pan ? { y: -pan } : {});
@@ -438,8 +477,25 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
       // With reduced motion an effect draws nothing, so the light is left off.
       if (gpu() && endLight && !reduced.matches && light.frame()) schedule();
     }
-    const now = current();
+    const now = view.deck ? stops[front]!.section : flowIndex();
     if (now !== reported) onChange(reported = now);
+  }
+  /**
+   * The window crossed between one column and two: the stops are others. In the deck the stage is cleared and set
+   * again with the first stop of the section it showed.
+   */
+  function restack() {
+    if (stacked.matches === builtStacked) return;
+    const section = stops[Math.min(view.deck ? where.index : 0, stops.length - 1)]!.section, deck = view.deck;
+    if (deck) { endJump(); show(flow); }
+    stops = buildStops(); builtStacked = stacked.matches;
+    lengths = undefined; pans = { from: 0, to: 0 };
+    if (!deck) return;
+    const index = firstStop(section);
+    show(staged(index, null));
+    front = index;
+    where = { index, panned: 0, changed: null };
+    scrollTo({ top: offset(index), behavior: "instant" });
   }
   let frame = 0;
   function schedule() { frame ||= requestAnimationFrame(() => { frame = 0; update(); }); }
@@ -448,7 +504,8 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     if (view.deck || acting) return view.deck;
     acting = true;
     try {
-      const before = scrollY, index = flowIndex(), pan = before - flowTop(index);
+      restack();
+      const before = scrollY, index = flowStop(), pan = before - flowTop(index);
       layout(true, index, pan);
       took((await controller.enable()).mode);
       // Refused: the flow again, exactly where it was.
@@ -483,6 +540,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
   addEventListener("resize", () => {
     // In a window of another size the sections have other lengths: the page stays at the same place in the deck,
     // panned as far through its section, or as far through the change after it.
+    restack();
     if (view.deck) {
       const kept = where;
       lengths = undefined;
@@ -504,19 +562,19 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     if (!section) return;
     event.preventDefault();
     history.pushState(null, "", link.hash);
-    go(Number(section.dataset.section), true);
+    go(stopOf(section), true);
   });
   // Back and forward between links followed in the deck.
   addEventListener("popstate", () => {
     const section = document.getElementById(location.hash.slice(1))?.closest<HTMLElement>("[data-section]");
-    if (view.deck && section) go(Number(section.dataset.section), true);
+    if (view.deck && section) go(stopOf(section), true);
   });
-  // Focus moving into a parked section (Tab, a screen reader) brings that section on stage, panned so that what took
-  // the focus is on the stage too.
+  // Focus moving into a parked layer (Tab, a screen reader) brings its stop on stage, panned so that what took the
+  // focus is on the stage too.
   document.addEventListener("focusin", event => {
-    const target = event.target as HTMLElement, layer = target.closest?.<HTMLElement>("[data-section]");
-    const index = Number(layer?.dataset.section ?? NaN);
-    if (!view.deck || !layer || !Number.isInteger(index) || index === view.from || index === view.to) return;
+    const target = event.target as HTMLElement, layer = target.closest?.<HTMLElement>(".app-container > [data-section]");
+    if (!view.deck || !layer || view.ids.includes(layer.id)) return;
+    const index = stopOf(layer);
     const { stage, pan, top } = measured();
     const inside = target.getBoundingClientRect().top - layer.getBoundingClientRect().top + (top.get(layer.id) ?? 0);
     endJump();
@@ -524,8 +582,8 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     schedule();
   });
   const paging = () => reduced.matches ? "instant" as const : "smooth" as const;
-  // Paging keys page through a section that is taller than the stage, and from its end (or start) jump to the next
-  // section (or the one before). A control that uses the key itself keeps it.
+  // Paging keys page through a stop that is taller than the stage, and from its end (or start) jump to the next stop
+  // (or the one before). A control that uses the key itself keeps it.
   addEventListener("keydown", event => {
     if (!view.deck || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
     if ((event.target as Element).closest?.("input, select, textarea, button, a, summary, [contenteditable], [tabindex]")) return;
@@ -535,11 +593,11 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
       const { stage, pan } = measured(), left = forward ? pan[now]! - pans.from : pans.from;
       if (left > 8) { event.preventDefault(); scrollBy({ top: (forward ? 1 : -1) * Math.min(stage * 0.85, left), behavior: paging() }); return; }
     }
-    const next = forward ? now + 1 : back ? now - 1 : event.key === "Home" ? 0 : event.key === "End" ? count - 1 : null;
+    const next = forward ? now + 1 : back ? now - 1 : event.key === "Home" ? 0 : event.key === "End" ? stops.length - 1 : null;
     if (next === null) return;
     event.preventDefault();
-    // At the last section the page scrolls on to the footer as usual.
-    if (next >= count) scrollTo({ top: document.documentElement.scrollHeight, behavior: paging() });
+    // At the last stop the page scrolls on to the footer as usual.
+    if (next >= stops.length) scrollTo({ top: document.documentElement.scrollHeight, behavior: paging() });
     else go(next, true);
   });
 
@@ -551,7 +609,9 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     await frames(2);
   }
   schedule();
-  return { start, stop, go, idle, warmed, modeChanged, errors,
-    place: () => view.deck ? place() : { from: flowIndex(), to: null, t: 0, panFrom: 0, panTo: 0 },
+  return { start, stop, idle, warmed, modeChanged, errors,
+    go: (section, smooth) => go(firstStop(section), smooth), goStop: index => go(index),
+    stops: () => stops.map(stop => ({ section: stop.section, ids: [...stop.ids] })),
+    place: () => view.deck ? place() : { from: flowStop(), to: null, t: 0, panFrom: 0, panTo: 0 },
     lengths: () => view.deck ? { pans: [...measured().pan], starts: [...measured().start], change: measured().change } : null };
 }

@@ -3,7 +3,7 @@
  * one decorative layer with a custom effect. The layer is an empty element an eighth of the stage's size, drawn eight
  * times larger, so its texture is a few thousand pixels however large the stage is: the light is computed by the
  * shader, not captured. With the pointer off the stage the layer draws nothing, so the stage is then exactly what
- * ordinary DOM shows (the static background is the page's own, in both presentations: `next.css`).
+ * ordinary DOM shows (the static background is the page's own, in both presentations: `home.css`).
  */
 import { defineEffect, type CanvasController, type EffectDescriptor, type EffectHandle } from "@underglass/react";
 

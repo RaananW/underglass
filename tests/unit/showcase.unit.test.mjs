@@ -31,17 +31,18 @@ test("showcase paths, old hash links and catalog filtering remain local and pred
     }
   }
   assert.equal(route("#/missing"), "layers");
-  for (const path of ["/", "/examples/missing", "/examples/motion/extra", "/underglass/examples/motion", "/other"]) assert.equal(exampleFromPath(path, "/"), undefined);
+  for (const path of ["/", "/examples", "/examples/", "/examples/missing", "/examples/motion/extra", "/underglass/examples/motion", "/other"]) assert.equal(exampleFromPath(path, "/"), undefined);
   assert.equal(exampleFromPath("/examples/motion", "/underglass/"), undefined);
   assert.deepEqual(searchExamples("layer", "Motion").map(example => example.id), ["motion"]);
   assert.equal(searchExamples("unfindable", "All").length, 0);
 });
 test("every page has its own title, description, canonical URL and structured data", () => {
-  const pages = [undefined, ...examples.map(example => example.id)];
+  // The home page, the examples' index (no id) and every example's page.
+  const pages = ["home", undefined, ...examples.map(example => example.id)];
   const titles = new Set(pages.map(id => pageMeta(id).title));
   assert.equal(titles.size, pages.length);
   for (const id of pages) {
-    const { title, description } = pageMeta(id), url = `${site.origin}/${id ? `examples/${id}` : ""}`;
+    const { title, description } = pageMeta(id), url = `${site.origin}/${id === "home" ? "" : id ? `examples/${id}` : "examples"}`;
     assert.ok(title.length <= 70 && description.length <= 200, `${id}: title or description too long`);
     const head = headTags(id, defaultImage);
     assert.equal((head.match(/<title>/g) ?? []).length, 1);
@@ -52,7 +53,8 @@ test("every page has its own title, description, canonical URL and structured da
     const json = /<script type="application\/ld\+json">(.*)<\/script>/.exec(head)[1];
     assert.ok(!json.includes("<"));
     assert.deepEqual(JSON.parse(json), structuredData(id));
-    // Without JavaScript the page still links to every example.
+    // The home page's content is in its HTML (prerendered). Without JavaScript a page of the studio still links to every example.
+    if (id === "home") continue;
     const body = noscriptBody(id, "/underglass/");
     for (const example of examples) assert.ok(body.includes(`href="/underglass/examples/${example.id}"`));
   }
@@ -60,7 +62,10 @@ test("every page has its own title, description, canonical URL and structured da
   assert.ok(headTags("compare", defaultImage).includes("GPU or CSS?"));
   assert.ok(!/content="[^"]*[<>][^"]*"/.test(headTags(undefined, defaultImage)));
   const urls = [...sitemap().matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => match[1]);
-  assert.deepEqual(urls, [`${site.origin}/`, ...examples.map(example => `${site.origin}/examples/${example.id}`)]);
+  assert.deepEqual(urls, [`${site.origin}/`, `${site.origin}/examples`, ...examples.map(example => `${site.origin}/examples/${example.id}`)]);
+  // The home page is the software, the studio's pages are pages of the site under "Examples".
+  assert.equal(structuredData("home")["@graph"][1]["@type"], "SoftwareSourceCode");
+  assert.deepEqual(structuredData("motion")["@graph"][1].itemListElement.map(item => item.name), ["Underglass", "Examples", "Card deck"]);
   assert.equal(robots(), `User-agent: *\nAllow: /\n\nSitemap: ${site.origin}/sitemap.xml\n`);
   assert.match(notFoundPage("/"), /<meta name="robots" content="noindex">/);
 });
@@ -87,7 +92,7 @@ test("public output guard fails before an unexpected artifact can be uploaded", 
     await writeFile(join(root, "assets/index-abc.css"), "body{}");
     // The pages and site files `seo.ts` writes, and the icons and social card from `public/`.
     await mkdir(join(root, "examples"));
-    for (const name of ["404.html", "next.html", "robots.txt", "sitemap.xml", "favicon.svg", "examples/motion.html"]) await writeFile(join(root, name), "text");
+    for (const name of ["404.html", "examples.html", "robots.txt", "sitemap.xml", "favicon.svg", "examples/index.html", "examples/motion.html"]) await writeFile(join(root, name), "text");
     await writeFile(join(root, "og.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
     await writeFile(join(root, "apple-touch-icon.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
     // Runs the checker as a child process on the fake build output and returns its status and stderr.

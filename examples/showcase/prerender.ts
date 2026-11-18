@@ -1,7 +1,7 @@
 /**
  * Vite plugin that renders a page's React tree to HTML when the showcase is built or served, so the page's content is
  * in the HTML file itself. A page marks the place with `<!-- prerender:/src/x/prerender.tsx -->`; the named module
- * exports `prerender(base: string): string`, and its result replaces the marker. Used by `next.html`.
+ * exports `prerender(base: string): string`, and its result replaces the marker. Used by `index.html`, the home page.
  *
  * The module is loaded through Vite's SSR loader in Node, with no DOM. The dev server loads it itself; a build has no
  * dev server, so one is started for the load and closed again.

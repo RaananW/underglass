@@ -321,14 +321,14 @@ export function HeroScene() {
       <span className="pane-label">ripple · chromatic · WGSL sheen</span>
     </div>
     <div ref={codeRef} id="hero-pane-code" className="hero-pane hero-pane-code" aria-hidden="true" inert style={{ pointerEvents: "none" }}>
-      <code>&lt;Surface id="hero-copy"&gt;</code><code className="dim">  {"<h1>Real React controls…</h1>"}</code><code>&lt;/Surface&gt;</code>
+      <code>&lt;Surface id="hero-copy"&gt;</code><code className="dim">  {"<h1>Live examples…</h1>"}</code><code>&lt;/Surface&gt;</code>
     </div>
     <div ref={slabRef} id="hero-card-glass" className="hero-card-glass" aria-hidden="true" inert style={{ pointerEvents: "none" }} />
     <div ref={copyRef} id="hero-copy" className="hero-copy">
       <p className="hero-badge"><span className="dot" aria-hidden="true" />HTML-in-Canvas · WebGPU · React</p>
-      <h1 id="hero-title">Real React controls.<br /><span className="hero-gradient">Painted by the GPU.</span></h1>
-      <p className="hero-lede">Underglass draws your <em>original</em> React DOM into one shared WebGPU compositor through the browser's
-        HTML-in-Canvas API. This header is one: the light follows your pointer, the colour turns as you scroll, and every link here is the real element.</p>
+      <h1 id="hero-title">Live examples.<br /><span className="hero-gradient">Real controls under glass.</span></h1>
+      <p className="hero-lede">Every example here is its <em>original</em> React DOM, drawn into one shared WebGPU compositor through the browser's
+        HTML-in-Canvas API. This header is one too: the light follows your pointer, the colour turns as you scroll, and every link here is the real element.</p>
       <div className="hero-cta"><a className="cta primary" href="#examples">Explore the examples</a><a className="cta ghost" href="#how-it-works">How it works</a></div>
       <ul className="hero-notes" aria-label="Highlights"><li>Original React state</li><li>Native inputs and hits</li><li>One shared compositor</li><li>Ordinary DOM everywhere else</li></ul>
     </div>

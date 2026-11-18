@@ -41,29 +41,34 @@ function Specimen({ index, caption, children }: { index: number; caption: ReactN
   return <><figcaption><span>FIG. {number(index)}</span>{caption}</figcaption><div className="specimen-body">{children}</div></>;
 }
 /**
- * One section: its text and, with `specimen`, its specimen as a sibling. `--row` places both in the section's row of
- * the flow. While the section is on the deck's stage the driver enrols them as layers (`deck.ts`; the layer ids are the
- * element ids); in the deck, a section that is not on stage is parked.
+ * One section: its text and, with `specimen`, its specimen as a sibling. `--row` places both in the section's rows of
+ * the flow. While they are on the deck's stage the driver enrols them as layers (`deck.ts`; the layer ids are the
+ * element ids); in the deck, a part that is not on stage is parked. What belongs to the specimen is marked
+ * `data-part="figure"`: in one column the deck shows a section as two stops, its text and then these.
  *
- * `second` is another panel in the specimen's place, a layer of its own (the live demonstration's). In ordinary DOM one
- * of the two is `unseen`; on the GPU both are drawn and the driver hides one by its matrix.
+ * - `second` is another panel in the specimen's place, a layer of its own (the live demonstration's). In ordinary DOM
+ *   one of the two is `unseen`; on the GPU both are drawn and the driver hides one by its matrix.
+ * - `bar` lies above the specimen in one column only (the demonstration's controls, which are in the text beside the
+ *   specimen where there are two columns).
+ * - `narrow` makes the specimen a layer in one column only (the cover's, which is inside the cover's own layer where
+ *   there are two).
  */
-function Slide({ id, label, children, specimen, figure, second, unseen }: { id: SectionId; label: string; children: ReactNode; specimen?: ReactNode; figure?: ReactNode;
-  second?: { caption: ReactNode; content: ReactNode }; unseen?: "first" | "second" }) {
+function Slide({ id, label, children, specimen, figure, second, unseen, bar, narrow }: { id: SectionId; label: string; children: ReactNode; specimen?: ReactNode; figure?: ReactNode;
+  second?: { caption: ReactNode; content: ReactNode }; unseen?: "first" | "second"; bar?: ReactNode; narrow?: boolean }) {
   const index = sections.findIndex(section => section.id === id);
   const view = useSyncExternalStore(viewStore.subscribe, viewStore.get, () => flow);
-  const live = view.deck && (index === view.from || index === view.to);
-  const parked = view.deck && !live ? " parked" : "";
+  const parked = (element: string) => view.deck && !view.ids.includes(element) ? " parked" : "";
   const row = { "--row": index + 1 } as CSSProperties;
   return <>
-    <section className={`slide-text slide-${id}${parked}`} id={id} data-section={index} aria-labelledby={`${id}-title`} style={row}>
+    <section className={`slide-text slide-${id}${parked(id)}`} id={id} data-section={index} aria-labelledby={`${id}-title`} style={row}>
       <p className="label"><span className="label-number">{number(index)}</span>{label}</p>
       {children}
     </section>
-    {specimen !== undefined && <figure className={`specimen${parked}${unseen === "first" ? " unseen" : ""}`} id={figureId(id)} data-section={index} style={row}>
+    {bar !== undefined && <div className={`demo-bar narrow-only${parked(`${id}-controls`)}`} id={`${id}-controls`} data-section={index} data-part="figure" style={row}>{bar}</div>}
+    {specimen !== undefined && <figure className={`specimen${narrow ? " narrow-only" : ""}${parked(figureId(id))}${unseen === "first" ? " unseen" : ""}`} id={figureId(id)} data-section={index} data-part="figure" style={row}>
       <Specimen index={index} caption={figure ?? ""}>{specimen}</Specimen>
     </figure>}
-    {second && <figure className={`specimen second${parked}${unseen === "second" ? " unseen" : ""}`} id={`${id}-second`} data-section={index} style={row}>
+    {second && <figure className={`specimen second${parked(`${id}-second`)}${unseen === "second" ? " unseen" : ""}`} id={`${id}-second`} data-section={index} data-part="figure" style={row}>
       <Specimen index={index} caption={second.caption}>{second.content}</Specimen>
     </figure>}
   </>;
@@ -99,9 +104,12 @@ function useDemo<T>(select: (state: DemoState) => T) {
 }
 /**
  * The demonstration's controls: which change, a slider that scrubs it, and a button that runs it on the clock. They are
- * in the section's text, a layer of its own, so they go on working while the panels carry an effect.
+ * in the section's text, a layer of its own, so they go on working while the panels carry an effect. In one column the
+ * text and the panels are two stops of the deck, so there the controls are a layer above the panels (`compact`, with
+ * ids of its own), and the ones in the text are not shown.
  */
-function DemoControls() {
+function DemoControls({ compact = false }: { compact?: boolean }) {
+  const suffix = compact ? "-bar" : "";
   const kind = useDemo(state => state.kind), gpu = useDemo(state => state.gpu), second = useDemo(state => state.t >= 0.5);
   const range = useRef<HTMLInputElement>(null);
   // The slider follows a change that runs on the clock, without a render per frame.
@@ -109,13 +117,13 @@ function DemoControls() {
     const value = String(Math.round(demoStore.get().t * 100));
     if (range.current && range.current.value !== value) range.current.value = value;
   }), []);
-  return <div className="demo" role="group" aria-labelledby="demo-title">
-    <p className="demo-title" id="demo-title">Try it on the panel</p>
+  return <div className="demo" role="group" aria-labelledby={`demo-title${suffix}`}>
+    <p className="demo-title" id={`demo-title${suffix}`}>Try it on the panel</p>
     <div className="demo-kinds">{demoKinds.map((name, index) =>
       <button key={name} type="button" aria-pressed={kind === index} disabled={!gpu} onClick={() => demoStore.set({ kind: index })}>{name}</button>)}</div>
     <div className="demo-run">
-      <button type="button" id="demo-play" onClick={demoPlay}>{second ? "Play back" : "Play"}</button>
-      <label>Scrub<input ref={range} id="demo-scrub" type="range" min={0} max={100} defaultValue={0} onChange={event => demoScrub(Number(event.currentTarget.value) / 100)} /></label>
+      <button type="button" id={`demo-play${suffix}`} onClick={demoPlay}>{second ? "Play back" : "Play"}</button>
+      <label>Scrub<input ref={range} id={`demo-scrub${suffix}`} type="range" min={0} max={100} defaultValue={0} onChange={event => demoScrub(Number(event.currentTarget.value) / 100)} /></label>
     </div>
     <p className="demo-note">{gpu ? "Both panels are live layers. Their clocks keep counting while one turns into the other, forwards or backwards, and the change repaints neither: it writes matrices and shader parameters."
       : "In ordinary DOM the panels swap at the middle. With GPU presentation the change you pick runs between them, and both stay live."}</p>
@@ -129,7 +137,7 @@ function Laps() {
 /** The "Transitions" section, with the live demonstration: its specimen is the first panel, and a second lies in the same place. */
 function TransitionsSlide() {
   const gpu = useDemo(state => state.gpu), second = useDemo(state => state.t >= 0.5);
-  return <Slide id="transitions" label="Page transitions" unseen={gpu ? undefined : second ? "first" : "second"}
+  return <Slide id="transitions" label="Page transitions" unseen={gpu ? undefined : second ? "first" : "second"} bar={<DemoControls compact />}
     figure={<>A snapshot against the live page<b className="clock" data-demo-clock>00:00.0</b></>} specimen={
       <table className="compare">
         <thead><tr><th scope="col"><span className="visually-hidden">Question</span></th><th scope="col">View Transitions</th><th scope="col">Underglass</th></tr></thead>
@@ -153,6 +161,12 @@ function TransitionsSlide() {
 }
 
 const Mark = () => <span className="mark" aria-hidden="true"><i /><i /><i /></span>;
+/** The cover's specimen: what Underglass does, in three steps. */
+const Steps = () => <ol className="stack">
+  <li><span>01</span><strong>React renders real DOM</strong><p>Ordinary inputs, buttons and text, with their state in React.</p></li>
+  <li><span>02</span><strong>The browser paints it into a canvas</strong><p>HTML-in-Canvas captures each layer as a texture.</p></li>
+  <li><span>03</span><strong>One GPU pass composes it</strong><p>Transforms, motion and your shaders on top.</p></li>
+</ol>;
 
 /**
  * The bar at the top: the brand, the site's links and the presentation readout. The readout says how the stage is
@@ -200,8 +214,9 @@ export function Stage({ base }: { base: string }) {
     <div id="deck-light" className="light" aria-hidden="true" inert />
     {/* Nothing to see: the deck compiles its changes' shaders on this layer before they are first used (`deck.ts`). */}
     <div id="deck-warm" className="warm" aria-hidden="true" inert />
-    {/* The cover is one layer: the headline runs across the page, with the text and the specimen under it. */}
-    <Slide id="cover" label="A GPU-first React framework">
+    {/* The cover is one layer where there are two columns: the headline runs across the page, with the text and the
+        specimen under it. In one column that specimen is not shown and the same one follows as a layer of its own. */}
+    <Slide id="cover" label="A GPU-first React framework" narrow figure="One tree, three steps" specimen={<Steps />}>
       <h1 id="cover-title">Real React controls.<br /><span className="glass">Painted by the GPU<i>.</i></span></h1>
       <div className="cover-grid">
       <div className="cover-body">
@@ -213,13 +228,7 @@ export function Stage({ base }: { base: string }) {
         <p className="chip"><i aria-hidden="true" />GPU in Chrome and Edge 157 or later. Ordinary DOM everywhere else.</p>
       </div>
       <figure className="specimen">
-        <Specimen index={0} caption="One tree, three steps">
-          <ol className="stack">
-            <li><span>01</span><strong>React renders real DOM</strong><p>Ordinary inputs, buttons and text, with their state in React.</p></li>
-            <li><span>02</span><strong>The browser paints it into a canvas</strong><p>HTML-in-Canvas captures each layer as a texture.</p></li>
-            <li><span>03</span><strong>One GPU pass composes it</strong><p>Transforms, motion and your shaders on top.</p></li>
-          </ol>
-        </Specimen>
+        <Specimen index={0} caption="One tree, three steps"><Steps /></Specimen>
       </figure>
       </div>
     </Slide>

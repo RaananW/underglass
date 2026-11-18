@@ -4,13 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- seo:head -->
-    <meta name="theme-color" content="#0d0b1a">
+    <meta name="theme-color" content="#07080a">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <!-- Before the first frame: marks a browser that has the APIs GPU presentation needs (the same test as
+         `detectSupport` in src/support.ts), so the stylesheet can draw the stage's text as the GPU will. -->
+    <!-- The site's first URLs named an example in the hash of the home page (#/motion): they go to the example's page. -->
+    <script>if (/^#\/[\w-]+$/.test(location.hash)) location.replace("%BASE_URL%examples/" + location.hash.slice(2));</script>
+    <script>try { var c = HTMLCanvasElement.prototype; if ("content" in c && typeof c.requestPaint === "function" && typeof c.updateElementGeometry === "function" && "gpu" in navigator) document.documentElement.classList.add("can-gpu"); } catch (e) {}</script>
   </head>
   <body>
-    <div id="app"></div>
-    <!-- seo:body -->
-    <script type="module" src="/src/main.tsx"></script>
+    <div id="app"><!-- prerender:/src/home/prerender.tsx --></div>
+    <script type="module" src="/src/home/main.ts"></script>
   </body>
 </html>

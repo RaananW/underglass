@@ -150,9 +150,9 @@ export const examples = [
 /** The id of one catalog example, such as `"layers"` or `"pond"`. */
 export type ExampleId = typeof examples[number]["id"];
 /**
- * The home page's scene (`hero.tsx`): the stage at the top of the home page, where the headline and its links are
- * the original React elements on a GPU-presented layer, under glass that follows the pointer and changes colour as
- * the page scrolls. Not a catalog example, so the catalog, search and the sitemap leave it out.
+ * The scene of the examples' index page (`hero.tsx`): the stage at the top of `/examples`, where the headline and its
+ * links are the original React elements on a GPU-presented layer, under glass that follows the pointer and changes
+ * colour as the page scrolls. Not a catalog example, so the catalog, search and the sitemap's example list leave it out.
  */
 export const hero = {
   id: "hero", number: "00", title: "Underglass",
@@ -169,7 +169,7 @@ export function route(hash: string): ExampleId {
 export function examplePath(id: ExampleId) { return `examples/${id}`; }
 /**
  * Maps a pathname under `base` (`/underglass/examples/motion`, with an optional `.html` or trailing
- * slash) to its example id. The home page, other paths and unknown ids give `undefined`.
+ * slash) to its example id. The examples' index (`examples`), other paths and unknown ids give `undefined`.
  */
 export function exampleFromPath(pathname: string, base: string): ExampleId | undefined {
   if (!pathname.startsWith(base)) return undefined;
@@ -198,9 +198,16 @@ export const previews: Partial<Record<ExampleId, string>> = {
   layers: "postcard-studio", motion: "card-deck", effects: "shader-lab", presence: "notification-stack", pond: "webcam-pond",
 };
 
-/** The title, description and canonical path (relative to the site root) of the home page or an example page. */
-export function pageMeta(id?: ExampleId) {
-  if (!id) return { title: site.title, description: site.description, path: "" };
+/** The path of the examples' index page, relative to the site base: the example studio with its overview scene and the catalog. */
+export const examplesPath = "examples";
+/**
+ * The title, description and canonical path (relative to the site root) of a page: the home page (`"home"`,
+ * `src/home`), an example's page, or without an id the examples' index.
+ */
+export function pageMeta(id?: ExampleId | "home") {
+  if (id === "home") return { title: site.title, description: site.description, path: "" };
+  if (!id) return { title: "Live examples | Underglass", path: examplesPath,
+    description: `${examples.length} live examples of Underglass: real React controls drawn by one WebGPU compositor, each with a switch between GPU presentation and ordinary DOM.` };
   const example = examples.find(entry => entry.id === id)!;
   return { title: `${example.title} | Underglass examples`, description: example.summary, path: examplePath(id) };
 }

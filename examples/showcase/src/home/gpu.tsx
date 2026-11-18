@@ -25,8 +25,8 @@ let status: CanvasStatus | undefined;
 let driver: Deck | undefined;
 const controller = mountCanvasApp({
   ...createCanvasHosts($("stage")), hydrate: true,
-  // Four layers at most are on stage (two sections of two), each as tall as its section: the budget covers them on a
-  // phone's dense display, where a section is several screens of pixels.
+  // A few layers at most are on stage (two stops' worth), each as tall as its content: the budget covers them on a
+  // phone's dense display.
   budgets: { layers: 16, pixels: 16_000_000 },
   onStatusChange(value) {
     const lost = status?.mode === "gpu" && value.mode === "dom" && !/^Explicit disable/.test(value.reason);
@@ -106,7 +106,8 @@ addEventListener("resize", () => {
 });
 if (!preference.off) void start(); else render();
 
-declare global { interface Window { nextDeck: unknown } }
+declare global { interface Window { homeDeck: unknown } }
 // For the site's checks (`scripts/showcase-validation.mjs`).
-window.nextDeck = { state: () => controller.state(), place: deck.place, go: (index: number) => { deck.go(index); return deck.idle(); }, idle: deck.idle,
+window.homeDeck = { state: () => controller.state(), place: deck.place, go: (index: number) => { deck.go(index); return deck.idle(); }, idle: deck.idle,
+  goStop: (index: number) => { deck.goStop(index); return deck.idle(); }, stops: deck.stops,
   start: () => deck.start().then(() => deck.idle()), stop: () => deck.stop().then(() => deck.idle()), lengths: deck.lengths, warmed: deck.warmed, errors: deck.errors };

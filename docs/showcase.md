@@ -1,20 +1,28 @@
 # Example showcase, underglass.dev and GitHub Pages
 
-The private `examples/showcase` npm workspace is a React SPA using the public
-Underglass package. Its catalog opens ten live examples in the same app. The
-engineering playground remains separate; raw reports, probes, test evidence and
+The private `examples/showcase` npm workspace is the public site, using the public
+Underglass package. It is two documents:
+
+- **The home page** (`index.html`, `src/home`): a page of eight sections which, with
+  GPU presentation, is a deck with a change between each two. See
+  [The home page](#the-home-page).
+- **The example studio** (`examples.html`, `src/main.tsx`): a React SPA whose catalog
+  opens ten live examples in the same app. It is served at `/examples` (its overview
+  scene and the catalog) and at `/examples/<id>` for each example.
+
+The engineering playground remains separate; raw reports, probes, test evidence and
 private fixtures are not served.
 
-The live stage is the top of every page, right under the site header, on the dark
-band. On the home page it shows the hero scene (below); on an example's page it
-shows that example, with its title (the page's `h1`), the picker, the mode, the
+In the studio the live stage is the top of every page, right under the site header,
+on the dark band. On the examples' index it shows the overview scene (below); on an
+example's page it shows that example, with its title (the page's `h1`), the picker, the mode, the
 controls, the status line and the **Why the GPU here** panel around it. "How it
 works", the catalog and "About" follow.
 
-## The home page's scene
+## The studio's overview scene
 
-`src/hero.tsx` is the stage on the home page, and a scene rather than a catalog
-example (`hero` in `src/catalog.ts`, number 00 in the picker). Its layers, all
+`src/hero.tsx` is the stage on the examples' index (`/examples`), and a scene rather
+than a catalog example (`hero` in `src/catalog.ts`, number 00 in the picker). Its layers, all
 enrolled with `useSurfaceRef` and laid out by CSS on a fluid stage that is as tall as
 its content (as the Instrument gallery's is):
 
@@ -70,7 +78,7 @@ or sent anywhere, and the site has no backend. **Stop camera**, leaving the exam
 closing the tab stops every track. The panel says this before the camera is started.
 
 The examples share a 1040x700 stage, except the Instrument gallery, whose stage is
-fluid like the home page's scene. A decorative backdrop and the decorative
+fluid like the overview scene. A decorative backdrop and the decorative
 `showcase-art` layer persist across examples (only their layout/content change).
 The art layer always carries the aurora definition, at identity strength unless
 the shader lab asks for more, because custom WGSL is compiled per layer during
@@ -97,14 +105,12 @@ The default base is `/underglass/`. Override `CANVAS_SHOWCASE_BASE` with an abso
 directory path ending in `/` for a different project/domain (in Git Bash on Windows, also set
 `MSYS2_ENV_CONV_EXCL=CANVAS_SHOWCASE_BASE`, or Git Bash turns `/` into a Windows path).
 
-## The preview home page (`/next`)
+## The home page
 
-`next.html` is the next home page, built beside the current one until it replaces it.
-It is `noindex`, its canonical URL is the home page, and it is not in the sitemap.
-`src/next/page.tsx` has eight sections, each making one claim about the framework (the
+`index.html` is the site's home page. `src/home/page.tsx` has eight sections, each making one claim about the framework (the
 DOM stays the DOM, page transitions, motion, shaders, components, ordinary DOM
 everywhere, getting started) beside a "specimen" panel of ordinary HTML: real controls,
-tables and code. `src/next/next.css` is its whole stylesheet (near-black ground,
+tables and code. `src/home/home.css` is its whole stylesheet (near-black ground,
 engraved type, hairline rules and one indicator colour); the page loads none of the
 gallery's CSS or JavaScript.
 
@@ -121,7 +127,7 @@ The header, the side scale and the footer are static markup outside the root.
   layer. Sections start at the same height in their rows, as slides do.
 - **The deck** is the page with GPU presentation, at every window size, a phone's
   included. `html.deck` makes the stage stick to the window, with every section in the
-  one grid cell, while a track scrolls past, and `src/next/deck.ts` reads the scroll
+  one grid cell, while a track scrolls past, and `src/home/deck.ts` reads the scroll
   position. The deck is the flow with the crossing from one section to the next
   replaced by a change:
   - A section taller than the stage **pans**. While the scroll position is inside the
@@ -135,20 +141,37 @@ The header, the side scale and the footer are static markup outside the root.
   - The track is as long as the sections' pans and the changes together, which is the
     length of the flow. The driver measures it (parked sections are laid out for the
     measurement, with nothing painted meanwhile) and sets it as `--track`.
-  - In one column (a window 920 px wide or less) the specimen is under its text. In
-    the flow that is the next grid row. In the deck, with every section in one cell,
-    the driver tells each specimen the height of the text above it (`--above`).
+- **In one column** (a window 920 px wide or less: a phone) the specimen is under its
+  text in the flow, and a section is too tall for the screen. So there the deck works
+  in **stops**: a section is two, its text and then its specimen, each a page that
+  starts near the top of the stage and fits a phone's screen (checked at 384 by
+  700). A change then always lands on a whole page, with nothing to scroll after it.
+  - The change between a section's two pages is another of the deck's, chosen so that
+    it differs from the two around it.
+  - The cover is one layer where there are two columns, with its specimen inside it.
+    In one column that specimen is not shown and the same one follows as a layer of
+    its own (`cover-figure`), so the cover is two pages too.
+  - The demonstration's controls are in the section's text. In one column the text and
+    the panels are different pages, so the controls are there a second time, as a
+    layer above the panels (`transitions-controls`, with ids of their own), and the
+    ones in the text are not shown. Each panel is told the controls' height
+    (`--above`), because in the deck every layer lies in one grid cell.
+  - An element the layout does not show (`display: none`) is no layer. The driver
+    builds its stops from what is shown, and builds them again when the window
+    crosses between one column and two.
+  - A page still taller than the stage (a very small phone, large text) pans, as
+    above.
 
 ### The background and the light
 
-The page's background (`.backdrop` in `next.css`) is ordinary DOM, fixed in the window
+The page's background (`.backdrop` in `home.css`) is ordinary DOM, fixed in the window
 behind everything, in both presentations: the output canvas is transparent where no
 layer is. It has two pools of light, a faint grid that fades toward the text, and two
 lens rings that travel down the right side as the page scrolls (`flow.ts` sets
 `--travel` on the backdrop itself, so nothing else restyles). During a jump the rings
 travel with the change.
 
-In the deck a light follows the pointer under the sections (`src/next/light.ts`): one
+In the deck a light follows the pointer under the sections (`src/home/light.ts`): one
 decorative layer with a custom effect. Its element is empty and an eighth of the
 stage's size, drawn eight times larger, so its texture is a few thousand pixels
 whatever the stage's size: the shader computes the light. With the pointer off the
@@ -163,7 +186,7 @@ are direct children of the root, so both are layers. Controls in the section's t
 turn one into the other: seven buttons pick the change, a slider scrubs it, and Play
 runs it on the clock in 1.3 s.
 
-- `src/next/demo.ts` is the demonstration's state: `t` from 0 (the first panel) to 1
+- `src/home/demo.ts` is the demonstration's state: `t` from 0 (the first panel) to 1
   (the second), and which change. It imports nothing of Underglass.
 - While the section is at rest, the deck's driver poses the two panels from that
   state with the same changes it runs between sections (`transitions.ts`): the first
@@ -187,7 +210,7 @@ runs it on the clock in 1.3 s.
 
 ### The changes between sections
 
-`src/next/transitions.ts` has one change per boundary, each a different thing the GPU
+`src/home/transitions.ts` has one change per boundary, each a different thing the GPU
 can do to a live page. The readout names the one that is running.
 
 | From | Change | What it is |
@@ -230,7 +253,7 @@ can do to a live page. The readout names the one that is running.
 Rules the deck keeps, most of them from the [probe](showcase-deck-probe.md):
 
 - Only the sections on stage are enrolled: the driver calls `controller.enroll` for
-  them, and `src/next/view.ts` tells React which others to park, inside `flushSync`.
+  them, and `src/home/view.ts` tells React which others to park, inside `flushSync`.
   A parked section is in the document and the accessibility tree, at `opacity: 0` and
   out of the pointer's way. `page.tsx` itself imports nothing of Underglass.
 - Scrolling through a change writes matrices and effect parameters only. Nothing in
@@ -291,32 +314,35 @@ Not built yet: scroll snapping. In the
 deck, the browser's find-in-page can match text in a parked section, which is not
 painted.
 
-**Not tried on a real phone.** The deck on a phone is checked in Chrome's emulation
-on a desktop: a 390 by 780 window at three device pixels per pixel, with touch. That
-proves the layout, the panning, taps and the changes. It does not prove a finger's
+**Tried on one real phone.** On a Galaxy S25+ the deck ran with its changes, and
+showed that a section was too long for the screen, which is why a section is now two
+pages there. The pages themselves are checked in Chrome's emulation on a desktop: a
+384 by 700 window at three device pixels per pixel, with touch. That proves the
+layout, that every page fits, taps and the changes. It does not prove a finger's
 scrolling (a synthesised touch gesture does not scroll the emulated page at all, in
 either presentation), the browser's toolbar hiding and showing, or the memory a
-phone's GPU has for layers that are several screens of pixels (the capture budget is
-16 million pixels; a refusal leaves the flow in ordinary DOM).
+phone's GPU has (the capture budget is 16 million pixels; a refusal leaves the flow in
+ordinary DOM). The stage is as tall as the largest viewport (`100vh`): while the
+browser's toolbar is showing, the bottom of the stage is under it, so a page is made
+to fit the smaller height.
 
-On a narrow window that is taller than a section (a tablet held upright), the flow
-shows the start of the next section under a short one and the deck does not, and
-the two are at different scroll positions; the change of layout keeps the section in
-place.
+In one column the deck and the flow are not the same picture: the flow shows what
+follows a part under it, and the deck shows one page. A change of layout keeps the
+same part of the page at the top of the window.
 
 ### The first load
 
 The first frame needs one request, the HTML (about 10 kB compressed), and no script:
 
 - The page is **prerendered**: `prerender.ts`, a Vite plugin, loads
-  `src/next/prerender.tsx` in Node when the site is built (or served by the dev server)
-  and writes the page's markup into `next.html`. The stage is rendered with
+  `src/home/prerender.tsx` in Node when the site is built (or served by the dev server)
+  and writes the page's markup into `index.html`. The stage is rendered with
   `prerenderCanvasApp`, so the HTML holds the Underglass hosts with the application in
   them ([server rendering](guide/server-rendering.md)). In the flow the stylesheet
   lets the content size the hosts, which otherwise fill their frame.
 - The stylesheet is **in the HTML**: `inline-css.ts`, another plugin, replaces the
   page's stylesheet link with a `<style>` element. The page loads no font and no image.
-- The entry script, `src/next/main.ts`, is about 1 kB and only decides what to load:
+- The entry script, `src/home/main.ts`, is about 1 kB and only decides what to load:
   - `gpu.tsx` in a browser with the APIs, at any window size. It adopts the
     prerendered hosts (`createCanvasHosts`), hydrates with
     `mountCanvasApp({ hydrate: true })` and starts the deck. About 260 kB of
@@ -326,7 +352,7 @@ The first frame needs one request, the HTML (about 10 kB compressed), and no scr
     requested. About 81 kB.
 
 **Starting GPU presentation changes no pixel of the stage.** Three things make that so
-(`next.css`), and `npm run test:showcase` compares the pixels:
+(`home.css`), and `npm run test:showcase` compares the pixels:
 
 - The flow and the deck put a section at the same place, at the same scroll
   position. A section has the same margins in both (on a wide screen the flow's top
@@ -341,7 +367,7 @@ The first frame needs one request, the HTML (about 10 kB compressed), and no scr
   a line height in whole pixels.
 - The stage's text is antialiased in grey from the first frame. Text the GPU draws is;
   ordinary DOM text on Windows is antialiased per colour channel, so it would change
-  its tint. An inline script in `next.html` marks a browser that has the APIs before
+  its tint. An inline script in `index.html` marks a browser that has the APIs before
   the first frame (`html.can-gpu`), and the stage is then a compositing layer of its
   own (`will-change: opacity`), where the browser antialiases text in grey.
 
@@ -368,35 +394,43 @@ changed, and reduced motion only fades. For the live demonstration it checks tha
 slider puts the chosen change's effect on both panels, that another change picked
 part way through takes over, that the second panel's button takes a click, that Play
 runs the change back, that scrolling on settles it, and that in ordinary DOM the
-panels swap at the middle. In a short desktop window and on an emulated
-phone it also checks that a tall section pans by exactly the scroll distance with no
-capture, that the change follows the pan, that a click or a tap lands on a button far
-down a panned section, and that ordinary DOM is the same picture at the same scroll
-position.
+panels swap at the middle. In a short desktop window it also checks that a tall section pans by exactly the
+scroll distance with no capture, that the change follows the pan, that a click lands
+on a button far down a panned section, and that ordinary DOM is the same picture at
+the same scroll position. On an emulated phone it checks the sixteen stops and their
+layers, that no page pans, the change between a section's two pages (no capture), a
+tap on a page's control, the demonstration from its controls above the panels, a
+link's jump to a section's first page, and the return to the flow.
 
 ## Pages, search and social metadata
 
-The base is the home page, whose stage shows the hero scene; each example has its own
-page at `<base>examples/<id>`. Catalog cards, the brand link and the studio's example
-picker (whose first entry, 00, is the home page) switch scenes in place with
-`history.pushState`, so the running runtime (and
-GPU mode) survives; a modified click opens the page's own URL. Old `#/motion` links
-open the same example and are moved to its path. Search and categories stay in the
-SPA; no iframe capture is used.
+The base is the home page. The studio's index is `<base>examples`, whose stage shows
+the overview scene, and each example has its own page at `<base>examples/<id>`.
+Catalog cards and the studio's example picker (whose first entry, 00, is the
+overview) switch scenes in place with `history.pushState`, so the running runtime
+(and GPU mode) survives; a modified click opens the page's own URL. The brand and
+**Home** go to the home page, another document. Old `#/motion` links, which named an
+example in the hash of the home page, are sent on to the example's page by a line of
+script in the home page's head. Search and categories stay in the SPA; no iframe
+capture is used.
 
-`examples/showcase/seo.ts`, a Vite plugin, writes one static HTML file per page
-(`index.html` and `examples/<id>.html`, which Vercel's clean URLs and GitHub Pages
-both serve without the extension), so no server rewrite rules are needed. Each page
-has its own title, description and canonical URL (from `pageMeta` in
-`src/catalog.ts`), Open Graph and Twitter card tags, JSON-LD (the site and the
-software on the home page, a web page with breadcrumbs for each example) and a
-`<noscript>` summary that links every page. The plugin also writes `sitemap.xml`,
-`robots.txt` and a `noindex` `404.html`. Canonical, sitemap and social URLs always
+`examples/showcase/seo.ts`, a Vite plugin, writes one static HTML file per page, so no
+server rewrite rules are needed: `index.html` (the home page, prerendered, given its
+head), `examples/<id>.html` for each example, and the examples' index twice, as
+`examples/index.html` and `examples.html`, so that `/examples` serves it on a host
+that redirects to the directory and on one that tries the path with `.html`. Each
+page has its own title, description and canonical URL (from `pageMeta` in
+`src/catalog.ts`), Open Graph and Twitter card tags and JSON-LD (the site and the
+software on the home page, a page with breadcrumbs for the examples). The studio's
+pages have a `<noscript>` summary that links every page; the home page's content is
+in its HTML. The plugin also writes `sitemap.xml`, `robots.txt` and a `noindex` `404.html`. In development the plugin serves
+`examples.html` for every path under `/examples`. Canonical, sitemap and social URLs always
 name `https://underglass.dev`, so the GitHub Pages copy points search engines at the
 canonical site. An example with a GPU preview uses it as its social card; the others,
 and the home page, use `public/og.jpg` (1200x630). `scripts/showcase-social-images.mjs`
-renders that card and `public/apple-touch-icon.png`; run it by hand after a brand or
-headline change and commit the images. `main.tsx` keeps the title, description and
+takes that card as a picture of the home page's cover, from a served build, and
+renders `public/apple-touch-icon.png`; run it by hand after a change to the brand or
+the cover and commit the images. `main.tsx` keeps the title, description and
 canonical URL in step when examples switch in place.
 
 `npm run build:site` adds the documentation pages to `sitemap.xml` (below), so the one
