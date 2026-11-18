@@ -77,7 +77,7 @@ different from currently failing supported code.
 
 - **A button whose background colour transitions** creates a new `key ${colour}` material for each frame it is in flight (a key body per colour), so it can push a scene past the rules mid-animation: the conversion trims it, and the warning re-arms when the panel fits again. This predates the cap work and is now visible.
 - **A push button falling back to a Relief key at 12 materials** (resolved with the above): the rule is named `INSTRUMENT_PUSH_MATERIALS`, documented in `button.md` section 11 and reported by `diagnostics` and a once-per-panel warning.
-- **The gallery's stage height at a phone's width** (2026-10-19): a stage is one canvas, so at 320 px and DPR 2 it must stay under 4,096 CSS px (the device's `maxTextureDimension2D` of 8,192); the synthesiser with its fifth module is at 4,034 (headless, 274 px stage) and 4,026 (a headed window, whose scrollbar narrows the stage to 259 px), so the gallery hides its intro and trims the envelope faders on a phone. A sixth module, or taller controls, needs the stage split across canvases or a different layout.
+- **The gallery's stage height at a phone's width** (2026-10-19): a stage is one canvas, so at 320 px and DPR 2 it must stay under 4,096 CSS px (the device's `maxTextureDimension2D` of 8,192); the synthesiser with its fifth module is at 4,034 (headless, 274 px stage) and 4,026 (a headed window, whose scrollbar narrows the stage to 259 px), so the gallery hides its intro and trims the envelope faders on a phone. A sixth module, or taller controls, needs the stage split across canvases or a different layout. **Superseded 2026-11-18:** that rule assumed two device pixels per pixel. A phone has 2.6 to 3.5, where a whole group in one column (3,084 CSS px at 412 px wide) is past the limit and GPU presentation was refused. The gallery now shows one content panel of a group at a time on a phone ([showcase](showcase.md)); its tallest stage is 1,907 CSS px (6,675 px at 3.5).
 - **The pointer light is not in the helper yet.** The gallery's `pointer-light.ts` does what the plan says the helper will.
 - **Input events captured (#167): narrowed, resolved for the JogWheel.** An `input` event captures its layer unless its target carries
   `data-underglass-gpu-value` (`api.md#input-events-and-captures`); the JogWheel's helper marks its input while the GPU draws the dimple, so a
@@ -107,6 +107,43 @@ different from currently failing supported code.
   a custom-property or style write that changes a value, and any write the DOM sees as a change (a different value, an added or removed attribute).
 
 - **A `<canvas>` inside a layer is captured blank (#184): resolved, one limit.** The browser (Canary 158.0.8112.0) captures a nested `<canvas>` only when it is itself `content="drawable"` (an unmarked one only if it is the first thing in its layer). Core now marks every canvas in an enrolled layer while GPU presents and restores the author's value afterwards ([api](api.md#canvas-inside-a-layer)); every variant (2D, WebGL, `preserveDrawingBuffer`, `willReadFrequently`, `bitmaprenderer`, `OffscreenCanvas`, deep, hidden then shown) is captured in every arrangement, at DPR 1 and 2. **Limit:** an `OffscreenCanvas`-transferred canvas raises no `paint` event when it commits, so its pixels stay stale until the author calls `controller.invalidate(layerId)` after drawing it (a core test pins the stale state); core cannot detect it safely. Not marked: canvases in open shadow roots (blank behind other canvases unless the author sets `content="drawable"`; core does not walk shadow roots and its observer cannot see inside them) and canvases that host drawable children (their own bitmap is captured). Filed 2026-10-21 as Chromium 576333009 (attach order) and 576333010 (no `paint` for `OffscreenCanvas` commits); whether the mark is intended to be required is asked in WICG html-in-canvas#187 ([upstream/canvas-in-drawable.md](upstream/canvas-in-drawable.md)). Closure: when the browser captures unmarked nested canvases (the raw `unmarked` probes in `core-canvas-content.test.mjs` fail first), the mark can go; when OffscreenCanvas commits invalidate paint, the `invalidate` step can.
+
+## Phone and frame-cost findings (2026-11-18)
+
+Found while the site was tried on a Galaxy S25+ and in Chrome's phone emulation (Canary 160.0.8169.0, an RTX 3080;
+CPU figures with the CPU slowed four times). None is fixed in `packages/` yet.
+
+- **The Strata helper builds every presented panel's scene again in each frame something moves.** While a control is
+  dragged, a spring settles or a light blinks, `@underglass/ui/gpu` reads the DOM of each panel (boxes, computed
+  styles) and compares the result with the last scene, panel by panel. On the Instrument gallery's synthesiser,
+  dragging the wheel averages about 40 ms a frame with spikes over 100 ms, and the "Wave 2" group about 36 ms at rest
+  (its blinking lights); a tab with nothing moving holds 16.7 ms. Fewer pixels do not change this: the figures are the
+  same with one panel on the stage as with five. Closure: rebuild only the panel that changed, or only the part of
+  the scene that an animation drives, and measure the same pages again.
+- **Core's policy check reads layout on every drawn frame.** `CanvasRuntime.policy()` reads each layer's
+  `offsetWidth` and `offsetHeight` and its viewport clip per frame; in a profile of a page that draws every frame it
+  was the largest single function (about 12% of the main thread). The structural half is cached; the geometry half is
+  not. Closure: cache the geometry half until a transform, a size or a scroll changes it.
+- **The clock for playing effects draws apart from the shared draw.** Since writes are drawn once per frame
+  ([api](api.md#when-writes-are-drawn)), a page that plays an owned animation or an effect and also writes in that
+  frame is still drawn twice in it, as before that change.
+- **The output canvas is drawn whole, whatever part of it is in the window.** A stage taller than the window (the
+  gallery's on a phone, three windows tall) costs its whole height in every frame. Drawing only the part in view
+  would have to keep the part that scrolls into view fresh, which a scroll the compositor does on its own makes hard.
+- **A page element over the stage's top left corner can turn tilted layers off.** `enable()` proves that native hits
+  follow a tilted layer with a probe near (48, 48) in the canvas. An element of the page that takes the pointer there
+  (a fixed header's link) fails the proof (`projective: "failed"`), and every tilt is then refused for the session.
+  The home page moves its header out of the way while the check runs. Closure in core: tell a covered witness from a
+  failed one, and place the probe where the stage is not covered.
+- **A canvas whose size is not a whole number of device pixels can be refused.** In emulation at 412 px wide and
+  2.625 device pixels per pixel, `enable()` fails with "Functional probe native grid exceeds prepared texture": the
+  probe's texture is sized from the device pixel ratio, and the browser's grid for it from the canvas, which rounds
+  up. Not known to happen on a device, whose screen is a whole number of device pixels.
+- **One browser test fails now and then on `main`.** `ui-structural-forms.test.mjs` ("two Dialogs, a plate and a
+  flush one", DPR 2) failed 1 of 24 runs on `main`'s core and 1 of 48 after the change to when writes are drawn, each
+  time with one to five pixels outside the plate's box at its top or left edge. Not investigated.
+- **Not tried on a real phone since:** the tilt on the home page's deck, the Instrument gallery's one-panel pages,
+  and whether the gallery is fast enough there.
 
 ## Unsupported or untargeted scope
 
