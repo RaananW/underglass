@@ -11,13 +11,20 @@
  *
  * Then replaces `examples/showcase/dist/docs` with a copy of `examples/docs/dist`, copies `llms.txt` to the site
  * root, where agents look for it, and adds the documentation pages to the showcase's `sitemap.xml`, so the one
- * sitemap `robots.txt` names lists the whole site. A failed check exits non-zero and so fails the build. Writes
- * only `examples/showcase/dist/docs`, `examples/showcase/dist/llms.txt` and `examples/showcase/dist/sitemap.xml`.
+ * sitemap `robots.txt` names lists the whole site. A failed check exits non-zero and so fails the build.
+ *
+ * In a build that is deployed (Vercel), or when `UNDERGLASS_SITEMAP_DATES` names the record of an earlier build (a URL
+ * or a file), each URL of the sitemap gets the day its text last changed (`<lastmod>`, `sitemap-dates.mjs`), and the
+ * record for the next build is written to `sitemap-dates.json`. Any other build writes the sitemap without dates.
+ *
+ * Writes only `examples/showcase/dist/docs`, `examples/showcase/dist/llms.txt`, `examples/showcase/dist/sitemap.xml`
+ * and, with dates, `examples/showcase/dist/sitemap-dates.json`.
  */
 import assert from "node:assert/strict";
 import { cp, lstat, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
 import { assertPhysicalPath } from "./release-policy.mjs";
+import { datePages, publishedDates, sitemapXml } from "./sitemap-dates.mjs";
 
 const docs = resolve("examples/docs/dist");
 const showcase = resolve("examples/showcase/dist");
@@ -107,6 +114,20 @@ await cp(join(docs, "llms.txt"), join(showcase, "llms.txt"));
 // The showcase's own URLs (any `/docs` ones from an earlier run dropped), then the documentation pages.
 const sitemap = join(showcase, "sitemap.xml");
 const urls = [...locs(await readFile(sitemap, "utf8")).filter(url => !url.startsWith(`${origin}${base}`)), ...docsUrls];
-await writeFile(sitemap, `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${
-  urls.map(url => `  <url><loc>${url}</loc></url>`).join("\n")}\n</urlset>\n`);
-console.log(`Documentation site: ${pages.size} pages, ${all.length} files copied to ${relative(".", output)}; llms.txt at the site root; sitemap.xml lists ${urls.length} URLs`);
+// Each URL's date is the day its text last changed, kept from the record the deployed site published (see the file comment).
+const record = join(showcase, "sitemap-dates.json");
+const source = process.env.UNDERGLASS_SITEMAP_DATES ?? (process.env.VERCEL === "1" ? `${origin}/sitemap-dates.json` : undefined);
+let dates, dated = "no dates (not a deployed build)";
+await rm(record, { force: true });
+if (source) {
+  // A showcase URL's page: the home page is `index.html`, `/examples/motion` is `examples/motion.html`.
+  const html = url => { const path = url.slice(origin.length); return path === base || path.startsWith(`${base}/`) ? pages.get(pageFile(path)) : readFile(join(showcase, path.length > 1 ? `${path.slice(1)}.html` : "index.html"), "utf8"); };
+  const published = await publishedDates(source), today = new Date().toISOString().slice(0, 10);
+  dates = datePages(await Promise.all(urls.map(async url => [url, await html(url)])), published.dates, today);
+  const changed = urls.filter(url => dates[url].date === today && published.dates?.[url]?.date !== today);
+  dated = published.dates ? `${changed.length} of ${urls.length} URLs dated ${today}${changed.length ? ` (${changed.slice(0, 8).map(url => url.slice(origin.length) || "/").join(", ")}${changed.length > 8 ? ", ..." : ""})` : ""}, the others keep their dates`
+    : `every URL dated ${today}: no earlier record at ${source} (${published.why})`;
+  await writeFile(record, `${JSON.stringify(dates, null, 1)}\n`);
+}
+await writeFile(sitemap, sitemapXml(urls, dates));
+console.log(`Documentation site: ${pages.size} pages, ${all.length} files copied to ${relative(".", output)}; llms.txt at the site root; sitemap.xml lists ${urls.length} URLs; ${dated}`);
