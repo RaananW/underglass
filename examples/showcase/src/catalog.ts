@@ -1,7 +1,8 @@
 /**
- * The showcase catalog: the copy for each example card, the studio heading and the "Why the GPU
- * here" panel, plus routing, page metadata (`seo.ts` builds each page's head from it) and search. Pure data with no Underglass imports, so it is shared by
- * `main.tsx` (the page chrome outside the Underglass root), `demos.tsx` and the unit tests.
+ * The showcase catalog: the copy for each example card, the example page's heading and the "Why the GPU
+ * here" panel, the groups the gallery shows them in, plus routing and page metadata (`seo.ts` builds each page's head
+ * from it). Pure data with no Underglass imports, so it is shared by `main.tsx` (the page chrome outside the
+ * Underglass root), the home page (`home/page.tsx`), `demos.tsx` and the unit tests.
  */
 
 /**
@@ -12,14 +13,13 @@ export interface GPUReason { headline: string; points: readonly string[]; css: s
 
 /**
  * Every example, in catalog order. `id` names the example's page (`examples/layers`) and selects the demo in
- * `demos.tsx`; `accent` picks the card's CSS colour class. `as const` keeps the ids as literal types
+ * `demos.tsx`; `summary` is the card's text and `detail` the example page's. `as const` keeps the ids as literal types
  * for `ExampleId`, and `satisfies` checks that each entry has a complete `gpu` explanation.
  */
 export const examples = [
   { id: "layers", number: "01", title: "Postcard studio", category: "Native controls",
     summary: "Design a postcard with real inputs, radio swatches and stamps. One native React form edits the GPU-presented card.",
     detail: "Type, pick a palette and a stamp, then save. Five surfaces share one compositor; the form, the card and the outbox are the original React controls in both DOM and GPU.",
-    accent: "sunset", tags: ["Inputs", "Live layers", "Chromatic"],
     gpu: {
       headline: "A print effect on live artwork, while the form stays native.",
       points: [
@@ -31,7 +31,6 @@ export const examples = [
   { id: "motion", number: "02", title: "Card deck", category: "Motion",
     summary: "Deal, stack, fan and shuffle four layer cards with staggered GPU motion. Like a card mid-flight: its button stays native.",
     detail: "Each arrangement is one declarative transition group, pivoted around card centres. React does not re-render to move a card; with reduced motion the cards go straight to their places.",
-    accent: "ocean", tags: ["transitionGroup", "Stagger", "Ripple"],
     gpu: {
       headline: "Cards fly as textures, and the felt table ripples when they land.",
       points: [
@@ -44,7 +43,6 @@ export const examples = [
   { id: "effects", number: "03", title: "Shader lab", category: "Effects",
     summary: "Chain ripple, chromatic, dissolve and a custom WGSL aurora on decorative artwork, with native sliders for every parameter.",
     detail: "Effects touch only the inert, aria-hidden artwork layer. Ordinary DOM keeps the static original artwork and every control; GPU mode runs the chain in the shared compositor.",
-    accent: "aurora", tags: ["setEffects", "defineEffect", "WGSL"],
     gpu: {
       headline: "Per-pixel programs running on a live DOM subtree.",
       points: [
@@ -57,7 +55,6 @@ export const examples = [
   { id: "presence", number: "04", title: "Notification stack", category: "Presence",
     summary: "Send notifications that slide in and out with Presence while their Dismiss buttons remain ordinary React buttons.",
     detail: "Each slot is a stable surface whose React subtree is retained through its exit motion, then removed. Completion results land in the log. Nothing is cloned to fake an exit.",
-    accent: "violet", tags: ["Presence", "Enter / exit", "Ripple"],
     gpu: {
       headline: "Each arrival sends a pulse through the phone screen.",
       points: [
@@ -69,7 +66,6 @@ export const examples = [
   { id: "tasks", number: "05", title: "Small tasks, real controls", category: "Applications",
     summary: "Try the maintained task app: create, search and edit local tasks with native inputs and a detail view.",
     detail: "This is the existing task component, not a duplicate. Tasks live in memory only; switching examples resets their local state.",
-    accent: "meadow", tags: ["Forms", "Dialog", "Scrolling"],
     gpu: {
       headline: "The app is unchanged; its artwork reacts to every task.",
       points: [
@@ -81,7 +77,6 @@ export const examples = [
   { id: "pond", number: "06", title: "Webcam pond", category: "Experimental",
     summary: "See yourself reflected in a koi pond. The koi are plain HTML spans, refracted by GPU water. Feed them from a native lily pad.",
     detail: "Optional camera, on your device only: nothing is recorded or sent anywhere. The pond floor, your text, the fish and the reflection are ordinary HTML in one decorative layer; ripple refraction and a custom WGSL water shader run over it on the GPU.",
-    accent: "pond", tags: ["Webcam", "Refraction", "Custom WGSL"],
     gpu: {
       headline: "Live HTML and your camera image, refracted and lit as water.",
       points: [
@@ -95,7 +90,6 @@ export const examples = [
   { id: "fluent", number: "07", title: "Fluent release board", category: "Applications",
     summary: "Stock Fluent UI v9 components that burn away, materialise and take a hit on the GPU, and still work as real controls. Throw cards between lanes on spring physics.",
     detail: "Every control is an unmodified Fluent UI v9 component. Archive a card and the live card burns away; add one and it materialises; open one and its editor, a full Fluent form, grows out of it. During each effect the layer's content is inert, so no click lands on displaced pixels; afterwards it is the same interactive component. Fluent's menus, dropdowns and dialog render in the adapter's overlay host.",
-    accent: "fluent", tags: ["Fluent UI", "Transition effects", "Springs"],
     gpu: {
       headline: "Per-pixel transitions on live components, not on pictures of them.",
       points: [
@@ -109,7 +103,6 @@ export const examples = [
   { id: "compare", number: "08", title: "GPU or CSS?", category: "Comparison",
     summary: "Six jobs done twice, side by side: the best CSS technique on the left, Underglass on the right, with a frame meter. One of them is a job where CSS wins.",
     detail: "Pick a comparison, then animate one side at a time and watch the meter. The left pane is CSS: keyframes, SVG filters, color-mix() and backdrop-filter. The right pane is Underglass: one capture of the same HTML and a shader. In ordinary DOM the right pane shows that raw capture.",
-    accent: "versus", tags: ["CSS vs GPU", "Frame meter", "Honest"],
     gpu: {
       headline: "The GPU wins when pixels change but content doesn't.",
       points: [
@@ -122,7 +115,6 @@ export const examples = [
   { id: "strata", number: "09", title: "Strata components", category: "Design system",
     summary: "Every Strata component, from buttons to tables, dialogs and toasts, in one design language that CSS draws flat and the GPU lights in 3D.",
     detail: "Switch tabs to see each group, then pick a level and a theme in the bar. The components are @underglass/ui's React bindings: ordinary DOM with the Strata stylesheet, presented on the GPU by useStrataGpu when GPU mode is on.",
-    accent: "strata", tags: ["Components", "Relief", "Objects"],
     gpu: {
       headline: "Depth that is lit, not painted on.",
       points: [
@@ -135,7 +127,6 @@ export const examples = [
   { id: "instrument", number: "10", title: "Instrument gallery", category: "Design system",
     summary: "Every Instrument component as hardware: knobs, faders, switches, lamps, meters, a jog wheel and a patch bay, plus a synthesiser voice that is wired like the real thing.",
     detail: "Pick a presentation level, a theme and a character, carry the pointer as a light, and browse the catalogue by group. The Synthesiser tab is a whole panel of real controls wired to each other: the knobs and faders set the meter, a patch jack opens the filter and lights its LED, the wheel loads a patch. The controls are native inputs, selects, meters and buttons.",
-    accent: "instrument", tags: ["Instrument", "Knobs", "Synthesiser"],
     gpu: {
       headline: "Machined parts, lit by one key light and by the lamps themselves.",
       points: [
@@ -150,16 +141,27 @@ export const examples = [
 /** The id of one catalog example, such as `"layers"` or `"pond"`. */
 export type ExampleId = typeof examples[number]["id"];
 /**
- * The scene of the examples' index page (`hero.tsx`): the stage at the top of `/examples`, where the headline and its
- * links are the original React elements on a GPU-presented layer, under glass that follows the pointer and changes
- * colour as the page scrolls. Not a catalog example, so the catalog, search and the sitemap's example list leave it out.
+ * The gallery's groups (`/examples`), in page order, each with its examples in catalog order. Every example is in
+ * exactly one (`tests/unit/showcase.unit.test.mjs`). The first group is what the home page shows too.
  */
-export const hero = {
-  id: "hero", number: "00", title: "Underglass",
-  detail: "This header is the live stage. The headline, its links and the glass panel's controls are the original React elements; the light, the colour and the ripples are drawn by one WebGPU pass.",
-} as const;
-/** What the stage can show: the home page's scene or one catalog example. */
-export type SceneId = ExampleId | typeof hero.id;
+export const groups = [
+  { id: "start", title: "Start here", note: "What the GPU adds to a live page, and one honest look at where CSS is enough.", ids: ["motion", "effects", "compare"] },
+  { id: "apps", title: "Real controls at work", note: "Forms, lists and a camera feed: ordinary React state under a GPU presentation.", ids: ["layers", "presence", "tasks", "pond", "fluent"] },
+  { id: "libraries", title: "Lit component libraries", note: "Strata, the component library built on Underglass, from flat CSS to machined parts.", ids: ["strata", "instrument"] },
+] as const satisfies readonly { id: string; title: string; note: string; ids: readonly ExampleId[] }[];
+/** The example with `id`. */
+export const exampleOf = (id: ExampleId) => examples.find(example => example.id === id)!;
+/** The examples before and after `id` in catalog order; the first follows the last. */
+export function neighbours(id: ExampleId) {
+  const at = examples.findIndex(example => example.id === id), count = examples.length;
+  return { previous: examples[(at + count - 1) % count]!, next: examples[(at + 1) % count]! };
+}
+/**
+ * The picture on an example's card, under the site's base path: `public/thumbs/<id>.jpg` (720x485) or, `small`,
+ * `public/thumbs/<id>-s.jpg` (360x243). Both are made by `scripts/showcase-thumbnails.mjs`.
+ */
+export const thumbnail = (id: ExampleId, base: string, small = false) => `${base}thumbs/${id}${small ? "-s" : ""}.jpg`;
+export const thumbnailSize = { width: 720, height: 485, small: { width: 360, height: 243 } } as const;
 /** Maps a location hash (`#/motion`, `#motion` or empty) to an example id; unknown ids open `"layers"`. */
 export function route(hash: string): ExampleId {
   const id = hash.replace(/^#\/?/, "");
@@ -198,7 +200,7 @@ export const previews: Partial<Record<ExampleId, string>> = {
   layers: "postcard-studio", motion: "card-deck", effects: "shader-lab", presence: "notification-stack", pond: "webcam-pond",
 };
 
-/** The path of the examples' index page, relative to the site base: the example studio with its overview scene and the catalog. */
+/** The path of the examples' index page, relative to the site base: the gallery of every example. */
 export const examplesPath = "examples";
 /**
  * The title, description and canonical path (relative to the site root) of a page: the home page (`"home"`,
@@ -210,13 +212,4 @@ export function pageMeta(id?: ExampleId | "home") {
     description: `${examples.length} live examples of Underglass: real React controls drawn by one WebGPU compositor, each with a switch between GPU presentation and ordinary DOM.` };
   const example = examples.find(entry => entry.id === id)!;
   return { title: `${example.title} | Underglass examples`, description: example.summary, path: examplePath(id) };
-}
-/**
- * Filters the catalog by category (`"All"` keeps every category) and by a case-insensitive substring
- * of the title, summary, category and tags. An empty query matches everything.
- */
-export function searchExamples(query: string, category: string) {
-  const text = query.trim().toLowerCase();
-  return examples.filter(example => (category === "All" || example.category === category)
-    && `${example.title} ${example.summary} ${example.category} ${example.tags.join(" ")}`.toLowerCase().includes(text));
 }

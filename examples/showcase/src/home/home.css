@@ -356,11 +356,14 @@ html.can-gpu .code { background: rgb(7 8 10 / 98%); }
 .levels li:nth-child(4) span { color: var(--signal); }
 .levels p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--dim); }
 
-/* The examples, as an index. */
-.examples { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; max-width: 56ch; }
-.examples a { display: flex; gap: 12px; padding: clamp(6px, .62 * var(--u), 9px) 0; padding: round(clamp(6px, .62 * var(--u), 9px), 1px) 0; border-bottom: 1px solid var(--rule); font-size: 14.5px; text-decoration: none; }
-.examples a span { font: 11px/1.8 var(--mono); color: var(--quiet); }
+/* Three of the examples, each with its picture; the gallery has them all. The picture's height is a whole number of
+   pixels, as every line's is (below). */
+.examples { list-style: none; margin: 0 0 14px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; max-width: 60ch; }
+.examples a { display: block; font-size: 14.5px; text-decoration: none; }
+.examples img { display: block; width: 100%; height: 96px; margin-bottom: 8px; object-fit: cover; object-position: left top; border-radius: 6px; background: var(--ground); box-shadow: 0 0 0 1px var(--rule-strong); }
+.examples a span { margin-right: 8px; font: 11px/1.8 var(--mono); color: var(--quiet); }
 .examples a:hover { color: var(--signal); }
+.examples a:hover img { box-shadow: 0 0 0 1px var(--signal); }
 
 /* ---------- Whole-pixel line boxes ---------- */
 /* A layer whose height is not a whole number of pixels is drawn a fraction of a pixel taller or shorter by the GPU than
@@ -416,12 +419,13 @@ h2 { line-height: round(1.02em, 1px); }
   .cover-grid { grid-template-columns: minmax(0, 1fr); }
   .compare th, .compare td { padding-block: 9px; }
   .facts li { grid-template-columns: minmax(0, 1fr); }
-  .top nav a:nth-child(-n+2) { display: none; }
+  .top nav a:first-child, .actions .browse { display: none; }
   .levels li { grid-template-columns: minmax(0, 1fr); gap: 6px; margin-left: 0 !important; }
   .stack li { margin-left: 0 !important; }
 }
 @media (max-width: 420px) {
-  .examples { gap: 0 14px; }
-  .examples a { gap: 8px; font-size: 13.5px; }
+  .examples { gap: 8px; }
+  .examples img { height: 72px; }
+  .examples a { font-size: 13.5px; }
   .compare tbody th { width: 30%; }
 }

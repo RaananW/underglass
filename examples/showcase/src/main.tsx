@@ -1,17 +1,19 @@
 /**
- * Entry point of the example studio (`examples.html`: `/examples` and each example's page; the home page is
- * `src/home`). `App` is ordinary React page chrome (hero, catalog, status,
- * browser help) that lives outside the Underglass root. Its effect loads Underglass, `demos.tsx` and the
- * opening example (separate chunks, so the page itself loads with only React and the catalog), then creates
+ * Entry point of the examples (`examples.html`: `/examples` and each example's page; the home page is `src/home`).
+ * `/examples` is the `Gallery`: every example as a card with its picture, in the catalog's groups, and nothing
+ * else; it loads no Underglass. An example's page is the `Studio`: a bar to find the way (back to the gallery, the
+ * example picker, previous and next, the GPU or DOM switch), the live stage, its status and what the GPU does there.
+ * Both are ordinary React page chrome outside the Underglass root. The studio's effect loads Underglass, `demos.tsx`
+ * and the opening example (separate chunks, so the page itself loads with only React and the catalog), then creates
  * the canvas hosts and mounts a second tree with `mountCanvasApp`, which renders `Demo`. The two sides
  * talk through the controller (enable, disable, dispose), `onStatusChange` and the URL path.
  */
-import { useCallback, useEffect, useRef, useState, version, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, version, type MouseEvent, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { version as reactDOMVersion } from "react-dom";
 import type { CanvasController } from "@underglass/react";
 import { loadExample } from "./examples";
-import { examplePath, examplesPath, exampleFromPath, examples, hero, pageMeta, previews as previewNames, route, searchExamples, site, type ExampleId, type SceneId } from "./catalog";
+import { examplePath, examplesPath, exampleFromPath, examples, exampleOf, groups, neighbours, pageMeta, previews as previewNames, route, site, thumbnail, thumbnailSize, type ExampleId } from "./catalog";
 import { detectSupport, explain, flags, type Support } from "./support";
 import { analyticsEnabled, startAnalytics, track, trackSupport, type Api } from "./analytics";
 import { installPolyfill, polyfillExcluded, polyfillLinks, polyfillOffers, polyfillPossible, removePolyfill } from "./polyfill";
@@ -21,15 +23,15 @@ import "./style.css";
 const previewFiles = import.meta.glob<string>("./previews/*.jpg", { eager: true, import: "default" });
 const previews = Object.fromEntries(Object.entries(previewNames).map(([id, name]) => [id, previewFiles[`./previews/${name}.jpg`]])) as Partial<Record<ExampleId, string>>;
 
-// Routing: the examples' index is `<base>examples` and shows the overview scene (`hero.tsx`) on the stage; each
-// example has its own page, `<base>examples/<id>`. The build writes each as static HTML with its own metadata
-// (`seo.ts`). Links switch examples in place with `history.pushState`, so the running runtime and its GPU mode
-// survive. The site's home page (`<base>`) is another document.
+// Routing: the examples' index is `<base>examples` (the gallery); each example has its own page,
+// `<base>examples/<id>`. The build writes each as static HTML with its own metadata (`seo.ts`). On an example's
+// page, links to other examples switch in place with `history.pushState`, so the running runtime and its GPU mode
+// survive. The gallery and the site's home page (`<base>`) are loaded as documents of their own.
 const base = import.meta.env.BASE_URL;
 /** The example the current URL names, or `undefined` on the examples' index. */
 const pageExample = () => exampleFromPath(location.pathname, base);
-/** The URL of the examples' index (no id, or the overview scene) or an example's page. */
-const pageURL = (id?: SceneId) => `${base}${id && id !== hero.id ? examplePath(id) : examplesPath}`;
+/** The URL of the examples' index (no id) or an example's page. */
+const pageURL = (id?: ExampleId) => `${base}${id ? examplePath(id) : examplesPath}`;
 /** Moves a `#/motion` link (the site's first URLs, and the Strata example's breadcrumb) to the example's own page, keeping history clean. */
 function upgradeHashLink() {
   if (location.hash.startsWith("#/")) history.replaceState(null, "", pageURL(route(location.hash)));
@@ -59,11 +61,66 @@ const autoVisiblePx = 160;
 startAnalytics();
 trackSupport(detectSupport());
 
-/** The whole page: marketing sections, the example catalog and the live studio with its stage. */
-function App() {
-  const [selected, setSelected] = useState<SceneId>(() => pageExample() ?? hero.id);
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("All");
+/** The page's fixed background and its header: the brand (the way home) and the site's links. */
+function Chrome({ gallery = false, skip }: { gallery?: boolean; skip: { href: string; text: string } }) {
+  return <>
+    <a className="skip-link" href={skip.href}>{skip.text}</a>
+    <div className="page-backdrop" aria-hidden="true"><i /><i /></div>
+    {/* The brand goes to the site's home page, another document. */}
+    <header className="site-header"><a className="brand" href={base}><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>Underglass<span className="tag">CHROME · EDGE 157+</span></a>
+      <nav aria-label="Site"><a href={pageURL()} aria-current={gallery ? "page" : undefined}>Examples</a><a href={site.docs}>Docs</a>
+        <a href={site.repository} onClick={() => track("Outbound Link", { target: "github" })}>GitHub <span aria-hidden="true">&#8599;</span></a></nav></header>
+  </>;
+}
+function Footer() {
+  return <footer><span><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>Underglass / Examples</span>
+    <span><a href={site.docs}>Documentation</a> · <a href={site.repository} onClick={() => track("Outbound Link", { target: "github" })}>Source on GitHub</a> · <a href={site.npm}
+      onClick={() => track("Outbound Link", { target: "npm" })}>@underglass/react on npm</a> · Apache-2.0.{analyticsEnabled && " Anonymous visit counts by Vercel Web Analytics, no cookies."}</span></footer>;
+}
+/** An example's card: its picture, where it belongs, its title and what it shows. `onClick` lets a page switch to it in place. */
+function ExampleCard({ id, label, eager = false, onClick }: { id: ExampleId; label?: string; eager?: boolean; onClick?(event: MouseEvent<HTMLAnchorElement>): void }) {
+  const example = exampleOf(id);
+  return <a className="example-card" href={pageURL(id)} onClick={onClick}>
+    {/* The small picture where a card is a third of a wide page, the large one where it fills a phone's width. */}
+    <img src={thumbnail(id, base)} srcSet={`${thumbnail(id, base, true)} ${thumbnailSize.small.width}w, ${thumbnail(id, base)} ${thumbnailSize.width}w`}
+      sizes="(max-width: 600px) 100vw, (max-width: 1000px) 50vw, 380px" alt="" width={thumbnailSize.width} height={thumbnailSize.height} loading={eager ? "eager" : "lazy"} decoding="async" />
+    <span className="card-top"><span>{label ?? example.category}</span><span>{example.number}</span></span>
+    <h3>{example.title}</h3><p>{example.summary}</p>
+  </a>;
+}
+
+/** `/examples`: every example, in the catalog's groups. Nothing here runs Underglass; a card opens its example's page. */
+function Gallery() {
+  const [support] = useState<Support>(detectSupport);
+  // A `#/motion` link (the site's first URLs) followed inside the open gallery opens the example's page.
+  useEffect(() => {
+    const follow = () => { if (location.hash.startsWith("#/")) location.replace(pageURL(route(location.hash))); };
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
+  }, []);
+  return <>
+    <Chrome gallery skip={{ href: "#gallery", text: "Skip to the examples" }} />
+    <main className="gallery" id="gallery" tabIndex={-1}>
+      <div className="gallery-head">
+        <p className="eyebrow"><b>{examples.length}</b>Live examples</p>
+        <h1 id="gallery-title">Examples</h1>
+        <p className="gallery-lede">Each one is its original React DOM, drawn by one WebGPU compositor, with a switch back to ordinary DOM. Pick one and use it.</p>
+        <p className={`mode-pill ${support === "likely" ? "active" : ""}`}><span className="dot" aria-hidden="true" />{support === "likely"
+          ? "This browser can draw them on the GPU"
+          : "This browser shows them as ordinary DOM · GPU needs Chrome or Edge 157+"}</p>
+      </div>
+      {groups.map((group, index) => <section key={group.id} className="gallery-group" aria-labelledby={`group-${group.id}`}>
+        <div className="group-head"><h2 id={`group-${group.id}`}>{group.title}</h2><p>{group.note}</p></div>
+        <ul className="example-grid">{group.ids.map(id => <li key={id}><ExampleCard id={id} eager={index === 0} /></li>)}</ul>
+      </section>)}
+    </main>
+    <Footer />
+  </>;
+}
+
+/** An example's page: the bar, the live stage with its status, and what the GPU does in this example. */
+function Studio({ opening }: { opening: ExampleId }) {
+  const [selected, setSelected] = useState<ExampleId>(opening);
   // `mode` and `diagnostic` mirror the runtime: `onStatusChange` and the result of each action.
   const [mode, setMode] = useState("dom");
   const [diagnostic, setDiagnostic] = useState("Ordinary DOM startup; admission pending.");
@@ -94,29 +151,30 @@ function App() {
   const leaving = useRef(false);
   // The `.stage` element that the canvas and DOM hosts are created in.
   const frame = useRef<HTMLDivElement>(null);
-  // The studio section, scrolled into view when a catalog card is chosen.
+  // The studio section, scrolled to its top when the card of the next example is followed.
   const studio = useRef<HTMLElement>(null);
   const controller = useRef<CanvasController>(undefined);
   // The example in the URL, kept by the effect below.
-  const shown = useRef<SceneId>(selected);
+  const shown = useRef<ExampleId>(selected);
   // Setter registered by `Demo` (through `onReady`) to switch examples inside the running root. It is
   // called once on registration too, in case the URL changed while the root was loading.
-  const change = useRef<(id: SceneId) => void>(undefined);
-  const ready = useCallback((update: (id: SceneId) => void) => { change.current = update; update(shown.current); }, []);
-  // The example on stage, or `undefined` on the examples' index, where the stage shows the overview scene.
-  const current = examples.find(example => example.id === selected);
-  const home = !current;
+  const change = useRef<(id: ExampleId) => void>(undefined);
+  const ready = useCallback((update: (id: ExampleId) => void) => { change.current = update; update(shown.current); }, []);
+  // The example on stage, and the ones before and after it in the catalog.
+  const current = exampleOf(selected), { previous, next } = neighbours(selected);
   useEffect(() => {
     const host = frame.current!;
     let app: CanvasController | undefined;
     let cancelled = false;
-    // The URL's example is selected in the page chrome and in the running `Demo`. Page anchors such as
-    // `#examples` also fire `popstate`; they leave the path, and so the example, as it is.
+    // The URL's example is selected in the page chrome and in the running `Demo`. Page anchors also fire
+    // `popstate`; they leave the path, and so the example, as it is.
     const show = () => {
       if (retired.current) return;
       upgradeHashLink();
-      const page = pageExample(), id: SceneId = page ?? hero.id;
-      applyHead(page);
+      const id = pageExample();
+      // The gallery is another view of this document's script: the history went back to it, so it is loaded.
+      if (!id) { location.reload(); return; }
+      applyHead(id);
       if (id === shown.current) return;
       shown.current = id; setSelected(id);
       // An example not offered on the polyfill is never shown GPU-presented by it: GPU mode is left first
@@ -176,18 +234,18 @@ function App() {
     return () => { cancelled = true; window.removeEventListener("popstate", show); window.removeEventListener("hashchange", show);
       window.removeEventListener("pagehide", close); window.removeEventListener("pageshow", restore); close(); };
   }, [ready]);
-  // Opens the examples' index (no id) or an example's page in place.
-  function go(id?: SceneId) {
+  // Opens an example's page in place.
+  function go(id: ExampleId) {
     history.pushState(null, "", pageURL(id));
     navigate.current?.();
   }
-  // A plain click on an in-site link switches in place; modified clicks open the page's own URL.
-  function follow(event: MouseEvent<HTMLAnchorElement>, id?: SceneId) {
-    if (disposed) { event.preventDefault(); return; }
-    if (ownClick(event)) return;
+  // A plain click on a link to another example switches in place and shows the top of the page; modified clicks open
+  // the page's own URL. A disposed page has no runtime to switch, so the link loads the example's page.
+  function follow(event: MouseEvent<HTMLAnchorElement>, id: ExampleId) {
+    if (disposed || ownClick(event)) return;
     event.preventDefault();
     go(id);
-    if (id) requestAnimationFrame(() => studio.current?.scrollIntoView({ block: "start" }));
+    requestAnimationFrame(() => { if ((studio.current?.getBoundingClientRect().top ?? 0) < 0) scrollTo({ top: 0 }); });
   }
   // Starts GPU mode by itself when enough of the stage is in view (see `autoStart`). Admission is the proof, as for a
   // press of Enable: a refusal is shown in the status line and the page stays ordinary DOM.
@@ -214,8 +272,8 @@ function App() {
   // (`trigger: "button"`) cancels the automatic start and records a DOM choice for this tab.
   async function action(operation: "enable" | "disable" | "dispose", trigger: "auto" | "button" = "button") {
     if (trigger === "button") { autoStart.current = false; if (operation !== "dispose") rememberDom(operation === "disable"); }
-    // Admission draws and clicks a probe inside the visible stage, and the buttons are under the stage: a press with too
-    // little of the stage in view brings it into view first, rather than failing with "explicitly enable again when visible".
+    // Admission draws and clicks a probe inside the visible stage: a press with too little of the stage in view brings
+    // it into view first, rather than failing with "explicitly enable again when visible".
     if (operation === "enable" && frame.current) {
       const box = frame.current.getBoundingClientRect(), visible = Math.min(box.bottom, innerHeight) - Math.max(box.top, 0);
       if (visible < Math.min(autoVisiblePx, box.height)) frame.current.scrollIntoView({ block: "nearest" });
@@ -259,135 +317,104 @@ function App() {
     await removePolyfill().catch(error => console.error("Showcase polyfill removal failed", error));
     polyfillActive.current = false; setPolyfilled(false);
   }
-  const filtered = searchExamples(query, category);
   // The page reflects the runtime's actual mode, not what was requested.
   const gpu = mode === "gpu";
   // With the polyfill installed, examples it doesn't run well are not offered GPU mode at all.
   const polyfillRefused = polyfilled ? polyfillExcluded[selected] : undefined;
-  // The studio's own controls: the example picker, the mode and the lifecycle buttons.
-  const picker = <label className="example-switch">{home ? "Open" : "Example"}
-    <select aria-label="Example" value={selected} disabled={disposed} onChange={event => go(event.target.value as SceneId)}>
-      <option value={hero.id}>{hero.number} · Overview</option>
-      {examples.map(example => <option key={example.id} value={example.id}>{example.number} · {example.title}</option>)}
-    </select></label>;
+  const usable = !busy && !disposed && mounted;
   const modePill = <span className={`mode-pill ${gpu ? "active" : ""}`}><span className="dot" aria-hidden="true" />{gpu ? polyfilled ? "GPU active · polyfill" : "GPU active" : disposed ? "Disposed" : "Ordinary DOM"}</span>;
-  const toolbar = <div className="toolbar"><button aria-describedby="gpu-requirement" disabled={busy || disposed || !mounted || !!polyfillRefused} onClick={() => void action("enable")}>Enable experimental GPU</button>
-    <button disabled={busy || disposed || !mounted} onClick={() => void action("disable")}>Use ordinary DOM</button>
-    <button disabled={busy || disposed || !mounted} onClick={() => void action("dispose")}>Dispose example</button></div>;
-  const stageClass = selected === "instrument" ? "stage stage-fluid" : home ? "stage stage-hero" : "stage";
   return <>
-    <a className="skip-link" href="#studio">Skip to the live stage</a>
-    <div className="page-backdrop" aria-hidden="true"><i /><i /></div>
-    <div className="hero-shell">
-      {/* The brand goes to the site's home page, another document. */}
-      <header className="site-header"><a className="brand" href={base}><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>Underglass<span className="tag">CHROME · EDGE 157+</span></a>
-        <nav aria-label="Site"><a href={base}>Home</a><a href="#examples">Examples</a><a href="#about">About the experiment</a><a href={site.docs}>Docs</a>
-          <a href={site.repository} onClick={() => track("Outbound Link", { target: "github" })}>GitHub <span aria-hidden="true">&#8599;</span></a></nav></header>
-      {/* The live stage is the top of every page. On the home page it shows the hero scene, whose headline (the
-          page's h1) is inside the stage; on an example's page the example's title is the h1. */}
-      <section className={`studio ${gpu ? "is-gpu" : ""} ${home ? "studio-home" : ""}`} id="studio" ref={studio} tabIndex={-1}
-        aria-labelledby={home ? undefined : "studio-title-heading"} aria-label={home ? "Live stage" : undefined}>
-        {current && <>
-          <div className="studio-head">
-            <div><p className="eyebrow"><b>{current.number}</b>Live studio</p><h1 id="studio-title-heading">{current.title}</h1></div>
-            <div className="studio-actions">{picker}{modePill}</div>
-          </div>
-          <p className="studio-detail">{current.detail}</p>
-        </>}
-        <div className="stage-frame">
-          {current && <div className="stage-chrome" aria-hidden="true"><i /><i /><i /><span>{gpu ? polyfilled ? "webgpu · html-in-canvas polyfill" : "webgpu · shared compositor" : "ordinary dom"}</span></div>}
-          <div className="stage-scroll" role="region" aria-label={home ? "Live stage" : "Live example canvas; scroll horizontally on small screens"} tabIndex={0}>
-            <div className={stageClass} ref={frame} /></div>
+    <Chrome skip={{ href: "#stage-frame", text: "Skip to the live stage" }} />
+    <main className={`studio ${gpu ? "is-gpu" : ""}`} id="studio" ref={studio} tabIndex={-1} aria-labelledby="studio-title-heading">
+      {/* The way around: back to the gallery, any example by name, the ones before and after, and how the stage is drawn. */}
+      <nav className="studio-bar" aria-label="Examples">
+        <a className="bar-back" href={pageURL()}><span aria-hidden="true">&#8592;</span><span>All examples</span></a>
+        <select className="bar-pick" aria-label="Example" value={selected} disabled={disposed} onChange={event => go(event.target.value as ExampleId)}>
+          {examples.map(example => <option key={example.id} value={example.id}>{example.number} · {example.title}</option>)}
+        </select>
+        <span className="bar-steps">
+          <a href={pageURL(previous.id)} aria-label={`Previous example: ${previous.title}`} title={`Previous: ${previous.title}`} onClick={event => follow(event, previous.id)}><span aria-hidden="true">&#8249;</span></a>
+          <a href={pageURL(next.id)} aria-label={`Next example: ${next.title}`} title={`Next: ${next.title}`} onClick={event => follow(event, next.id)}><span aria-hidden="true">&#8250;</span></a>
+        </span>
+        <div className="mode-switch" role="group" aria-label="Presentation">
+          <button type="button" aria-pressed={gpu} aria-describedby="gpu-requirement" title="Draw the stage on the GPU (experimental)"
+            disabled={!usable || !!polyfillRefused} onClick={() => void action("enable")}>GPU</button>
+          <button type="button" aria-pressed={!gpu && !disposed} title="Draw the stage as ordinary DOM" disabled={!usable} onClick={() => void action("disable")}>DOM</button>
         </div>
-        <div className="control-bar">
-          {home && modePill}
+      </nav>
+      <div className="studio-head">
+        <p className="eyebrow"><b>{current.number}</b>{current.category}</p>
+        <h1 id="studio-title-heading">{current.title}</h1>
+      </div>
+      <div className="stage-frame" id="stage-frame">
+        <div className="stage-chrome" aria-hidden="true"><i /><i /><i /><span>{gpu ? polyfilled ? "webgpu · html-in-canvas polyfill" : "webgpu · shared compositor" : "ordinary dom"}</span>
+          {selected !== "instrument" && <span className="scroll-hint">scroll sideways &#8594;</span>}</div>
+        <div className="stage-scroll" role="region" aria-label="Live example canvas; scroll horizontally on small screens" tabIndex={0}>
+          <div className={selected === "instrument" ? "stage stage-fluid" : "stage"} ref={frame} /></div>
+      </div>
+      <div className="status-row">
+        {modePill}
+        <Status reason={diagnostic}>
           <p className="stage-note" id="gpu-requirement"><strong>GPU mode needs Chrome or Edge 157 or later{offerPolyfill && ", or the polyfill offered below"}.</strong> Ordinary DOM works in any browser.</p>
-          {home && picker}
-          {toolbar}
+          <p className="stage-note">Dispose ends this page's Underglass session and returns every control to ordinary DOM, until the page is reloaded.</p>
+          <button type="button" className="dispose" disabled={!usable} onClick={() => void action("dispose")}>Dispose example</button>
+        </Status>
+      </div>
+      {disposed && <p className="disposed-note">The example is disposed. Reload this page to start a fresh session.</p>}
+      {!gpu && !disposed && support !== "likely" && <GpuHelp support={support} preview={previews[current.id]} title={current.title} example={selected}
+        polyfill={offerPolyfill ? { excluded: polyfillExcluded[selected], ready: mounted && !busy, run: () => void tryPolyfill() } : undefined} />}
+      {gpu && polyfilled && <p className="polyfill-note" role="note"><strong>Running on the HTML-in-Canvas polyfill.</strong> GPU mode here uses
+        a JavaScript stand-in for the browser API, not Chrome's own HTML-in-Canvas: changes reach the GPU about a tenth of a second late,
+        and some details differ. Chrome or Edge 157 or later shows the real thing. <a href={polyfillLinks.limitations} target="_blank" rel="noreferrer">What
+        the polyfill can't do <span aria-hidden="true">&#8599;</span></a></p>}
+      <p className="studio-detail">{current.detail}</p>
+      <section className="why-gpu" aria-labelledby="why-gpu-heading">
+        <div className="why-col">
+          <p className="eyebrow">WHY THE GPU HERE</p>
+          <h2 id="why-gpu-heading">{current.gpu.headline}</h2>
+          <ul>{current.gpu.points.map(point => <li key={point}>{point}</li>)}</ul>
+          {!gpu && <p className="why-hint">Switch to GPU above to see these parts; ordinary DOM shows the same controls without them.</p>}
         </div>
-        <Status reason={diagnostic} />
-        {disposed && <p className="disposed-note">The example is disposed. Reload this page to start a fresh session.</p>}
-        {!gpu && !disposed && support !== "likely" && <GpuHelp support={support} preview={current && previews[current.id]} title={current?.title ?? "The header"} example={selected}
-          polyfill={offerPolyfill ? { excluded: polyfillExcluded[selected], ready: mounted && !busy, run: () => void tryPolyfill() } : undefined} />}
-        {gpu && polyfilled && <p className="polyfill-note" role="note"><strong>Running on the HTML-in-Canvas polyfill.</strong> GPU mode here uses
-          a JavaScript stand-in for the browser API, not Chrome's own HTML-in-Canvas: changes reach the GPU about a tenth of a second late,
-          and some details differ. Chrome or Edge 157 or later shows the real thing. <a href={polyfillLinks.limitations} target="_blank" rel="noreferrer">What
-          the polyfill can't do <span aria-hidden="true">&#8599;</span></a></p>}
-        {current && <>
-          <section className="why-gpu" aria-labelledby="why-gpu-heading">
-            <div className="why-col">
-              <p className="eyebrow">WHY THE GPU HERE</p>
-              <h3 id="why-gpu-heading">{current.gpu.headline}</h3>
-              <ul>{current.gpu.points.map(point => <li key={point}>{point}</li>)}</ul>
-              {!gpu && <p className="why-hint">Enable experimental GPU above to see these parts; ordinary DOM shows the same controls without them.</p>}
-            </div>
-            <div className="why-col why-css">
-              <p className="eyebrow">WITH CSS ALONE</p>
-              <p>{current.gpu.css}</p>
-            </div>
-          </section>
-          <p className="stage-note">Same original controls in DOM and GPU. {selected === "instrument" ? "This example reflows to the width of your screen." : "On smaller screens, scroll the studio horizontally."} Nothing you type or film leaves your browser.</p>
-        </>}
-      </section>
-    </div>
-    <main>
-      <section className="how" id="how-it-works" aria-labelledby="how-title">
-        <p className="eyebrow">HOW IT WORKS</p>
-        <h2 id="how-title">Three steps, no clones.</h2>
-        <ol className="how-steps">
-          <li><span className="step-art step-react" aria-hidden="true"><b /><b /><b /></span><strong>React renders real DOM</strong>
-            <span>Typed <code>Surface</code> layers hold ordinary inputs, buttons and text. Their state never leaves React.</span></li>
-          <li><span className="step-art step-canvas" aria-hidden="true"><b /><b /></span><strong>Chrome paints it into a canvas</strong>
-            <span>HTML-in-Canvas captures each surface as a texture and keeps native hit testing on the original elements.</span></li>
-          <li><span className="step-art step-gpu" aria-hidden="true"><b /><b /><b /></span><strong>One GPU pass composes it</strong>
-            <span>Transforms, staggered motion and decorative shaders run in a shared WebGPU compositor on top.</span></li>
-        </ol>
-      </section>
-      <section className="catalog" id="examples" aria-labelledby="catalog-title">
-        <div className="section-heading"><div><p className="eyebrow">THE COLLECTION</p><h2 id="catalog-title">Pick a playground</h2></div>
-          <span className="count-pill">{examples.length} live examples</span></div>
-        <div className="filters"><label>Find an example<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Try motion, WGSL or presence" /></label>
-          <label>Category<select aria-label="Category" value={category} onChange={event => setCategory(event.target.value)}>
-            {["All", ...new Set(examples.map(example => example.category))].map(value => <option key={value}>{value}</option>)}
-          </select></label></div>
-        <div className="example-grid">{filtered.map(example => <a key={example.id} className={`example-card accent-${example.accent}`}
-          href={pageURL(example.id)} aria-current={selected === example.id ? "page" : undefined} onClick={event => follow(event, example.id)}>
-          <span className={`card-art art-${example.id}`} aria-hidden="true"><i /><i /><i /><i /></span>
-          <span className="card-top"><span>{example.category}</span><span>{example.number}</span></span>
-          <h3>{example.title}</h3><p>{example.summary}</p>
-          <span className="card-tags">{example.tags.map(tag => <span key={tag}>{tag}</span>)}</span>
-          <span className="card-link">{selected === example.id ? "Now in the studio" : "Open in the studio"} <span aria-hidden="true">&#8594;</span></span>
-        </a>)}</div>
-        {filtered.length === 0 && <p role="status" className="empty">No matching examples. Try another search or category.</p>}
-      </section>
-      <section className="about" id="about"><p className="eyebrow">AN HONEST EXPERIMENT</p><h2>Progressive presentation, not pretend compatibility.</h2>
-        <div className="about-grid">
-          <div><h3>What it is</h3><p>Underglass layers GPU presentation over React's original controls. The examples use the public Surface, Box, Presence, motion and effect APIs. Typed layout and appearance compile to browser CSS; the browser still owns layout and editing.</p></div>
-          <div><h3>What it needs</h3><p>Experimental GPU needs a compatible browser with HTML-in-Canvas and native geometry support; in one, the studio turns it on by itself when the stage comes into view, and <strong>Use ordinary DOM</strong> turns it off for this tab. Ordinary DOM works everywhere else. In other Chromium browsers, an opt-in polyfill can stand in for that API, and the page says so while it does. Missing capabilities are diagnosed, not disguised. Decorative shaders never replace essential controls.</p></div>
-          <div><h3>What it is not</h3><p>This is a prepared showcase, not a production certification. Accessibility, physical-device and broader browser qualification remain open. Your reduced-motion preference is respected.</p></div>
+        <div className="why-col why-css">
+          <p className="eyebrow">WITH CSS ALONE</p>
+          <p>{current.gpu.css}</p>
         </div>
       </section>
+      <p className="stage-note">Same original controls in DOM and GPU. {selected === "instrument" ? "This example reflows to the width of your screen." : "On smaller screens, scroll the stage sideways."} Nothing you type or film leaves your browser.</p>
+      <nav className="studio-next" aria-label="More examples">
+        <ExampleCard id={next.id} label="Next example" onClick={event => follow(event, next.id)} />
+        <a className="all-examples" href={pageURL()}>All {examples.length} examples <span aria-hidden="true">&#8594;</span></a>
+      </nav>
     </main>
-    <footer><span><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>Underglass / Example studio</span>
-      <span><a href={site.docs}>Documentation</a> · <a href={site.repository} onClick={() => track("Outbound Link", { target: "github" })}>Source on GitHub</a> · <a href={site.npm}
-        onClick={() => track("Outbound Link", { target: "npm" })}>@underglass/react on npm</a> · Apache-2.0.{analyticsEnabled && " Anonymous visit counts by Vercel Web Analytics, no cookies."}</span></footer>
+    <Footer />
   </>;
+}
+
+/** The page the URL names when the document loads: the gallery, or an example's studio. */
+function App() {
+  const [opening] = useState(pageExample);
+  return opening ? <Studio opening={opening} /> : <Gallery />;
 }
 
 // Types the `window.showcase` inspection handle.
 declare global {
   interface Window { showcase: { state(): ReturnType<CanvasController["state"]>; controller: CanvasController; react: string; reactDOM: string } }
 }
-// The page chrome is a normal React root; the Underglass root is created separately in `App`.
+// The page chrome is a normal React root; the Underglass root is created separately in `Studio`.
 createRoot(document.getElementById("app")!).render(<App />);
 
-/** Plain-language status with the runtime's exact reason one click away. */
-function Status({ reason }: { reason: string }) {
+/**
+ * Plain-language status, with the rest one click away under **Details**: the runtime's exact reason, and what the page
+ * passes in (what GPU mode needs, and the control that ends the session).
+ */
+function Status({ reason, children }: { reason: string; children: ReactNode }) {
   const { title, hint } = explain(reason);
-  return <div className="diagnostic" role="status" aria-live="polite">
-    <span className="diagnostic-label">Status</span>
-    <span className="diagnostic-text"><strong>{title}</strong>{hint && <> {hint}</>}
-      {title !== reason && <details><summary>Details</summary><code>{reason}</code></details>}</span>
+  return <div className="diagnostic">
+    <span className="diagnostic-text" role="status" aria-live="polite"><strong>{title}</strong>{hint && <> {hint}</>}</span>
+    <details><summary>Details</summary>
+      {title !== reason && <code>{reason}</code>}
+      {children}
+    </details>
   </div>;
 }
 
@@ -395,7 +422,7 @@ function Status({ reason }: { reason: string }) {
 interface PolyfillOffer { excluded?: string; ready: boolean; run(): void }
 
 /** Shown when this browser cannot run GPU mode: how to get it, what it looks like, and the polyfill where it can work. */
-function GpuHelp({ support, preview, title, example, polyfill }: { support: Support; preview?: string; title: string; example: SceneId; polyfill?: PolyfillOffer }) {
+function GpuHelp({ support, preview, title, example, polyfill }: { support: Support; preview?: string; title: string; example: ExampleId; polyfill?: PolyfillOffer }) {
   const [copied, setCopied] = useState<string>();
   const [showPreview, setShowPreview] = useState(false);
   const copy = (url: string) => { track("GPU Help", { example, action: "copy-flag" }); void navigator.clipboard?.writeText(url).then(() => setCopied(url), () => setCopied(undefined)); };
@@ -403,12 +430,12 @@ function GpuHelp({ support, preview, title, example, polyfill }: { support: Supp
     <div className="gpu-help-text">
       <h3 id="gpu-help-title">{support === "chrome-flags" ? "Update your browser to turn on GPU mode" : "You're seeing the ordinary DOM version"}</h3>
       <p>{support === "chrome-flags"
-        ? "This browser doesn't have HTML-in-Canvas yet. Everything below works as ordinary DOM; GPU mode adds the effects described under the stage."
-        : "GPU mode needs HTML-in-Canvas, which Chrome and Edge have from version 157. Every example below still works here as plain DOM, with the same controls."}</p>
+        ? "This browser doesn't have HTML-in-Canvas yet. The example works as ordinary DOM; GPU mode adds the effects described below."
+        : "GPU mode needs HTML-in-Canvas, which Chrome and Edge have from version 157. Every example still works here as plain DOM, with the same controls."}</p>
       <ol>
         <li>Use <a href="https://www.google.com/chrome/" target="_blank" rel="noreferrer" onClick={() => track("GPU Help", { example, action: "download" })}>Chrome</a> or
           Edge 157 or later. Already have one? Open <code>chrome://settings/help</code> or <code>edge://settings/help</code> to update it.</li>
-        <li>Restart the browser, come back here and press <strong>Enable experimental GPU</strong>.</li>
+        <li>Restart the browser and come back here: the example then starts on the GPU by itself, and the <strong>GPU</strong> button above switches it on.</li>
       </ol>
       {support === "chrome-flags" && <>
         <p className="gpu-help-flags">On an older build, open each of these, set it to <strong>Enabled</strong> and restart:</p>
