@@ -149,6 +149,12 @@ strata.detach();                               // back to the CSS presentation
     they do in CSS;
   - states from `:hover`, `:active`, `:focus-visible` and `:disabled`;
   - geometry from layout, followed through CSS transitions.
+- **When it reads:** a panel is read only when something happened to it: the pointer or a key in it, an `input`, a
+  DOM change, a transition, a blinking or chasing light, a spring of its own, or a form control a script set. So a drag
+  in one panel costs that panel, not the page. A press, a release, a `change`, a move of the focus and a resize read
+  every panel, and so does a poll every half second (`poll`), which is what finds a change nothing reports: a theme
+  set above the Underglass root, an edited stylesheet, a scroll inside a panel. Call `strata.refresh()` after such a
+  change to have it at once.
 - **When GPU is off** (fallback, forced colours or disabled): panels leave face mode, and the CSS relief is back.
 - **The Objects level:** `attachStrataGpu(controller, { level: "objects" })`, or `data-strata-level="objects"` on a
   component, a panel or a scope (`level` on the bindings), presents components as objects (design language section
