@@ -1,5 +1,11 @@
 # @underglass/ui
 
+## 0.4.0
+
+### Patch Changes
+
+- 4054e2f: The npm pages of all five packages link https://underglass.dev as their homepage.
+
 ## 0.3.0
 
 No changes in this release.
