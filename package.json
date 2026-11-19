@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
+  "homepage": "https://underglass.dev",
   "type": "module",
   "workspaces": [
     "packages/core",

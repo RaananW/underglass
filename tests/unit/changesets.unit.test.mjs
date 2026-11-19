@@ -72,7 +72,8 @@ test("all five library packages are publishable and carry full npm metadata", ()
   assert.deepEqual(publishable, ["@underglass/core", "@underglass/css-compiler", "@underglass/react", "@underglass/ui", "@underglass/vue"]);
   for (const { manifest } of libraries) {
     assert.ok(manifest.author, `${manifest.name} author`);
-    assert.ok(manifest.homepage && manifest.bugs?.url, `${manifest.name} homepage and bugs`);
+    assert.equal(manifest.homepage, "https://underglass.dev", `${manifest.name} homepage`);
+    assert.ok(manifest.bugs?.url, `${manifest.name} bugs`);
     assert.ok(manifest.keywords?.length, `${manifest.name} keywords`);
   }
 });
