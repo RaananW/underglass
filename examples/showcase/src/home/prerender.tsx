@@ -13,5 +13,5 @@ import { Backdrop, Footer, Header, Rail, sections, Stage } from "./page";
 export const prerender = (base: string) =>
   renderToStaticMarkup(<><Backdrop /><Header base={base} /><Rail /></>)
   // The track is as tall as the sections it holds; in the deck the pin keeps the stage in the window (`home.css`).
-  + `<main id="track" style="--count:${sections.length}"><div id="pin"><div id="stage">${prerenderCanvasApp(<Stage base={base} />, renderToString)}</div></div></main>`
+  + `<main id="track" style="--count:${sections.length}"><div id="pin"><div id="stage">${prerenderCanvasApp(<Stage base={base} assets="/" />, renderToString)}</div></div></main>`
   + renderToStaticMarkup(<Footer />);

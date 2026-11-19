@@ -18,12 +18,12 @@ const directory = resolve(process.argv[2] ?? "dist");
 await assertPhysicalPath(directory);
 /**
  * Every public path: the home, 404 and example pages and the site files that `examples/showcase/seo.ts`
- * writes, the icons and social card from `examples/showcase/public/`, and Vite's hashed JS/CSS plus the JPEG
+ * writes, the icons, the social card and the example cards' pictures (`thumbs/`) from `examples/showcase/public/`, and Vite's hashed JS/CSS plus the JPEG
  * previews of GPU mode shown to browsers that cannot run it. A chunk's base name may contain dots: Vite names
  * Babylon Lite's lazily loaded shader chunks after their source files (`skybox.vertex-<hash>.js`), which the
  * instrument material's environment loading brings in.
  */
-const allowed = /^(?:(?:index|examples|404)\.html|robots\.txt|sitemap\.xml|favicon\.svg|og\.jpg|apple-touch-icon\.png|examples\/[\w-]+\.html|assets\/[\w.-]+\.(?:js|css|jpg))$/;
+const allowed = /^(?:(?:index|examples|404)\.html|robots\.txt|sitemap\.xml|favicon\.svg|og\.jpg|apple-touch-icon\.png|examples\/[\w-]+\.html|thumbs\/[\w-]+\.jpg|assets\/[\w.-]+\.(?:js|css|jpg))$/;
 let count = 0;
 /** Recursively checks `path`; `prefix` is the output-relative prefix (`""`, `"assets/"` or `"examples/"`) of its entries. */
 async function check(path, prefix = "") {
@@ -31,8 +31,8 @@ async function check(path, prefix = "") {
     const name = `${prefix}${entry.name}`, file = join(path, entry.name);
     assert.equal((await lstat(file)).isSymbolicLink(), false, `Public asset symlink refused: ${name}`);
     if (entry.isDirectory()) {
-      // Only the top-level `assets/` and `examples/` directories are allowed; any nested directory fails here.
-      assert.ok(name === "assets" || name === "examples", `Unexpected public directory: ${name}`);
+      // Only the top-level `assets/`, `examples/` and `thumbs/` directories are allowed; any nested directory fails here.
+      assert.ok(name === "assets" || name === "examples" || name === "thumbs", `Unexpected public directory: ${name}`);
       await check(file, `${name}/`);
     } else {
       assert.ok(allowed.test(name), `Unexpected public asset: ${name}`);

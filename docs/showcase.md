@@ -6,52 +6,49 @@ Underglass package. It is two documents:
 - **The home page** (`index.html`, `src/home`): a page of eight sections which, with
   GPU presentation, is a deck with a change between each two. See
   [The home page](#the-home-page).
-- **The example studio** (`examples.html`, `src/main.tsx`): a React SPA whose catalog
-  opens ten live examples in the same app. It is served at `/examples` (its overview
-  scene and the catalog) and at `/examples/<id>` for each example.
+- **The examples** (`examples.html`, `src/main.tsx`): the gallery at `/examples` and a
+  page for each of the ten live examples at `/examples/<id>`.
 
 The engineering playground remains separate; raw reports, probes, test evidence and
 private fixtures are not served.
 
-In the studio the live stage is the top of every page, right under the site header.
 The page around a stage has the home page's look (near-black ground, hairline rules,
 one indicator colour); what a stage holds is the example's own, with its own colours.
-On the examples' index it shows the overview scene (below); on an
-example's page it shows that example, with its title (the page's `h1`), the picker, the mode, the
-controls, the status line and the **Why the GPU here** panel around it. "How it
-works", the catalog and "About" follow.
 
-## The studio's overview scene
+## The gallery and an example's page
 
-`src/hero.tsx` is the stage on the examples' index (`/examples`), and a scene rather
-than a catalog example (`hero` in `src/catalog.ts`, number 00 in the picker). Its layers, all
-enrolled with `useSurfaceRef` and laid out by CSS on a fluid stage that is as tall as
-its content (as the Instrument gallery's is):
+**The gallery** (`/examples`) is every example as a card and nothing else: a heading,
+one line of what the examples are, whether this browser can draw them on the GPU, and
+the cards in three groups (`groups` in `src/catalog.ts`: **Start here**, **Real
+controls at work**, **Lit component libraries**). The first card is in the first
+screen at every width. A card is the example's picture, its category and number, its
+title and a sentence. The gallery loads no Underglass; a card is a link to the
+example's page.
 
-| Layer | Kind | What it is |
-| --- | --- | --- |
-| `hero-sky` | decorative | Pools of light on the page's dark ground, under a faint grid. Ripple (at rest), then the custom `showcase-hero-sky` shader: a hue turn and a lamp with faint caustic rings at the pointer. |
-| `hero-pane-art`, `hero-pane-code` | decorative | Translucent glass panes. Ripple (at rest), a 1 px chromatic split, then the custom `showcase-hero-glass` sheen: a glint and a streak that slide with the pointer and an edge lit on the side facing it. They drift away from the pointer (`setTransform`). |
-| `hero-card-glass` | decorative | The glass slab under the card, kept on the card's box, with the same chain. |
-| `hero-copy` | interactive | The page's `h1`, its lede, the two links and the highlights. |
-| `hero-card` | interactive | Real range inputs (**Light**, **Colour**) and a **Ripple the glass** button, whose values the shaders read. |
+**A card's picture** is the example's own stage, GPU-presented:
+`public/thumbs/<id>.jpg` (720x485) and `<id>-s.jpg` (360x243), offered together
+(`srcset`) so a wide page fetches the small one. `scripts/showcase-thumbnails.mjs`
+renders them from a served build; run it by hand after an example's look changes and
+commit the images.
 
-Effects only ever go on the decorative layers. The pointer, the scroll position and
-the card's inputs only write effect parameters (`handle.update`) and transforms, so
-nothing is recaptured while the light moves: the lamp eases toward the pointer (or
-drifts slowly round its resting place without one), the hue turns as the stage
-scrolls out of view, and a press on the sky, or the button, ripples the glass and the
-sky for about a second. The frame loop runs only in GPU mode, with the stage in view
-and the page visible. Under `prefers-reduced-motion` the lamp follows the pointer
-without easing, and nothing drifts or ripples; the shaders' clock is paused. In
-ordinary DOM the scene is the same markup with working inputs and no effects (the
-button is disabled and the card says why).
+**An example's page** holds the example and the way around:
 
-The panes never rotate: a stage taller than the viewport (on a phone, or a short
-window) is clipped to the viewport, and a clipped layer must stay axis-aligned
-(`Viewport clipping requires positive axis-aligned layer transforms`). On a stage
-narrower than 760 px the copy and the card stack, and the panes move to a strip of
-their own under the card.
+- **The bar**, one row at every width: **All examples** (back to the gallery), the
+  example picker (a native select, which a phone shows as its own list), previous and
+  next, and the presentation switch, **GPU** and **DOM**, whose pressed half is how the
+  stage is drawn now. On a phone the back link is its arrow and previous and next are
+  left to the card under the stage. The bar is part of the page and is not fixed over
+  it: nothing may lie over the stage where GPU admission draws and clicks its probe.
+- The example's title (the page's `h1`) and **the stage**, which starts in the first
+  screen.
+- **The status line** under the stage: the mode, what the runtime last said, and
+  **Details** with the exact reason, what GPU mode needs and **Dispose example**.
+- What the example does, the **Why the GPU here** panel, and the card of the next
+  example with a link to the gallery.
+
+The picker, previous, next and the card switch examples in place
+(`history.pushState`), so the running runtime and its GPU mode survive; the gallery
+is loaded as a document of its own.
 
 | Example | What it shows |
 | --- | --- |
@@ -80,7 +77,7 @@ or sent anywhere, and the site has no backend. **Stop camera**, leaving the exam
 closing the tab stops every track. The panel says this before the camera is started.
 
 The examples share a 1040x700 stage, except the Instrument gallery, whose stage is
-fluid like the overview scene. A decorative backdrop and the decorative
+fluid: as wide as the page and as tall as its content. A decorative backdrop and the decorative
 `showcase-art` layer persist across examples (only their layout/content change).
 The art layer always carries the aurora definition, at identity strength unless
 the shader lab asks for more, because custom WGSL is compiled per layer during
@@ -417,15 +414,17 @@ link's jump to a section's first page, and the return to the flow.
 
 ## Pages, search and social metadata
 
-The base is the home page. The studio's index is `<base>examples`, whose stage shows
-the overview scene, and each example has its own page at `<base>examples/<id>`.
-Catalog cards and the studio's example picker (whose first entry, 00, is the
-overview) switch scenes in place with `history.pushState`, so the running runtime
-(and GPU mode) survives; a modified click opens the page's own URL. The brand and
-**Home** go to the home page, another document. Old `#/motion` links, which named an
-example in the hash of the home page, are sent on to the example's page by a line of
-script in the home page's head. Search and categories stay in the SPA; no iframe
-capture is used.
+The base is the home page. The gallery is `<base>examples`, and each example has its
+own page at `<base>examples/<id>`. On an example's page the picker, previous, next and
+the next example's card switch examples in place with `history.pushState`, so the
+running runtime (and GPU mode) survives; a modified click opens the page's own URL.
+The brand goes to the home page and **All examples** to the gallery, each another
+document. The home page leads to the examples from its header (at every width), its
+cover (**Browse the examples**, where the page has two columns), a link in each section to the example that shows it
+live, and three picture cards with a link to the gallery in its last section. Old
+`#/motion` links, which named an example in the hash of the home page, are sent on to
+the example's page by a line of script in the home page's head. No iframe capture is
+used.
 
 `examples/showcase/seo.ts`, a Vite plugin, writes one static HTML file per page, so no
 server rewrite rules are needed: `index.html` (the home page, prerendered, given its
@@ -525,7 +524,7 @@ up-front guess of whether this browser can run GPU mode, `likely`, `chrome-flags
 `unsupported`), `GPU Enable` (result mode, the status line's headline, the up-front
 browser guess, `api`: `native` or `polyfill`, and `trigger`: `auto` when the page
 started GPU mode by itself, `button` for a press), `GPU Lost` (GPU mode ended without
-the visitor asking, with `api`), `Studio Action` (**Use ordinary DOM**, **Dispose
+the visitor asking, with `api`), `Studio Action` (a press of **DOM**, **Dispose
 example**), `GPU Help` (preview, copied flag, Chrome download link, polyfill button;
 the download link was the Canary link, action `canary`, until Chrome 157) and
 `Outbound Link` (GitHub, npm). `api` keeps polyfilled runs out of the native numbers.
@@ -542,9 +541,10 @@ only, with no custom events.
 
 ## Loading
 
-The page loads with only React, the page chrome and the catalog (about 260 kB, 82 kB
-gzipped). Its effect then loads Underglass, `demos.tsx` and the opening example as
-separate chunks and mounts the Underglass root; the lifecycle buttons wait for it.
+An example's page loads with only React, the page chrome and the catalog. Its effect
+then loads Underglass, `demos.tsx` and the opening example as separate chunks and
+mounts the Underglass root; the switch waits for it. The gallery loads the same entry
+and nothing more: its pictures below the first group are fetched as they come near.
 Each example is its own chunk (`src/examples.ts`), loaded the first time it is
 opened, so Fluent UI, Strata and Babylon Lite only download for the examples that
 use them. Switching examples loads the next one before `Demo` swaps it in: nothing
@@ -552,14 +552,15 @@ inside the root suspends, and the current example stays on stage, GPU-presented,
 until the next one is ready. Vite's chunk-size warning limit is 600 kB, just above
 the two largest chunks (Fluent UI and the Underglass runtime with Babylon Lite).
 
-The surrounding responsive chrome uses ordinary CSS and has no motion of its own
-(the hero's motion is drawn on the GPU, above). Enrolled example surfaces
+The surrounding responsive chrome uses ordinary CSS and has no motion of its own.
+Enrolled example surfaces
 use typed layout and appearance that compile to browser CSS, not a replacement
 layout engine. The shared compositor retains the original React controls/state.
 The task example reuses its existing authored CSS, original component and
 decorative transition helper, with owned cleanup on example retirement.
-The fixed-size live studio scrolls horizontally on small screens to preserve
-native control geometry; the catalog itself reflows. Choosing another example
+The fixed-size stage scrolls sideways on small screens to preserve native control
+geometry (its frame says so while it does); the page around it and the gallery
+reflow. Choosing another example
 resets that example's local in-memory state, deliberately. No backend, external
 font/CDN or local-storage persistence is added; analytics is described above. The
 one `sessionStorage` entry besides analytics' is the visitor's DOM choice (below).
@@ -571,13 +572,12 @@ clicks a probe inside the visible stage, so it waits for 160 px of the stage, or
 of it, in the viewport. Presence is only the guess that decides whether to try:
 admission is the proof, and a refusal leaves ordinary DOM with its reason in the
 status line. If admission is refused only because the stage left the viewport while
-the probe ran, the page tries again the next time it is in view. Any lifecycle button
-cancels the automatic start. **Use ordinary DOM** also records the choice in
-`sessionStorage` (`underglass-showcase-dom`), so this tab stays in DOM after a reload;
-**Enable experimental GPU** clears it. Other browsers keep ordinary DOM until the
-visitor presses **Enable experimental GPU** or the polyfill button. Those buttons sit
-under the stage, so a press with less than 160 px of the stage in view scrolls the
-stage into view first. Raw refusal reasons remain visible. The shader affects
+the probe ran, the page tries again the next time it is in view. A press of the
+switch, or of **Dispose example**, cancels the automatic start. **DOM** also records
+the choice in `sessionStorage` (`underglass-showcase-dom`), so this tab stays in DOM
+after a reload; **GPU** clears it. Other browsers keep ordinary DOM until the visitor
+presses **GPU** or the polyfill button. A press with less than 160 px of the stage in
+view scrolls the stage into view first. Raw refusal reasons remain visible. The shader affects
 only inert aria-hidden artwork, never essential input geometry. Explicit DOM
 recovery preserves original values and focus; disposal ends the app until
 reload. Reduced motion is handled by the existing runtime. Accessibility,
@@ -602,7 +602,7 @@ these switches:
 ```
 
 In either browser GPU mode starts by itself when the stage comes into view (above);
-**Enable experimental GPU** starts it again after **Use ordinary DOM**. A version
+**GPU** starts it again after **DOM**. A version
 number or the API's presence does not guarantee support; Underglass checks working
 capture and geometry and reports refusal reasons.
 
@@ -623,7 +623,7 @@ The offer appears only where it can work: no native support, and both WebGPU and
 `Element.moveBefore`, which Underglass needs and the polyfill does not provide
 (Safari has no `moveBefore` yet, so it gets no offer). Examples that don't run well
 on it can be listed in `polyfillExcluded` with the reason shown to visitors; with the
-polyfill installed, **Enable experimental GPU** is disabled on them, and switching
+polyfill installed, **GPU** is disabled on them, and switching
 to one from polyfilled GPU mode returns to ordinary DOM first. None is listed today.
 
 Measured on 2026-11-08 with polyfill 0.4.0, Chrome 156.0.8078.80 stable (no flags)

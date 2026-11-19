@@ -1,5 +1,5 @@
 /**
- * Unit tests for the public showcase: base path policy, routing and catalog search, the page metadata
+ * Unit tests for the public showcase: base path policy, routing, the gallery's groups and pictures, the page metadata
  * `examples/showcase/seo.ts` writes, the GitHub Pages workflow file, and `scripts/check-showcase-assets.mjs`. Reads files relative to the repository root, so
  * run from the root with `npm run test:unit`.
  */
@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { showcaseBase } from "../../examples/showcase/site-policy.mjs";
-import { route, searchExamples, examples, examplePath, exampleFromPath, pageMeta, site } from "../../examples/showcase/src/catalog.ts";
+import { route, examples, examplePath, exampleFromPath, groups, neighbours, pageMeta, site, thumbnail, thumbnailSize } from "../../examples/showcase/src/catalog.ts";
 import { headTags, noscriptBody, sitemap, robots, notFoundPage, structuredData, defaultImage } from "../../examples/showcase/seo.ts";
 import { inlineCss } from "../../examples/showcase/inline-css.ts";
 
@@ -22,7 +22,7 @@ test("showcase project base is deterministic and rejects unsafe URL shapes", () 
     assert.throws(() => showcaseBase(base), /CANVAS_SHOWCASE_BASE/);
   }
 });
-test("showcase paths, old hash links and catalog filtering remain local and predictable", () => {
+test("showcase paths and old hash links remain local and predictable", () => {
   for (const example of examples) {
     assert.equal(route(`#/${example.id}`), example.id);
     assert.equal(examplePath(example.id), `examples/${example.id}`);
@@ -33,8 +33,27 @@ test("showcase paths, old hash links and catalog filtering remain local and pred
   assert.equal(route("#/missing"), "layers");
   for (const path of ["/", "/examples", "/examples/", "/examples/missing", "/examples/motion/extra", "/underglass/examples/motion", "/other"]) assert.equal(exampleFromPath(path, "/"), undefined);
   assert.equal(exampleFromPath("/examples/motion", "/underglass/"), undefined);
-  assert.deepEqual(searchExamples("layer", "Motion").map(example => example.id), ["motion"]);
-  assert.equal(searchExamples("unfindable", "All").length, 0);
+});
+test("the gallery shows every example once, each with its two pictures, and the steps go round the catalog", async () => {
+  // Every example is in exactly one group, and a group lists its examples in catalog order.
+  const grouped = groups.flatMap(group => group.ids), order = examples.map(example => example.id);
+  assert.deepEqual([...grouped].sort(), [...order].sort());
+  for (const group of groups) assert.deepEqual([...group.ids], order.filter(id => group.ids.includes(id)), group.id);
+  // The pictures are JPEGs of the sizes the pages reserve for them (a JPEG's frame header holds its height and width).
+  const size = bytes => { for (let at = 2; at < bytes.length;) { const marker = bytes[at + 1], length = bytes.readUInt16BE(at + 2);
+    if (marker >= 0xc0 && marker <= 0xc2) return { height: bytes.readUInt16BE(at + 5), width: bytes.readUInt16BE(at + 7) }; at += 2 + length; } return undefined; };
+  for (const id of order) {
+    for (const small of [false, true]) {
+      const address = thumbnail(id, "/underglass/", small);
+      assert.equal(address, `/underglass/thumbs/${id}${small ? "-s" : ""}.jpg`);
+      const bytes = await readFile(`examples/showcase/public${address.slice("/underglass".length)}`), expected = small ? thumbnailSize.small : thumbnailSize;
+      assert.deepEqual(size(bytes), { width: expected.width, height: expected.height }, address);
+      assert.ok(bytes.length < (small ? 30_000 : 80_000), `${address} is ${bytes.length} bytes`);
+    }
+  }
+  // Previous and next follow the catalog and wrap at its ends.
+  assert.deepEqual([neighbours("layers").previous.id, neighbours("layers").next.id], ["instrument", "motion"]);
+  assert.deepEqual([neighbours("instrument").previous.id, neighbours("instrument").next.id], ["strata", "layers"]);
 });
 test("every page has its own title, description, canonical URL and structured data", () => {
   // The home page, the examples' index (no id) and every example's page.
@@ -94,6 +113,9 @@ test("public output guard fails before an unexpected artifact can be uploaded", 
     await mkdir(join(root, "examples"));
     for (const name of ["404.html", "examples.html", "robots.txt", "sitemap.xml", "favicon.svg", "examples/index.html", "examples/motion.html"]) await writeFile(join(root, name), "text");
     await writeFile(join(root, "og.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+    // The example cards' pictures, also from `public/`.
+    await mkdir(join(root, "thumbs"));
+    await writeFile(join(root, "thumbs/motion-s.jpg"), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
     await writeFile(join(root, "apple-touch-icon.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
     // Runs the checker as a child process on the fake build output and returns its status and stderr.
     const check = () => spawnSync(process.execPath, ["scripts/check-showcase-assets.mjs", root], { encoding: "utf8" });

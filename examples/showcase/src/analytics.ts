@@ -7,7 +7,7 @@
  * only example ids, runtime modes and the status line's headline.
  */
 import { inject, track as send } from "@vercel/analytics";
-import type { SceneId } from "./catalog";
+import type { ExampleId } from "./catalog";
 import type { Support } from "./support";
 
 declare const __VERCEL_ANALYTICS__: boolean;
@@ -38,8 +38,8 @@ export const analyticsEnabled = __VERCEL_ANALYTICS__;
 /** Which HTML-in-Canvas implementation GPU mode ran on: the browser's own, or the opt-in polyfill. */
 export type Api = "native" | "polyfill";
 
-/** Where an event happened: an example's page (the examples' index is `hero`), or the home page. */
-export type Page = SceneId | "home";
+/** Where an event happened: an example's page, or the home page. */
+export type Page = ExampleId | "home";
 
 export interface Events {
   "Browser Support": { support: Support };
@@ -47,7 +47,7 @@ export interface Events {
   "GPU Lost": { example: Page; status: string; api: Api };
   "Studio Action": { example: Page; action: "disable" | "dispose" };
   "Home Demo": { kind: string; action: "play" | "scrub"; presentation: "gpu" | "dom" };
-  "GPU Help": { example: SceneId; action: "preview" | "copy-flag" | "download" | "polyfill" };
+  "GPU Help": { example: ExampleId; action: "preview" | "copy-flag" | "download" | "polyfill" };
   "Outbound Link": { target: "github" | "npm" };
 }
 

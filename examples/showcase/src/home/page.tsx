@@ -16,7 +16,7 @@
  *   document and the accessibility tree, unpainted (`view.ts`, `deck.ts`, `docs/showcase.md`).
  */
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
-import { examples, site } from "../catalog";
+import { exampleOf, examples, groups, site, thumbnail, thumbnailSize } from "../catalog";
 import { demoKinds, demoPlay, demoScrub, demoStore, type DemoState } from "./demo";
 import { homeTrack } from "./track";
 import { flow, viewStore } from "./view";
@@ -199,7 +199,7 @@ export function Header({ base }: { base: string }) {
           <span id="deck-change" className="change" hidden /></p>
         <p id="deck-note" className="visually-hidden" role="status" />
       </div>
-      <nav aria-label="Site"><a href="#transitions">Transitions</a><a href="#examples-title">Examples</a><a href={site.docs}>Docs</a>
+      <nav aria-label="Site"><a href="#transitions">Transitions</a><a href={`${base}examples`}>Examples</a><a href={site.docs}>Docs</a>
         <a href={site.repository}>GitHub <span aria-hidden="true">&#8599;</span></a></nav>
     </header>
   </>;
@@ -224,8 +224,12 @@ export function Footer() {
     {__VERCEL_ANALYTICS__ && <p className="bottom-note">Anonymous visit counts by Vercel Web Analytics, no cookies.</p>}</footer>;
 }
 
-/** The stage's application: every section's text and specimen, in page order. `base` is the site's base path. */
-export function Stage({ base }: { base: string }) {
+/**
+ * The stage's application: every section's text and specimen, in page order. `base` is the site's base path. `assets` is
+ * what a picture's address starts with: the base path too, except in the prerendered page (`prerender.tsx`), whose HTML
+ * Vite reads afterwards and puts the base path in front of every address in it.
+ */
+export function Stage({ base, assets = base }: { base: string; assets?: string }) {
   const docs = site.docs;
   return <>
     {/* The light under the sections: empty, and drawn by a shader in the deck (`light.ts`). */}
@@ -241,7 +245,9 @@ export function Stage({ base }: { base: string }) {
         <p className="lede">Underglass draws your original React DOM into one WebGPU compositor through the browser's HTML-in-Canvas API.
           Inputs, focus and clicks stay native. What you gain is everything a shader can do to a live page.</p>
         <div className="actions"><a className="button primary" href={`${docs}/guide/getting-started`}>Get started</a>
-          <a className="button" href="#transitions">See the transitions</a></div>
+          <a className="button" href="#transitions">See the transitions</a>
+          {/* In one column the header's link is right above, and the cover has no room for a third button. */}
+          <a className="button browse" href={`${base}examples`}>Browse the examples</a></div>
         <p className="install"><code>npm install @underglass/react</code></p>
         <p className="chip"><i aria-hidden="true" />GPU in Chrome and Edge 157 or later. Ordinary DOM everywhere else.</p>
       </div>
@@ -260,6 +266,7 @@ export function Stage({ base }: { base: string }) {
         ["State survives.", "Switching the GPU on or off moves the same React root. Values, focus and selection stay where they were."],
         ["It is ordinary HTML.", "The accessibility tree, the form and the text are the DOM's own."],
       ]} />
+      <p className="links"><a href={`${base}examples/layers`}>Open the Postcard studio</a></p>
     </Slide>
 
     <TransitionsSlide />
@@ -288,6 +295,7 @@ export function Stage({ base }: { base: string }) {
         ["The same in ordinary DOM.", "The numbers that drive the GPU become CSS transforms when it is off."],
         ["Clicks follow.", "A control stays clickable where it is drawn, tilted and mid-flight."],
       ]} />
+      <p className="links"><a href={`${base}examples/motion`}>Open the Card deck</a></p>
     </Slide>
 
     <Slide id="shaders" label="Shaders" figure="A fragment function over rendered HTML" specimen={
@@ -315,6 +323,7 @@ export function Stage({ base }: { base: string }) {
         ["Materials.", "Relight a layer of working controls without moving a pixel, with its contrast protected."],
         ["Live parameters.", "Change them every frame. Nothing recompiles and nothing is captured again."],
       ]} />
+      <p className="links"><a href={`${base}examples/effects`}>Open the Shader lab</a></p>
     </Slide>
 
     <Slide id="depth" label="Components" figure="Four levels of one control" specimen={
@@ -353,6 +362,7 @@ export function Stage({ base }: { base: string }) {
         ["Diagnosed, never disguised.", "If the GPU cannot present something correctly, the page returns to DOM and says why."],
         ["What it needs.", "HTML-in-Canvas and WebGPU. An opt-in polyfill covers other Chromium browsers, more slowly."],
       ]} />
+      <p className="links"><a href={`${base}examples/compare`}>Compare GPU and CSS, live</a></p>
     </Slide>
 
     <Slide id="start" label="Get started" figure="A first layer" specimen={
@@ -383,8 +393,11 @@ export function Stage({ base }: { base: string }) {
       <p className="links"><a href={`${docs}/guide/getting-started`}>Read the guide</a><a href={`${docs}/reference/api`}>API reference</a>
         <a href={site.repository}>Source on GitHub</a><a href={site.npm}>npm</a></p>
       <h3 id="examples-title">Live examples</h3>
-      <ul className="examples" aria-labelledby="examples-title">{examples.map(example =>
-        <li key={example.id}><a href={`${base}examples/${example.id}`}><span>{example.number}</span>{example.title}</a></li>)}</ul>
+      {/* The gallery's first group, with its pictures; the rest is one link away. */}
+      <ul className="examples" aria-labelledby="examples-title">{groups[0].ids.map(id =>
+        <li key={id}><a href={`${base}examples/${id}`}><img src={thumbnail(id, assets, true)} alt="" width={thumbnailSize.small.width} height={thumbnailSize.small.height} decoding="async" />
+          <span>{exampleOf(id).number}</span>{exampleOf(id).title}</a></li>)}</ul>
+      <p className="links"><a href={`${base}examples`}>All {examples.length} examples</a></p>
     </Slide>
   </>;
 }

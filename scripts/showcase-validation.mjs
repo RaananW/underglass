@@ -26,7 +26,9 @@ import { devNull } from "../tests/helpers/process.mjs";
 
 const root = resolve(".");
 const sha = data => createHash("sha256").update(data).digest("hex");
-/** The `sessionStorage` key where the showcase records a visitor's **Use ordinary DOM** (`src/main.tsx`). */
+/** The `sessionStorage` key where the showcase records a visitor's press of **DOM** (`src/main.tsx`). */
+/** A half of an example page's presentation switch: `"GPU"` or `"DOM"`. */
+const modeButton = (page, name) => page.locator(".mode-switch").getByRole("button", { name, exact: true });
 const domChoiceKey = "underglass-showcase-dom";
 /**
  * Waits for the showcase's automatic start (GPU mode on its own once the stage is in view) to finish: the startup
@@ -137,11 +139,11 @@ try {
   async function checkAssets(directory, prefix = "") {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const path = join(directory, entry.name), name = `${prefix}${entry.name}`;
-      if (entry.isDirectory()) { assert.ok(name === "assets" || name === "examples", name); await checkAssets(path, `${name}/`); }
+      if (entry.isDirectory()) { assert.ok(name === "assets" || name === "examples" || name === "thumbs", name); await checkAssets(path, `${name}/`); }
       else {
         // The pages and site files `seo.ts` writes, the icons and social card, hashed JS/CSS and the JPEG
         // previews of GPU mode shown to browsers that cannot run it.
-        assert.ok(/^(?:(?:index|examples|404)\.html|robots\.txt|sitemap\.xml|favicon\.svg|og\.jpg|apple-touch-icon\.png|examples\/[\w-]+\.html|assets\/[\w.-]+\.(?:js|css|jpg))$/.test(name),
+        assert.ok(/^(?:(?:index|examples|404)\.html|robots\.txt|sitemap\.xml|favicon\.svg|og\.jpg|apple-touch-icon\.png|examples\/[\w-]+\.html|thumbs\/[\w-]+\.jpg|assets\/[\w.-]+\.(?:js|css|jpg))$/.test(name),
           `Unexpected public asset: ${name}`);
         const bytes = await readFile(path);
         if (name.endsWith(".jpg")) assert.ok(bytes[0] === 0xff && bytes[1] === 0xd8, `Public image is not a JPEG: ${name}`);
@@ -825,7 +827,7 @@ try {
     result.home = "passed";
   }
   // The same scenario runs twice: `dom` (no HTML-in-Canvas flags, and the visitor's DOM choice recorded, as
-  // **Use ordinary DOM** does; the examples must stay on DOM) and `native` (flags on; GPU starts by itself when the
+  // a press of **DOM** does; the examples must stay on DOM) and `native` (flags on; GPU starts by itself when the
   // stage is in view and the pixels must change as the examples run).
   for (const lane of ["dom", "native"]) {
     const executablePath = process.env.CANVAS_BROWSER_EXECUTABLE;
@@ -856,12 +858,13 @@ try {
       await page.waitForFunction(() => window.showcase);
       record.peer = await page.evaluate(() => ({ react: window.showcase.react, reactDOM: window.showcase.reactDOM }));
       assertRuntimePeer(record.peer, "19.3.1");
-      await page.getByLabel("Find an example").fill("no matching term");
-      await page.getByText("No matching examples. Try another search or category.").waitFor();
-      await page.getByLabel("Find an example").fill("");
-      await page.getByLabel("Category", { exact: true }).selectOption("Motion");
+      // An example's page holds the example and the way around, not the gallery: its one card is the next example's.
       assert.equal(await page.locator(".example-card").count(), 1);
-      await page.getByLabel("Category", { exact: true }).selectOption("All");
+      assert.equal(await page.locator(".example-card").getAttribute("href"), "/underglass/examples/motion");
+      assert.equal(await page.locator("h1").innerText(), "Postcard studio");
+      assert.equal(await page.getByRole("link", { name: "All examples", exact: true }).getAttribute("href"), "/underglass/examples");
+      // The stage starts in the first screen.
+      assert.ok((await page.locator(".stage").boundingBox()).y < 400, "The stage starts in the first screen");
       // Helpers: the example's reported state, a button inside the stage by exact label, and a settle that
       // flushes the controller then waits briefly for pending paints.
       const state = () => page.evaluate(() => window.showcase.state());
@@ -988,7 +991,7 @@ try {
         assert.ok(changed > 50, `Real decorative shader changed pixels: ${changed}`);
         record.changedEffectPixels = changed;
       }
-      await page.locator('.example-card[href$="/examples/tasks"]').click();
+      await page.getByLabel("Example", { exact: true }).selectOption("tasks");
       await page.getByLabel("New task", { exact: true }).waitFor();
       await settle();
       await page.getByLabel("New task", { exact: true }).fill("Showcase task");
@@ -1002,7 +1005,7 @@ try {
       assert.match(await page.locator("#task-message").innerText(), /Saved/);
       if (lane === "native") await output.screenshot({ path: join(run, "native-tasks.png") });
       // Fluent release board: stock Fluent UI v9 controls, springs and transition effects on live layers.
-      await page.locator('.example-card[href$="/examples/fluent"]').click();
+      await page.getByLabel("Example", { exact: true }).selectOption("fluent");
       await page.getByRole("button", { name: "Add item", exact: true }).waitFor();
       const springTo = (id, x, y) => page.waitForFunction(([id, x, y]) => {
         const transform = window.showcase.state().layers.find(layer => layer.id === id)?.transform;
@@ -1173,12 +1176,12 @@ try {
       // GPU admits while app code changes a layer every frame: the ripple's CSS side moves an SVG filter from
       // requestAnimationFrame. This used to time out with "Native refresh did not settle".
       if (lane === "native") {
-        await page.getByRole("button", { name: "Use ordinary DOM", exact: true }).click();
+        await modeButton(page, "DOM").click();
         await page.waitForFunction(() => window.showcase.state().mode === "dom");
         await page.locator(".stage input[name=compare-scene][value=ripple]").check();
         await page.locator(".stage").scrollIntoViewIfNeeded();
         await page.waitForTimeout(300);
-        await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
+        await modeButton(page, "GPU").click();
         await page.waitForFunction(() => !window.showcase.state().initializing && window.showcase.state().mode !== "admitting");
         record.compare.enableWhileAnimating = await state();
         assert.equal(record.compare.enableWhileAnimating.mode, "gpu", record.compare.enableWhileAnimating.reason);
@@ -1187,6 +1190,8 @@ try {
       record.beforeDispose = await state();
       assert.equal(record.beforeDispose.mode, lane === "native" ? "gpu" : "dom", record.beforeDispose.reason);
       // Explicit dispose must retire every GPU and runtime resource.
+      // The control that ends the session is behind the status line's Details.
+      await page.locator(".diagnostic summary").click();
       await page.getByRole("button", { name: "Dispose example", exact: true }).click();
       await page.getByText("The example is disposed. Reload this page to start a fresh session.").waitFor();
       record.disposed = await state();
@@ -1208,20 +1213,27 @@ try {
       await page.reload();
       await studioButton("Apply chromatic effect").waitFor();
       assert.equal((await state()).mode, "dom");
-      await page.locator('a[href="#about"]').click();
-      assert.equal(await page.locator(".example-card[aria-current]").getAttribute("href"), "/underglass/examples/effects");
-      await page.locator('a[href$="/examples/motion"].example-card').focus();
+      // The bar's steps switch examples in place, from the keyboard too: the Card deck is before the Shader lab.
+      assert.equal(await page.locator(".example-card").getAttribute("href"), "/underglass/examples/presence");
+      await page.getByRole("link", { name: "Previous example: Card deck", exact: true }).focus();
       await page.keyboard.press("Enter");
       await studioButton("Play layer journey").waitFor();
-      // The studio's own picker switches examples in place, through the same hash route.
+      assert.equal(await page.evaluate(() => location.pathname), "/underglass/examples/motion");
+      assert.equal(await page.locator("h1").innerText(), "Card deck");
+      // The picker switches examples in place, through the same route.
       assert.equal(await page.getByLabel("Example", { exact: true }).inputValue(), "motion");
       await page.getByLabel("Example", { exact: true }).selectOption("effects");
       await studioButton("Apply chromatic effect").waitFor();
       assert.equal(await page.evaluate(() => location.pathname), "/underglass/examples/effects");
-      assert.equal(await page.locator(".example-card[aria-current]").getAttribute("href"), "/underglass/examples/effects");
+      assert.equal(await page.locator(".example-card").getAttribute("href"), "/underglass/examples/presence");
+      // Back in the history is the Card deck again, in place.
+      await page.goBack();
+      await studioButton("Play layer journey").waitFor();
+      await page.goForward();
+      await studioButton("Apply chromatic effect").waitFor();
       await page.evaluate(() => scrollTo(0, 0));
       await page.screenshot({ path: join(run, `${lane}-desktop.png`) });
-      // Mobile viewport: no horizontal overflow and a single site header.
+      // Mobile viewport: no horizontal overflow, a single site header, the bar in one row and the stage in the first screen.
       const mobileContext = await laneContext({ viewport: { width: 390, height: 844 } });
       const mobile = await mobileContext.newPage();
       await mobile.goto(`${url}examples/motion`);
@@ -1231,13 +1243,17 @@ try {
       record.mobile = await mobile.evaluate(() => ({ headers: document.querySelectorAll(".site-header").length,
         viewport: innerWidth, width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight }));
       assert.equal(record.mobile.headers, 1);
+      record.mobile.bar = await mobile.evaluate(() => { const bar = document.querySelector(".studio-bar"), tops = [...bar.children].filter(child => child.checkVisibility()).map(child => Math.round(child.getBoundingClientRect().top + child.getBoundingClientRect().height / 2));
+        return { height: Math.round(bar.getBoundingClientRect().height), rows: new Set(tops).size, stage: Math.round(document.querySelector(".stage").getBoundingClientRect().top + scrollY) }; });
+      assert.equal(record.mobile.bar.rows, 1, `The bar is one row on a phone: ${JSON.stringify(record.mobile.bar)}`);
+      assert.ok(record.mobile.bar.stage < 400, `The stage starts in a phone's first screen: ${record.mobile.bar.stage}`);
       await mobile.screenshot({ path: join(run, `${lane}-mobile-viewport.png`) });
       await mobile.locator("#studio").scrollIntoViewIfNeeded();
       await mobile.waitForTimeout(300);
       await mobile.screenshot({ path: join(run, `${lane}-mobile-studio.png`) });
       await mobileContext.close();
-      // A visitor's **Use ordinary DOM** holds for the tab: after a reload GPU doesn't start by itself, even with the
-      // stage in view, and **Enable experimental GPU** clears the choice.
+      // A visitor's press of **DOM** holds for the tab: after a reload GPU doesn't start by itself, even with the
+      // stage in view, and a press of **GPU** clears the choice.
       if (lane === "native") {
         const choiceContext = await laneContext({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: 1 });
         const choice = await choiceContext.newPage();
@@ -1246,7 +1262,7 @@ try {
         await choice.waitForFunction(() => window.showcase);
         await choice.locator(".stage").scrollIntoViewIfNeeded();
         await autoAdmission(choice);
-        await choice.getByRole("button", { name: "Use ordinary DOM", exact: true }).click();
+        await modeButton(choice, "DOM").click();
         await choice.waitForFunction(() => window.showcase.state().mode === "dom");
         assert.equal(await choice.evaluate(key => sessionStorage.getItem(key), domChoiceKey), "1");
         await choice.reload();
@@ -1256,88 +1272,55 @@ try {
         record.domChoice = await choice.evaluate(() => window.showcase.state());
         assert.equal(record.domChoice.mode, "dom", record.domChoice.reason);
         assert.match(record.domChoice.reason, /^Ordinary DOM startup/);
-        await choice.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
+        await modeButton(choice, "GPU").click();
         await choice.waitForFunction(() => { const state = window.showcase.state();
           return !state.initializing && state.mode !== "admitting" && !/^Ordinary DOM startup/.test(state.reason); });
         assert.equal((await choice.evaluate(() => window.showcase.state())).mode, "gpu");
         assert.equal(await choice.evaluate(key => sessionStorage.getItem(key), domChoiceKey), null);
         await choiceContext.close();
       }
-      // The examples' index: the stage at the top holds the overview scene (src/hero.tsx). Its headline, links and the card's
-      // inputs are the original elements; in GPU mode the sky and the glass take their light, colour and ripples from
-      // effect parameters. GPU starts by itself with nothing pressed or scrolled: the stage is in view on arrival.
-      const homeContext = await laneContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
-      const home = await homeContext.newPage();
-      home.on("pageerror", error => errors.push(String(error)));
-      await home.goto(`${url}examples`);
-      await home.waitForFunction(() => window.showcase && document.getElementById("hero-card"));
-      const homeState = () => home.evaluate(() => window.showcase.state());
-      const sheen = id => home.evaluate(layer => window.showcase.state().decorativeEffects.find(entry => entry.id === layer)
-        ?.effects.find(effect => effect.kind === "custom")?.parameters, id);
-      assert.equal(await home.locator("h1#hero-title").count(), 1, "The examples' index's h1 is the overview scene's headline");
-      if (lane === "native") {
-        record.home = { initial: await autoAdmission(home) };
-        assert.equal((await home.evaluate(() => scrollY)), 0, "GPU started without scrolling");
-        // Native hits: the call to action and the card's range input are hit where they are drawn.
-        record.home.hits = await home.evaluate(() => ["#hero-copy a.cta.primary", "#hero-card input[type=range]", "#hero-card button"].map(selector => {
-          const element = document.querySelector(selector), box = element.getBoundingClientRect();
-          const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
-          return { selector, hit: hit === element || element.contains(hit) };
-        }));
-        assert.ok(record.home.hits.every(entry => entry.hit), `Hero hits: ${JSON.stringify(record.home.hits)}`);
-        // The lamp follows the pointer: the sky's parameters move toward it.
-        const stageBox = await home.locator(".stage").boundingBox();
-        await home.mouse.move(stageBox.x + stageBox.width * 0.3, stageBox.y + stageBox.height * 0.8, { steps: 5 });
-        await home.waitForFunction(() => {
-          const sky = window.showcase.state().decorativeEffects.find(entry => entry.id === "hero-sky");
-          const parameters = sky?.effects.find(effect => effect.kind === "custom")?.parameters;
-          return parameters && Math.abs(parameters.pointerX - 0.3) < 0.03 && Math.abs(parameters.pointerY - 0.8) < 0.03;
-        }, null, { timeout: 5000 });
-        record.home.sky = await sheen("hero-sky");
-        // A real key on the card's Light input changes the glass's light, and the input's own label is presented fresh.
-        const output = home.locator(".stage .output");
-        const before = PNG.sync.read(await output.screenshot());
-        const lightInput = home.locator("#hero-card input[type=range]").first();
-        await lightInput.focus();
-        for (let step = 0; step < 10; step++) await home.keyboard.press("ArrowLeft");
-        assert.equal(await home.locator("#hero-card output").first().innerText(), "60%");
-        await home.evaluate(() => window.showcase.controller.settle());
-        await home.waitForTimeout(250);
-        const after = PNG.sync.read(await output.screenshot());
-        const label = await home.locator("#hero-card output").first().boundingBox(), canvas = await output.boundingBox();
-        let changed = 0;
-        for (let y = Math.floor(label.y - canvas.y); y < Math.ceil(label.y - canvas.y + label.height); y++) {
-          for (let x = Math.floor(label.x - canvas.x); x < Math.ceil(label.x - canvas.x + label.width); x++) {
-            const offset = (y * after.width + x) * 4;
-            if (before.data.subarray(offset, offset + 3).some((value, index) => Math.abs(value - after.data[offset + index]) > 24)) changed++;
-          }
-        }
-        assert.ok(changed > 20, `The card's label is presented fresh: ${changed} pixels changed`);
-        record.home.labelPixels = changed;
-        // A press on the sky ripples the glass: the panes' ripple amplitude rises, then settles back to 0.
-        await home.mouse.click(stageBox.x + stageBox.width * 0.5, stageBox.y + stageBox.height * 0.04);
-        await home.waitForFunction(() => window.showcase.state().decorativeEffects.find(entry => entry.id === "hero-pane-art")
-          ?.effects.find(effect => effect.kind === "ripple")?.parameters.amplitude > 0, null, { timeout: 2000 });
-        await home.waitForFunction(() => window.showcase.state().decorativeEffects.find(entry => entry.id === "hero-pane-art")
-          ?.effects.find(effect => effect.kind === "ripple")?.parameters.amplitude === 0, null, { timeout: 4000 });
-        // Scrolling the stage out of view turns the colour.
-        await home.mouse.move(stageBox.x + stageBox.width + 4, 4);
-        await home.evaluate(() => scrollTo(0, 420));
-        await home.waitForFunction(() => (window.showcase.state().decorativeEffects.find(entry => entry.id === "hero-sky")
-          ?.effects.find(effect => effect.kind === "custom")?.parameters.hue ?? 0) > 0.2, null, { timeout: 5000 });
-        record.home.scrolled = await sheen("hero-sky");
-        const end = await homeState();
-        assert.equal(end.mode, "gpu", end.reason);
-        record.home.layers = end.layers.length;
-      } else {
-        // Ordinary DOM: the same scene, with working inputs and no effects drawn.
-        await home.locator("#hero-card input[type=range]").first().fill("30");
-        assert.equal(await home.locator("#hero-card output").first().innerText(), "30%");
-        assert.equal((await homeState()).mode, "dom");
-        assert.ok(await home.locator("#hero-card button").isDisabled(), "Ripple needs GPU mode");
+      // The examples' index is the gallery: every example as a card with its picture, in the catalog's groups, and no
+      // Underglass (there is nothing to enable). A card opens its example's page, and that page's bar leads back.
+      for (const [name, options] of [["gallery", { viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 }], ["gallery-phone", { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }]]) {
+        const galleryContext = await laneContext(options);
+        const gallery = await galleryContext.newPage();
+        gallery.on("pageerror", error => errors.push(String(error)));
+        await gallery.goto(`${url}examples`);
+        await gallery.locator(".gallery-group").first().waitFor();
+        const found = record[name] = await gallery.evaluate(async () => {
+          const cards = [...document.querySelectorAll(".example-card")];
+          const firstCard = Math.round(cards[0].getBoundingClientRect().top + scrollY);
+          // A picture below the first screen loads as it comes near: each is brought into view before it is asked for.
+          const pictures = [];
+          for (const card of cards) { card.scrollIntoView(); const image = card.querySelector("img"); await image.decode().catch(() => undefined); pictures.push(image.naturalWidth); }
+          scrollTo(0, 0);
+          return { title: document.querySelector("h1").textContent, groups: [...document.querySelectorAll(".gallery-group h2")].map(heading => heading.textContent),
+            cards: cards.map(card => card.getAttribute("href")), pictures, firstCard, runtime: typeof window.showcase, stages: document.querySelectorAll(".stage, canvas").length,
+            columns: new Set(cards.slice(0, 3).map(card => Math.round(card.getBoundingClientRect().left))).size, overflow: document.documentElement.scrollWidth > innerWidth };
+        });
+        assert.equal(found.title, "Examples");
+        assert.equal(await gallery.title(), "Live examples | Underglass");
+        assert.deepEqual(found.groups, ["Start here", "Real controls at work", "Lit component libraries"]);
+        assert.equal(found.cards.length, 10);
+        assert.equal(new Set(found.cards).size, 10, "Every example has one card");
+        assert.ok(found.cards.every(href => /^\/underglass\/examples\/[\w-]+$/.test(href)), JSON.stringify(found.cards));
+        assert.ok(found.pictures.every(width => width > 0), `Every card has its picture: ${JSON.stringify(found.pictures)}`);
+        assert.ok(found.firstCard < 700, `The first card is in the first screen: ${found.firstCard}`);
+        assert.equal(found.runtime, "undefined", "The gallery runs no Underglass");
+        assert.equal(found.stages, 0);
+        assert.equal(found.columns, name === "gallery" ? 3 : 1);
+        assert.equal(found.overflow, false);
+        await gallery.screenshot({ path: join(run, `${lane}-${name}.png`) });
+        // A card opens its example; the bar's link leads back to the gallery.
+        await gallery.locator('.example-card[href$="/examples/compare"]').click();
+        await gallery.waitForURL(`${url}examples/compare`);
+        await gallery.waitForFunction(() => window.showcase);
+        assert.equal(await gallery.locator("h1").innerText(), "GPU or CSS?");
+        await gallery.getByRole("link", { name: "All examples", exact: true }).click();
+        await gallery.waitForURL(`${url}examples`);
+        await gallery.locator(".gallery-group").first().waitFor();
+        await galleryContext.close();
       }
-      await home.screenshot({ path: join(run, `${lane}-home.png`) });
-      await homeContext.close();
       // Strata gallery, opened directly: its components render in the runtime's first, synchronous render, so
       // `useStrataGpu` must attach after the mount returns. Real keys and clicks drive the original controls.
       const strataContext = await laneContext({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: 1 });
@@ -1476,7 +1459,7 @@ try {
         await fallback.goto(`${url}examples/layers`);
         await fallback.waitForFunction(() => window.showcase);
         await fallback.locator("#studio-title").fill("Retained fallback");
-        await fallback.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
+        await modeButton(fallback, "GPU").click();
         await fallback.waitForFunction(() => !window.showcase.state().initializing);
         record.syntheticUnsupported = await fallback.evaluate(() => window.showcase.state());
         assert.equal(record.syntheticUnsupported.mode, "dom");
@@ -1549,7 +1532,7 @@ try {
       await page.getByLabel("Example", { exact: true }).selectOption("fluent");
       await page.locator("#fluent-title").waitFor();
       await page.locator(".stage").scrollIntoViewIfNeeded();
-      await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
+      await modeButton(page, "GPU").click();
       await page.waitForFunction(() => !window.showcase.state().initializing && window.showcase.state().mode !== "admitting");
       record.fluent = await state();
       assert.equal(record.fluent.mode, "gpu", record.fluent.reason);
@@ -1575,7 +1558,7 @@ try {
       await page.getByLabel("Example", { exact: true }).selectOption("strata");
       await page.locator("#strata-gallery").waitFor();
       await page.locator(".stage").scrollIntoViewIfNeeded();
-      await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
+      await modeButton(page, "GPU").click();
       await page.waitForFunction(() => !window.showcase.state().initializing && window.showcase.state().mode !== "admitting");
       record.strata = await state();
       assert.equal(record.strata.mode, "gpu", record.strata.reason);
@@ -1592,7 +1575,7 @@ try {
       // Back on an offered example, the ordinary Enable button runs on the installed polyfill.
       await page.getByLabel("Example", { exact: true }).selectOption("layers");
       await page.locator("#studio-title").waitFor();
-      await page.getByRole("button", { name: "Enable experimental GPU", exact: true }).click();
+      await modeButton(page, "GPU").click();
       await page.waitForFunction(() => !window.showcase.state().initializing && window.showcase.state().mode !== "admitting");
       record.reenabled = await state();
       assert.equal(record.reenabled.mode, "gpu", record.reenabled.reason);
