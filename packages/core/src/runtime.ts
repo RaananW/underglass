@@ -1170,6 +1170,7 @@ export class CanvasRuntime {
         });
         if (!this.environment.visible) { index--; continue; }
         if (this.renderer().phase() !== "gpu" || version !== this.renderer().version() || this.reduced.matches) throw new Error("Motion interrupted by renderer/media generation");
+        const ticked = this.renderer().timeTick();
         // Hidden time is excluded: elapsed only advances between consecutive visible frames.
         if (previous !== undefined) elapsed += Math.min(100, now - previous);
         previous = now;
@@ -1186,6 +1187,7 @@ export class CanvasRuntime {
         const policy = this.policy();
         if (policy) { await this.renderer().recover(policy); throw new Error(policy); }
         this.renderer().draw();
+        ticked();
         if (progress >= 1) break;
       }
     } finally { this.moving = false; this.scheduleReadmission(); }
@@ -1488,7 +1490,7 @@ export class CanvasRuntime {
         this.recover(`Declarative motion failed: ${String(error)}`);
       }
     };
-    const schedule = () => { this.resources.controllerFrames++; frame = requestAnimationFrame(tick); };
+    const schedule = () => { this.resources.controllerFrames++; frame = requestAnimationFrame(this.timed(tick)); };
     let initial: Transform;
     // Under reduced motion the transition jumps to its end state on commit instead of animating.
     const reduced = this.reduced.matches;
@@ -1646,7 +1648,7 @@ export class CanvasRuntime {
       || ![...this.ownership.values()].some(owner => owner.lease.playback.state().playing)
         && ![...this.effects.values()].some(effect => effect.values.some(value => value.time.playing))) return;
     this.resources.controllerFrames++;
-    this.clockFrame = requestAnimationFrame(time => {
+    this.clockFrame = requestAnimationFrame(this.timed(time => {
       this.clockFrame = 0;
       this.resources.controllerFrames--;
       const delta = this.clockTime === undefined ? 0 : Math.min(100, time - this.clockTime);
@@ -1658,7 +1660,14 @@ export class CanvasRuntime {
         if (policy) this.recover(policy); else this.renderer().draw();
       } catch (error) { this.recover(`Animation ownership failure: ${String(error)}`); }
       this.startClock();
-    });
+    }));
+  }
+  /** Wraps a frame callback so its work is reported as one `frameTickMs` sample; the frames it draws stay `frameWorkMs`. */
+  private timed(callback: (time: number) => void) {
+    return (time: number) => {
+      const done = this.core?.timeTick();
+      try { callback(time); } finally { done?.(); }
+    };
   }
   /** Convenience over `setEffects` for one ripple; `null` clears the layer's effect ownership. */
   setRipple(id: string, value: Ripple | null) {
@@ -1826,11 +1835,13 @@ export class CanvasRuntime {
         });
         if (!this.environment.visible) { index--; continue; }
         if (this.renderer().phase() !== "gpu" || generation !== this.renderer().version()) throw new Error("Timeline interrupted by renderer generation");
+        const ticked = this.renderer().timeTick();
         for (const owner of this.ownership.values()) { owner.check?.(); owner.lease.tick(milliseconds, true); }
         this.tickRipples(milliseconds, true);
         const policy = this.policy();
         if (policy) { await this.disable(); throw new Error(policy); }
         this.renderer().draw();
+        ticked();
       }
     } finally { this.moving = false; this.startClock(); }
     return { before, after: this.state() };

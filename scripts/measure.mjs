@@ -80,7 +80,7 @@ function summary(run) {
     rafMs: distribution(run.measurement.intervals),
     estimatedMissedRefreshSlots: budget ? run.measurement.intervals.reduce((sum, dt) => sum + Math.max(0, Math.round(dt / budget) - 1), 0) : null,
     warmupRefreshBudgetMs: budget,
-    cpuSamples: Object.fromEntries(["captureMs", "readbackCompareMs", "uploadMs", "frameWorkMs", "frameIntervalsMs"].map(kind =>
+    cpuSamples: Object.fromEntries(["captureMs", "readbackCompareMs", "uploadMs", "frameWorkMs", "frameTickMs", "frameIntervalsMs"].map(kind =>
       [kind, distribution(run.measurement.samples.filter(sample => sample.kind === kind).map(sample => sample.durationMs))])),
     perLayer: run.measurement.after.layers.map(layer => {
       const b = run.measurement.before.metrics.perLayer[layer.id], a = run.measurement.after.metrics.perLayer[layer.id];

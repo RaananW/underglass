@@ -180,9 +180,10 @@ export interface InstrumentProbeLayer {
 export interface RendererSample {
   /**
    * `instrumentGpuMs`: the GPU time of one instrument layer's mesh pass in one frame; `emitterGpuMs`: of one layer's
-   * face pool (emitter light) pass. Both from Lite's per-task timings.
+   * face pool (emitter light) pass. Both from Lite's per-task timings. `frameWorkMs`: one drawn frame, the policy check
+   * included; `frameTickMs`: one runtime frame callback (clock, transition, motion step) less the frames it drew.
    */
-  kind: "captureMs" | "uploadMs" | "frameWorkMs" | "frameIntervalsMs" | "readbackCompareMs" | "effectCompileMs" | "instrumentGpuMs" | "emitterGpuMs";
+  kind: "captureMs" | "uploadMs" | "frameWorkMs" | "frameTickMs" | "frameIntervalsMs" | "readbackCompareMs" | "effectCompileMs" | "instrumentGpuMs" | "emitterGpuMs";
   /** `performance.now()` time when the sample was taken, in milliseconds. */
   at: number;
   durationMs: number;
@@ -226,8 +227,8 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   const metrics = { captures: 0, inputCapturesSkipped: 0, mutationsIgnored: 0, pixelCopies: 0, pixelReadbacks: 0, reusedUploads: 0, uploads: 0, paintNotifications: 0, deviceLossCount: 0, fenceCount: 0, effectShaderCompilations: 0, incompleteFramesSkipped: 0, shaderSourceGenerations: 0, precompiledShaderSelections: 0,
     admission: { engineMs: null as number | null, slowInits: 0, admittingMs: null as number | null, swapMs: null as number | null, cover: null as "view-transition" | "none" | null, attempts: 0, passes: 0, captures: 0, pixelCopies: 0, pixelReadbacks: 0, uploads: 0, gpuFrames: 0, gpuReadbacks: 0, geometryChecks: 0,
       last: undefined as { nativePixels: number[][]; gpuPixels: number[][]; geometry: ReturnType<typeof verifyProbeGeometry>; frameBounds: ReturnType<typeof verifyFrameBounds>; projective?: ReturnType<typeof verifyProjectiveHits> } | undefined },
-    timings: { captureMs: timing(), uploadMs: timing(), frameWorkMs: timing(), frameIntervalsMs: timing() },
-    paintElements: [] as string[][], perLayer: layerMetrics, lightPassesDisposed: 0, uploadBytes: 0, gpuFrames: 0, geometryUpdates: 0, moves: 0, deviceLosses: [] as { reason: GPUDeviceLostReason; message: string; duringMotion: boolean; duringAdmission: boolean }[], fenceOutcomes: [] as IdleOutcome[], captureMs: [] as number[], uploadMs: [] as number[], frameWorkMs: [] as number[], frameIntervalsMs: [] as number[] };
+    timings: { captureMs: timing(), uploadMs: timing(), frameWorkMs: timing(), frameTickMs: timing(), frameIntervalsMs: timing() },
+    paintElements: [] as string[][], perLayer: layerMetrics, lightPassesDisposed: 0, uploadBytes: 0, gpuFrames: 0, geometryUpdates: 0, moves: 0, deviceLosses: [] as { reason: GPUDeviceLostReason; message: string; duringMotion: boolean; duringAdmission: boolean }[], fenceOutcomes: [] as IdleOutcome[], captureMs: [] as number[], uploadMs: [] as number[], frameWorkMs: [] as number[], frameTickMs: [] as number[], frameIntervalsMs: [] as number[] };
   /** Appends `value` to a history that keeps only the latest 256 entries. */
   function sample<T>(values: T[], value: T) {
     if (values.length === 256) values.shift();
@@ -1089,10 +1090,12 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   /**
    * Draws one frame if GPU is presented: re-applies geometry, skips (and requests a paint) while the composition
    * is incomplete, writes uniforms and submits all passes. Does nothing while hidden or after device loss. A
-   * failing `policy` triggers recovery; a draw error triggers recovery and is rethrown.
+   * failing `policy` triggers recovery; a draw error triggers recovery and is rethrown. A drawn frame's
+   * `frameWorkMs` runs from before the policy check to the end.
    */
   function draw() {
     if (!engine || !registered || mode !== "gpu" && mode !== "admitting" || lostInfo || options.isPaused?.()) return;
+    const started = performance.now();
     const policy = options.policy?.();
     if (policy) {
       void recover(policy).catch(reportFailure);
@@ -1129,7 +1132,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       throw error;
     }
     metrics.gpuFrames++;
-    recordTiming("frameWorkMs", performance.now() - now);
+    recordTiming("frameWorkMs", performance.now() - started);
   }
   /** Requests a native paint and waits until publication settles. */
   async function captureLayers() {
@@ -2038,6 +2041,14 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       cancelAdmission("Runtime disposed: pending admission cancelled.");
       return serialize(dispose);
     }, invalidate: queueCapture, ignoreMutation, draw,
+    /**
+     * Starts timing one frame callback of the runtime (its clock, a transition, a motion step). The returned function
+     * ends it and records a `frameTickMs` sample: the time since, less the `frameWorkMs` of the frames drawn meanwhile.
+     */
+    timeTick: () => {
+      const started = performance.now(), drawn = metrics.timings.frameWorkMs.totalMs;
+      return () => { if (mode !== "disposed") recordTiming("frameTickMs", Math.max(0, performance.now() - started - (metrics.timings.frameWorkMs.totalMs - drawn))); };
+    },
     /**
      * Applies the layers' native geometry now, without drawing: a transform the application wrote moves the layer's
      * hits at once, and its pixels follow in the frame the runtime asks for. Skipped wherever `draw` would be.
