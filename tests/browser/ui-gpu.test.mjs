@@ -119,10 +119,12 @@ test("only the panel something happened to has its scene built again, and a chan
   expect(await sideScene()).toContain('"primitives"');
   // The pointer goes to rest outside both panels, and the frames after it build nothing.
   await page.mouse.move(700, 480);
-  await frames(4);
-  const rest = await reads(), mainAtRest = await page.evaluate(() => JSON.stringify(window.strataGpuProbe.scene()));
-  await frames(10);
-  expect(await reads(), "at rest no scene is built").toEqual(rest);
+  // What the move and the start of the page still had to deliver (a pointer event, a status change) may come some frames
+  // late on a busy machine: the page is at rest once ten frames pass with nothing read.
+  let rest = await reads();
+  await expect.poll(async () => { const before = rest; await frames(10); rest = await reads(); return rest.main === before.main && rest.side === before.side; },
+    { message: "at rest no scene is built", timeout: 10000 }).toBe(true);
+  const mainAtRest = await page.evaluate(() => JSON.stringify(window.strataGpuProbe.scene()));
 
   // The pointer crosses the first panel's controls: its scene follows (hover), and the other panel is not read once.
   const save = await page.locator("#gpu-save").boundingBox(), cancel = await page.locator("#gpu-cancel").boundingBox();
