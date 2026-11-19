@@ -9,7 +9,7 @@
     "vite-plugin",
     "webpack-plugin"
   ],
-  "homepage": "https://github.com/RaananW/underglass/tree/main/packages/css-compiler#readme",
+  "homepage": "https://underglass.dev",
   "bugs": {
     "url": "https://github.com/RaananW/underglass/issues"
   },
