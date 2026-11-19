@@ -81,6 +81,10 @@
  * turned cap in a bearing collar whose dimple turns on its accumulated angle (`--strata-jog-angle`, on the knob's spring), and the jack a
  * washer and barrel whose plug rises out of the hole on `spring.patch`; both are uniform updates, so a turning frame or a rising frame recaptures nothing (core captures each native `input` event, as for a Knob).
  *
+ * A panel is read (its boxes, its computed styles, its text) only when something happened to it: a pointer or key event,
+ * an `input`, a DOM change, a transition or a light's animation in it, a spring of its own, a move against the stage or a
+ * form control a script set. A press, a release, a `change`, a move of the focus, a resize and the poll read every panel.
+ *
  * Everything the scene needs comes from the page as the CSS presentation sees it: geometry from layout (followed through
  * CSS transitions frame by frame), states from
  * `:hover`, `:active`, `:focus-visible` and `:disabled`, and token values from each element's resolved `--strata-*`
@@ -171,7 +175,12 @@ export interface StrataStageMaterial extends StrataMaterialBase {
 export interface StrataGpuOptions {
   /** Which direct root children are Strata panels (default `.ug-panel`). */
   panels?: string;
-  /** How often to check whether GPU is presenting, in ms (default 500). Call `refresh()` from `onStatusChange` too. */
+  /**
+   * How often every panel's scene is built again whatever happened, in ms (default 500): it finds whether GPU is
+   * presenting, and any change nothing reports to the helper (a theme set above the root, a stylesheet, text, a scroll
+   * inside a panel). Between polls a scene is built only for the panel something happened to. Call `refresh()` from
+   * `onStatusChange` too.
+   */
   poll?: number;
   /**
    * The application's presentation level (design language section 16), where no component, panel or scope sets
@@ -273,7 +282,11 @@ function register(name: string, syntax: "<number>" | "<length>", initialValue: s
   registered.add(name);
   try { CSS.registerProperty({ name, syntax, inherits: true, initialValue }); } catch { /* already registered by the page */ }
 }
+let tokensRegistered = false;
 function registerTokens() {
+  // Once a page: every scene asks, and walking the token tree again each time was a visible part of a frame.
+  if (tokensRegistered) return;
+  tokensRegistered = true;
   for (const token of flatten(strataTokens)) {
     if (!sceneTokens.test(token.path)) continue;
     const length = token.$type === "dimension";
@@ -296,10 +309,20 @@ function hex(value: string) {
   const parts = (value.match(/[0-9.]+/g) ?? ["0", "0", "0"]).slice(0, 3).map(Number);
   return `#${parts.map(part => Math.round(part).toString(16).padStart(2, "0")).join("")}`;
 }
+/** The material presets the token source declares (the others are an application's, registered on first sight). */
+let presetNames: Set<string> | undefined;
+const presetMaterials = () => presetNames ??= new Set(flatten(strataTokens).filter(token => token.path.startsWith("material.presets.")).map(token => token.path.split(".")[2]!));
+/** Each token path's custom property, kept: a scene reads the same few hundred paths every time it is built. */
+const variables = new Map<string, string>();
+function variableOf(path: string) {
+  let name = variables.get(path);
+  if (name === undefined) variables.set(path, name = cssVariable(path));
+  return name;
+}
 /** Reads one element's resolved token values. */
 function reader(element: Element) {
   const style = getComputedStyle(element);
-  const raw = (path: string) => style.getPropertyValue(cssVariable(path)).trim();
+  const raw = (path: string) => style.getPropertyValue(variableOf(path)).trim();
   const number = (path: string, fallback = 0) => { const value = Number.parseFloat(raw(path)); return Number.isFinite(value) ? value : fallback; };
   return { raw, number, colour: (role: string) => hex(raw(`colour.${role}`)) };
 }
@@ -471,7 +494,7 @@ export function strataScene(panel: HTMLElement, options: StrataSceneOptions = {}
   const tokens = reader(panel);
   const level = (element: Element, fallback: string) =>
     tokens.number(`elevation.${element.getAttribute("data-strata-elevation") ?? fallback}`, tokens.number(`elevation.${fallback}`));
-  const presets = new Set(flatten(strataTokens).filter(token => token.path.startsWith("material.presets.")).map(token => token.path.split(".")[2]!));
+  const presets = presetMaterials();
   const materials: Record<string, SceneMaterial> = {};
   const material = (name: string): string => {
     if (!presets.has(name)) registerMaterial(name);
@@ -1419,7 +1442,50 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   const forced = matchMedia("(forced-colors: active)");
   type Motion = { start: number; duration: number; ease: (t: number) => number; from: number; to: number; kind: "enter" | "leave" };
   const panels = new Map<HTMLElement, { id: string; release: () => void; handle?: ReturnType<StrataGpuController["setMaterial"]>; kind?: StrataSceneMaterial["kind"];
-    scene?: string; structure?: string; motion?: Motion; domes: Set<Element>; report?: StrataGpuDiagnostics; warned?: Set<string> }>();
+    scene?: string; structure?: string; motion?: Motion; domes: Set<Element>; report?: StrataGpuDiagnostics; warned?: Set<string>;
+    /** Something that can change the panel's scene happened to it since the scene was built (`touch`). */
+    stale: boolean;
+    /** A spring or a held peak of the panel was still moving when its scene was built: it needs another next frame. */
+    moving: boolean;
+    /** A CSS transition or a light's animation ran in the panel in the last frame: the next frame builds its scene once more, at rest. */
+    animated?: boolean;
+    /** What a panel nothing happened to is checked against before its scene is kept (`seen`). */
+    seen?: string }>();
+  // Which scenes a frame builds. Reading a panel (its boxes, its computed styles, its text) is most of what a frame of
+  // the helper costs, so a frame reads only the panels something happened to: a pointer or key event, an `input`, a DOM
+  // change, a CSS transition or a blink in it, a spring of its own. Anything that cannot be traced to one panel (the
+  // root's own attributes, a resize, a click, the poll, the level cap) makes every panel stale, as it always did.
+  let everything = true;
+  /** Each blinking lens's computed style and the `--strata-lit` it last had (`blinked`). */
+  const lit = new WeakMap<Element, { style: CSSStyleDeclaration; value: string }>();
+  /** Whether a blinking lens's light is another than in the frame before: a blink steps, so most frames it is not. */
+  const blinked = (element: Element) => {
+    let last = lit.get(element);
+    if (!last) lit.set(element, last = { style: getComputedStyle(element), value: "" });
+    const value = last.style.getPropertyValue("--strata-lit");
+    if (value === last.value) return false;
+    last.value = value;
+    return true;
+  };
+  /** The enrolled panel `node` is in, or undefined: the root itself, another child of it, or a node outside it. */
+  const panelOf = (node: unknown) => {
+    let element = node instanceof Element ? node : node instanceof Node ? node.parentElement : null;
+    while (element && element.parentElement !== root) element = element.parentElement;
+    return element ? panels.get(element as HTMLElement) : undefined;
+  };
+  /** Marks the panel `node` is in as stale, or every panel where it is in none. */
+  const touch = (node: unknown) => { const entry = panelOf(node); if (entry) entry.stale = true; else everything = true; };
+  /**
+   * What a panel that nothing happened to could still have changed by: its box against the stage's (another panel grew
+   * and moved it; the camera is centred on the stage) and the state of its form controls, which a script can set with no
+   * event and no attribute (`checked`, `value`). Cheap next to a scene: no computed style, and a layout the frame needs anyway.
+   */
+  const seen = (element: HTMLElement, stage: DOMRect) => {
+    const box = element.getBoundingClientRect();
+    let key = `${box.left - stage.left},${box.top - stage.top},${box.width},${box.height},${stage.width},${stage.height},${element.offsetWidth},${element.offsetHeight}`;
+    for (const control of element.querySelectorAll<HTMLInputElement>("input, select, textarea")) key += `|${control.checked ? 1 : 0}${control.indeterminate ? 1 : 0}${control.value}`;
+    return key;
+  };
   /** Shows the CSS paint of the elements a panel no longer draws as domes, and hides it on those it now does. */
   const markDomes = (entry: { domes: Set<Element> }, domes: Set<Element>) => {
     for (const element of entry.domes) if (!domes.has(element)) { element.removeAttribute("data-strata-dome"); markValue(element, false); }
@@ -1432,7 +1498,10 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   // Instrument knobs' springs, kept between scenes; the knobs still moving ask for another frame.
   const springs = new WeakMap<Element, KnobSpring>(), moving = new Set<Element>(), peaks = new WeakMap<Element, PeakState>();
   const schedule = () => { if (!frame && !detached) frame = requestAnimationFrame(sync); };
-  const resize = new ResizeObserver(schedule);
+  /** Asks for a frame that builds every panel's scene. */
+  const scheduleAll = () => { everything = true; schedule(); };
+  // A resize moves the panels after the one that grew, and the stage's size is every camera's.
+  const resize = new ResizeObserver(scheduleAll);
   // The adjust policy: a cap on levels, moved by frame intervals measured here (no core dependency).
   let cap: StrataLevel = "scene";
   const policy = { frameBudgetMs: 25, stepDownAfterFrames: 120, stepUpAfterFrames: 600, window: 60, ...options.adjust };
@@ -1452,7 +1521,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     intervals.length = 0; over = 0; under = 0;
     options.onAdjust?.(event);
     root.dispatchEvent(new CustomEvent("strata-adjust", { detail: event }));
-    schedule();
+    scheduleAll();
   };
   const measure = (now: number) => {
     meter = 0;
@@ -1490,7 +1559,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
       if (gpu) element.setAttribute("data-strata-mode", "face");
       // Centred, so depth and tilt move the panel about its middle as the CSS motion does.
       const release = controller.enroll(element, { id, origin: "center" });
-      panels.set(element, { id, release, domes: new Set() });
+      panels.set(element, { id, release, domes: new Set(), stale: true, moving: false });
       (element as Movable)[panelMotion] = mover(element);
       resize.observe(element);
     } catch (error) {
@@ -1551,11 +1620,33 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   root.setAttribute("data-strata-stage", "");
   (root as HTMLElement & { [strataStage]?: StagePresenter })[strataStage] = presenter;
 
+  /** Whether the last frame found GPU presenting: a change of it changes every panel. */
+  let presented: boolean | undefined;
   function sync() {
     frame = 0;
     if (detached) return;
-    moving.clear();
     const gpu = presenting();
+    if (gpu !== presented) { presented = gpu; everything = true; }
+    // A CSS transition (a knob sliding, a face settling) moves geometry with no event per frame: its panel's scene
+    // follows it until it ends, and is built once more in the frame after. Endless CSS animations (the spinner) stay in
+    // the captured content and need no new scene. A StatusLight's blink and a chase (a Spinner ring, an indeterminate
+    // bar) are CSS animations of `--strata-lit`, which the scene reads: a chase needs a scene each frame, a blink (which
+    // steps) in the frames its light changes.
+    let again = false;
+    for (const entry of panels.values()) if (entry.animated) { entry.stale = true; entry.animated = false; }
+    if (gpu) for (const animation of root.getAnimations({ subtree: true })) {
+      if (animation.playState !== "running") continue;
+      const light = animation instanceof CSSAnimation && /^ug-(blink|chase)/.test(animation.animationName) ? animation.animationName : undefined;
+      if (!light && !(animation instanceof CSSTransition)) continue;
+      again = true;
+      const effect = animation.effect as KeyframeEffect | null, target = effect?.target;
+      if (light === "ug-blink" && target && !effect?.pseudoElement && !blinked(target)) continue;
+      const entry = panelOf(target);
+      if (entry) entry.stale = entry.animated = true; else everything = true;
+    }
+    const all = everything;
+    everything = false;
+    let stage: DOMRect | undefined;
     for (const element of root.children) {
       if (!shown(element)) continue;
       if (gpu && element.matches(".ug-scrim") && !scrims.has(element)) enrollScrim(element);
@@ -1578,15 +1669,16 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
         markDomes(entry, new Set());
         continue;
       }
-      update(element, entry);
+      // A panel nothing happened to keeps its scene, once its place and its controls are found as they were (`seen`).
+      if (all || entry.stale || entry.moving || entry.motion || entry.scene === undefined || entry.seen !== seen(element, stage ??= stageBox().getBoundingClientRect())) update(element, entry);
+      else if (element.getAttribute("data-strata-mode") !== "face") element.setAttribute("data-strata-mode", "face");
     }
     // The Scene level: its backdrop while it applies (and its particles, which end with it).
-    if (sceneLevel()) presentBackdrop(); else { withdrawBackdrop(); endParticles(); }
-    // A CSS transition (a knob sliding, a face settling) moves geometry with no event per frame: follow it until it
-    // ends. Endless CSS animations (the spinner) stay in the captured content and need no new scene.
-    // A StatusLight's blink and a chase (a Spinner ring, an indeterminate bar) are CSS animations of `--strata-lit`, which the scene reads: they need a scene each frame while they run.
-    if (gpu && (root.getAnimations({ subtree: true }).some(animation => (animation instanceof CSSTransition || (animation instanceof CSSAnimation && /^ug-(blink|chase)/.test(animation.animationName))) && animation.playState === "running")
-      || [...panels.values()].some(entry => entry.motion) || moving.size)) schedule();
+    if (sceneLevel(gpu)) presentBackdrop(); else { withdrawBackdrop(); endParticles(); }
+    if (!gpu) return;
+    // Another frame while anything of a panel is on its way: a transition or a light (above), a panel motion, a spring.
+    if (!again) for (const entry of panels.values()) if (entry.motion || entry.moving) { again = true; break; }
+    if (again) schedule();
   }
 
   // ---- The Scene level (Phase 5): decorative layers the helper owns, a backdrop first and particles last. ----
@@ -1594,7 +1686,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   /** The stage's box: the root's containing block (the canvas, or the ordinary host), which overlays fill. */
   const stageBox = () => root.parentElement ?? root;
   /** Whether the stage is at the Scene level now: presenting, and neither the page nor the adjust policy lowers it. */
-  const sceneLevel = () => presenting() && lower(strataLevel(root, options.level), cap) === "scene";
+  const sceneLevel = (gpu = presenting()) => gpu && lower(strataLevel(root, options.level), cap) === "scene";
   type StageLayer = { element: HTMLElement; release: () => void; handle?: ReturnType<StrataGpuController["setMaterial"]>; scene?: string };
   let backdrop: StageLayer | undefined, particles: (StageLayer & { confetti: Confetto[]; done: (() => void)[]; last: number; frame: number }) | undefined;
   /** A decorative, inert, hidden layer of the stage's size, added to the root and enrolled now. */
@@ -1676,7 +1768,7 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   let environment: EnvironmentMap | undefined;
   if (options.environment) {
     fetch(options.environment).then(response => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(`HTTP ${response.status}`))))
-      .then(buffer => { environment = environmentFrom(decodeHdr(buffer)); schedule(); })
+      .then(buffer => { environment = environmentFrom(decodeHdr(buffer)); scheduleAll(); })
       .catch(error => console.warn(`Strata GPU: the environment ${options.environment} did not load: ${String(error)}`));
   }
 
@@ -1699,6 +1791,9 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
   /** Brings a presented panel's scene and material up to date. */
   function update(element: HTMLElement, entry: NonNullable<ReturnType<typeof panels.get>>) {
     if (element.getAttribute("data-strata-mode") !== "face") element.setAttribute("data-strata-mode", "face");
+    // Anything that happens to the panel from here on is for the next scene.
+    entry.stale = false;
+    moving.clear();
     const motion = entry.motion;
     const domes = new Set<Element>();
     // A Dialog's plate and a Drawer's tray come out of the chassis with the motion's eased progress, and go back into it as it leaves.
@@ -1707,6 +1802,8 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
     const scene = strataScene(element, { level: options.level, cap, stage: stageBox(), domes, environment, springs, moving, peaks, ...(options.parts ? { parts: options.parts } : {}),
       ...(motion ? { height: motion.from + (motion.to - motion.from) * motion.ease(Math.min(1, (performance.now() - motion.start) / motion.duration)), rise: motion.kind === "enter" ? progress : 1 - progress } : {}) });
     markDomes(entry, domes);
+    entry.moving = moving.size > 0;
+    entry.seen = seen(element, stageBox().getBoundingClientRect());
     entry.report = isInstrumentScene(scene) ? instrumentReport : undefined;
     if (entry.report) warnOnce(element, entry);
     // A panel drawn with the instrument material says so, so the CSS can hold the motion of the parts it draws.
@@ -1769,23 +1866,31 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
       catch (error) { console.warn(`Strata GPU: ${entry.id} did not move: ${String(error)}`); return; }
       entry.motion = { start: performance.now(), duration: length, ease: settles ? settle : bezier(easing), from: motion === "enter" ? modal : own, to: motion === "enter" ? own : modal, kind: motion };
       schedule();
-      try { await handle.finished; } finally { entry.motion = undefined; schedule(); }
+      // The frame after the motion ends builds the panel's scene once more, at its own height.
+      try { await handle.finished; } finally { entry.motion = undefined; entry.stale = true; schedule(); }
     };
   }
   const events = ["pointerover", "pointerout", "pointerdown", "pointerup", "focusin", "focusout", "keydown", "keyup", "input", "change", "transitionrun", "transitionend", "strata-meter-live"];
   // A JogWheel the GPU draws turns without a write to the DOM: its behaviour wakes the helper with this event instead.
   events.push("strata-jog-live");
-  for (const type of events) root.addEventListener(type, schedule, true);
-  const mutation = new MutationObserver(schedule);
+  // What can come many times a second belongs to the panel it happens in: the pointer crossing its controls, a drag's
+  // or a held key's `input`, a transition, a live meter or wheel. A press, a release, a `change` and a move of the
+  // focus come once per action and may be answered anywhere on the page, so every panel is read again after one.
+  const local = new Set(["pointerover", "pointerout", "keydown", "keyup", "input", "transitionrun", "transitionend", "strata-meter-live", "strata-jog-live"]);
+  const happened = (event: Event) => { if (local.has(event.type)) touch(event.target); else everything = true; schedule(); };
+  for (const type of events) root.addEventListener(type, happened, true);
+  const mutation = new MutationObserver(records => { for (const record of records) touch(record.target); schedule(); });
   mutation.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "disabled", "checked", "aria-checked",
     "aria-current", "aria-disabled", "aria-pressed", "data-strata-lit", "data-strata-blink", "data-strata-colour", "aria-selected", "data-strata-closing", "data-strata-face", "data-strata-material", "data-strata-elevation", "data-strata-level", "data-strata-depth", "data-strata-theme", "data-strata-character", "data-strata-scope", "data-strata-preview", "hidden", "open", "value", "min", "max", "low", "high", "optimum", "data-strata-backlight"] });
   resize.observe(root);
-  const poll = setInterval(schedule, options.poll ?? 500);
-  forced.addEventListener("change", schedule);
+  // The poll reads every panel: it is what finds a change nothing reports (a theme set above the root, a stylesheet,
+  // text, a scroll inside a panel).
+  const poll = setInterval(scheduleAll, options.poll ?? 500);
+  forced.addEventListener("change", scheduleAll);
   sync();
   const handle: StrataGpu = {
     burst,
-    refresh: () => { if (frame) cancelAnimationFrame(frame); sync(); },
+    refresh: () => { if (frame) cancelAnimationFrame(frame); frame = 0; everything = true; sync(); },
     scene: panel => { const key = panels.get(panel)?.scene; return key ? JSON.parse(key) as StrataScene | StrataInstrumentScene : undefined; },
     cap: () => cap,
     diagnostics: panel => { const report = panels.get(panel)?.report; return report ? { materials: { ...report.materials }, keysAtRelief: [...report.keysAtRelief] } : undefined; },
@@ -1794,8 +1899,8 @@ export function attachStrataGpu(controller: StrataGpuController, options: Strata
       detached = true;
       if (frame) cancelAnimationFrame(frame);
       if (meter) cancelAnimationFrame(meter);
-      for (const type of events) root.removeEventListener(type, schedule, true);
-      mutation.disconnect(); resize.disconnect(); clearInterval(poll); forced.removeEventListener("change", schedule);
+      for (const type of events) root.removeEventListener(type, happened, true);
+      mutation.disconnect(); resize.disconnect(); clearInterval(poll); forced.removeEventListener("change", scheduleAll);
       for (const element of [...panels.keys()]) releasePanel(element);
       for (const element of [...scrims.keys()]) releaseScrim(element);
       endParticles(); withdrawBackdrop();

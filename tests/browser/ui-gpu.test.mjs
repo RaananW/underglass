@@ -99,6 +99,79 @@ test("Strata panels are GPU-presented in face mode with a scene from their marku
   expect(errors).toEqual([]);
 });
 
+// The helper reads a panel (its boxes, computed styles and text) only when something happened to it. A build starts by
+// reading the panel's computed style, which nothing else on this page does, so those reads count the builds. The poll
+// (every panel, every half second by default) is set long, so it cannot be what brings a scene up to date here.
+test("only the panel something happened to has its scene built again, and a change that no event reports still reaches the other", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.addInitScript(() => {
+    const original = window.getComputedStyle, reads = window.__reads = {};
+    window.getComputedStyle = function (element, ...rest) { if (element?.id === "gpu-panel" || element?.id === "gpu-side") reads[element.id] = (reads[element.id] ?? 0) + 1; return original.call(this, element, ...rest); };
+  });
+  await ready(page, "?level=objects&poll=600000");
+  await page.evaluate(async () => { const probe = window.strataGpuProbe; probe.addPanel(); probe.refresh(); await probe.controller.settle(); });
+  const frames = count => page.evaluate(count => new Promise(done => { const step = left => (left ? requestAnimationFrame(() => step(left - 1)) : done()); step(count); }), count);
+  const reads = () => page.evaluate(() => ({ main: window.__reads["gpu-panel"] ?? 0, side: window.__reads["gpu-side"] ?? 0 }));
+  const sideScene = () => page.evaluate(() => JSON.stringify(window.strataGpuProbe.sceneOf(window.strataGpuProbe.side())));
+  const state = () => page.evaluate(() => { const state = window.strataGpuProbe.controller.state(); return { mode: state.mode, reason: state.reason, layers: state.layers.map(layer => layer.id) }; });
+  expect((await state()).layers).toEqual(["gpu-panel", "gpu-side"]);
+  expect(await sideScene()).toContain('"primitives"');
+  // The pointer goes to rest outside both panels, and the frames after it build nothing.
+  await page.mouse.move(700, 480);
+  await frames(4);
+  const rest = await reads(), mainAtRest = await page.evaluate(() => JSON.stringify(window.strataGpuProbe.scene()));
+  await frames(10);
+  expect(await reads(), "at rest no scene is built").toEqual(rest);
+
+  // The pointer crosses the first panel's controls: its scene follows (hover), and the other panel is not read once.
+  const save = await page.locator("#gpu-save").boundingBox(), cancel = await page.locator("#gpu-cancel").boundingBox();
+  for (let step = 0; step <= 12; step++) { await page.mouse.move(cancel.x + 6 + (save.x + save.width - cancel.x - 12) * step / 12, save.y + save.height / 2); await frames(1); }
+  await frames(3);
+  const hovered = await reads();
+  expect(hovered.main, "the panel under the pointer is built again").toBeGreaterThan(rest.main);
+  expect(hovered.side, "the other panel is not read").toBe(rest.side);
+  expect(await page.evaluate(() => JSON.stringify(window.strataGpuProbe.scene())), "its scene has the hovered key").not.toBe(mainAtRest);
+
+  // A script checks the other panel's box: no event, no attribute. The next frame the helper has a reason to run (the
+  // pointer moves on in the first panel) finds it, long before the poll.
+  const before = { scene: await sideScene(), reads: await reads(), shot: PNG.sync.read(await page.locator("#frame").screenshot()) };
+  await page.evaluate(() => { document.querySelector("#gpu-side-check").checked = true; });
+  await page.mouse.move(cancel.x + cancel.width / 2, cancel.y + cancel.height / 2);
+  await frames(4);
+  await page.evaluate(() => window.strataGpuProbe.controller.settle());
+  const after = { scene: await sideScene(), reads: await reads() };
+  expect(after.reads.side, "the panel whose box changed is built again").toBeGreaterThan(before.reads.side);
+  expect(after.scene, "its scene has the checked box").not.toBe(before.scene);
+  // Fresh pixels: the mark is drawn in the box.
+  const box = await page.locator("#gpu-side .ug-checkbox__mark").boundingBox(), frame = await page.locator("#frame").boundingBox();
+  const shot = PNG.sync.read(await page.locator("#frame").screenshot()), ratio = shot.width / 760;
+  let changed = 0;
+  for (let y = Math.floor((box.y - frame.y) * ratio); y < Math.ceil((box.y - frame.y + box.height) * ratio); y++) {
+    for (let x = Math.floor((box.x - frame.x) * ratio); x < Math.ceil((box.x - frame.x + box.width) * ratio); x++) {
+      const at = (y * shot.width + x) * 4;
+      if ([0, 1, 2].some(channel => Math.abs(shot.data[at + channel] - before.shot.data[at + channel]) > 24)) changed++;
+    }
+  }
+  expect(changed, "the checked mark is presented").toBeGreaterThan(8);
+
+  // The first panel changes in a way that moves the other (no event or attribute on the other): its camera follows.
+  const vanish = () => page.evaluate(() => window.strataGpuProbe.sceneOf(window.strataGpuProbe.side()).camera.vanish[0]);
+  const was = await vanish();
+  await page.addStyleTag({ content: "#gpu-panel.moved ~ #gpu-side { margin-left: 10px; }" });
+  await page.evaluate(() => document.querySelector("#gpu-panel").classList.add("moved"));
+  await frames(4);
+  expect(await vanish(), "the moved panel's camera is where the stage's centre now is").toBeCloseTo(was - 10, 1);
+
+  // Native hits: a real click reaches the other panel's button where it is drawn, and GPU is on throughout.
+  const press = await page.locator("#gpu-side-press").boundingBox();
+  await page.mouse.click(press.x + press.width / 2, press.y + press.height / 2);
+  expect(await page.evaluate(() => window.strataGpuProbe.presses())).toBe(1);
+  const end = await state();
+  expect(end.mode, end.reason).toBe("gpu");
+  expect(errors).toEqual([]);
+});
+
 test("only controls take hover and press on the GPU: a card or a plinth under the pointer stays where it is", async ({ page }) => {
   await ready(page);
   await page.evaluate(async () => {

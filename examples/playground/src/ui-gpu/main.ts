@@ -22,6 +22,8 @@
  * `strataGpuProbe.addMenu()` an Actions menu button in the panel whose Menu is in `<body>`,
  * `strataGpuProbe.addCombobox()` a Combobox with three suggestions, and
  * `strataGpuProbe.addDatePicker()` a DatePicker, empty.
+ * `strataGpuProbe.addPanel()` adds a second Strata panel beside the first (`side()`, `sceneOf(panel)`, `presses()`), for what
+ * happens to one panel and not to the other; `?poll=ms` sets how often the helper reads every panel whatever happened.
  */
 import "@underglass/ui/css";
 import { compileStyle, mountApplicationModule, type CanvasController } from "@underglass/core";
@@ -195,6 +197,24 @@ function addMenu() {
 const chipsMarkup = `<p style="margin:12px 0 0;display:flex;gap:8px"><span class="ug-chip" data-strata-face="raised" id="gpu-tag"><span class="ug-chip__label">Design</span></span><button class="ug-chip" data-strata-face="raised" type="button" aria-pressed="false" id="gpu-filter"><span class="ug-chip__label">Remote</span></button></p>`;
 /** An Avatar in plain markup (`avatar.md`), added to the panel by `strataGpuProbe.addAvatar()`. */
 const avatarMarkup = `<p style="margin:12px 0 0"><span class="ug-avatar" data-strata-face="raised" role="img" aria-label="Ada Lovelace" id="gpu-avatar"><span class="ug-avatar__initials" aria-hidden="true">AL</span></span></p>`;
+/** The second panel (`strataGpuProbe.addPanel()`): a checkbox and a button that counts its presses. */
+const sideMarkup = `<label class="ug-checkbox"><input class="ug-checkbox__input" data-strata-face="well" type="checkbox" id="gpu-side-check" />
+    <span class="ug-checkbox__mark" data-strata-face="mark" aria-hidden="true"></span><span class="ug-checkbox__label">On</span></label>
+  <p style="margin:12px 0 0"><button type="button" class="ug-button" data-strata-face="raised" id="gpu-side-press"><span class="ug-button__label">Press</span></button></p>`;
+let side: HTMLElement | undefined, presses = 0;
+function addPanel() {
+  side = document.createElement("section");
+  side.className = "ug-panel";
+  side.id = "gpu-side";
+  side.setAttribute("data-strata-face", "raised");
+  side.setAttribute("data-strata-elevation", "floating");
+  side.setAttribute("aria-label", "Side");
+  Object.assign(side.style, compileStyle({ x: 600, y: 50, width: 130 }, {}, true));
+  side.innerHTML = sideMarkup;
+  root.append(side);
+  side.querySelector("#gpu-side-press")!.addEventListener("click", () => { presses++; });
+  strata?.refresh();
+}
 let saves = 0;
 // Declared before mounting: the runtime may report status while it mounts.
 let strata: StrataGpu | undefined;
@@ -221,7 +241,8 @@ const level = params.get("level") === "objects" || params.get("level") === "scen
 const adjusting = params.get("adjust")?.split(",").map(Number);
 const adjustments: StrataAdjustEvent[] = [];
 const adjust = adjusting ? { enabled: true, frameBudgetMs: adjusting[0], stepDownAfterFrames: adjusting[1], stepUpAfterFrames: adjusting[2], window: adjusting[3] } : undefined;
-strata = params.has("plain") ? undefined : attachStrataGpu(controller, { level, adjust, onAdjust: event => adjustments.push(event), environment: params.get("environment") ?? undefined });
+strata = params.has("plain") ? undefined : attachStrataGpu(controller, { level, adjust, onAdjust: event => adjustments.push(event), environment: params.get("environment") ?? undefined,
+  ...(params.has("poll") ? { poll: Number(params.get("poll")) } : {}) });
 // An artificial cost per frame, so tests can drive the adjust policy.
 let load = 0;
 const busy = () => { const until = performance.now() + load; while (performance.now() < until) { /* spin */ } if (load) requestAnimationFrame(busy); };
@@ -235,6 +256,7 @@ if (!params.has("dom")) void controller.enable().then(() => strata?.refresh());
 window.strataGpuProbe = {
   controller, panel: () => panel, saves: () => saves,
   scene: () => strata?.scene(panel),
+  addPanel, side: () => side, sceneOf: element => strata?.scene(element), presses: () => presses,
   refresh: () => strata?.refresh(),
   detach: () => { strata?.detach(); strata = undefined; },
   cap: () => strata?.cap(), adjustments: () => [...adjustments],
@@ -284,6 +306,7 @@ declare global {
   interface Window { strataGpuProbe: {
     controller: CanvasController; panel(): HTMLElement; saves(): number;
     scene(): ReturnType<StrataGpu["scene"]>; refresh(): void; detach(): void;
+    addPanel(): void; side(): HTMLElement | undefined; sceneOf(element: HTMLElement): ReturnType<StrataGpu["scene"]>; presses(): number;
     cap(): string | undefined; adjustments(): StrataAdjustEvent[]; load(ms: number): void;
     burst(options?: BurstOptions): Promise<void>; root(): HTMLElement;
     enter(options?: PanelMotionOptions): Promise<void>; leave(options?: PanelMotionOptions): Promise<void>;

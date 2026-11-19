@@ -113,13 +113,15 @@ different from currently failing supported code.
 Found while the site was tried on a Galaxy S25+ and in Chrome's phone emulation (Canary 160.0.8169.0, an RTX 3080;
 CPU figures with the CPU slowed four times). None is fixed in `packages/` yet.
 
-- **The Strata helper builds every presented panel's scene again in each frame something moves.** While a control is
-  dragged, a spring settles or a light blinks, `@underglass/ui/gpu` reads the DOM of each panel (boxes, computed
-  styles) and compares the result with the last scene, panel by panel. On the Instrument gallery's synthesiser,
-  dragging the wheel averages about 40 ms a frame with spikes over 100 ms, and the "Wave 2" group about 36 ms at rest
-  (its blinking lights); a tab with nothing moving holds 16.7 ms. Fewer pixels do not change this: the figures are the
-  same with one panel on the stage as with five. Closure: rebuild only the panel that changed, or only the part of
-  the scene that an animation drives, and measure the same pages again.
+- **The Strata helper builds the whole scene of every panel something happens to, each frame.** `@underglass/ui/gpu` reads
+  a panel's DOM (boxes, computed styles, text) to build its scene and compares the result with the last one. Since
+  2026-11-19 it does so only for the panels something happened to (a drag, a hover, a transition or a light in them),
+  where it did for every panel in each frame anything moved; a stepped blink costs its panel only in the frames its
+  light changes. What is left: a panel that changes is still read whole. On the Instrument gallery's synthesiser the
+  wheel changes three panels through the page's state (the readout, the sound, the output), so a drag still fills the
+  main thread of a CPU slowed four times (about 790 ms of work a second, 33 frames a second on the desktop layout and
+  about 40 on the phone layout, from 20 and about 32). Closure: build only the part of a scene that a value or a
+  spring drives (a uniform), without reading the panel again, and measure the same pages.
 - **Core's policy check reads layout on every drawn frame.** `CanvasRuntime.policy()` reads each layer's
   `offsetWidth` and `offsetHeight` and its viewport clip per frame; in a profile of a page that draws every frame it
   was the largest single function (about 12% of the main thread). The structural half is cached; the geometry half is
