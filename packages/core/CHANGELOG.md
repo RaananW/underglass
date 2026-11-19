@@ -1,5 +1,18 @@
 # @underglass/core
 
+## 0.4.0
+
+### Minor Changes
+
+- cfac7eb: Custom displacement effects: `defineEffect` takes `geometry: "displacement"`, a WGSL function that returns the position in the layer each pixel is drawn from. It is a sampling operation of an effect chain (`kind: "custom"`), so it can move, stretch, split or take away a layer's pixels during a transition, and one chain may hold a displacement and a colour function. A position outside the layer draws nothing, and nothing is drawn outside the layer's box. Materials refuse it.
+- 0c21def: Writes are drawn once per frame. `setTransform`, `setOrigin` and a `Surface`'s committed layout or transform used to draw at once; they now change state in the call (hits and `getBoundingClientRect()` follow in the same task) and are drawn with the frame, like effect and material updates. Every write made in one task appears in the same frame, in the state the task left, so a pose written and replaced in one task is never shown, also when a layer is enrolled between the two. A frame loop is drawn in the frame it wrote in, whichever way it asks for its frames.
+  
+  Changed timing: code that wrote a transform and read the canvas's pixels in the same task now reads the previous frame. Wait for a frame, or `await controller.settle()`.
+
+### Patch Changes
+
+- 4054e2f: The npm pages of all five packages link https://underglass.dev as their homepage.
+
 ## 0.3.0
 
 ### Minor Changes
