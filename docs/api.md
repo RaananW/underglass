@@ -180,6 +180,8 @@ not CSS-sized downsampling; allocation growth prepares a successor.
 `state().publication` exposes generation, pending state and capture coverage;
 `metrics.incompleteFramesSkipped` counts withheld incomplete compositions.
 `metrics.mutationsIgnored` counts ignored same-value mutation records ([below](#same-value-mutations-are-ignored)).
+`metrics.policyPasses` and `metrics.ownershipChecks` count the presentation policy's passes and the owned-animation
+source checks ([below](#policy-checks-per-frame)).
 Compatibility admission/readmission counters remain, but automatic attempts
 and retry frames stay zero. Visibility pauses scheduling, reduced motion uses
 its canonical endpoint/identity contract and forced colors refreshes native
@@ -256,6 +258,32 @@ effect, material and emitter update.
 
 Changes the browser makes (a resize, a scroll, a new device pixel ratio) are drawn in
 the call that learns of them, so they are in the frame that shows the change.
+
+### Policy checks per frame
+
+Every drawn frame is checked against the presentation contract first: the declarations core owns, each owned
+animation's source (its computed style, keyframes and timing), the cached structural checks and each layer's
+geometry. A violation recovers to ordinary DOM before the frame is drawn. Some of these changes raise no event (a
+keyframe edit, a stylesheet edit), so the check runs in every frame rather than on events.
+
+- **A clock frame** (owned playback or a playing effect), and each frame of `animate()` and `advance()`, runs one
+  policy pass. Each playing owned animation's source is checked as its new time is applied, and the pass does not
+  check it again; the draw that follows takes the pass's verdict. All of it is one synchronous run, so no page code
+  runs between the check and the draw.
+- **A frame of running transitions** runs one pass for all of them, in one shared frame callback, and one in the
+  draw. A transition that asks for a frame in a frame callback is stepped in the next frame, as before. When the
+  shared pass finds a violation, the frame is checked again one transition at a time, as when each had a callback of
+  its own: the transition whose sample broke the contract is cancelled with the reason, and on the GPU the recovery
+  cancels the others with `DOM recovery`.
+- **Every other draw**, and every check made for a mutation, a resize, a React commit, a native paint or admission,
+  runs a full pass: a verdict is never kept across a callback or a task.
+
+`state().metrics.policyPasses` counts full passes and `state().metrics.ownershipChecks` counts owned-animation
+source checks, both since the runtime was created. A page with three playing owned animations makes one pass and
+three source checks a frame (it made two and nine); a group of four transitions makes two passes a frame (it made
+five).
+`state().runtimeResources.controllerFrames` counts the shared transition callback once, however many transitions run
+(it counted one per transition).
 
 Editable and top-layer admission checks include the enrolled element itself,
 not just descendants. Native `contenteditable` (including empty and

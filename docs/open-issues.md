@@ -111,7 +111,7 @@ different from currently failing supported code.
 ## Phone and frame-cost findings (2026-11-18)
 
 Found while the site was tried on a Galaxy S25+ and in Chrome's phone emulation (Canary 160.0.8169.0, an RTX 3080;
-CPU figures with the CPU slowed four times). None is fixed in `packages/` yet.
+CPU figures with the CPU slowed four times). None is closed in `packages/` yet; the first two are narrowed.
 
 - **The Strata helper builds the whole scene of every panel something happens to, each frame.** `@underglass/ui/gpu` reads
   a panel's DOM (boxes, computed styles, text) to build its scene and compares the result with the last one. Since
@@ -125,7 +125,11 @@ CPU figures with the CPU slowed four times). None is fixed in `packages/` yet.
 - **Core's policy check reads layout on every drawn frame.** `CanvasRuntime.policy()` reads each layer's
   `offsetWidth` and `offsetHeight` and its viewport clip per frame; in a profile of a page that draws every frame it
   was the largest single function (about 12% of the main thread). The structural half is cached; the geometry half is
-  not. Closure: cache the geometry half until a transform, a size or a scroll changes it.
+  not. Since #331 the pass runs once a frame where it ran more than once: a clock frame ran it twice and a frame of N
+  transitions N + 1 times (now 1 and 2), and each owned animation's source check ran three times (now once;
+  [api](api.md#policy-checks-per-frame)). What is left: the one pass still reads layout, and a source check still
+  reads every keyframe (`getKeyframes()` and its signature, about two thirds of a check), because nothing signals a
+  keyframe edit. Closure: cache the geometry half until a transform, a size or a scroll changes it.
 - **The clock for playing effects draws apart from the shared draw.** Since writes are drawn once per frame
   ([api](api.md#when-writes-are-drawn)), a page that plays an owned animation or an effect and also writes in that
   frame is still drawn twice in it, as before that change.

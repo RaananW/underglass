@@ -88,6 +88,8 @@ interface OwnershipHost {
   validate(transform: Transform): void;
   changed(): void;
   release(options?: ReleaseOptions): Promise<unknown>;
+  /** Called at the start of every source check (`check`); the runtime counts them (`metrics.ownershipChecks`). */
+  checked?(): void;
 }
 /** Options for releasing an animation back to the browser. */
 export interface ReleaseOptions {
@@ -225,6 +227,7 @@ export function prepareAnimation(element: HTMLElement, source: Animation, host: 
   const assertLive = () => { if (released) throw new Error("Animation ownership is released"); };
   // Throws if the source or the element's style was changed while the GPU owns the animation.
   const check = () => {
+    host.checked?.();
     presentation.check();
     const current = getComputedStyle(element);
     if (current.translate !== "none" || current.rotate !== "none" || current.scale !== "none" || current.transformOrigin !== "0px 0px") {
@@ -297,13 +300,17 @@ export function prepareAnimation(element: HTMLElement, source: Animation, host: 
       released = true;
       restoreSource();
     },
+    /**
+     * Advances a playing (or `force`d) animation by `delta` and applies the sample. Returns true when it applied:
+     * the source was checked (`check`), then its time was set and the sample handed to the host's `apply`.
+     */
     tick(delta: number, force = false) {
       assertLive();
-      if (playing || force) {
-        milliseconds = Math.min(1e12, milliseconds + delta);
-        apply();
-        if (milliseconds >= timeline.end) playing = false;
-      }
+      if (!playing && !force) return false;
+      milliseconds = Math.min(1e12, milliseconds + delta);
+      apply();
+      if (milliseconds >= timeline.end) playing = false;
+      return true;
     },
     playback: {
       play() { assertLive(); playing = true; host.changed(); },
