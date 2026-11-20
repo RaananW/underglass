@@ -154,6 +154,15 @@ React's behaviour: React 19 then only reports the error, to that root's
 `onUncaughtError`, and the mount returns a controller over an empty root.
 `mountWorkerCanvasApp` throws the same way.
 
+The Vue adapter's `mountCanvasApp` throws the same way, on Vue's production and
+development builds: a render function, a `setup` or a mounted hook that throws
+during the first render makes the mount throw that error, the app is unmounted
+and the same hosts can take another mount. Vue alone would only log the error in
+production and mount the rest. An `onErrorCaptured` hook in the application that
+returns `false` for the error is not a failure. The error goes to the caller of
+`mountCanvasApp` and not to an `errorHandler` set in `configure`, which gets the
+errors after the mount.
+
 Normal commits synchronously register current-original native geometry and
 reconcile logical capture slots. Complete cached coverage may recompose; new
 slots or extent/density growth retain the last complete GPU output until prepared

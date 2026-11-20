@@ -306,10 +306,40 @@ export const Presence = defineComponent({
 export type MountCanvasOptions = Omit<RuntimeOptions, "mount"> & { configure?: (app: App) => void };
 
 /**
+ * Mounts `app` in `container` and returns its unmount callback. When the first render fails, the app is
+ * unmounted and the error thrown here.
+ *
+ * Vue alone does not do that. It gives an error that no `onErrorCaptured` hook stopped to the app's
+ * `errorHandler`; without one, its production build only logs the error and mounts the rest, and its
+ * development build throws in the middle of the patch, which leaves the hooks of the components already
+ * rendered in Vue's queue (they would then run against a removed container). So while mounting, the app's
+ * handler is one that keeps the first error: Vue completes the mount, and the complete tree is unmounted.
+ * A mount that succeeds gets the app's own handler back; a failed app keeps the silent one, so whatever
+ * of it Vue still runs (after an error Vue does not handle, such as an invalid element name) reports
+ * nothing more.
+ */
+function mountApp(app: App, container: Element): () => void {
+  const own = app.config.errorHandler;
+  let failure: { error: unknown } | undefined;
+  // A failing component can make others fail; the first error is the cause.
+  app.config.errorHandler = error => { failure ??= { error }; };
+  try { app.mount(container); }
+  catch (error) { throw (failure ?? { error }).error; }
+  if (failure) { app.unmount(); throw failure.error; }
+  app.config.errorHandler = own;
+  return () => app.unmount();
+}
+
+/**
  * Explicit bootstrap: creates the one persistent Vue app from `root` (with optional root `props`) inside
  * the adapter-owned container, provides the runtime to it, mounts it synchronously and returns the
  * controller. The app starts in ordinary DOM; call `enable()` to request GPU presentation. Disposal
  * unmounts the app.
+ *
+ * A first render that throws (in a render function, `setup` or a mounted hook) makes this throw that
+ * error: the app is unmounted and the hosts are left as they were, so they can take another mount. The
+ * error goes to the caller, not to an `errorHandler` set in `configure`. An `onErrorCaptured` hook in the
+ * app that returns `false` for the error contains it, and the mount succeeds.
  */
 export function mountCanvasApp(options: MountCanvasOptions, root: Component, props?: Record<string, unknown>): CanvasController {
   const { configure, ...runtimeOptions } = options;
@@ -319,8 +349,7 @@ export function mountCanvasApp(options: MountCanvasOptions, root: Component, pro
       const app = createApp(root, props);
       app.provide(runtimeKey, runtime);
       configure?.(app);
-      app.mount(container);
-      return () => app.unmount();
+      return mountApp(app, container);
     },
   });
 }
