@@ -5,7 +5,7 @@
  * React-rendered elements with the runtime. The components render plain DOM, so they work unchanged
  * when GPU presentation is off. The framework-neutral runtime in `@underglass/core` owns all GPU behaviour.
  */
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, StrictMode, type HTMLAttributes, type ReactNode, type RefCallback } from "react";
+import { createContext, useCallback, useContext, useLayoutEffect, useRef, useState, useSyncExternalStore, StrictMode, type HTMLAttributes, type ReactNode, type RefCallback } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import {
@@ -117,13 +117,24 @@ export function Presence({ id, present, enter, exit, children, onComplete }: Pre
     const handle = runtime.transition(id, present ? enter : exit);
     motion.current = handle;
     void handle.finished.then(result => {
+      if (motion.current === handle) motion.current = undefined;
       // A newer transition or an unmount superseded this one; ignore its completion.
       if (version !== generation.current) return;
       if (!present) setRetained(false);
       completion.current?.(result);
     });
   }, [runtime, id, present, retained, enterKey, exitKey]);
-  useEffect(() => () => { generation.current++; motion.current?.cancel(); }, []);
+  // Layout-effect cleanup, so the transition ends inside the commit that removes the children, before React detaches
+  // their DOM. Bumping `generation` there also drops a `finished` that the same commit resolved (releasing the layer's
+  // enrollment cancels its transition) before that continuation, a microtask, can run. React also runs this cleanup
+  // when Suspense hides this `Presence` and when StrictMode replays mount effects (no transition runs on mount); a
+  // transition it interrupts is marked pending, so the effect above plays it again when the `Presence` is shown.
+  useLayoutEffect(() => () => {
+    generation.current++;
+    const running = motion.current;
+    motion.current = undefined;
+    if (running) { pending.current = true; running.cancel(); }
+  }, []);
   return retained ? <>{children}</> : null;
 }
 /** Props of `Surface`. Other HTML attributes are forwarded to the rendered `<section>`. */

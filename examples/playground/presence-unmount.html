@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Underglass Presence unmount</title>
+</head>
+<body>
+  <h1>Presence unmounted mid-transition</h1>
+  <p>Three enrolled layers: a control panel that stays, a stage whose <code>Presence</code> is unmounted, and a host
+    that is unmounted together with its <code>Presence</code>.</p>
+  <div id="frame"><canvas id="capture" hidden></canvas><canvas id="output" hidden></canvas><div id="ordinary"></div><div id="overlay"></div></div>
+  <pre id="status" role="status"></pre>
+  <script type="module" src="/src/demo/presence-unmount-demo.tsx"></script>
+</body>
+</html>

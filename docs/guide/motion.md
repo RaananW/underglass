@@ -51,7 +51,8 @@ handle. Invalid input fails as a whole, before anything moves.
 
 `Presence` keeps its children mounted through the exit motion, then removes them.
 The `Surface` stays as a stable layer. The toast's buttons are the real React
-buttons the whole time.
+buttons the whole time. Unmounting the `Presence` itself mid-motion stops the
+motion in the same commit, and `onComplete` is not called for it.
 
 ## Direct motion
 
