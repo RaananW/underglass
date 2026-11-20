@@ -180,6 +180,8 @@ not CSS-sized downsampling; allocation growth prepares a successor.
 `state().publication` exposes generation, pending state and capture coverage;
 `metrics.incompleteFramesSkipped` counts withheld incomplete compositions.
 `metrics.mutationsIgnored` counts ignored same-value mutation records ([below](#same-value-mutations-are-ignored)).
+`metrics.policyPasses` and `metrics.ownershipChecks` count the presentation policy's passes and the owned-animation
+source checks ([below](#policy-checks-per-frame)).
 Compatibility admission/readmission counters remain, but automatic attempts
 and retry frames stay zero. Visibility pauses scheduling, reduced motion uses
 its canonical endpoint/identity contract and forced colors refreshes native
@@ -256,6 +258,32 @@ effect, material and emitter update.
 
 Changes the browser makes (a resize, a scroll, a new device pixel ratio) are drawn in
 the call that learns of them, so they are in the frame that shows the change.
+
+### Policy checks per frame
+
+Every drawn frame is checked against the presentation contract first: the declarations core owns, each owned
+animation's source (its computed style, keyframes and timing), the cached structural checks and each layer's
+geometry. A violation recovers to ordinary DOM before the frame is drawn. Some of these changes raise no event (a
+keyframe edit, a stylesheet edit), so the check runs in every frame rather than on events.
+
+- **A clock frame** (owned playback or a playing effect), and each frame of `animate()` and `advance()`, runs one
+  policy pass. Each playing owned animation's source is checked as its new time is applied, and the pass does not
+  check it again; the draw that follows takes the pass's verdict. All of it is one synchronous run, so no page code
+  runs between the check and the draw.
+- **A frame of running transitions** runs one pass for all of them, in one shared frame callback, and one in the
+  draw. A transition that asks for a frame in a frame callback is stepped in the next frame, as before. When the
+  shared pass finds a violation, the frame is checked again one transition at a time, as when each had a callback of
+  its own: the transition whose sample broke the contract is cancelled with the reason, and on the GPU the recovery
+  cancels the others with `DOM recovery`.
+- **Every other draw**, and every check made for a mutation, a resize, a React commit, a native paint or admission,
+  runs a full pass: a verdict is never kept across a callback or a task.
+
+`state().metrics.policyPasses` counts full passes and `state().metrics.ownershipChecks` counts owned-animation
+source checks, both since the runtime was created. A page with three playing owned animations makes one pass and
+three source checks a frame (it made two and nine); a group of four transitions makes two passes a frame (it made
+five).
+`state().runtimeResources.controllerFrames` counts the shared transition callback once, however many transitions run
+(it counted one per transition).
 
 Editable and top-layer admission checks include the enrolled element itself,
 not just descendants. Native `contenteditable` (including empty and
@@ -498,7 +526,7 @@ event array; its histories and cumulative counters remain bounded.
 | `captureMs`, `uploadMs` | layer upload | The synchronous native upload of one layer's paint into its texture, with its `layerId` and `bytes` (both kinds time the same call) | The wait for the browser's paint, and GPU execution |
 | `readbackCompareMs` | layer readback | A pixel readback plus its comparison | Reserved: the current renderer makes no content readbacks and emits none |
 | `frameWorkMs` | drawn GPU frame | The whole `draw`: the policy check, native geometry, lights, uniforms and the submission of every pass | A draw that presents nothing (a failing policy check, an incomplete composition), and the frame callback's other work |
-| `frameTickMs` | runtime frame callback | The callback's own work: the shared clock advancing owned animations and playing effects, a transition sampling its timeline, an `animate()` or `advance()` step, with the policy checks they make | The `frameWorkMs` of any frame drawn inside it. Draws the runtime batches into a frame of its own are `frameWorkMs` only |
+| `frameTickMs` | runtime frame callback | The callback's own work: the shared clock advancing owned animations and playing effects, the running transitions sampling their timelines, an `animate()` or `advance()` step, with the policy checks they make | The `frameWorkMs` of any frame drawn inside it. Draws the runtime batches into a frame of its own are `frameWorkMs` only |
 | `frameIntervalsMs` | draw that passed its policy check, after the first | The time between two such draws, each timestamped just after its policy check | Work: it is cadence, not cost |
 | `effectCompileMs` | effect compilation | From the start of compilation until the shaders are ready (`phase: "admission"`) | It is not kept in `timings` |
 | `instrumentGpuMs`, `emitterGpuMs` | layer and frame | The GPU time of one layer's instrument mesh pass and post chain, or of its emitter face pool pass, from Babylon Lite's per-task timings when the device has timestamp queries | CPU work; they are not kept in `timings` |
@@ -507,8 +535,8 @@ event array; its histories and cumulative counters remain bounded.
 most of the runtime's JavaScript in the frames it animates (90 to 95% of a CPU
 profile on the playground's performance page). The rest is work outside a frame
 callback and a draw: observer and paint callbacks, and an adapter's commits.
-Several transitions take one `frameTickMs` sample each in the same frame, and a
-transition also ticks in ordinary DOM. Neither kind covers the browser's own
+Transitions share one frame callback, so however many run they take one
+`frameTickMs` sample a frame between them, and they also tick in ordinary DOM. Neither kind covers the browser's own
 work for a frame (style, layout, paint, the native capture) or GPU execution:
 compare them with a profile, not with frame intervals. The CPU kinds are synchronous public CPU
 work, not completion or GPU execution, and `phase` separates admission work

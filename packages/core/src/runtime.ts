@@ -97,6 +97,28 @@ export interface RuntimeOptions extends Omit<MountBoundaryOptions, "mount"> {
  */
 export type CanvasController = Pick<CanvasRuntime, "container" | "enroll" | "transition" | "transitionGroup" | "setTransform" | "setOrigin" | "animate" | "enable" | "disable" | "dispose" | "invalidate" | "settle" | "state" | "ownAnimation" | "ownCSSAnimation" | "ownCompiledAnimation" | "createMotion" | "advance" | "setRipple" | "setEffects" | "setMaterial">;
 
+/** A running declarative transition as `stageTransition` builds it and `tickTransitions` steps it. */
+interface RunningTransition {
+  finish(status: TransitionResult["status"], reason: string, transferred?: boolean): void;
+  pause(): void;
+  resume(): void;
+  lease: DeclarationOwnership;
+  layer: LayerDefinition;
+  /** Start of the timeline (moved on by the time spent hidden) and its end, in milliseconds; for `state()`. */
+  start: number;
+  end: number;
+  /** True while the transition has asked for a frame and not been stepped since. */
+  waiting(): boolean;
+  /** False once it has completed or been cancelled. */
+  running(): boolean;
+  /** True when it asked for a frame before the frame at time `time` (a RAF it asked for in this frame runs in the next). */
+  due(time: number | undefined): boolean;
+  /** Takes the frame and writes the sample for `now`; throws what sampling throws. */
+  step(now: number): void;
+  /** After its policy pass: completes at the end of the timeline, otherwise asks for the next frame. */
+  advance(now: number): void;
+}
+
 /**
  * Runtime controller for one mounted application. Its public methods form the `CanvasController`, plus
  * `register`, `update`, `setOrigin`, `requestReconcile` and `overlayHost`, which framework adapters (the
@@ -169,8 +191,17 @@ export class CanvasRuntime {
   private readonly ownership = new Map<string, { lease: ReturnType<typeof prepareAnimation>; base: Transform; compiled?: CompiledAnimation; check?(): void; restore?(): void; resources?(): number }>();
   /** Managed native sources created by `createMotion`, whether or not they are currently owned. */
   private readonly motions = new Map<string, { source: Animation; handle: MotionHandle }>();
-  /** Running declarative transitions (`transition`/`transitionGroup`), at most one per layer. */
-  private readonly transitions = new Map<string, { finish(status: TransitionResult["status"], reason: string, transferred?: boolean): void; pause(): void; resume(): void; lease: DeclarationOwnership; start: number; end: number }>();
+  /** Running declarative transitions (`transition`/`transitionGroup`), at most one per layer; built by `stageTransition`. */
+  private readonly transitions = new Map<string, RunningTransition>();
+  /** The one RAF that steps every transition waiting for a frame (`tickTransitions`); 0 when none is pending. */
+  private transitionFrame = 0;
+  /**
+   * Set by `drawVerified` for the draw it makes: the renderer's first policy call in that draw takes the verdict of the
+   * pass that ran just before it in the same synchronous run, and clears the flag. Never set across a callback.
+   */
+  private policyVerified = false;
+  /** Counters reported in `state().metrics`: full policy passes and owned-animation source checks. */
+  private readonly checks = { policyPasses: 0, ownershipChecks: 0 };
   /** Shared RAF clock for owned animation playback and effect time; `clockTime` is the last tick's timestamp. */
   private clockFrame = 0;
   private clockTime: number | undefined;
@@ -265,7 +296,7 @@ export class CanvasRuntime {
         })),
         size: () => this.size(),
         nativeOrigin: () => this.ownerContentOrigin,
-        policy: () => this.policy(),
+        policy: () => this.rendererPolicy(),
         // Called by the renderer when it moves the root: to the output canvas at admission ("gpu") and back
         // on recovery, disable or disposal ("dom"). DOM recovery also hands owned animations back.
         presentation: mode => {
@@ -651,10 +682,21 @@ export class CanvasRuntime {
    * transform-dependent geometry are checked on every call; DOM/style-derived
    * structure is cached until a mutation, resize, scroll, animation, input or
    * membership event invalidates it, so steady GPU frames do not force style reads.
+   *
+   * `applied`: layers whose owned animation the caller has just applied in the same synchronous run (`lease.tick`
+   * returned true). That ran the source check, set the source's time (and the expected time with it) and called the
+   * host's `apply`, which ran the CSS provenance check and wrote `layer.transform` only (the clock and `advance` run on
+   * the GPU, where `apply` writes no declaration). Nothing either check reads has changed since, so neither is
+   * repeated for those layers; everything else is checked as always.
    */
-  private policy(gpuGeometry = true): string | undefined {
+  private policy(gpuGeometry = true, applied?: ReadonlySet<string>): string | undefined {
+    this.checks.policyPasses++;
     for (const layer of this.registry.values()) {
-      try { const owner = this.ownership.get(layer.id); owner?.check?.(); owner?.lease.check(); this.transitions.get(layer.id)?.lease.check(); this.gpuDeclarations.get(layer.id)?.check(); }
+      try {
+        const owner = this.ownership.get(layer.id);
+        if (!applied?.has(layer.id)) { owner?.check?.(); owner?.lease.check(); }
+        this.transitions.get(layer.id)?.lease.check(); this.gpuDeclarations.get(layer.id)?.check();
+      }
       catch (error) { return `CSS ownership validation failed: ${String(error)}`; }
     }
     const phase = this.core?.phase();
@@ -680,6 +722,24 @@ export class CanvasRuntime {
       }
     }
     return undefined;
+  }
+  /**
+   * The renderer's `policy` callback (draws, paints, admission). Inside a draw made by `drawVerified` the first call
+   * takes the verdict of the pass that ran just before that draw, in the same synchronous run; every other call is a
+   * full pass.
+   */
+  private rendererPolicy() {
+    if (!this.policyVerified) return this.policy();
+    this.policyVerified = false;
+    return undefined;
+  }
+  /**
+   * Draws after the caller's own policy pass found no violation, with nothing run in between: the draw's pass would
+   * see the same inputs, so it takes that verdict (`rendererPolicy`). The flag is cleared however the draw ends.
+   */
+  private drawVerified() {
+    this.policyVerified = true;
+    try { this.renderer().draw(); } finally { this.policyVerified = false; }
   }
   /** Cached result of `structuralViolation()` for one renderer phase; cleared by `invalidatePolicy()`. */
   private structuralPolicy: { phase: string | undefined; reason: string | undefined } | undefined;
@@ -1186,7 +1246,7 @@ export class CanvasRuntime {
         layer.transform = next;
         const policy = this.policy();
         if (policy) { await this.renderer().recover(policy); throw new Error(policy); }
-        this.renderer().draw();
+        this.drawVerified();
         ticked();
         if (progress >= 1) break;
       }
@@ -1404,13 +1464,15 @@ export class CanvasRuntime {
     return staged.map(transition => transition.commit());
   }
   /**
-   * Builds one transition's lifecycle (`prepare`, `validate`, `rollback`, `commit`) around a RAF loop that
-   * samples the compiled timeline. In ordinary DOM it writes the CSS matrix and opacity itself and verifies
-   * they were not overridden; in GPU mode it only updates the layer transform and requests a draw.
+   * Builds one transition's lifecycle (`prepare`, `validate`, `rollback`, `commit`) and the entry the shared frame
+   * callback (`tickTransitions`) steps, which samples the compiled timeline. In ordinary DOM it writes the CSS matrix
+   * and opacity itself and verifies they were not overridden; in GPU mode it only updates the layer transform and
+   * requests a draw.
    */
   private stageTransition(id: string, { layer, prior, compiled, base }: ReturnType<CanvasRuntime["prepareTransition"]>, start: number) {
     const lease = new DeclarationOwnership(layer.element, prior?.lease);
-    let frame = 0, done = false;
+    // `waiting`: the transition asked for a frame (`schedule`) at frame time `asked`; it is stepped in a later frame.
+    let waiting = false, asked: number | undefined, done = false;
     let resolve!: (result: TransitionResult) => void;
     const finished = new Promise<TransitionResult>(complete => { resolve = complete; });
     const validate = (transform: Transform) => {
@@ -1450,8 +1512,9 @@ export class CanvasRuntime {
       if (done) return;
       if (status === "completed") apply(compiled.timeline.end);
       done = true;
-      if (frame) { cancelAnimationFrame(frame); frame = 0; this.resources.controllerFrames--; }
+      waiting = false;
       this.transitions.delete(id);
+      this.releaseTransitionFrame();
       this.invalidatePolicy();
       this.resources.declarativeMotions--;
       if (!transferred && (status === "cancelled" || layer.preserveStyles || this.core?.phase() !== "dom")) lease.restore();
@@ -1465,32 +1528,33 @@ export class CanvasRuntime {
     const pause = () => {
       if (done || pausedAt !== undefined) return;
       pausedAt = performance.now();
-      if (frame) { cancelAnimationFrame(frame); frame = 0; this.resources.controllerFrames--; }
+      if (waiting) { waiting = false; this.releaseTransitionFrame(); }
     };
     const resume = () => {
       if (done || pausedAt === undefined) return;
       start += performance.now() - pausedAt;
       pausedAt = undefined;
-      const entry = this.transitions.get(id);
-      if (entry) entry.start = start;
-      if (!frame) schedule();
+      entry.start = start;
+      if (!waiting) schedule();
     };
-    const tick = () => {
-      frame = 0; this.resources.controllerFrames--;
-      try {
-        if (!this.environment.visible) { pause(); return; }
-        const elapsed = performance.now() - start;
-        apply(Math.min(elapsed, compiled.timeline.end));
-        const policy = this.policy(this.core?.phase() !== "dom");
-        if (policy) { finish("cancelled", policy); this.recover(policy); return; }
-        if (elapsed >= compiled.timeline.end) finish("completed", "Finished");
-        else schedule();
-      } catch (error) {
-        finish("cancelled", String(error));
-        this.recover(`Declarative motion failed: ${String(error)}`);
-      }
+    const schedule = () => { waiting = true; asked = frameTime(); this.requestTransitionFrame(); };
+    const entry: RunningTransition = {
+      finish, pause, resume, lease, layer, start, end: compiled.timeline.end,
+      waiting: () => waiting,
+      running: () => !done,
+      // A frame asked for at this frame time runs in the next frame, as a RAF of its own would.
+      due: time => waiting && (time === undefined || asked === undefined || asked !== time),
+      step: now => { waiting = false; apply(Math.min(now - start, compiled.timeline.end)); },
+      advance: now => {
+        try {
+          if (now - start >= compiled.timeline.end) finish("completed", "Finished");
+          else schedule();
+        } catch (error) {
+          finish("cancelled", String(error));
+          this.recover(`Declarative motion failed: ${String(error)}`);
+        }
+      },
     };
-    const schedule = () => { this.resources.controllerFrames++; frame = requestAnimationFrame(this.timed(tick)); };
     let initial: Transform;
     // Under reduced motion the transition jumps to its end state on commit instead of animating.
     const reduced = this.reduced.matches;
@@ -1502,7 +1566,7 @@ export class CanvasRuntime {
         // `transferred`: the new transition inherits the prior one's declaration lease, so nothing is restored.
         prior?.finish("cancelled", "Replaced", true);
         layer.transform = initial;
-        this.transitions.set(id, { finish, pause, resume, lease, start, end: compiled.timeline.end });
+        this.transitions.set(id, entry);
         this.invalidatePolicy();
         this.resources.declarativeMotions++;
         if (reduced) {
@@ -1518,6 +1582,68 @@ export class CanvasRuntime {
         return { finished, cancel: () => finish("cancelled", "Cancelled") };
       },
     };
+  }
+  /** Asks for the shared transition frame (`tickTransitions`) unless it is already pending. */
+  private requestTransitionFrame() {
+    if (this.transitionFrame) return;
+    this.resources.controllerFrames++;
+    this.transitionFrame = requestAnimationFrame(this.timed(() => this.tickTransitions()));
+  }
+  /** Cancels the pending shared transition frame once no transition waits for it. */
+  private releaseTransitionFrame() {
+    if (!this.transitionFrame || [...this.transitions.values()].some(entry => entry.waiting())) return;
+    cancelAnimationFrame(this.transitionFrame);
+    this.transitionFrame = 0;
+    this.resources.controllerFrames--;
+  }
+  /**
+   * The one frame callback of every running transition. Each transition that asked for a frame before this one
+   * (`due`) writes its sample, then a single policy pass checks them all and each completes or asks for the next frame
+   * (`advance`). Before, every transition had a callback of its own that ran a full pass, so a group of N layers ran N
+   * passes a frame; the samples and the pass still run in one synchronous run, so nothing of the page runs between a
+   * sample and the pass that checks it, and the frame's draw runs its own pass as before.
+   *
+   * When that pass finds a violation, or a sample threw, the frame is replayed as the per-transition callbacks ran it:
+   * the layers go back to their transforms before the frame, then each transition in turn takes its sample, gets a
+   * pass of its own and completes, continues or is cancelled with that pass's reason (a throw: its error) and recovers
+   * to DOM. The transition that is cancelled with the reason, and the reason itself, are the ones the per-transition
+   * callbacks would have produced; on the GPU the recovery cancels the rest (`DOM recovery`), in ordinary DOM the
+   * others go on. A replay costs one pass per transition, and only on a violation.
+   */
+  private tickTransitions() {
+    this.transitionFrame = 0;
+    this.resources.controllerFrames--;
+    const time = frameTime();
+    const due = [...this.transitions.values()].filter(entry => entry.due(time));
+    if (!this.environment.visible) for (const entry of due) entry.pause();
+    else {
+      const now = performance.now();
+      const ticked: { entry: RunningTransition; before: Transform; after: Transform; error?: { value: unknown } }[] = [];
+      for (const entry of due) {
+        const before = entry.layer.transform;
+        try { entry.step(now); ticked.push({ entry, before, after: entry.layer.transform }); }
+        catch (value) { ticked.push({ entry, before, after: before, error: { value } }); }
+      }
+      // A thrown policy is reported as a thrown sample was: the error is the reason.
+      const verdict = () => {
+        try { const reason = this.policy(this.core?.phase() !== "dom"); return reason === undefined ? undefined : { reason, recovery: reason }; }
+        catch (error) { return { reason: String(error), recovery: `Declarative motion failed: ${String(error)}` }; }
+      };
+      if (ticked.length && !ticked.some(item => item.error) && !verdict()) for (const { entry } of ticked) entry.advance(now);
+      else if (ticked.length) {
+        for (const { entry, before, error } of ticked) if (!error) entry.layer.transform = before;
+        for (const { entry, after, error } of ticked) {
+          if (!entry.running()) continue;
+          let failure: { reason: string; recovery: string } | undefined;
+          if (error) failure = { reason: String(error.value), recovery: `Declarative motion failed: ${String(error.value)}` };
+          else { entry.layer.transform = after; failure = verdict(); }
+          if (!failure) { entry.advance(now); continue; }
+          entry.finish("cancelled", failure.reason);
+          this.recover(failure.recovery);
+        }
+      }
+    }
+    if ([...this.transitions.values()].some(entry => entry.waiting())) this.requestTransitionFrame();
   }
   /**
    * Takes ownership of a WAAPI animation on a layer so the runtime samples it for GPU presentation, and
@@ -1587,6 +1713,7 @@ export class CanvasRuntime {
       },
       changed: () => { this.stopClock(); this.requestDraw(); this.startClock(); },
       release: options => options?.freeze ? this.freezeOwnership(id, lease) : this.disable(),
+      checked: () => { this.checks.ownershipChecks++; },
     }, compiled);
       lease.acquire();
     } catch (error) {
@@ -1641,7 +1768,7 @@ export class CanvasRuntime {
   /**
    * Starts the shared RAF clock if something needs it: GPU is active, the document visible, motion not
    * reduced or driven by `animate`/`advance`, and an owned animation or effect is playing. Each tick advances
-   * them by the elapsed time (capped at 100 ms), re-checks policy, draws and re-arms itself.
+   * them by the elapsed time (capped at 100 ms), runs one policy pass, draws and re-arms itself.
    */
   private startClock() {
     if (this.stopped || this.clockFrame || this.moving || !this.environment.visible || this.reduced.matches || this.core?.phase() !== "gpu"
@@ -1654,10 +1781,13 @@ export class CanvasRuntime {
       const delta = this.clockTime === undefined ? 0 : Math.min(100, time - this.clockTime);
       this.clockTime = time;
       try {
-        for (const owner of this.ownership.values()) { owner.check?.(); owner.lease.tick(delta); }
+        // One synchronous run: each playing owner is checked as it applies, the policy pass skips those checks, and
+        // the draw takes the pass's verdict (`drawVerified`). Nothing of the page runs between them.
+        const applied = new Set<string>();
+        for (const [id, owner] of this.ownership) { owner.check?.(); if (owner.lease.tick(delta)) applied.add(id); }
         this.tickRipples(delta);
-        const policy = this.policy();
-        if (policy) this.recover(policy); else this.renderer().draw();
+        const policy = this.policy(true, applied);
+        if (policy) this.recover(policy); else this.drawVerified();
       } catch (error) { this.recover(`Animation ownership failure: ${String(error)}`); }
       this.startClock();
     }));
@@ -1836,11 +1966,12 @@ export class CanvasRuntime {
         if (!this.environment.visible) { index--; continue; }
         if (this.renderer().phase() !== "gpu" || generation !== this.renderer().version()) throw new Error("Timeline interrupted by renderer generation");
         const ticked = this.renderer().timeTick();
-        for (const owner of this.ownership.values()) { owner.check?.(); owner.lease.tick(milliseconds, true); }
+        const applied = new Set<string>();
+        for (const [id, owner] of this.ownership) { owner.check?.(); if (owner.lease.tick(milliseconds, true)) applied.add(id); }
         this.tickRipples(milliseconds, true);
-        const policy = this.policy();
+        const policy = this.policy(true, applied);
         if (policy) { await this.disable(); throw new Error(policy); }
-        this.renderer().draw();
+        this.drawVerified();
         ticked();
       }
     } finally { this.moving = false; this.startClock(); }
@@ -1849,7 +1980,7 @@ export class CanvasRuntime {
   /** Renderer state extended with runtime diagnostics: environment, admission, layers, resource ledgers and owners. */
   state() {
     const renderer = this.renderer().state();
-    return { ...renderer, environment: { ...this.environment }, registryRevision: this.revision,
+    return { ...renderer, metrics: { ...renderer.metrics, ...this.checks }, environment: { ...this.environment }, registryRevision: this.revision,
       admission: { policy: this.options.admissionPolicy ?? "explicit", intent: this.admissionIntent,
         pending: this.readmissionPending, attempts: this.automaticAttempts, reason: this.admissionReason },
       layers: this.ordered().map(layer => ({ id: layer.id, width: layer.element.offsetWidth, height: layer.element.offsetHeight,
