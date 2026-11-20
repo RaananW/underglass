@@ -34,6 +34,13 @@
  *   between. The scroll position is set to the target at once and the change runs on the clock, so a jump over five
  *   sections does not race through five changes. Scrolling during a jump ends it. Focus moving into a parked section
  *   brings that section on stage at once.
+ * - The stage follows the scroll position, but runs a change in no less than `changeMs`: a fast scroll (a trackpad's
+ *   fling) shows each change it passes, and the stage catches up when the scroll stops. A stage at rest that is two
+ *   stops or more behind jumps to where the scroll is instead, as the paging keys do.
+ * - A scroll of the visitor's that stops part way through a change, outside the rest bands, **settles**: after a short
+ *   pause the page scrolls on to the next rest, or back where the change had barely begun, so the page comes to rest
+ *   with a section that takes input. A scroll made by a script does not settle. The side scale's cursor shows which:
+ *   lit on the section at rest, hollow while the stage changes (`flow.ts`).
  * - A decorative layer under the sections carries a light that follows the pointer (`light.ts`).
  * - The "Transitions" section holds a live demonstration (`demo.ts`): two panels in one place, each a layer, and
  *   controls that turn one into the other. While that section is at rest the driver poses the two panels from the
@@ -51,6 +58,12 @@ import { flow, viewStore, type View } from "./view";
 const band = 0.14;
 /** How long a jump's change takes, ms; with reduced motion it is a short fade. */
 const jumpMs = 950, calmJumpMs = 320;
+/** The shortest time a change takes on stage however fast the page scrolls, ms. */
+const changeMs = 520;
+/** How long after the visitor's last scrolling input a scroll that ends is still theirs (a fling runs on), ms. */
+const gestureMs = 2500;
+/** How long a scroll of the visitor's has to have stopped before a change it left part way is finished, ms. */
+const pauseMs = 380;
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
 /**
@@ -84,7 +97,7 @@ export interface Deck {
   errors: string[];
 }
 
-export function createDeck({ controller, ids, track, onChange, onTransition }: {
+export function createDeck({ controller, ids, track, onChange, onTransition, onPlace }: {
   controller: CanvasController;
   /** The sections' ids in page order. A section's layers are the root's children marked with its index (`data-section`). */
   ids: readonly string[];
@@ -94,6 +107,8 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
   onChange(current: number): void;
   /** Called when a change between two sections starts, with its name, and with null when the stage comes to rest. */
   onTransition?(name: string | null): void;
+  /** Called on every frame the deck draws, with the section at rest or leaving, the one arriving (null at rest) and the change's progress. */
+  onPlace?(from: number, to: number | null, t: number): void;
 }): Deck {
   const root = document.documentElement;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)"), stacked = matchMedia("(max-width: 920px)");
@@ -186,10 +201,34 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
   /**
    * A jump in progress: the stage is changing between `low` and `high` on the clock (toward `high` when `forward`),
    * with the scroll position already at the target's start. `pan` is how far the section it started from had panned.
+   * A jump that `follows` was started by a fast scroll: the scroll position goes on moving, and does not end it.
    */
-  let jump: { low: number; high: number; forward: boolean; target: number; began: number; ms: number; offset: number; travelFrom: number; pan: number } | undefined;
+  let jump: { low: number; high: number; forward: boolean; target: number; began: number; ms: number; offset: number; travelFrom: number; pan: number; follows: boolean } | undefined;
+  /** Starts a jump from stop `from`, panned by `pan`, to the start of stop `target` (document offset `top`). */
+  function leap(from: number, target: number, pan: number, top: number, follows: boolean) {
+    const travelFrom = travelNow();
+    jump = { low: Math.min(from, target), high: Math.max(from, target), forward: target > from, target, began: performance.now(), ms: reduced.matches ? calmJumpMs : jumpMs,
+      offset: top, travelFrom, pan, follows };
+    holdTravel(travelFrom);
+  }
   /** Ends a jump where it is: the scroll position decides again, and the background follows it again. */
-  function endJump() { if (jump) { jump = undefined; holdTravel(null); } }
+  function endJump() { if (jump) { jump = undefined; holdTravel(null); } shown = null; }
+  /**
+   * The track offset the stage shows. It follows the scroll position, but no faster than one change in `changeMs`: a
+   * fast scroll (a trackpad's fling) still shows each change it passes, and the stage catches up when it stops. Where
+   * the stage, at rest, is two stops or more behind, it jumps to where the scroll is instead (`follows`), as the paging
+   * keys do. Null: the stage is exactly where the scroll is.
+   */
+  let shown: number | null = null, shownAt = 0;
+  /** True while the stage is behind the scroll position: the frame loop goes on. */
+  let lagging = false;
+  /** The stop whose start is at or before a track offset. */
+  function stopAt(offset: number) {
+    const { start } = measured();
+    let index = stops.length - 1;
+    while (index > 0 && offset < start[index]!) index--;
+    return index;
+  }
   /** Where the page is in the deck: by the clock during a jump, by the scroll position otherwise. */
   function place(): Place {
     if (jump) {
@@ -200,13 +239,32 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
         // The section the jump started from stays where it had panned to; the target arrives at its top.
         return { from: jump.low, to: jump.high, t: jump.forward ? eased : 1 - eased, panFrom: jump.forward ? jump.pan : 0, panTo: jump.forward ? 0 : jump.pan };
       }
+      // A jump that followed a scroll lands at its target's start, and the stage goes on from there toward the scroll.
+      const landed = jump.follows ? measured().start[jump.target]! : null;
       endJump();
+      shown = landed;
     }
     const { change, pan, start, end } = measured();
-    const offset = clamp(scrollY - trackTop(), 0, end);
-    let index = stops.length - 1;
-    while (index > 0 && offset < start[index]!) index--;
+    const now = performance.now(), scrolled = clamp(scrollY - trackTop(), 0, end);
+    if (shown === null || reduced.matches || !gpu()) shown = scrolled;
+    else if (shown !== scrolled) {
+      const step = change * Math.min(50, now - shownAt) / changeMs;
+      shown = Math.abs(scrolled - shown) <= step ? scrolled : shown + Math.sign(scrolled - shown) * step;
+    }
+    shownAt = now;
+    lagging = shown !== scrolled;
+    const offset = shown;
+    const index = stopAt(offset);
     const within = offset - start[index]!, room = pan[index]!;
+    // At rest (in its pan or a rest band) and two stops or more behind the scroll: one change on the clock instead.
+    const resting = within <= room + band * change ? index : index < stops.length - 1 && within >= room + (1 - band) * change ? index + 1 : null;
+    if (lagging && resting !== null) {
+      const target = stopAt(scrolled);
+      if (Math.abs(target - resting) >= 2) {
+        leap(resting, target, resting === index ? Math.min(within, room) : 0, trackTop() + start[target]!, true);
+        return place();
+      }
+    }
     if (within <= room || index === stops.length - 1) {
       where = { index, panned: room ? Math.min(1, within / room) : 0, changed: null };
       return { from: index, to: null, t: 0, panFrom: Math.min(within, room), panTo: 0 };
@@ -241,10 +299,8 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     const target = clamp(index, 0, stops.length - 1), top = offset(target);
     // In the deck a smooth move is a jump: one change from the section on stage to the target, on the clock.
     if (smooth && view.deck && gpu() && target !== front) {
-      const travelFrom = travelNow();
-      jump = { low: Math.min(front, target), high: Math.max(front, target), forward: target > front, target, began: performance.now(), ms: reduced.matches ? calmJumpMs : jumpMs,
-        offset: top, travelFrom, pan: panned() };
-      holdTravel(travelFrom);
+      endJump();
+      leap(front, target, panned(), top, false);
       scrollTo({ top, behavior: "instant" });
     } else {
       if (view.deck) endJump();
@@ -472,8 +528,9 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
       pans = { from: panFrom, to: panTo };
       show(staged(from, to));
       front = to !== null && t >= 0.5 ? to : from;
-      // A jump runs on the clock: it needs every frame until it has arrived.
-      if (pose(t) || jump) schedule();
+      onPlace?.(stops[from]!.section, to === null ? null : stops[to]!.section, t);
+      // A jump runs on the clock, and a stage behind the scroll catches up: each needs every frame until it has arrived.
+      if (pose(t) || jump || lagging) schedule();
       const demo = layers(from).includes(demoPanels.first);
       demoStore.set({ live: to === null && demo });
       if (to === null) {
@@ -502,7 +559,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     const section = stops[Math.min(view.deck ? where.index : 0, stops.length - 1)]!.section, deck = view.deck;
     if (deck) { endJump(); show(flow); }
     stops = buildStops(); builtStacked = stacked.matches;
-    lengths = undefined; pans = { from: 0, to: 0 };
+    lengths = undefined; shown = null; pans = { from: 0, to: 0 };
     if (!deck) return;
     const index = firstStop(section);
     show(staged(index, null));
@@ -546,11 +603,45 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     schedule();
   }
 
+  /** When the visitor last gave scrolling input, and which way the page last scrolled (1 down, -1 up). */
+  let inputAt = -Infinity, heading = 0, lastY = scrollY;
+  /**
+   * A scroll of the visitor's that stops part way through a change finishes it, or takes it back where it had barely
+   * begun: the page comes to rest with one section on stage, which takes input. It waits for a pause (`pauseMs`): a
+   * wheel ends a scroll at every notch. The stage runs the rest of the change no faster than `changeMs`. A scroll made
+   * by a script, and one that stops in a rest band (the stage is at rest there), are left where they are.
+   */
+  let pause = 0;
+  function settleSoon() { clearTimeout(pause); pause = window.setTimeout(settle, pauseMs); }
+  function settle() {
+    if (!view.deck || !gpu() || performance.now() - inputAt > gestureMs) return;
+    if (jump) { settleSoon(); return; }
+    const { change, pan, start, end } = measured(), scrolled = clamp(scrollY - trackTop(), 0, end), index = stopAt(scrolled);
+    const within = scrolled - start[index]!, room = pan[index]!;
+    if (index === stops.length - 1 || within <= room) return;
+    const changed = (within - room) / change;
+    if (changed <= band || changed >= 1 - band) return;
+    const forward = heading < 0 ? changed > 0.7 : changed > 0.3;
+    const top = trackTop() + (forward ? start[index + 1]! : start[index]! + room);
+    if (Math.abs(top - scrollY) > 1) scrollTo({ top, behavior: reduced.matches ? "instant" : "smooth" });
+  }
+  // Scrolling input: a wheel or a trackpad, a finger, a scrolling key, and a press on the scrollbar (its target is the root).
+  const scrollKeys = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", " ", "Home", "End"]);
+  const scrolling = (event: Event) => {
+    if (event.type === "keydown" && !scrollKeys.has((event as KeyboardEvent).key)) return;
+    if (event.type === "pointerdown" && event.target !== root) return;
+    inputAt = performance.now(); clearTimeout(pause);
+  };
+  for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) addEventListener(type, scrolling, { passive: true });
   addEventListener("scroll", () => {
-    // Scrolling during a jump takes the stage back: the jump ends and the scroll position decides again.
-    if (jump && Math.abs(scrollY - jump.offset) > 2) endJump();
+    if (scrollY !== lastY) { heading = Math.sign(scrollY - lastY); lastY = scrollY; }
+    clearTimeout(pause);
+    // Scrolling during a jump takes the stage back: the jump ends and the scroll position decides again. A jump that
+    // follows a fast scroll is not ended by it.
+    if (jump && !jump.follows && Math.abs(scrollY - jump.offset) > 2) endJump();
     schedule();
   }, { passive: true });
+  addEventListener("scrollend", settleSoon);
   addEventListener("pointermove", () => { if (view.deck && light.behind()) schedule(); }, { passive: true });
   addEventListener("resize", () => {
     // In a window of another size the sections have other lengths: the page stays at the same place in the deck,
@@ -558,7 +649,7 @@ export function createDeck({ controller, ids, track, onChange, onTransition }: {
     restack();
     if (view.deck) {
       const kept = where;
-      lengths = undefined;
+      lengths = undefined; shown = null;
       const { start, pan, change: length } = measured();
       if (jump) jump.offset = trackTop() + start[jump.target]!;
       scrollTo({ top: jump ? jump.offset : trackTop() + start[kept.index]! + (kept.changed === null ? kept.panned * pan[kept.index]! : pan[kept.index]! + kept.changed * length), behavior: "instant" });

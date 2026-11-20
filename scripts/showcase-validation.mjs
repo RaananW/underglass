@@ -565,6 +565,53 @@ try {
       await go(1);
       assert.deepEqual((await snapshot()).effects, []);
 
+      // A fast scroll still shows its change: a scroll by a whole change in one frame leaves the stage part way through
+      // it, for about half a second, and the side scale's cursor is hollow meanwhile and lit again at the rest.
+      const cursor = () => page.evaluate(() => document.querySelector(".rail-cursor").dataset.state);
+      assert.equal(await cursor(), "live");
+      const watchStage = () => page.evaluate(async () => {
+        const seen = [];
+        for (let frame = 0; frame < 240; frame++) {
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          const place = window.homeDeck.place();
+          seen.push({ at: performance.now(), from: place.from, to: place.to, cursor: document.querySelector(".rail-cursor").dataset.state });
+          if (place.to === null && seen.some(item => item.to !== null)) break;
+        }
+        return seen;
+      });
+      await page.evaluate(() => scrollTo({ top: 2 * innerHeight, behavior: "instant" }));
+      let seen = await watchStage();
+      let moving = seen.filter(item => item.to !== null);
+      assert.ok(moving.length && moving.at(-1).at - moving[0].at > 300, `the change ran for ${moving.length ? Math.round(moving.at(-1).at - moving[0].at) : 0} ms`);
+      // (The cursor is written by the deck's frame, which may run after this one: read once the deck is idle.)
+      await page.evaluate(() => window.homeDeck.idle());
+      assert.deepEqual([[...new Set(moving.map(item => `${item.from}>${item.to}`))], moving.some(item => item.cursor === "moving"), seen.at(-1).from, await cursor()],
+        [["1>2"], true, 2, "live"]);
+      // Further than one stop at once: one change, straight to where the scroll is, as a jump runs.
+      await page.evaluate(() => scrollTo({ top: 6 * innerHeight, behavior: "instant" }));
+      seen = await watchStage();
+      moving = seen.filter(item => item.to !== null);
+      assert.deepEqual([[...new Set(moving.map(item => `${item.from}>${item.to}`))], seen.at(-1).from], [["2>6"], 6]);
+      await page.evaluate(() => window.homeDeck.idle());
+      assert.deepEqual([(await snapshot()).mode, (await snapshot()).errors], ["gpu", []]);
+      // A wheel scroll that stops a third of the way into a change finishes it, and the arriving section takes a real
+      // click. One that stops a fifth of the way in (past the rest band) is taken back.
+      await go(1);
+      await page.mouse.move(760, 500);
+      await page.mouse.wheel(0, 0.35 * 900);
+      await page.waitForFunction(() => scrollY === 2 * innerHeight && window.homeDeck.place().from === 2 && window.homeDeck.place().to === null, null, { timeout: 5_000 });
+      await page.evaluate(() => window.homeDeck.idle());
+      assert.equal(await cursor(), "live");
+      await page.getByRole("button", { name: "mosaic", exact: true }).click();
+      assert.equal(await page.getByRole("button", { name: "mosaic", exact: true }).getAttribute("aria-pressed"), "true");
+      await page.mouse.wheel(0, 0.2 * 900);
+      await page.waitForFunction(() => scrollY > 2 * innerHeight);
+      await page.waitForFunction(() => scrollY === 2 * innerHeight && window.homeDeck.place().to === null, null, { timeout: 5_000 });
+      await page.evaluate(() => window.homeDeck.idle());
+      state = await snapshot();
+      assert.deepEqual([state.mode, state.place.from, state.effects, state.errors], ["gpu", 2, [], []]);
+      await page.mouse.move(30, 880);
+
       // A link jumps: one change, straight from the section on stage to the one asked for, on the clock. The scroll
       // position is the target's at once, only those two sections are on stage, and it takes about a second however
       // many sections lie between (scrolling through them would run four changes in that time).
