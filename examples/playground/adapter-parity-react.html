@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Underglass React adapter parity</title>
+  <style>
+    body { margin: 24px; background: white; color: black; font: 16px system-ui; }
+    button { font: inherit; }
+    #frame { position: relative; width: 640px; height: 420px; background: white; }
+    #capture, #output, #ordinary { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #output { pointer-events: none; }
+    #status { white-space: pre-wrap; }
+    .parity-layer { position: absolute; top: 20px; height: 120px; box-sizing: border-box; padding: 10px; }
+    #plain { left: 20px; width: 200px; }
+    #pivot { left: 240px; width: 160px; }
+    #presence { left: 420px; width: 200px; }
+  </style>
+</head>
+<body>
+  <h1>React adapter parity</h1>
+  <p>The React adapter's <code>useSurfaceRef</code> and <code>Presence</code> behave as the Vue ones do.</p>
+  <div id="frame"><canvas id="capture" hidden></canvas><canvas id="output" hidden></canvas><div id="ordinary"></div><div id="overlay"></div></div>
+  <pre id="status" role="status"></pre>
+  <script type="module" src="/src/demo/adapter-parity-react.tsx"></script>
+</body>
+</html>
