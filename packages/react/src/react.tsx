@@ -5,7 +5,7 @@
  * React-rendered elements with the runtime. The components render plain DOM, so they work unchanged
  * when GPU presentation is off. The framework-neutral runtime in `@underglass/core` owns all GPU behaviour.
  */
-import { createContext, useCallback, useContext, useLayoutEffect, useRef, useState, useSyncExternalStore, StrictMode, type HTMLAttributes, type ReactNode, type RefCallback } from "react";
+import { createContext, useCallback, useContext, useInsertionEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, StrictMode, type HTMLAttributes, type ReactNode, type RefCallback } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import {
@@ -49,11 +49,16 @@ export function useNativeOverlayHost(): HTMLElement {
  * React root. The enrollment is released when the element detaches or `id`/`decorative` change;
  * `origin` updates in place. Throws `EnrollmentError` (from the runtime) when the element is refused.
  */
-export function useSurfaceRef<T extends HTMLElement = HTMLElement>({ id, decorative, origin }: EnrollmentOptions): RefCallback<T> {
+export function useSurfaceRef<T extends HTMLElement = HTMLElement>({ id, decorative: flag, origin }: EnrollmentOptions): RefCallback<T> {
   const runtime = useRuntime();
+  // `undefined` and `false` name the same enrollment, so a change between them does not re-enroll (as in Vue).
+  const decorative = !!flag;
   const originKey = JSON.stringify(origin ?? "top-left");
+  // The origin of the last commit, never of a render React discarded. Written in an insertion effect: those run
+  // in the commit's mutation phase, before React attaches refs, so the ref callback below enrolls a new element
+  // with the origin of its own commit.
   const latestOrigin = useRef(origin);
-  latestOrigin.current = origin;
+  useInsertionEffect(() => { latestOrigin.current = origin; });
   const attached = useRef<T | null>(null);
   const release = useRef<(() => void) | undefined>(undefined);
   const ref = useCallback((element: T | null) => {
@@ -102,8 +107,10 @@ export function Presence({ id, present, enter, exit, children, onComplete }: Pre
   const pending = useRef(false);
   const generation = useRef(0);
   const motion = useRef<ReturnType<CanvasRuntime["transition"]> | undefined>(undefined);
+  // The handler of the last commit, never of a render React discarded; a transition's completion is a later
+  // microtask, so a layout effect has always run by then.
   const completion = useRef(onComplete);
-  completion.current = onComplete;
+  useLayoutEffect(() => { completion.current = onComplete; });
   // The descriptors are compared by value so an inline object does not restart the effect each render.
   const enterKey = JSON.stringify(enter), exitKey = JSON.stringify(exit);
   // Layout effect: the enter sample is applied before the newly retained children first paint.

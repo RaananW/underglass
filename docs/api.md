@@ -30,7 +30,7 @@ or integrates the compiler with the worker backend.
 | `@underglass/react/experimental-worker` | `mountWorkerCanvasApp`, `WorkerSurface` and public worker types. Essential/native-control geometry is fixed; only inert decoration animates. |
 | `@underglass/react/experimental-worker/thread` | `startWorkerCompositor(self)` for an application-owned module worker. React, DOM/layout and native capture remain main-thread. |
 | `@underglass/core` | The framework-neutral runtime for framework adapters and plain-DOM applications: `CanvasRuntime`, `compileStyle` (typed `Layout`/`Appearance` to a `CompiledStyle` of complete string values), `affine`/`pivot`, plus every helper and type `@underglass/react` re-exports. Imports no UI framework. |
-| `@underglass/vue` | The Vue 3 adapter (`vue@^3.5` peer): `mountCanvasApp(options, RootComponent, rootProps?)`, `Surface`, `Box`, `NativeScroll`, `NativeOverlay`, `Presence` (emits `complete`), `useSurfaceRef`, `useGPUHost`, `useNativeOverlayHost`, plus the same core helpers and types `@underglass/react` re-exports. See the [frameworks guide](guide/frameworks.md). |
+| `@underglass/vue` | The Vue 3 adapter (`vue@^3.5` peer): `mountCanvasApp(options, RootComponent, rootProps?)`, `Surface`, `Box`, `NativeScroll`, `NativeOverlay`, `Presence` (emits `complete`), `useSurfaceRef`, `useGPUHost`, `useNativeOverlayHost`, plus the same core helpers and types `@underglass/react` re-exports, except `canvasHostsMarkup` (prerendering is React-only). It has no `GPUHost`, `prerenderCanvasApp` or `strict` option, takes `configure(app)` instead, and exports a `SurfaceRef` type instead of props interfaces; `tests/unit/adapter-exports.unit.test.mjs` lists these differences. See the [frameworks guide](guide/frameworks.md). |
 | `@underglass/core/build`, `/experimental-worker`, `/experimental-worker/thread` | Framework-neutral originals of the React package's `/build` and `/experimental-worker/thread` entries, and the worker protocol and capture primitives the React worker controller builds on. |
 
 Compiled and worker runtime routes consume prebuilt shaders; the default
@@ -389,7 +389,9 @@ direction and visible/hidden/scroll overflow. `Appearance` supports background,
 color, border color/width, radius and font size. Numeric fields are validated;
 colors use the browser's `CSS.supports`. These types compile to HTML/CSS layout,
 not a new layout engine or an absence of browser styles. `style` is intentionally
-excluded from authored Surface/Box props. Existing arbitrary classes/ancestor
+excluded from authored Surface/Box/NativeScroll props in both adapters: React's prop
+types leave it out, and Vue's components declare it as `never`, do not apply a
+`style` passed anyway and warn about it in development. Existing arbitrary classes/ancestor
 selectors are not normalized or proven compatible.
 The positioned x/y origin applies to Surface; Box remains ordinary flow layout.
 

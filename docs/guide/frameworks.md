@@ -12,8 +12,13 @@ GPU draws them, and native hit testing, focus and input stay on those elements.
 
 ## Vue
 
-`@underglass/vue` is the Vue 3 adapter (`vue@^3.5`). It has the same components as
-the React package, written as Vue components:
+`@underglass/vue` is the Vue 3 adapter (`vue@^3.5`). It has the React package's
+layer components, hooks (as composables) and core re-exports, written for Vue, with
+these differences: it has no `GPUHost` (`mountCanvasApp` provides the runtime to the
+app), no prerendering (`prerenderCanvasApp`, `canvasHostsMarkup`) and no `strict`
+option; its `mountCanvasApp` takes a root component and a `configure(app)` option
+instead; and it exports no props interfaces (`SurfaceProps`, `BoxProps`,
+`PresenceProps`) but a `SurfaceRef` callback type.
 
 ```ts
 import { createCanvasHosts, mountCanvasApp } from "@underglass/vue";
@@ -48,8 +53,20 @@ const name = ref("Ada");
   store) before it mounts.
 - `Surface`, `Box`, `NativeScroll`, `NativeOverlay` and `Presence` take the same
   props as in React. `Presence` emits `complete` instead of calling `onComplete`.
+- As in React, `Surface`, `Box` and `NativeScroll` take no `style`: their inline
+  style comes from `layout` and `appearance`. A typed template or `h()` call
+  rejects it, and a `style` passed anyway is not applied (Vue warns in
+  development). Use `class` for other styles. Other attributes and listeners fall
+  through to the element.
 - `useSurfaceRef({ id })` returns a callback for `:ref`; bind it to your own
-  top-level element. The options may be a ref or getter.
+  top-level element, or to a component whose single root element is one (its
+  `$el` is enrolled, so it must keep that root element while enrolled). The
+  options may be a ref or getter. A component whose root is not one element, or
+  an element of another document or realm, is refused with `EnrollmentError`.
+  Vue calls the callback, and re-enrolls after an `id` or `decorative` change,
+  inside its own error handling, so a refused enrollment from either reaches
+  `onErrorCaptured` and `app.config.errorHandler` (set it in `configure`).
+  Without a handler, Vue rethrows it in development and logs it in production.
 - `useGPUHost()` and `useNativeOverlayHost()` work in `setup`.
 - Vue re-applies every key of a `:style` object on each update. Never bind
   `transform`, `opacity` or `transform-origin` on a layer element: the runtime

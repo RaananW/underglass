@@ -6,7 +6,7 @@
  * plain DOM, so they work unchanged when GPU presentation is off. The core runtime owns all GPU behaviour.
  */
 import {
-  createApp, defineComponent, h, inject, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, shallowRef, toValue, watch,
+  createApp, defineComponent, h, inject, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, shallowRef, toValue, warn, watch,
   Teleport, type App, type Component, type ComponentPublicInstance, type InjectionKey, type MaybeRefOrGetter, type PropType,
 } from "vue";
 import {
@@ -14,12 +14,14 @@ import {
   type Transform, type TransformOrigin, type EnrollmentOptions, type MotionDescriptor, type TransitionHandle, type TransitionResult,
 } from "@underglass/core";
 
+// The same core runtime names and types as `@underglass/react` re-exports, minus `canvasHostsMarkup` (prerendering
+// is React-only); `tests/unit/adapter-exports.unit.test.mjs` holds the two lists to each other.
 export {
-  createCanvasHosts, EnrollmentError, defineEffect,
+  createCanvasHosts, EnrollmentError, mountApplicationModule, defineEffect,
 } from "@underglass/core";
 export type {
   CanvasController, CanvasHosts, EnrollmentOptions, EnrollmentErrorCode, Transform, TransformOrigin, Affine, Point,
-  Layout, Appearance, AdmissionPolicy, RuntimeOptions, CanvasStatus, AnimationPlayback, ReleaseOptions, CSSAnimationSource,
+  Layout, Appearance, LocalApplicationModule, AdmissionPolicy, LayerDefinition, RuntimeOptions, CanvasStatus, AnimationPlayback, ReleaseOptions, CSSAnimationSource,
   CompiledAnimation, CompiledProgramSet, Ripple, ApplicationEffect, ParameterRange, EffectDescriptor, EffectTime, EffectHandle,
   EffectResult, MaterialDescriptor, MaterialHandle, CustomMaterial, ReliefMaterial, ReliefScene, ReliefPrimitive, ReliefSceneMaterial, MotionKeyframe, MotionTiming, MotionDescriptor, MotionHandle, TransitionHandle, TransitionResult, CoordinatedMotion,
 } from "@underglass/core";
@@ -51,11 +53,27 @@ export function useNativeOverlayHost(): HTMLElement {
 export type SurfaceRef = (element: Element | ComponentPublicInstance | null) => void;
 
 /**
+ * The element a template ref names: the element itself, or a component's root element (`$el`). Checked by
+ * `nodeType`, as the core checks nodes, so an element of another realm (an iframe's) is not mistaken for
+ * "no element"; anything else is returned as it is, for the runtime to refuse.
+ */
+function refElement(value: Element | ComponentPublicInstance): HTMLElement {
+  if ((value as Node).nodeType !== 1 && "$el" in value) return (value.$el ?? value) as HTMLElement;
+  return value as HTMLElement;
+}
+
+/**
  * Enrolls your own element (bind the returned callback with `:ref`) as a layer of the runtime without
  * cloning it, so the original Vue controls and state are kept. Bind it to a direct child of the app's
- * root. The enrollment is released when the element unmounts or `id`/`decorative` change; `origin`
- * updates in place. `options` may be a ref or getter. Throws `EnrollmentError` (from the runtime) when
- * the element is refused.
+ * root, or to a component whose single root element is one (its `$el` is enrolled; it must keep that
+ * root element while enrolled). The enrollment is released when the element unmounts or
+ * `id`/`decorative` change; `origin` updates in place. `options` may be a ref or getter. Throws
+ * `EnrollmentError` (from the runtime) when the element is refused, including a component whose root is
+ * not one element and an element of another document or realm. Vue calls the callback, and runs the
+ * re-enrollment after an `id`/`decorative` change, inside its own error handling, so both surface the same
+ * way: through `onErrorCaptured` and `app.config.errorHandler` (set it in `configure`), and without a handler
+ * Vue rethrows the error in development and logs it in production. Called directly, the callback throws to
+ * its caller.
  */
 export function useSurfaceRef(options: MaybeRefOrGetter<EnrollmentOptions>): SurfaceRef {
   const runtime = useRuntime();
@@ -79,7 +97,7 @@ export function useSurfaceRef(options: MaybeRefOrGetter<EnrollmentOptions>): Sur
   onBeforeUnmount(detach);
   // Vue calls a stable function ref on every patch of its element, so only a changed element re-enrolls.
   return element => {
-    const next = element instanceof HTMLElement ? element : null;
+    const next = element ? refElement(element) : null;
     if (next === attached) return;
     detach();
     attached = next;
@@ -89,16 +107,41 @@ export function useSurfaceRef(options: MaybeRefOrGetter<EnrollmentOptions>): Sur
 }
 
 /**
+ * `style` is not an authored prop of `Surface`, `Box` or `NativeScroll`, as in React: their inline style is
+ * compiled from the typed `layout` and `appearance`, and on a layer the runtime writes the presentation
+ * declarations (`transform`, `opacity`, `transform-origin`) itself. Declaring it as a `never` prop makes a
+ * typed `h()` call or template reject it, keeps it out of the fallthrough attributes, and lets the component
+ * warn (in development) instead of dropping it unnoticed. Style the content with `class` or with elements
+ * inside.
+ */
+const rejectedStyle = {
+  /** Not supported: use `layout` and `appearance`, or `class`. */
+  style: { type: null as unknown as PropType<never>, default: undefined },
+};
+/** Warns once per component instance, in development, that a `style` it was given is not applied. */
+function styleWarning(component: string) {
+  let warned = false;
+  return (style: unknown) => {
+    if (style === undefined || warned) return;
+    warned = true;
+    warn(`${component} does not apply \`style\`: its inline style comes from \`layout\` and \`appearance\`. Use \`class\` for other styles.`);
+  };
+}
+
+/**
  * A top-level GPU layer: renders one native `<section>` (the original element, never a copy) and
  * registers it with the runtime. Its content is ordinary Vue and stays interactive through native hit
  * testing. `layout`, `transform` and `origin` updates are forwarded to the runtime after Vue patches
- * the DOM, in the same flush, so they land in the same GPU frame. Other attributes and listeners fall
- * through to the `<section>`.
+ * the DOM, in the same flush, so they land in the same GPU frame. Other attributes (`class`, `aria-*`,
+ * `data-*`) and listeners fall through to the `<section>`. `style` is not accepted, as in React: the
+ * layer's inline style comes from `layout` and `appearance`, and a `style` given anyway is not applied
+ * (Vue warns in development).
  */
 export const Surface = defineComponent({
   name: "UnderglassSurface",
   inheritAttrs: false,
   props: {
+    ...rejectedStyle,
     /** Unique layer ID used by the controller methods. */
     id: { type: String, required: true },
     /** Position, size and flex layout compiled to browser styles. */
@@ -132,10 +175,12 @@ export const Surface = defineComponent({
       () => runtime.update(props.id, props.layout, props.transform), { flush: "post" });
     onUpdated(() => runtime.requestReconcile());
     onBeforeUnmount(() => { release?.(); release = undefined; });
+    const checkStyle = styleWarning("Surface");
     return () => {
       // Validate eagerly so a bad transform or origin throws during render rather than inside a watcher.
       affine(props.transform);
       pivot(props.origin, { width: 1, height: 1 });
+      checkStyle(props.style);
       // Vue re-applies every key of a style object on each patch, so the style below must never name the
       // presentation properties the runtime owns (`transform`, `opacity`, `transform-origin`): rewriting
       // them would drop the runtime's GPU declarations and revoke GPU. The runtime writes the element's
@@ -156,20 +201,26 @@ const boxProps = {
   layout: { type: Object as PropType<Layout>, default: undefined },
   /** Visual styling compiled to browser styles. */
   appearance: { type: Object as PropType<Appearance>, default: undefined },
+  ...rejectedStyle,
 };
 
 /**
  * A styled `<div>` for content inside a `Surface`. It gets a `data-underglass-clipped` marker attribute
- * when its `overflow` clips. Other attributes and listeners fall through to the `<div>`.
+ * when its `overflow` clips. Other attributes and listeners fall through to the `<div>`; `style` is not
+ * accepted, as on `Surface`.
  */
 export const Box = defineComponent({
   name: "UnderglassBox",
   props: boxProps,
   setup(props, { slots }) {
-    return () => h("div", {
-      "data-underglass-clipped": props.layout?.overflow && props.layout.overflow !== "visible" ? "" : undefined,
-      style: compileStyle(props.layout, props.appearance),
-    }, slots.default?.());
+    const checkStyle = styleWarning("Box");
+    return () => {
+      checkStyle(props.style);
+      return h("div", {
+        "data-underglass-clipped": props.layout?.overflow && props.layout.overflow !== "visible" ? "" : undefined,
+        style: compileStyle(props.layout, props.appearance),
+      }, slots.default?.());
+    };
   },
 });
 
@@ -178,7 +229,11 @@ export const NativeScroll = defineComponent({
   name: "UnderglassNativeScroll",
   props: boxProps,
   setup(props, { slots }) {
-    return () => h(Box, { layout: { ...props.layout, overflow: "scroll" }, appearance: props.appearance, "data-underglass-scroll": "" }, slots);
+    const checkStyle = styleWarning("NativeScroll");
+    return () => {
+      checkStyle(props.style);
+      return h(Box, { layout: { ...props.layout, overflow: "scroll" }, appearance: props.appearance, "data-underglass-scroll": "" }, slots);
+    };
   },
 });
 
