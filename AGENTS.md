@@ -9,9 +9,10 @@ User-facing behaviour is described in [docs/guide](docs/guide/getting-started.md
 
 - `packages/core`: the framework-neutral runtime (`@underglass/core`); it must never import a UI framework.
 - `packages/vue`: the Vue 3 adapter (`@underglass/vue`), which depends on core.
-- `packages/react`: the React adapter (`@underglass/react`), which depends on core. Core and the
-  adapters are the only packages that are packed.
-- `packages/css-compiler`: the opt-in build-time CSS compiler.
+- `packages/react`: the React adapter (`@underglass/react`), which depends on core.
+- `packages/css-compiler`: the opt-in build-time CSS compiler (`@underglass/css-compiler`).
+- `packages/ui`: Strata, the 3D design language (`@underglass/ui`): tokens, CSS and components.
+  All five packages are published on npm ([releasing](docs/releasing.md)); the root and the examples are private.
 - `examples/playground`: engineering pages and probes; `examples/showcase`: the public gallery;
   `examples/docs`: the documentation site (Astro Starlight), generated from `docs/` at build time.
 - `tests/unit`, `tests/browser`, `tests/compiler`, `tests/helpers`. The React 18 fixture is separately locked.

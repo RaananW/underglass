@@ -2,10 +2,9 @@
 
 ## Workspace ownership
 
-`packages/core/package.json` (the framework-neutral runtime),
-`packages/react/package.json` (the React adapter) and
-`packages/vue/package.json` (the Vue adapter) are the release manifests; both
-adapters depend on core. Keep library source independent of playground/tests,
+The manifests of `packages/core` (the framework-neutral runtime), `packages/react` (the React
+adapter), `packages/vue` (the Vue adapter), `packages/css-compiler` and `packages/ui` are the
+release manifests, all published on npm ([releasing](docs/releasing.md)); the adapters depend on core. Keep library source independent of playground/tests,
 and never import a UI framework from `packages/core`. A new adapter must pass
 the shared contract in `tests/helpers/framework-contract.mjs`. The private root
 owns tools and stable scripts, while `examples/playground` owns app dependencies, HTML and Vite/TS
@@ -56,12 +55,8 @@ fresh pixels, current original native hit geometry and no blank application
 frames. A test that only proves useful DOM fallback does not accept such a fix.
 Exercise GPU remaining active through repeated supported updates alongside
 rendered-pixel and original native-interaction checks; retain separate genuine
-unsupported/fault/explicit-disable recovery tests. The bounded structural/native
-viewport correction is independently accepted at `cfa9df73`, external
-axis-aligned scroll at `ab598c00`, and selected Phase13 task adoption/diagnostics
-at `12f13661`. Earlier Phase12 engineering alone was not seamless proof;
-broader framework and physical/manual gates remain open in the
-[current register](docs/open-issues.md).
+unsupported/fault/explicit-disable recovery tests. What was accepted, with its limits, and the
+framework and physical/manual gates still open are in the [current register](docs/open-issues.md).
 Once GPU is enabled, only GPU errors or factual missing required
 GPU/capture/geometry feature support justify diagnosed fallback. Normal
 structure/layout/DPR updates, visibility pauses and reduced motion must retain
@@ -83,24 +78,12 @@ not silent legacy compatibility or property detection alone.
 
 Underglass is open-source software under the [Apache License 2.0](LICENSE)
 (selected 2026-10-14). Contributions are accepted under the same license.
-The packages are experimental and not yet on npm; the first publish is the owner's one-time step
-and releases then follow [docs/releasing.md](docs/releasing.md). No maintainer or
-security contact is designated here.
-Phase10 private distribution preparation is independently accepted with limits;
-[verdict](evidence/phase10-independent/acceptance-summary.json) and
-[local pack/consumer and browser policy](docs/distribution.md).
-Keep the existing package names and the Apache-2.0 license. Never run `npm publish` from a change;
-publishing is the owner's step in [docs/releasing.md](docs/releasing.md). A bounded private build-only CI definition and
-local Phase14 pilot are authorized engineering, not hosted success or release
-qualification; see [private release lanes](docs/archive/private-release.md).
-Historical Phase12 engineering covered opted-in settled
-structural readmission and a measured engineering envelope, independently
-accepted with limits ([verdict](evidence/phase12-independent/acceptance-summary.json));
-full Phase12 production budgets remain open. The later bounded continuous-GPU
-correction and selected [Phase13 task workspace](docs/archive/task-workspace.md) are
-qualified-accepted; this does not close manual/historical gates. Phase14
-private engineering is started; release qualification, licensing and publication
-remain open or undecided.
+The five library packages are experimental and published on npm; CI releases them
+([docs/releasing.md](docs/releasing.md)). Report a vulnerability privately as
+[SECURITY.md](SECURITY.md) describes.
+Keep the existing package names and the Apache-2.0 license. Never run `npm publish` from a change
+or from a laptop: only the Release workflow publishes. Accepted limits, open gates and what
+was left unverified are in [docs/open-issues.md](docs/open-issues.md).
 
 Start with [README.md](README.md), the maintained
 [architecture/lifecycle/mount contract](docs/architecture.md), and the
@@ -115,40 +98,15 @@ The [Phase 6 report](docs/archive/measurements.md) documents actual React18/19 b
 production comparisons, raw samples and still-unperformed manual gates.
 The [Phase7 integration](docs/archive/integration.md), `/integration.html`, adds
 original-element refs, Radix Dialog and bounded motion/presence; the
-[public roadmap](docs/archive/roadmap.md) records
-Phase9 bounded hardening accepted-with-limits on actual installed155; exact154
-remains unverified, not waived; see [independent proof](evidence/phase9-independent/acceptance-v1.json).
+[public roadmap](docs/archive/roadmap.md) records the hardening work.
 The [adoption checklist](docs/archive/adoption.md) covers migration and manual/device
 gates. The [Phase8 effects](docs/effects.md), `/effects.html`, use the same
 shared compositor and add a trusted application color-function extension.
-Phase8 is independently accepted with explicit limits; the
-[Phase8 acceptance summary](evidence/phase8-acceptance-summary.json) preserves earlier
-routing findings and does not close manual/device or release gates.
-
-## Private phase history
-
-The user-authorized history remote is private
-[`RaananW/underglass`](https://github.com/RaananW/underglass), `origin`
-`https://github.com/RaananW/underglass.git`, on `main`. Commit and normally push each
-phase **after separate technical acceptance**, not during an unfinished phase.
-The first accepted commit
-includes the preexisting accepted Phases1-6 baseline plus Phase7; do not
-fabricate retrospective phase commits. Later accepted phases get individual
-commits. Inspect the exact staging set for secrets, private local paths and
-generated artifacts; retain only compact curated verdicts, keep dependencies,
-caches and browser profiles ignored, include the standard Copilot coauthor
-trailer, verify the remote stays private and verify matching local/remote main
-SHAs after push. Do not advance phases until this verification. This is private
-history tracking, not authorization to change the license, publish a package,
-make the repository public or modify upstream engines.
-
-On 2026-10-12, the owner separately requested documented compiler/worker
-persistence before independent acceptance. This scoped authorization does not
-waive phase-acceptance gates or qualify production/manual work; the experiments
-remain explicitly labelled as implementer-verified.
+The Phase8 effects are bounded and do not close the manual/device gates; see [open issues](docs/open-issues.md).
 
 Raw reports, screenshots, reruns and full performance dumps must stay outside
-tracked history. The [archive catalog](docs/archive/archive-catalog.md) records preserved
+tracked history. Inspect the exact staging set for secrets, private local paths and
+generated artifacts, and keep dependencies, caches and browser profiles ignored. The [archive catalog](docs/archive/archive-catalog.md) records preserved
 local bytes and access/reproduction limits. Stage source/docs/tests and curated
 verdicts explicitly, then run `node scripts/check-evidence.mjs`; it checks staged
 paths, JSON validity and a64 KiB per-verdict budget (8 KiB for the exact
