@@ -20,6 +20,8 @@
  * connected and `thunk` as it is disconnected (`dom/patch-point.ts`).
  */
 
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
+
 /** The four sounds of a character's sound set. */
 export type StrataSoundKind = "click" | "tick" | "thunk" | "snap";
 /** One sound's three parameters: its tone (Hz), its decay (the envelope's time constant, ms) and its noise (0–1). */
@@ -76,7 +78,7 @@ export interface StrataFeedbackHandle {
   update(options: StrataFeedbackOptions): void;
   /** The audio context, once a gesture on a control with sound on has created it. */
   context(): AudioContext | undefined;
-  /** Removes the options and closes the audio context; the gesture listeners stay, inert, until a new attach. */
+  /** Removes the options, closes the audio context and gives back the handle's hold on the gesture listeners (they go when no control needs them either); idempotent. */
   detach(): void;
 }
 
@@ -100,13 +102,16 @@ const controls = ".ug-switch[data-strata-form] .ug-switch__input, .ug-knob__inpu
 /** Those, and the Pad and the Keypad's keys (`dom/pad.ts`, `dom/keypad.ts`): a gesture on one is the visitor's own input, and its press plays `click`. */
 const withPads = `${controls}, .ug-pad, .ug-keypad__key`;
 
-/** The page's feedback state, with its gesture listeners, created once per document. */
+/** The page's feedback state, created once per document. The gesture listeners that feed it are `listenForStrataFeedback`'s. */
 function stateOf(doc: Document): FeedbackState {
   let state = states.get(doc);
-  if (state) return state;
-  const created: FeedbackState = { options: {}, buffers: new Map(), gesture: new WeakMap() };
-  states.set(doc, created);
-  state = created;
+  if (!state) states.set(doc, state = { options: {}, buffers: new Map(), gesture: new WeakMap() });
+  return state;
+}
+
+/** Installs the gesture listeners of `doc` (one set per document, reference-counted by `listenForStrataFeedback`). */
+function installFeedback(doc: Document, scope: StrataDelegateScope): void {
+  const created = stateOf(doc);
   // The first gesture on a control with sound on creates the audio context (and every gesture resumes it), inside the
   // gesture, as browsers allow. A trusted gesture also marks the control as the visitor's own input, for haptics.
   const gesture = (event: Event) => {
@@ -128,9 +133,10 @@ function stateOf(doc: Document): FeedbackState {
       if (created.context?.state === "suspended") void created.context.resume().catch(() => undefined);
     } catch { /* no audio: feedback stays silent */ }
   };
-  doc.addEventListener("pointerdown", gesture, { capture: true, passive: true });
-  doc.addEventListener("keydown", gesture, { capture: true, passive: true });
-  return created;
+  scope.listen(doc, "pointerdown", gesture, { capture: true, passive: true });
+  scope.listen(doc, "keydown", gesture, { capture: true, passive: true });
+  // With no control left to hear, the audio context the gestures created is not kept running.
+  scope.onRelease(() => { void created.context?.close().catch(() => undefined); created.context = undefined; created.buffers.clear(); });
 }
 
 /**
@@ -139,17 +145,20 @@ function stateOf(doc: Document): FeedbackState {
  * only needed to set options.
  */
 export function attachStrataFeedback(options: StrataFeedbackOptions = {}, doc: Document = document): StrataFeedbackHandle {
-  const state = stateOf(doc);
+  const release = listenForStrataFeedback(doc), state = stateOf(doc);
   state.options = { ...options };
   return {
     update: next => { state.options = { ...state.options, ...next }; },
     context: () => state.context,
-    detach: () => { state.options = {}; void state.context?.close().catch(() => undefined); state.context = undefined; state.buffers.clear(); },
+    detach: () => { state.options = {}; void state.context?.close().catch(() => undefined); state.context = undefined; state.buffers.clear(); release(); },
   };
 }
 
-/** Makes sure `doc` listens for the gestures that unlock audio; idempotent. */
-export function listenForStrataFeedback(doc: Document = document): void { stateOf(doc); }
+/**
+ * Makes sure `doc` listens for the gestures that unlock audio: one set per document, reference-counted. Returns a disposer; the last one
+ * for the document removes the listeners and closes the audio context they created.
+ */
+export function listenForStrataFeedback(doc: Document = document): () => void { return acquireStrataDelegate(doc, installFeedback); }
 
 /**
  * Plays `kind` for `element` and pulses, where each is on for it: sound only once a gesture has created the audio

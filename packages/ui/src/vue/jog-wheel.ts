@@ -6,8 +6,9 @@
  * `@underglass/ui/dom`, attached once when a wheel mounts; keys are native. Use `v-model`, or `defaultValue` uncontrolled. Field-aware,
  * as Slider is.
  */
-import { defineComponent, h, nextTick, onMounted, ref, useId, watch, type PropType } from "vue";
+import { defineComponent, h, nextTick, ref, useId, watch, type PropType } from "vue";
 import { attachStrataJogWheels, syncStrataJogWheel } from "../dom/jog-wheel.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { jogDefaults, jogInitialAngle, jogStyle, jogWheelModel } from "../shared/jog-wheel.ts";
 import { strataAttributes, strataProps, useFieldControl } from "./shared.ts";
 
@@ -54,7 +55,7 @@ export const JogWheel = defineComponent({
     const start = jogStyle(jogInitialAngle(initial, { min: props.min, max: props.max, step: props.step }, props.turn), props.turn);
     const root = ref<HTMLElement>(), input = ref<HTMLInputElement>();
     expose({ root, input });
-    onMounted(() => attachStrataJogWheels());
+    useStrataDelegates(() => [attachStrataJogWheels]);
     // A value the parent sets (a controlled change, a reset) moves the wheel by the shorter way round.
     watch(() => props.modelValue ?? own.value, () => { void nextTick(() => { if (input.value) syncStrataJogWheel(input.value); }); });
     return () => {

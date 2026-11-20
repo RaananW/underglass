@@ -21,6 +21,7 @@
  * passing a detent plays `tick` through `strataFeedback` (sound and haptics, both off unless the page or scope turns
  * them on).
  */
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
 import { knobDefaults, knobDetentsCrossed, knobDrag, knobFraction, knobNotch, knobRegion, knobValueAtAngle, knobValueText, type KnobRange, type KnobTokens } from "../shared/knob.ts";
 import { listenForStrataFeedback, strataFeedback } from "./feedback.ts";
 
@@ -85,24 +86,26 @@ function resetOf(input: HTMLInputElement): number {
 
 interface Gesture { input: HTMLInputElement; root: Element; x: number; y: number; last: number; raw: number; moved: boolean; before: string; tokens: KnobTokens }
 
-const attached = new WeakSet<Document>();
-
 /**
  * Runs every `.ug-knob` in `doc`, present and future, through delegated listeners (one of them the blocking
  * document-level wheel listener), once per document. `attachStrata` calls it; the React and Vue bindings call it when
  * a knob mounts.
  */
-export function attachStrataKnobs(doc: Document = document): void {
-  if (attached.has(doc)) return;
-  attached.add(doc);
-  listenForStrataFeedback(doc);
+export function attachStrataKnobs(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installKnobs);
+}
+
+function installKnobs(doc: Document, scope: StrataDelegateScope): void {
+  scope.onRelease(listenForStrataFeedback(doc));
   const gestures = new Map<number, Gesture>();
+  // A drag in progress lets go of its pointer, so nothing keeps it captured with no listener to end it.
+  scope.onRelease(() => { for (const [pointerId, gesture] of gestures) try { gesture.input.releasePointerCapture(pointerId); } catch { /* already released */ } gestures.clear(); });
   const knobInput = (target: EventTarget | null) => {
     const input = (target as Element | null)?.closest?.(knobInputs);
     return input instanceof HTMLInputElement && input.type === "range" && !input.disabled ? input : undefined;
   };
 
-  doc.addEventListener("pointerdown", event => {
+  scope.listen(doc, "pointerdown", event => {
     const input = knobInput(event.target);
     const root = input?.closest(".ug-knob");
     if (!input || !root || event.button !== 0 || !event.isPrimary || event.defaultPrevented) return;
@@ -114,8 +117,8 @@ export function attachStrataKnobs(doc: Document = document): void {
   });
   // A touch drives a native range on its own (it sets the value from the touch's x, whatever the pointer events do):
   // cancelling `touchstart` leaves a touch to the pointer events above.
-  doc.addEventListener("touchstart", event => { if (knobInput(event.target)) event.preventDefault(); }, { passive: false });
-  doc.addEventListener("pointermove", event => {
+  scope.listen(doc, "touchstart", event => { if (knobInput(event.target)) event.preventDefault(); }, { passive: false });
+  scope.listen(doc, "pointermove", event => {
     const gesture = gestures.get(event.pointerId);
     if (!gesture) return;
     if (!gesture.moved && Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) < gesture.tokens.tapSlop) return;
@@ -142,17 +145,17 @@ export function attachStrataKnobs(doc: Document = document): void {
       : commit(input, knobValueAtAngle(where.theta, range, { sweep: tokens.sweep, snap: tokens.snap, marks: marksOf(root) }));
     if (changed) finish(input);
   };
-  doc.addEventListener("pointerup", event => end(event, false));
-  doc.addEventListener("pointercancel", event => end(event, true));
+  scope.listen(doc, "pointerup", event => end(event, false));
+  scope.listen(doc, "pointercancel", event => end(event, true));
 
-  doc.addEventListener("dblclick", event => {
+  scope.listen(doc, "dblclick", event => {
     const input = knobInput(event.target);
     if (input && commit(input, resetOf(input))) finish(input);
   });
 
   // The wheel: notches up raise the value. Fine-grained wheels (touchpads) add up to a notch before stepping.
   let wheelInput: HTMLInputElement | undefined, wheelSum = 0, wheelTime = 0;
-  doc.addEventListener("wheel", event => {
+  scope.listen(doc, "wheel", event => {
     if (event.ctrlKey) return;
     const under = doc.elementFromPoint(event.clientX, event.clientY);
     const input = knobInput(under?.closest(".ug-knob__dial")?.querySelector(knobInputs) ?? null);
@@ -171,7 +174,7 @@ export function attachStrataKnobs(doc: Document = document): void {
 
   // Keys, the wheel, drags and taps all end in an `input` event: the dial follows the value. In the capture phase, so
   // the page's own listeners already see the new value text.
-  doc.addEventListener("input", event => {
+  scope.listen(doc, "input", event => {
     const input = (event.target as Element | null)?.closest?.(knobInputs);
     if (!(input instanceof HTMLInputElement)) return;
     // A detented knob's pointer passing a detent ticks (feedback, off by default): the pointer's last place, read before

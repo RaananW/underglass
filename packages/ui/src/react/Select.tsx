@@ -213,7 +213,7 @@ const SliderObject = forwardRef<HTMLInputElement, Omit<SliderProps, "form"> & { 
   const [own, setOwn] = useState(initial);
   const current = value !== undefined ? sliderNumber(value, low) : own;
   const model = sliderFormModel(form, { value: current, min: low, max: sliderNumber(max, 100), step: step !== undefined ? sliderNumber(step, 1) : undefined, marks, detents, sweep, travel, unit, format });
-  useEffect(() => { if (form === "knob") attachStrataKnobs(); else attachStrataFaders(); }, [form]);
+  useEffect(() => (form === "knob" ? attachStrataKnobs() : attachStrataFaders()), [form]);
   const wheel = form === "wheel";
   const knob = form === "knob", part = knob ? "knob" : "fader";
   const control = (

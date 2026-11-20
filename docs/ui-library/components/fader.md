@@ -173,7 +173,8 @@ default), `id`, `name`, `form`, `disabled`, and in React `inputRef` (Vue exposes
 - Every change goes through the input's `value`: `input` while it changes, `change` at the end of a gesture, so forms
   and bindings see native events. The behaviour is `attachStrataFaders` from `@underglass/ui/dom` (one set of
   delegated listeners per document, among them the blocking document-level wheel listener); `attachStrata` and the
-  React, Vue and Astro components attach it. Without script the fader is a native vertical slider whose drag, track
+  React, Vue and Astro components attach it, and the returned disposer removes them with the last one
+  ([conventions](README.md#conventions)). Without script the fader is a native vertical slider whose drag, track
   click and keys work; the carriage stays where it was rendered.
 - **Feedback** ([design language section 20](../design-language.md#20-feedback)): a detented fader's carriage
   passing a detent plays `tick` through `strataFeedback` (one per change, however many detents it passes). Sound and

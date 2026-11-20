@@ -3,8 +3,9 @@
  * `select.md`, `slider.md`). Field provides its control's id, description and state; each control applies them before
  * its own attributes. Controls support `v-model` and also work uncontrolled.
  */
-import { computed, defineComponent, h, mergeProps, onMounted, provide, ref, useId, watch, type PropType } from "vue";
+import { computed, defineComponent, h, mergeProps, provide, ref, useId, watch, type PropType } from "vue";
 import { attachStrataFaders } from "../dom/fader.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { attachStrataKnobs } from "../dom/knob.ts";
 import type { FaderMark } from "../shared/fader.ts";
 import type { KnobMark } from "../shared/knob.ts";
@@ -163,9 +164,8 @@ export const Slider = defineComponent({
     const generated = (useId() ?? "").replace(/[^a-zA-Z0-9_-]/g, "");
     const own = ref(sliderNumber(props.defaultValue ?? props.modelValue ?? attrs.min, 0));
     const initial = own.value;
-    const attach = () => { const formed = sliderForm(props.form); if (formed === "knob") attachStrataKnobs(); else if (formed === "fader" || formed === "wheel") attachStrataFaders(); };
-    onMounted(attach);
-    watch(() => props.form, attach);
+    const { sync } = useStrataDelegates(() => { const formed = sliderForm(props.form); return [formed === "knob" && attachStrataKnobs, (formed === "fader" || formed === "wheel") && attachStrataFaders]; });
+    watch(() => props.form, sync);
     return () => {
       const { id, "aria-describedby": describedBy, disabled } = field?.value ?? {};
       const formed = sliderForm(props.form);

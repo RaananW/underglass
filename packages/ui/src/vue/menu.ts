@@ -3,8 +3,9 @@
  * slot's one element gets `popovertarget` and `aria-haspopup="menu"`; the menu (`popover`, `role="menu"`) is teleported
  * to `to` (`body` by default), outside every Underglass layer. `attachStrataMenus` runs its keys.
  */
-import { Fragment, Teleport, cloneVNode, defineComponent, h, onMounted, useId, type PropType } from "vue";
+import { Fragment, Teleport, cloneVNode, defineComponent, h, useId, type PropType } from "vue";
 import { attachStrataMenus } from "../dom/menu.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { attachStrataPopovers } from "../dom/popover.ts";
 
 export type MenuEntry = { label: string; onSelect?: () => void; disabled?: boolean } | "separator";
@@ -23,7 +24,7 @@ export const Menu = defineComponent({
   },
   setup(props, { slots }) {
     const generated = (useId() ?? "").replace(/[^a-zA-Z0-9_-]/g, "");
-    onMounted(() => { attachStrataMenus(); attachStrataPopovers(); });
+    useStrataDelegates(() => [attachStrataMenus, attachStrataPopovers]);
     return () => {
       const menuId = props.id ?? `menu-${generated}`;
       const [trigger] = slots.trigger?.() ?? [];

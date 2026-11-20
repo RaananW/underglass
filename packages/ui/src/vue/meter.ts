@@ -6,8 +6,9 @@
  * `root` and `meter`. The value reaches the drawing through `attachStrataMeters` from `@underglass/ui/dom`, attached once
  * when a meter mounts; a changed `value` is all it takes. `Gauge` (a round dial) renders the same markup.
  */
-import { defineComponent, h, onMounted, ref, useId, type PropType, type Ref, type VNode } from "vue";
+import { defineComponent, h, ref, useId, type PropType, type Ref, type VNode } from "vue";
 import { attachStrataMeters } from "../dom/meter.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { meterModel, type MeterMark, type MeterModel, type StrataMeterForm } from "../shared/meter.ts";
 import { classes, strataAttributes, strataProps } from "./shared.ts";
 
@@ -95,7 +96,7 @@ export const Meter = defineComponent({
     const generated = (useId() ?? "").replace(/[^a-zA-Z0-9_-]/g, "");
     const root = ref<HTMLElement>(), meter = ref<HTMLMeterElement>();
     expose({ root, meter });
-    onMounted(() => attachStrataMeters());
+    useStrataDelegates(() => [attachStrataMeters]);
     return () => renderMeter(props, props.form, generated, { root, meter });
   },
 });

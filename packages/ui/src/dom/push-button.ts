@@ -16,6 +16,7 @@
  *   checkbox toggle, never for a script's assignment), not on the way down.
  * Every listener is delegated and passive: nothing on the native event path is blocked or changed.
  */
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
 import { listenForStrataFeedback, strataFeedback } from "./feedback.ts";
 
 const pushes = "button.ug-push, .ug-latch";
@@ -32,16 +33,16 @@ function buttonOf(target: EventTarget | null): HTMLElement | undefined {
 /** Whether `host` is a latching key (a Checkbox's or a bank key), not a button. */
 const isLatch = (host: Element) => host.classList.contains("ug-latch");
 
-const attached = new WeakSet<Document>();
-
 /**
  * Runs every `button.ug-push` in `doc`, present and future, through delegated listeners, once per document. `attachStrata`
  * calls it; the React and Vue bindings call it when a push button mounts.
  */
-export function attachStrataPushButtons(doc: Document = document): void {
-  if (attached.has(doc)) return;
-  attached.add(doc);
-  listenForStrataFeedback(doc);
+export function attachStrataPushButtons(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installPushButtons);
+}
+
+function installPushButtons(doc: Document, scope: StrataDelegateScope): void {
+  scope.onRelease(listenForStrataFeedback(doc));
   /** The pointers holding a button down, and the keys. */
   const pointers = new Map<number, HTMLElement>(), keys = new Map<HTMLElement, string>();
   const held = (button: HTMLElement) => keys.has(button) || [...pointers.values()].includes(button);
@@ -56,7 +57,9 @@ export function attachStrataPushButtons(doc: Document = document): void {
     pointers.clear(); keys.clear();
     for (const button of buttons) set(button, false);
   };
-  doc.addEventListener("pointerdown", event => {
+  // No button stays held down once nothing listens for its release.
+  scope.onRelease(releaseAll);
+  scope.listen(doc, "pointerdown", event => {
     const button = event.button === 0 && event.isPrimary ? buttonOf(event.target) : undefined;
     if (!button) return;
     pointers.set(event.pointerId, button);
@@ -67,32 +70,32 @@ export function attachStrataPushButtons(doc: Document = document): void {
     pointers.delete(event.pointerId);
     if (button && !held(button)) set(button, false);
   };
-  doc.addEventListener("pointerup", up, { capture: true, passive: true });
-  doc.addEventListener("pointercancel", up, { capture: true, passive: true });
-  doc.addEventListener("keydown", event => {
+  scope.listen(doc, "pointerup", up, { capture: true, passive: true });
+  scope.listen(doc, "pointercancel", up, { capture: true, passive: true });
+  scope.listen(doc, "keydown", event => {
     const button = event.target instanceof HTMLButtonElement || event.target instanceof HTMLInputElement ? buttonOf(event.target) : undefined;
     // Enter does nothing on a checkbox or a radio: only Space holds a latching key.
     if (!button || event.repeat || (event.key !== " " && event.key !== "Enter") || (isLatch(button) && event.key !== " ")) return;
     keys.set(button, event.key);
     set(button, true);
   }, { capture: true, passive: true });
-  doc.addEventListener("keyup", event => {
+  scope.listen(doc, "keyup", event => {
     const button = event.target instanceof HTMLButtonElement ? event.target : event.target instanceof HTMLInputElement ? buttonOf(event.target) : undefined;
     if (!button || !keys.has(button) || (event.key !== " " && event.key !== "Enter")) return;
     keys.delete(button);
     if (!held(button)) set(button, false);
   }, { capture: true, passive: true });
   // A button that loses focus, or a page that is hidden, lets go.
-  doc.addEventListener("focusout", event => {
+  scope.listen(doc, "focusout", event => {
     const button = event.target instanceof HTMLButtonElement ? event.target : event.target instanceof HTMLInputElement ? event.target.closest<HTMLElement>(".ug-latch") ?? undefined : undefined;
     if (!button?.matches(pushes)) return;
     keys.delete(button);
     if (!held(button)) set(button, false);
   }, { capture: true, passive: true });
   // A latching key plays its click once per real change of its input.
-  doc.addEventListener("change", event => {
+  scope.listen(doc, "change", event => {
     const host = event.target instanceof HTMLInputElement ? event.target.closest(".ug-latch") : null;
     if (host && event.target === host.querySelector(":scope > input")) strataFeedback(host, "click");
   }, { capture: true, passive: true });
-  doc.addEventListener("visibilitychange", () => { if (doc.visibilityState === "hidden") releaseAll(); }, { passive: true });
+  scope.listen(doc, "visibilitychange", () => { if (doc.visibilityState === "hidden") releaseAll(); }, { passive: true });
 }

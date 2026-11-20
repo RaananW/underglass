@@ -34,6 +34,7 @@
  * `aria-valuetext`; a detented wheel (`.ug-jog-wheel--detented`) plays `tick` through `strataFeedback` once for each value change
  * (sound and haptics, both off unless the page or scope turns them on).
  */
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
 import {
   angleDelta, coast, jogCount, jogDefaults, jogIndex, jogIndexOfSteps, jogLimit, jogSteps, jogStepAngle, jogAdvance, jogValueAt, jogWrap, pointerAngle, verticalAngle,
   type JogMotion, type JogRange, type JogTokens,
@@ -159,7 +160,6 @@ interface Gesture {
 /** A coasting wheel. */
 interface Coasting { input: HTMLInputElement; root: HTMLElement; motion: JogMotion; steps: number; time: number; allowance: number; before: string; tokens: JogTokens; detented: boolean; frame: number }
 
-const attached = new WeakSet<Document>();
 /** The wheels coasting now, by input. */
 const coasting = new Map<HTMLInputElement, Coasting>();
 
@@ -236,17 +236,21 @@ export function flingStrataJogWheel(input: HTMLInputElement, velocity: number): 
  * Runs every `.ug-jog-wheel` in `doc`, present and future, through delegated listeners (one of them the blocking document-level
  * wheel listener), once per document. `attachStrata` calls it; the React and Vue bindings call it when a jog wheel mounts.
  */
-export function attachStrataJogWheels(doc: Document = document): void {
-  if (attached.has(doc)) return;
-  attached.add(doc);
-  listenForStrataFeedback(doc);
+export function attachStrataJogWheels(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installJogWheels);
+}
+
+function installJogWheels(doc: Document, scope: StrataDelegateScope): void {
+  scope.onRelease(listenForStrataFeedback(doc));
   const gestures = new Map<number, Gesture>();
+  // A drag in progress lets go of its pointer, so nothing keeps it captured with no listener to end it.
+  scope.onRelease(() => { for (const [pointerId, gesture] of gestures) try { gesture.input.releasePointerCapture(pointerId); } catch { /* already released */ } gestures.clear(); });
   const wheelInput = (target: EventTarget | null) => {
     const input = (target as Element | null)?.closest?.(jogInputs);
     return input instanceof HTMLInputElement && input.type === "range" && !input.disabled ? input : undefined;
   };
 
-  doc.addEventListener("pointerdown", event => {
+  scope.listen(doc, "pointerdown", event => {
     const input = wheelInput(event.target);
     const root = input?.closest<HTMLElement>(".ug-jog-wheel");
     if (!input || !root || event.button !== 0 || !event.isPrimary || event.defaultPrevented) return;
@@ -263,8 +267,8 @@ export function attachStrataJogWheels(doc: Document = document): void {
   });
   // A touch drives a native range on its own (it sets the value from the touch's x, whatever the pointer events do):
   // cancelling `touchstart` leaves a touch to the pointer events above.
-  doc.addEventListener("touchstart", event => { if (wheelInput(event.target)) event.preventDefault(); }, { passive: false });
-  doc.addEventListener("pointermove", event => {
+  scope.listen(doc, "touchstart", event => { if (wheelInput(event.target)) event.preventDefault(); }, { passive: false });
+  scope.listen(doc, "pointermove", event => {
     const g = gestures.get(event.pointerId);
     if (!g) return;
     if (!g.moved && Math.hypot(event.clientX - g.x, event.clientY - g.y) < g.tokens.tapSlop) return;
@@ -308,10 +312,10 @@ export function attachStrataJogWheels(doc: Document = document): void {
     writeText(input);
     if (input.value !== before) finish(input);
   };
-  doc.addEventListener("pointerup", event => end(event, false));
-  doc.addEventListener("pointercancel", event => end(event, true));
+  scope.listen(doc, "pointerup", event => end(event, false));
+  scope.listen(doc, "pointercancel", event => end(event, true));
 
-  doc.addEventListener("dblclick", event => {
+  scope.listen(doc, "dblclick", event => {
     const input = wheelInput(event.target);
     if (!input) return;
     stopCoast(input);
@@ -320,7 +324,7 @@ export function attachStrataJogWheels(doc: Document = document): void {
   });
 
   // Keys: native, except the ones that would go past an end of a wheel that wraps, which go round.
-  doc.addEventListener("keydown", event => {
+  scope.listen(doc, "keydown", event => {
     const input = wheelInput(event.target);
     if (!input || !wraps(input) || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     stopCoast(input);
@@ -337,7 +341,7 @@ export function attachStrataJogWheels(doc: Document = document): void {
 
   // The wheel: notches up turn the wheel clockwise. Fine-grained wheels (touchpads) add up to a notch before stepping.
   let wheelTarget: HTMLInputElement | undefined, wheelSum = 0, wheelTime = 0;
-  doc.addEventListener("wheel", event => {
+  scope.listen(doc, "wheel", event => {
     if (event.ctrlKey) return;
     const under = doc.elementFromPoint(event.clientX, event.clientY);
     const input = wheelInput(under?.closest(".ug-jog-wheel__dial")?.querySelector(jogInputs) ?? null);
@@ -357,7 +361,7 @@ export function attachStrataJogWheels(doc: Document = document): void {
 
   // Keys, the wheel, taps and drags all end in an `input` event: the wheel follows the value. In the capture phase, so the
   // page's own listeners already see the new value text.
-  doc.addEventListener("input", event => {
+  scope.listen(doc, "input", event => {
     const input = (event.target as Element | null)?.closest?.(jogInputs);
     if (!(input instanceof HTMLInputElement)) return;
     const value = Number(input.value), last = seen.get(input);

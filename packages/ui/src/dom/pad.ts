@@ -18,6 +18,7 @@
  *   row, Control+Home and Control+End to the ends of the grid; nothing wraps.
  * Every listener is delegated and passive except the grid's keys, which cancel only the keys they move focus with.
  */
+import { acquireStrataDelegate, combineStrataDisposers, type StrataDelegateScope } from "./delegate.ts";
 import { listenForStrataFeedback, strataFeedback } from "./feedback.ts";
 import { gridTarget, padVelocity } from "../shared/pad.ts";
 
@@ -37,20 +38,25 @@ function buttonOf(target: EventTarget | null, selector: string): HTMLButtonEleme
   return button instanceof HTMLButtonElement && !button.disabled && button.getAttribute("aria-disabled") !== "true" ? button : undefined;
 }
 
-const held = new WeakMap<Document, Set<string>>();
+/** The held-button delegate of each selector (one install function per selector, which is the delegate's identity). */
+const heldInstalls = new Map<string, (doc: Document, scope: StrataDelegateScope) => void>();
 
 /**
  * Holds every enabled button of `selector` in `doc` down (`data-strata-down`) while it is pressed, through delegated listeners, once per
- * document and selector, and plays `click` as it goes down. `down` runs as a button goes down, with the event that did it.
+ * document and selector, and plays `click` as it goes down. `down` runs as a button goes down, with the event that did it (the first
+ * attach for a selector sets it). Returns a disposer, reference-counted per document and selector: the last one lets every held button go and
+ * removes the listeners.
  */
-export function attachStrataHeldButtons(doc: Document, selector: string, down?: (button: HTMLButtonElement, event: PointerEvent | KeyboardEvent) => void): void {
-  const done = held.get(doc) ?? new Set<string>();
-  held.set(doc, done);
-  if (done.has(selector)) return;
-  done.add(selector);
-  listenForStrataFeedback(doc);
+export function attachStrataHeldButtons(doc: Document, selector: string, down?: (button: HTMLButtonElement, event: PointerEvent | KeyboardEvent) => void): () => void {
+  let install = heldInstalls.get(selector);
+  if (!install) heldInstalls.set(selector, install = (target, scope) => installHeldButtons(target, scope, selector, down));
+  return acquireStrataDelegate(doc, install);
+}
+
+function installHeldButtons(doc: Document, scope: StrataDelegateScope, selector: string, down?: (button: HTMLButtonElement, event: PointerEvent | KeyboardEvent) => void): void {
+  scope.onRelease(listenForStrataFeedback(doc));
   // A click on an `aria-disabled` button is stopped before any other listener sees it, so it stays focusable without activating.
-  doc.addEventListener("click", event => {
+  scope.listen(doc, "click", event => {
     const blocked = (event.target as Element | null)?.closest?.(selector);
     if (blocked?.getAttribute("aria-disabled") === "true") { event.preventDefault(); event.stopImmediatePropagation(); }
   }, { capture: true });
@@ -69,7 +75,9 @@ export function attachStrataHeldButtons(doc: Document, selector: string, down?: 
     pointers.clear(); keys.clear();
     for (const button of buttons) set(button, false);
   };
-  doc.addEventListener("pointerdown", event => {
+  // No button stays held down once nothing listens for its release.
+  scope.onRelease(releaseAll);
+  scope.listen(doc, "pointerdown", event => {
     const button = event.button === 0 && event.isPrimary ? buttonOf(event.target, selector) : undefined;
     if (!button) return;
     pointers.set(event.pointerId, button);
@@ -80,28 +88,28 @@ export function attachStrataHeldButtons(doc: Document, selector: string, down?: 
     pointers.delete(event.pointerId);
     if (button && !isHeld(button)) set(button, false);
   };
-  doc.addEventListener("pointerup", up, { capture: true, passive: true });
-  doc.addEventListener("pointercancel", up, { capture: true, passive: true });
-  doc.addEventListener("keydown", event => {
+  scope.listen(doc, "pointerup", up, { capture: true, passive: true });
+  scope.listen(doc, "pointercancel", up, { capture: true, passive: true });
+  scope.listen(doc, "keydown", event => {
     const button = event.target instanceof HTMLButtonElement ? buttonOf(event.target, selector) : undefined;
     if (!button || event.repeat || (event.key !== " " && event.key !== "Enter")) return;
     keys.set(button, event.key);
     set(button, true, event);
   }, { capture: true, passive: true });
-  doc.addEventListener("keyup", event => {
+  scope.listen(doc, "keyup", event => {
     const button = event.target instanceof HTMLButtonElement ? event.target : undefined;
     if (!button || !keys.has(button) || (event.key !== " " && event.key !== "Enter")) return;
     keys.delete(button);
     if (!isHeld(button)) set(button, false);
   }, { capture: true, passive: true });
   // A button that loses focus, or a page that is hidden, lets go.
-  doc.addEventListener("focusout", event => {
+  scope.listen(doc, "focusout", event => {
     const button = event.target instanceof HTMLButtonElement ? event.target : undefined;
     if (!button?.matches(selector)) return;
     keys.delete(button);
     if (!isHeld(button)) set(button, false);
   }, { capture: true, passive: true });
-  doc.addEventListener("visibilitychange", () => { if (doc.visibilityState === "hidden") releaseAll(); }, { passive: true });
+  scope.listen(doc, "visibilitychange", () => { if (doc.visibilityState === "hidden") releaseAll(); }, { passive: true });
 }
 
 /** The controls of a grid that focus can move to, in document order: not disabled, not hidden. */
@@ -133,17 +141,17 @@ export function strataGridTarget(from: Element, key: string, ctrl = false): HTML
   return target === undefined ? undefined : all[target];
 }
 
-const gridded = new WeakSet<Document>();
+/** Runs the grid pattern for every `.ug-pad-grid` and keypad plinth in `doc`, present and future, once per document; returns its reference-counted disposer. */
+export function attachStrataGrids(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installGrids);
+}
 
-/** Runs the grid pattern for every `.ug-pad-grid` and keypad plinth in `doc`, present and future, once per document. */
-export function attachStrataGrids(doc: Document = document): void {
-  if (gridded.has(doc)) return;
-  gridded.add(doc);
-  doc.addEventListener("focusin", event => {
+function installGrids(doc: Document, scope: StrataDelegateScope): void {
+  scope.listen(doc, "focusin", event => {
     const control = (event.target as Element | null)?.closest?.(controls), grid = control?.closest(grids);
     if (control && grid) rovingStrataGrid(grid, control);
   }, { passive: true });
-  doc.addEventListener("keydown", event => {
+  scope.listen(doc, "keydown", event => {
     if (event.defaultPrevented || event.altKey || event.metaKey || event.shiftKey) return;
     const from = event.target instanceof Element ? event.target.closest(controls) : null;
     if (!from || (event.ctrlKey && event.key !== "Home" && event.key !== "End")) return;
@@ -170,22 +178,21 @@ function reportVelocity(button: HTMLButtonElement, event: PointerEvent | Keyboar
  * Runs every `button.ug-pad` in `doc`, present and future, through delegated listeners, once per document, with the grid pattern for
  * the pads in a grid. `attachStrata` calls it; the React and Vue bindings call it when a pad mounts.
  */
-export function attachStrataPads(doc: Document = document): void {
-  attachStrataHeldButtons(doc, pads, reportVelocity);
-  attachStrataGrids(doc);
+export function attachStrataPads(doc: Document = document): () => void {
+  return combineStrataDisposers(attachStrataHeldButtons(doc, pads, reportVelocity), attachStrataGrids(doc));
 }
-
-const latched = new WeakSet<Document>();
 
 /**
  * Toggles `aria-pressed` on a click on a latching `button.ug-pad[aria-pressed]` and dispatches a bubbling `strata-pressed-change` with
  * `{ pressed }`, once per document. `attachStrata` calls it, for markup without a binding; the React and Vue bindings keep a pad's state
  * themselves and never call it.
  */
-export function attachStrataPadLatches(doc: Document = document): void {
-  if (latched.has(doc)) return;
-  latched.add(doc);
-  doc.addEventListener("click", event => {
+export function attachStrataPadLatches(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installPadLatches);
+}
+
+function installPadLatches(doc: Document, scope: StrataDelegateScope): void {
+  scope.listen(doc, "click", event => {
     const button = (event.target as Element | null)?.closest?.("button.ug-pad[aria-pressed]") as HTMLButtonElement | null;
     if (!button || event.defaultPrevented || button.disabled || button.getAttribute("aria-disabled") === "true") return;
     const pressed = button.getAttribute("aria-pressed") !== "true";

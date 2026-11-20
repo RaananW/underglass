@@ -38,7 +38,7 @@ export function Popover({ trigger, title, label, children, id, placement = "bott
   const element = useRef<HTMLDivElement>(null);
   // The portal target exists only in the browser, after the first render.
   const [host, setHost] = useState<Element | null>(null);
-  useEffect(() => { attachStrataPopovers(); setHost(container ?? document.body); }, [container]);
+  useEffect(() => { setHost(container ?? document.body); return attachStrataPopovers(); }, [container]);
   const report = useRef(onOpenChange);
   report.current = onOpenChange;
   useEffect(() => {

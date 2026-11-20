@@ -8,8 +8,9 @@
  * default) and `label` (its accessible name); inside it the pads are one tab stop and the arrow keys move between them (the grid
  * pattern, `attachStrataPads`).
  */
-import { defineComponent, h, onMounted, onUpdated, ref, type PropType } from "vue";
+import { defineComponent, h, ref, type PropType } from "vue";
 import { attachStrataPads, type PadVelocity } from "../dom/pad.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import type { StrataLampColour } from "../shared/lamp.ts";
 import { gridStyle, padMarkup } from "../shared/pad.ts";
 import { classes, strataAttributes, strataProps } from "./shared.ts";
@@ -37,8 +38,7 @@ export const Pad = defineComponent({
     const own = ref(props.defaultPressed), button = ref<HTMLButtonElement | null>(null);
     expose({ button });
     // A pad is held down while it is pressed, reports its velocity, plays its feedback and runs the grid keys (`dom/pad.ts`), once per document.
-    onMounted(() => attachStrataPads());
-    onUpdated(() => attachStrataPads());
+    useStrataDelegates(() => [attachStrataPads], { updated: true });
     const listen = (event: Event) => { const { velocity, source } = (event as CustomEvent<PadVelocity>).detail; emit("velocity", velocity, source); };
     return () => {
       const current = props.pressed ?? own.value;
@@ -75,7 +75,7 @@ export const PadGrid = defineComponent({
     ...strataProps,
   },
   setup(props, { slots }) {
-    onMounted(() => attachStrataPads());
+    useStrataDelegates(() => [attachStrataPads]);
     return () => h("div", { class: classes("ug-pad-grid"), role: "group", "aria-label": props.label, ...strataAttributes(props), style: gridStyle("pad", props.columns) }, slots.default?.());
   },
 });

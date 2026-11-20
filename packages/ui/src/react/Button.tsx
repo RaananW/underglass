@@ -47,7 +47,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 ) {
   const push = buttonPushForm(form);
   // A push button is held down while it is pressed and plays its feedback (`dom/push-button.ts`), once per document.
-  useEffect(() => { if (push) attachStrataPushButtons(); }, [push]);
+  useEffect(() => (push ? attachStrataPushButtons() : undefined), [push]);
   const content = (
     <>
       {icon !== undefined && <span className="ug-button__icon" aria-hidden="true">{icon}</span>}
@@ -122,7 +122,7 @@ export const ToggleButton = forwardRef<HTMLButtonElement, ToggleButtonProps>(fun
   const [own, setOwn] = useState(defaultPressed);
   const current = pressed ?? own;
   const push = togglePushForm(form);
-  useEffect(() => { if (push) attachStrataPushButtons(); }, [push]);
+  useEffect(() => (push ? attachStrataPushButtons() : undefined), [push]);
   const label = <span className="ug-toggle-button__label">{children}</span>;
   return (
     <button

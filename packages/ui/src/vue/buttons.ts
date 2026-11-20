@@ -3,8 +3,9 @@
  * `toggle-button.md`, `button-group.md`, `link.md`). Attributes and listeners fall through to the native element.
  * `aria-disabled` blocks activation and keeps the control focusable.
  */
-import { defineComponent, h, onMounted, onUpdated, ref, type PropType, type VNode } from "vue";
+import { defineComponent, h, ref, type PropType, type VNode } from "vue";
 import { attachStrataPushButtons } from "../dom/push-button.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { buttonPushForm, pushMarkup, togglePushForm, type StrataPushForm } from "../shared/push-button.ts";
 import type { StrataLampColour } from "../shared/lamp.ts";
 import { classes, strataAttributes, strataProps } from "./shared.ts";
@@ -38,8 +39,7 @@ export const Button = defineComponent({
   },
   setup(props, { attrs, slots }) {
     // A push button is held down while it is pressed and plays its feedback (`dom/push-button.ts`), once per document.
-    onMounted(() => { if (buttonPushForm(props.form)) attachStrataPushButtons(); });
-    onUpdated(() => { if (buttonPushForm(props.form)) attachStrataPushButtons(); });
+    useStrataDelegates(() => [buttonPushForm(props.form) && attachStrataPushButtons], { updated: true });
     return () => {
       const push = buttonPushForm(props.form);
       const content = [
@@ -95,8 +95,7 @@ export const ToggleButton = defineComponent({
   emits: { "update:pressed": (pressed: boolean) => typeof pressed === "boolean" },
   setup(props, { attrs, slots, emit }) {
     const own = ref(props.defaultPressed);
-    onMounted(() => { if (togglePushForm(props.form)) attachStrataPushButtons(); });
-    onUpdated(() => { if (togglePushForm(props.form)) attachStrataPushButtons(); });
+    useStrataDelegates(() => [togglePushForm(props.form) && attachStrataPushButtons], { updated: true });
     return () => {
       const current = props.pressed ?? own.value;
       const push = togglePushForm(props.form);

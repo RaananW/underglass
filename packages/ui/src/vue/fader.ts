@@ -6,8 +6,9 @@
  * the double-click reset are `attachStrataFaders` from `@underglass/ui/dom`, attached once when a fader mounts. Use
  * `v-model`, or `defaultValue` uncontrolled. Field-aware, as Slider is.
  */
-import { defineComponent, h, onMounted, ref, useId, type PropType } from "vue";
+import { defineComponent, h, ref, useId, type PropType } from "vue";
 import { attachStrataFaders } from "../dom/fader.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { faderModel, type FaderMark, type FaderOrientation } from "../shared/fader.ts";
 import { strataAttributes, strataProps, useFieldControl } from "./shared.ts";
 
@@ -53,7 +54,7 @@ export const Fader = defineComponent({
     const initial = props.modelValue ?? props.defaultValue ?? props.min;
     const root = ref<HTMLElement>(), input = ref<HTMLInputElement>();
     expose({ root, input });
-    onMounted(() => attachStrataFaders());
+    useStrataDelegates(() => [attachStrataFaders]);
     return () => {
       const current = props.modelValue ?? own.value;
       const model = faderModel({ value: current, min: props.min, max: props.max, step: props.step, detents: props.detents, travel: props.travel,

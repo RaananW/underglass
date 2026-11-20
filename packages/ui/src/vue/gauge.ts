@@ -5,8 +5,9 @@
  * ProgressBar. Attributes and listeners (`class` and `style` included) fall through to the `.ug-meter.ug-gauge` root; the
  * component exposes `root` and `meter`. The needle follows the value on `spring.gauge`.
  */
-import { defineComponent, onMounted, ref, useId } from "vue";
+import { defineComponent, ref, useId } from "vue";
 import { attachStrataMeters } from "../dom/meter.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { meterProps, renderMeter } from "./meter.ts";
 
 export const Gauge = defineComponent({
@@ -16,7 +17,7 @@ export const Gauge = defineComponent({
     const generated = (useId() ?? "").replace(/[^a-zA-Z0-9_-]/g, "");
     const root = ref<HTMLElement>(), meter = ref<HTMLMeterElement>();
     expose({ root, meter });
-    onMounted(() => attachStrataMeters());
+    useStrataDelegates(() => [attachStrataMeters]);
     return () => renderMeter(props, "dial", generated, { root, meter });
   },
 });

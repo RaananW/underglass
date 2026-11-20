@@ -6,6 +6,7 @@
  */
 import { cloneElement, useEffect, useId, useState, version, type ReactElement, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { combineStrataDisposers } from "../dom/delegate.ts";
 import { attachStrataMenus } from "../dom/menu.ts";
 import { attachStrataPopovers } from "../dom/popover.ts";
 import { classes } from "./shared.ts";
@@ -35,7 +36,7 @@ export function Menu({ trigger, label, items, id, placement = "bottom", containe
   const menuId = id ?? `menu-${generated}`;
   // The portal target exists only in the browser, after the first render.
   const [host, setHost] = useState<Element | null>(null);
-  useEffect(() => { attachStrataMenus(); attachStrataPopovers(); setHost(container ?? document.body); }, [container]);
+  useEffect(() => { setHost(container ?? document.body); return combineStrataDisposers(attachStrataMenus(), attachStrataPopovers()); }, [container]);
   const attributes = { className: classes("ug-menu", className), "data-strata-face": "raised", id: menuId, popover: "", role: "menu", "aria-label": label,
     "data-strata-placement": placement === "top" ? "top" : undefined };
   return (

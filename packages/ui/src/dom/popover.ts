@@ -7,9 +7,9 @@
  * (`attachStrataPopovers`); `attachStrata` and the React and Vue bindings call it.
  */
 
-const gap = 4, margin = 4;
-const attached = new WeakSet<Document>();
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
 
+const gap = 4, margin = 4;
 /** The button that opened `popover`: the source of its toggle, or the first `[popovertarget]` naming it. */
 function invokerOf(popover: HTMLElement): HTMLElement | null {
   return popover.ownerDocument.querySelector<HTMLElement>(`[popovertarget="${CSS.escape(popover.id)}"]`);
@@ -29,11 +29,13 @@ export function placeStrataPopover(popover: HTMLElement, invoker: HTMLElement): 
 }
 
 /** Attaches popover placement to `doc` once; later calls do nothing. */
-export function attachStrataPopovers(doc: Document = document): void {
-  if (attached.has(doc)) return;
-  attached.add(doc);
+export function attachStrataPopovers(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installPopovers);
+}
+
+function installPopovers(doc: Document, scope: StrataDelegateScope): void {
   const scripted = new Map<HTMLElement, HTMLElement>();
-  doc.addEventListener("toggle", event => {
+  scope.listen(doc, "toggle", event => {
     const popover = event.target as HTMLElement;
     if (!popover.matches?.(".ug-popover, .ug-menu")) return;
     if ((event as ToggleEvent).newState !== "open") { scripted.delete(popover); return; }
@@ -42,6 +44,10 @@ export function attachStrataPopovers(doc: Document = document): void {
     else { popover.removeAttribute("data-strata-anchor"); popover.style.removeProperty("top"); popover.style.removeProperty("left"); }
   }, true);
   const follow = () => { for (const [popover, invoker] of scripted) if (popover.matches(":popover-open")) placeStrataPopover(popover, invoker); };
-  doc.defaultView?.addEventListener("scroll", follow, { capture: true, passive: true });
-  doc.defaultView?.addEventListener("resize", follow);
+  const view = doc.defaultView;
+  if (view) {
+    scope.listen(view, "scroll", follow, { capture: true, passive: true });
+    scope.listen(view, "resize", follow);
+  }
+  scope.onRelease(() => scripted.clear());
 }

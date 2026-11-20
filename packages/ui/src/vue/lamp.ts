@@ -6,8 +6,9 @@
  * the opt-in feedback are `attachStrataLamps` from `@underglass/ui/dom`, attached once when a lamp mounts. The label
  * must not contain "on" or "off".
  */
-import { defineComponent, h, mergeProps, onMounted, ref, type PropType } from "vue";
+import { defineComponent, h, mergeProps, ref, type PropType } from "vue";
 import { attachStrataLamps } from "../dom/lamp.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { lampMarkup, type StrataLampColour } from "../shared/lamp.ts";
 import { classes, splitAttrs, strataAttributes, strataProps, useFieldControl } from "./shared.ts";
 
@@ -31,7 +32,7 @@ export const Lamp = defineComponent({
     const field = useFieldControl();
     const input = ref<HTMLInputElement | HTMLButtonElement | null>(null);
     expose({ input });
-    onMounted(() => attachStrataLamps());
+    useStrataDelegates(() => [attachStrataLamps]);
     return () => {
       const parts = [
         h("span", { class: "ug-lamp__object", "aria-hidden": "true" }, lampMarkup.map(part => h("span", { class: part.className, ...(part.face ? { "data-strata-face": part.face } : {}) }))),

@@ -20,6 +20,7 @@
  * the input has `data-strata-unit`, its `aria-valuetext` follow the value, and a detented fader's carriage passing a
  * detent plays `tick` through `strataFeedback` (sound and haptics, both off unless the page or scope turns them on).
  */
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
 import { faderDefaults, faderFraction, faderGeometry, faderNotch, faderSnap, faderValueAt, faderValueText, type FaderRange } from "../shared/fader.ts";
 import { listenForStrataFeedback, strataFeedback } from "./feedback.ts";
 
@@ -77,17 +78,17 @@ function snapOf(root: Element): number {
 
 interface Press { input: HTMLInputElement; x: number; y: number; before: string }
 
-const attached = new WeakSet<Document>();
-
 /**
  * Runs every `.ug-fader` in `doc`, present and future, through delegated listeners (one of them the blocking
  * document-level wheel listener), once per document. `attachStrata` calls it; the React and Vue bindings call it when
  * a fader mounts.
  */
-export function attachStrataFaders(doc: Document = document): void {
-  if (attached.has(doc)) return;
-  attached.add(doc);
-  listenForStrataFeedback(doc);
+export function attachStrataFaders(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installFaders);
+}
+
+function installFaders(doc: Document, scope: StrataDelegateScope): void {
+  scope.onRelease(listenForStrataFeedback(doc));
   const presses = new Map<number, Press>();
   const faderInput = (target: EventTarget | null) => {
     const input = (target as Element | null)?.closest?.(faderInputs);
@@ -98,11 +99,11 @@ export function attachStrataFaders(doc: Document = document): void {
   // of a printed mark it sets exactly the mark's value, and on the thumb's margin round the carriage (where the
   // browser starts a drag rather than a track click) it sets the value there, as a track click does. A tap on the
   // carriage itself changes nothing.
-  doc.addEventListener("pointerdown", event => {
+  scope.listen(doc, "pointerdown", event => {
     const input = faderInput(event.target);
     if (input && event.button === 0 && event.isPrimary) presses.set(event.pointerId, { input, x: event.clientX, y: event.clientY, before: input.value });
   });
-  doc.addEventListener("pointerup", event => {
+  scope.listen(doc, "pointerup", event => {
     const press = presses.get(event.pointerId);
     presses.delete(event.pointerId);
     const root = press?.input.closest(".ug-fader");
@@ -123,16 +124,16 @@ export function attachStrataFaders(doc: Document = document): void {
     // The browser fires its own `change` on release; a snap is one more change, after it.
     if (value !== undefined && commit(press.input, value)) finish(press.input);
   });
-  doc.addEventListener("pointercancel", event => { presses.delete(event.pointerId); });
+  scope.listen(doc, "pointercancel", event => { presses.delete(event.pointerId); });
 
-  doc.addEventListener("dblclick", event => {
+  scope.listen(doc, "dblclick", event => {
     const input = faderInput(event.target);
     if (input && commit(input, resetOf(input))) finish(input);
   });
 
   // The wheel: notches up (or right) raise the value. Fine-grained wheels (touchpads) add up to a notch before stepping.
   let wheelInput: HTMLInputElement | undefined, wheelSum = 0, wheelTime = 0;
-  doc.addEventListener("wheel", event => {
+  scope.listen(doc, "wheel", event => {
     if (event.ctrlKey) return;
     const under = doc.elementFromPoint(event.clientX, event.clientY);
     const input = faderInput(under?.closest(".ug-fader__track")?.querySelector(faderInputs) ?? null);
@@ -151,7 +152,7 @@ export function attachStrataFaders(doc: Document = document): void {
 
   // Keys, drags, track clicks, the wheel and the reset all end in an `input` event: the carriage follows the value. In
   // the capture phase, so the page's own listeners already see the new value text.
-  doc.addEventListener("input", event => {
+  scope.listen(doc, "input", event => {
     const input = (event.target as Element | null)?.closest?.(faderInputs);
     if (!(input instanceof HTMLInputElement)) return;
     // A detented carriage passing a detent ticks (feedback, off by default): the carriage's last place, read before it

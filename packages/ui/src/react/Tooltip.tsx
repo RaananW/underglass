@@ -27,7 +27,7 @@ export function Tooltip({ content, children, id, placement = "top", container, c
   const tipId = id ?? `tooltip-${generated}`;
   // The portal target exists only in the browser, after the first render.
   const [host, setHost] = useState<Element | null>(null);
-  useEffect(() => { attachStrataTooltips(); setHost(container ?? document.body); }, [container]);
+  useEffect(() => { setHost(container ?? document.body); return attachStrataTooltips(); }, [container]);
   const describedBy = [children.props["aria-describedby"], tipId].filter(Boolean).join(" ");
   return (
     <>

@@ -12,12 +12,11 @@
  * The held look of the button (the ring lit, the cap down) is the PushButton's own behaviour (`attachStrataPushButtons`, which this attaches).
  * Every listener is delegated.
  */
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
 import { selectStepIndex } from "../shared/select-forms.ts";
 import { attachStrataPushButtons } from "./push-button.ts";
 
 const steps = ".ug-select-display__step";
-const attached = new WeakSet<Document>();
-
 /** The select a step button steps, in its display's root. */
 const selectOf = (button: Element) => button.closest(".ug-select-display")?.querySelector<HTMLSelectElement>(".ug-display__text");
 
@@ -36,13 +35,15 @@ export function stepStrataSelect(select: HTMLSelectElement, direction: 1 | -1): 
  * Runs every `.ug-select-display__step` in `doc`, present and future, through delegated listeners, once per document. `attachStrata`
  * calls it; the React and Vue bindings call it when a display Select mounts.
  */
-export function attachStrataSelectDisplays(doc: Document = document): void {
-  if (attached.has(doc)) return;
-  attached.add(doc);
-  attachStrataPushButtons(doc);
+export function attachStrataSelectDisplays(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installSelectDisplays);
+}
+
+function installSelectDisplays(doc: Document, scope: StrataDelegateScope): void {
+  scope.onRelease(attachStrataPushButtons(doc));
   // Cancelled, so the press does not move the focus off the select (or onto the button, which is not in the tab order).
-  doc.addEventListener("mousedown", event => { if ((event.target as Element | null)?.closest?.(steps)) event.preventDefault(); });
-  doc.addEventListener("click", event => {
+  scope.listen(doc, "mousedown", event => { if ((event.target as Element | null)?.closest?.(steps)) event.preventDefault(); });
+  scope.listen(doc, "click", event => {
     const button = (event.target as Element | null)?.closest?.<HTMLButtonElement>(steps);
     const select = button && selectOf(button);
     if (!button || !select || button.disabled || event.defaultPrevented) return;

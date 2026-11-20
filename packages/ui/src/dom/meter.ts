@@ -16,6 +16,7 @@
  * as parts on uniforms, so a live value never recaptures its layer; these variables then feed only the CSS presentation.
  * One observer and no listener on the native event path: nothing is blocked or changed.
  */
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
 import { advancePeak, meterBounds, meterFraction, meterValueText, peakDefaults, peakIndex, segmentZones, type PeakState, type PeakTokens } from "../shared/meter.ts";
 
 const roots = ".ug-meter";
@@ -133,12 +134,12 @@ function holdPeak(root: HTMLElement, fraction: number, count: number) {
   step(performance.now());
 }
 
-const attached = new WeakSet<Document>();
-
 /** Runs every `.ug-meter` (meters and gauges) in `doc`, present and future, through one observer, once per document. `attachStrata` calls it. */
-export function attachStrataMeters(doc: Document = document): void {
-  if (attached.has(doc)) return;
-  attached.add(doc);
+export function attachStrataMeters(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installMeters);
+}
+
+function installMeters(doc: Document, scope: StrataDelegateScope): void {
   const all = (root: ParentNode) => root.querySelectorAll<HTMLMeterElement>(`${roots} meter.ug-meter__native`);
   const syncAll = (root: ParentNode) => { for (const native of all(root)) syncStrataMeter(native); };
   syncAll(doc);
@@ -151,4 +152,5 @@ export function attachStrataMeters(doc: Document = document): void {
     }
   });
   observer.observe(doc.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: watched });
+  scope.onRelease(() => observer.disconnect());
 }

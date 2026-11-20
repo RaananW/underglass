@@ -12,6 +12,8 @@ it shows, and binding tests compare against it.
 native attributes (`:hover`, `:active`, `:focus-visible`, `:checked`, `:disabled`, `aria-invalid`,
 `aria-busy`, `aria-pressed`), never from state classes.
 
+**Behaviour delegates** (`attachStrata` and the `attachStrataFaders`, `attachStrataKnobs`, `attachStrataMenus`... functions of `@underglass/ui/dom`) listen on the document, once per document, however many controls use them. Each returns a disposer, reference-counted per document: the first attach adds the listeners, and the last disposer for that document removes them (the blocking document-level `wheel` listeners of the Fader, Knob, Jog wheel and Rotary selector included), releases any pointer capture or held press, hides an open tooltip and disconnects the observers. A disposer is idempotent: calling it twice releases one reference. The React and Vue components attach on mount and call the disposer on unmount, so a page with no such control mounted has none of the listeners; an Astro page attaches once for the life of the page and never disposes. `attachStrataFeedback` is counted the same way: its handle's `detach` releases the handle's reference.
+
 **Strata attributes** use the `data-strata-` prefix:
 
 | Attribute | On | Meaning |

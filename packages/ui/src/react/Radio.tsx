@@ -104,8 +104,8 @@ export const RadioGroup = forwardRef<HTMLFieldSetElement, RadioGroupProps>(funct
   const hasError = error !== undefined && error !== null && error !== false;
   const bank = drawn === "bank" ? "bank" : undefined, selector = drawn === "selector", owner = radioOwner(form);
   // A bank's keys are held down while they are pressed and play their feedback (`dom/push-button.ts`), once per document; a selector's dial has its own behaviour.
-  useEffect(() => { if (bank) attachStrataPushButtons(); }, [bank]);
-  useEffect(() => { if (selector) attachStrataRotarySelectors(); }, [selector]);
+  useEffect(() => (bank ? attachStrataPushButtons() : undefined), [bank]);
+  useEffect(() => (selector ? attachStrataRotarySelectors() : undefined), [selector]);
   const current = value ?? own;
   const model = selector ? radioSelectorModel(options!, current, sweep) : undefined;
   const describedBy = [help ? helpId : undefined, hasError ? errorId : undefined].filter(Boolean).join(" ") || undefined;

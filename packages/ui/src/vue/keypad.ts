@@ -7,8 +7,9 @@
  * (`value`, `name`, `disabled`) and listeners fall through to the native button. A `disabled` keypad disables every key. The keys are
  * one tab stop and the arrow keys move between them (the grid pattern, `attachStrataKeypads`).
  */
-import { defineComponent, h, onMounted, onUpdated, type PropType } from "vue";
+import { defineComponent, h, type PropType } from "vue";
 import { attachStrataKeypads } from "../dom/keypad.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { gridStyle } from "../shared/pad.ts";
 import { classes, strataAttributes, strataProps } from "./shared.ts";
 
@@ -25,7 +26,7 @@ export const Keypad = defineComponent({
     ...strataProps,
   },
   setup(props, { attrs, slots }) {
-    onMounted(() => attachStrataKeypads());
+    useStrataDelegates(() => [attachStrataKeypads]);
     return () => {
       const { class: className, style, ...rest } = attrs;
       const columns = gridStyle("keypad", props.columns);
@@ -47,8 +48,7 @@ export const KeypadKey = defineComponent({
     ...strataProps,
   },
   setup(props, { slots }) {
-    onMounted(() => attachStrataKeypads());
-    onUpdated(() => attachStrataKeypads());
+    useStrataDelegates(() => [attachStrataKeypads], { updated: true });
     return () => h("button", { type: props.type, class: "ug-keypad__key", ...strataAttributes(props) }, [
       h("span", { class: "ug-keypad__cap", "data-strata-face": "raised" }, [
         h("span", { class: "ug-keypad__print" }, slots.default?.()),

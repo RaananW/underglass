@@ -45,7 +45,7 @@ export const SegmentedControl = forwardRef<HTMLFieldSetElement, SegmentedControl
   const groupName = name ?? `segmented-${generated}`;
   const latching = latchForm(form), owner = nativeForm(form, "latching");
   // A latching key is held down while it is pressed and plays its feedback (`dom/push-button.ts`), once per document.
-  useEffect(() => { if (latching) attachStrataPushButtons(); }, [latching]);
+  useEffect(() => (latching ? attachStrataPushButtons() : undefined), [latching]);
   return (
     <fieldset ref={ref} className={classes("ug-segmented", className)} {...strataAttributes({ size, material, level })} {...(latching ? { "data-strata-form": latching } : {})} {...(owner !== undefined ? { form: owner } : {})} {...rest}>
       <legend className={classes("ug-segmented__legend", hideLabel && "ug-segmented__legend--hidden")}>{label}</legend>

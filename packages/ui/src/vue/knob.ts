@@ -4,8 +4,9 @@
  * exposes `root` and `input`. The round pointer behaviour is `attachStrataKnobs` from `@underglass/ui/dom`, attached
  * once when a knob mounts; keys are native. Use `v-model`, or `defaultValue` uncontrolled. Field-aware, as Slider is.
  */
-import { defineComponent, h, onMounted, ref, useId, type PropType } from "vue";
+import { defineComponent, h, ref, useId, type PropType } from "vue";
 import { attachStrataKnobs } from "../dom/knob.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { knobModel, type KnobMark } from "../shared/knob.ts";
 import { strataAttributes, strataProps, useFieldControl } from "./shared.ts";
 
@@ -49,7 +50,7 @@ export const Knob = defineComponent({
     const initial = props.modelValue ?? props.defaultValue ?? props.min;
     const root = ref<HTMLElement>(), input = ref<HTMLInputElement>();
     expose({ root, input });
-    onMounted(() => attachStrataKnobs());
+    useStrataDelegates(() => [attachStrataKnobs]);
     return () => {
       const current = props.modelValue ?? own.value;
       const model = knobModel({ value: current, min: props.min, max: props.max, step: props.step, detents: props.detents, sweep: props.sweep, marks: props.marks, unit: props.unit, format: props.format });

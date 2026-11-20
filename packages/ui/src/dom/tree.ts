@@ -4,6 +4,8 @@
  * markup for plain HTML and Astro (through `attachStrata`), while the React and Vue bindings apply it to their state.
  */
 
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
+
 const item = "[role='treeitem']";
 
 /** The tree's items that are shown: those with no closed parent item. */
@@ -64,15 +66,15 @@ export function strataTreeAction(entry: HTMLElement, key: string): StrataTreeAct
   }
 }
 
-const attached = new WeakSet<Document>();
-
 /**
  * Runs every `.ug-tree` in `doc` from its markup, once: keys and clicks move the tab stop, set `aria-expanded` and
  * `aria-selected`, and dispatch `strata-expand` (`detail.open`) and `strata-select` from the item.
  */
-export function attachStrataTrees(doc: Document = document): void {
-  if (attached.has(doc)) return;
-  attached.add(doc);
+export function attachStrataTrees(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installTrees);
+}
+
+function installTrees(doc: Document, scope: StrataDelegateScope): void {
   const apply = (action: StrataTreeAction) => {
     if (action.expand) {
       action.expand.item.setAttribute("aria-expanded", String(action.expand.open));
@@ -86,7 +88,7 @@ export function attachStrataTrees(doc: Document = document): void {
     const focus = action.focus ?? action.select;
     if (focus) { rovingStrataTree(focus.closest("[role='tree']")!, focus); focus.focus(); }
   };
-  doc.addEventListener("keydown", event => {
+  scope.listen(doc, "keydown", event => {
     const entry = (event.target as Element | null)?.closest?.<HTMLElement>(`.ug-tree ${item}`);
     if (!entry || event.target !== entry || event.altKey || event.ctrlKey || event.metaKey) return;
     const action = strataTreeAction(entry, event.key);
@@ -94,7 +96,7 @@ export function attachStrataTrees(doc: Document = document): void {
     event.preventDefault();
     apply(action);
   });
-  doc.addEventListener("click", event => {
+  scope.listen(doc, "click", event => {
     const target = event.target as Element | null;
     const row = target?.closest?.(".ug-tree .ug-tree__row");
     const entry = row?.parentElement;
@@ -103,7 +105,7 @@ export function attachStrataTrees(doc: Document = document): void {
     else apply({ select: entry });
   });
   // A tree's first tab stop, before any key: the selected item, or the first.
-  doc.addEventListener("focusin", event => {
+  scope.listen(doc, "focusin", event => {
     const tree = (event.target as Element | null)?.closest?.(".ug-tree");
     if (tree && !tree.querySelector(`${item}[tabindex='0']`)) { const stop = strataTreeTabStop(tree); if (stop) rovingStrataTree(tree, stop); }
   });
