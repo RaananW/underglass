@@ -1,5 +1,11 @@
 # @underglass/ui
 
+## 0.5.0
+
+### Patch Changes
+
+- 55ffafc: The `attachStrata*` document delegates (`attachStrataFaders`, `attachStrataKnobs`, `attachStrataMenus`, `attachStrataKeypads`, `attachStrataHeldButtons` and the rest of `@underglass/ui/dom`) now return a disposer where they returned nothing, so existing calls keep working. Attaching is reference-counted per document: the first attach adds the listeners, and the last disposer for that document removes them, together with the observers, pending tooltip timers, held presses and pointer captures the delegate was keeping. A disposer called twice releases one reference. The React and Vue components now call the disposer when they unmount, so the blocking `wheel` listener of the Fader, Knob, Jog wheel and Rotary selector, which ran `elementFromPoint` on every wheel event for the life of the page, is gone once the last such control has unmounted, and comes back with the next one. `attachStrata()` releases its delegates in the function it returns, and `attachStrataFeedback`'s `detach` gives up the handle's hold on the gesture listeners. The Astro components still attach once for the life of the page. `strataFeedback` on its own no longer installs the gesture listeners as a side effect; attach feedback, or any control delegate, first.
+
 ## 0.4.1
 
 ### Patch Changes

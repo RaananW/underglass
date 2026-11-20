@@ -1,5 +1,0 @@
----
-"@underglass/react": patch
----
-
-With React 19, a first render that throws now makes `mountCanvasApp` throw without `hydrate` too, as it already did when hydrating and as it did with React 18. Before, React 19 only reported the error (as an uncaught error on the page), and the mount returned a working controller over an empty root, with the runtime's observers and listeners attached. Now the root is unmounted, the container removed and the runtime released before the error reaches the caller, so the same hosts can take another mount. An error boundary in the application that catches the error still leaves an ordinary mount, and errors after the mount are reported as React does by default. A `createRoot` passed to `mountCanvasApp` keeps React's own behaviour, as a passed `hydrateRoot` already did. `mountWorkerCanvasApp` (experimental) throws the same way: with React 19 it used to return a controller over an empty root, and with React 18 it threw but left the controller's observers and listeners to an asynchronous disposal. Now they are released before the error reaches the caller, also when `createRoot` itself throws.
