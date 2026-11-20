@@ -11,7 +11,7 @@
 import { createCanvasHosts, mountCanvasApp, type CanvasStatus } from "@underglass/react";
 import { detectSupport, explain } from "../support";
 import { createDeck, type Deck } from "./deck";
-import { ids, markRail, note } from "./flow";
+import { ids, markRail, note, placeRail } from "./flow";
 import { Stage } from "./page";
 import { homeTrack } from "./track";
 
@@ -44,7 +44,7 @@ const deck = driver = createDeck({ controller, ids, track: $("track"), onChange(
   const label = $("deck-change");
   label.hidden = name === null;
   if (name !== null) label.textContent = name;
-} });
+}, onPlace: placeRail });
 
 const support = detectSupport();
 /** Why GPU presentation is not on, in a sentence, or an empty string. */

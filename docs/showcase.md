@@ -137,6 +137,17 @@ The header, the side scale and the footer are static markup outside the root.
     end of it is a rest band (14% of a window) where one section is alone on stage and
     interactive; between the bands both sections are on stage and the driver runs the
     change between them. With reduced motion every change is a fade.
+  - The stage follows the scroll position, but runs a change in no less than 0.52 s, so
+    a fast scroll (a trackpad's fling) still shows each change it passes and the stage
+    catches up when the scroll stops. A stage at rest that is two sections or more
+    behind the scroll jumps to it instead, with one change, as the paging keys do.
+  - A scroll of the visitor's (wheel, trackpad, finger, scrolling key or scrollbar)
+    that stops part way through a change, outside the rest bands, **settles**: after
+    0.38 s without scrolling the page scrolls on to the next section's rest, or back
+    where the change had barely begun (under 30% of it in the direction of travel). So
+    the page always comes to rest on a section that takes input. A scroll made by a
+    script does not settle. On the side scale a cursor shows which: lit on the section
+    at rest, hollow and moving between the marks while the stage changes.
   - The track is as long as the sections' pans and the changes together, which is the
     length of the flow. The driver measures it (parked sections are laid out for the
     measurement, with nothing painted meanwhile) and sets it as `--track`.
@@ -320,7 +331,9 @@ stage, the captures so far and the runtime's work per frame. Where the browser h
 APIs the deck starts by itself; a visitor who switches it off stays in the flow for
 the rest of the session (`sessionStorage`, `underglass-deck`).
 
-Not built yet: scroll snapping. In the
+Not built: CSS scroll snapping. Tried with `mandatory` snapping and
+`scroll-snap-stop: always`, the browser animated each change in one quick snap, so the
+change could hardly be seen; the driver's pacing and settling above replaced it. In the
 deck, the browser's find-in-page can match text in a parked section, which is not
 painted.
 

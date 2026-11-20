@@ -124,7 +124,13 @@ code { font-family: var(--mono); font-size: .92em; }
   /* The name appears beside the number, over the page, when a mark is pointed at. */
   .rail a:hover, .rail a:focus-visible { z-index: 1; width: max-content; padding-right: 14px; background: var(--ground); }
   .rail a:hover::after, .rail a:focus-visible::after { display: none; }
+  /* The cursor: lit on the mark of the section at rest, which takes input; hollow while the stage changes. */
+  html.deck .rail-cursor { display: block; position: absolute; top: -4px; right: 27px; width: 8px; height: 8px; border: 1.5px solid var(--signal);
+    border-radius: 50%; background: var(--signal); box-shadow: 0 0 0 4px var(--signal-wash), 0 0 12px rgb(255 90 54 / 60%); pointer-events: none;
+    will-change: transform; transition: background-color .15s, box-shadow .15s; }
+  html.deck .rail-cursor[data-state="moving"] { background: transparent; box-shadow: none; }
 }
+.rail-cursor { display: none; }
 .bottom { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; padding: 32px var(--gutter); padding-left: calc(var(--gutter) + var(--rail));
   border-top: 1px solid var(--rule); color: var(--dim); font-size: 14px; }
 .bottom span { display: inline-flex; align-items: center; gap: 12px; }

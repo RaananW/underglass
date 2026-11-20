@@ -215,6 +215,8 @@ export function Backdrop() {
 export function Rail() {
   return <nav className="rail" aria-label="Sections">
     <ol>{sections.map((section, index) => <li key={section.id}><a href={`#${section.id}`}><span>{number(index)}</span>{section.rail}</a></li>)}</ol>
+    {/* In the deck: lit on the section at rest, which is live; hollow and moving while the stage changes (`flow.ts`). */}
+    <i className="rail-cursor" aria-hidden="true" />
   </nav>;
 }
 export function Footer() {
