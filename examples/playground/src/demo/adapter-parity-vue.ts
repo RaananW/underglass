@@ -11,8 +11,14 @@
  * callback is bound to `RefCard`, whose single root `<section>` is the layer. `#component-button` swaps its colour from
  * the component's own state. `adapterParity.foreignRef()` hands a second, unbound `useSurfaceRef` callback an element
  * of an iframe's realm and returns what it threw.
+ *
+ * Enrollment errors, for the documented behaviour: `adapterParity.change(name)` makes one refused enrollment and
+ * returns where it surfaced. "duplicate" mounts a section whose ref enrolls the taken id `styled` (the ref-callback
+ * path), "fragment" mounts a component with a fragment root behind a component ref (also the ref-callback path), and
+ * "rename" changes the card's enrollment id to `styled` (the post-flush re-enrollment path). With `?handler` the app's
+ * `config.errorHandler` (set through `configure`) records each error and Vue's info string; without it, Vue rethrows.
  */
-import { defineComponent, h, ref } from "vue";
+import { defineComponent, h, nextTick, ref } from "vue";
 import { mountCanvasApp, useSurfaceRef, Surface, Box, NativeScroll, type CanvasController, type SurfaceRef } from "@underglass/vue";
 
 const colours = { red: "rgb(240, 30, 60)", blue: "rgb(20, 120, 220)", green: "rgb(20, 200, 90)", yellow: "rgb(250, 200, 20)" };
@@ -22,6 +28,20 @@ const cardColour = ref<"green" | "blue">("green");
 const untyped = (props: Record<string, unknown>) => props as object;
 // A `useSurfaceRef` callback that no template binds, for `foreignRef`.
 let spare!: SurfaceRef;
+// The refused-enrollment cases `change` can turn on, and the card's enrollment id.
+const duplicate = ref(false), fragment = ref(false), cardId = ref("component");
+// Errors the app's `config.errorHandler` received (with `?handler`), as plain data.
+const handled: { name: string; code?: string; info: string }[] = [];
+
+// A section of its own enrolled under the id the `styled` Surface already has.
+const DuplicateSection = defineComponent({
+  setup() {
+    const section = useSurfaceRef({ id: "styled" });
+    return () => h("section", { ref: section, id: "duplicate", style: { position: "absolute", left: "420px", top: "20px", width: "100px", height: "60px" } }, "Duplicate");
+  },
+});
+// A component whose root is a fragment, so it has no single root element to enroll.
+const FragmentCard = defineComponent({ setup: () => () => [h("span", "One"), h("span", "Two")] });
 
 // A component with one root element, enrolled through a ref on the component rather than on an element.
 const RefCard = defineComponent({
@@ -34,7 +54,8 @@ const RefCard = defineComponent({
 
 const App = defineComponent({
   setup() {
-    const card = useSurfaceRef({ id: "component" });
+    const card = useSurfaceRef(() => ({ id: cardId.value }));
+    const fragmentCard = useSurfaceRef({ id: "fragment" });
     spare = useSurfaceRef({ id: "spare" });
     return () => [
       h(Surface, {
@@ -46,6 +67,8 @@ const App = defineComponent({
         h("button", { id: "styled-button", type: "button", onClick: () => { boxColour.value = boxColour.value === "blue" ? "green" : "blue"; } }, "Swap"),
       ]),
       h(RefCard, { ref: card }),
+      duplicate.value ? h(DuplicateSection) : null,
+      fragment.value ? h(FragmentCard, { ref: fragmentCard }) : null,
     ];
   },
 });
@@ -64,6 +87,9 @@ const host = (id: string) => document.getElementById(id)!;
 const controller: CanvasController = mountCanvasApp({
   outputCanvas: host("output") as HTMLCanvasElement, ordinaryHost: host("ordinary"), overlayHost: host("overlay"),
   onStatus: message => { host("status").textContent = message; },
+  configure: new URLSearchParams(location.search).has("handler") ? app => {
+    app.config.errorHandler = (error, _instance, info) => { handled.push({ name: (error as Error).name, code: (error as { code?: string }).code, info }); };
+  } : undefined,
 }, App);
 
 /** What a call threw, as plain data; `undefined` when it returned. */
@@ -82,6 +108,19 @@ const probe = {
       const element = frame.contentDocument!.createElement("section");
       return { instanceOfHTMLElement: element instanceof HTMLElement, error: thrown(() => spare(element)) };
     } finally { spare(null); frame.remove(); }
+  },
+  /**
+   * Makes one refused enrollment through Vue and waits for Vue's flush. Returns the errors the app's handler received
+   * meanwhile and what the flush itself rejected with (Vue rethrows an unhandled error in development).
+   */
+  async change(name: "duplicate" | "fragment" | "rename") {
+    const before = handled.length;
+    if (name === "duplicate") duplicate.value = true;
+    else if (name === "fragment") fragment.value = true;
+    else cardId.value = "styled";
+    let flush: ReturnType<typeof thrown> = undefined;
+    try { await nextTick(); } catch (error) { flush = thrown(() => { throw error; }); }
+    return { handled: handled.slice(before), flush };
   },
 };
 declare global { interface Window { adapterParity: typeof probe } }

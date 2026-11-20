@@ -109,3 +109,28 @@ test("Vue useSurfaceRef on a component enrolls its root element under GPU, and r
   await mkdir(evidence, { recursive: true });
   await writeFile(`${evidence}/vue-component-ref.json`, JSON.stringify({ startup: startup.layers, foreign, after: { mode: after.mode, layers: after.layers } }, null, 2));
 });
+
+// A refused enrollment surfaces one way whichever path made it: Vue calls the ref callback, and the post-flush
+// re-enrollment after an `id` change, through its own error handling, so the `EnrollmentError` reaches
+// `app.config.errorHandler` (set through `configure`) when there is one, and otherwise Vue rethrows it from the flush
+// in development. Both paths run without GPU here; the error routing does not depend on the presentation.
+for (const handler of [true, false]) test(`Vue enrollment errors from a ref and from re-enrollment surface alike handler=${handler}`, async ({ page }) => {
+  const messages = watch(page);
+  await page.goto(`${developmentURL}/adapter-parity-vue.html${handler ? "?handler" : ""}`);
+  await page.waitForFunction(() => window.adapterParity);
+  const results = {};
+  for (const name of ["duplicate", "fragment", "rename"]) results[name] = await page.evaluate(name => window.adapterParity.change(name), name);
+  const expected = { duplicate: ["invalid-id", "ref function"], fragment: ["foreign-element", "ref function"], rename: ["invalid-id", "watcher callback"] };
+  for (const [name, [code, info]] of Object.entries(expected)) {
+    if (handler) expect(results[name], name).toEqual({ handled: [{ name: "EnrollmentError", code, info }] });
+    else expect(results[name], name).toMatchObject({ handled: [], flush: { name: "EnrollmentError", code } });
+  }
+  // Without a handler, Vue's development build reports each one as an unhandled error of that path (a ref error is
+  // then reported once more for the component update it was rethrown through).
+  const unhandled = messages.map(message => /Unhandled error during execution of (ref function|watcher callback)/.exec(message)?.[1]).filter(Boolean);
+  expect(unhandled).toEqual(handler ? [] : ["ref function", "ref function", "watcher callback"]);
+  // The refused enrollments changed nothing else: the two layers that were enrolled before stay, minus the renamed one.
+  expect((await state(page)).layers.map(layer => layer.id)).toEqual(["styled"]);
+  await mkdir(evidence, { recursive: true });
+  await writeFile(`${evidence}/vue-errors-handler-${handler}.json`, JSON.stringify({ results, messages }, null, 2));
+});

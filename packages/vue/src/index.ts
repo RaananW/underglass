@@ -67,7 +67,11 @@ function refElement(value: Element | ComponentPublicInstance): HTMLElement {
  * root element while enrolled). The enrollment is released when the element unmounts or
  * `id`/`decorative` change; `origin` updates in place. `options` may be a ref or getter. Throws
  * `EnrollmentError` (from the runtime) when the element is refused, including a component whose root is
- * not one element and an element of another document or realm.
+ * not one element and an element of another document or realm. Vue calls the callback, and runs the
+ * re-enrollment after an `id`/`decorative` change, inside its own error handling, so both surface the same
+ * way: through `onErrorCaptured` and `app.config.errorHandler` (set it in `configure`), and without a handler
+ * Vue rethrows the error in development and logs it in production. Called directly, the callback throws to
+ * its caller.
  */
 export function useSurfaceRef(options: MaybeRefOrGetter<EnrollmentOptions>): SurfaceRef {
   const runtime = useRuntime();
