@@ -200,8 +200,28 @@ export class CanvasRuntime {
    * pass that ran just before it in the same synchronous run, and clears the flag. Never set across a callback.
    */
   private policyVerified = false;
-  /** Counters reported in `state().metrics`: full policy passes and owned-animation source checks. */
-  private readonly checks = { policyPasses: 0, ownershipChecks: 0 };
+  /**
+   * Counters reported in `state().metrics`: full policy passes, owned-animation source checks, transient structure
+   * observations held for the frame boundary (`deferredStructure`) and draws withheld meanwhile (`heldDraws`).
+   */
+  private readonly checks = { policyPasses: 0, ownershipChecks: 0, deferredStructure: 0, heldDraws: 0 };
+  /**
+   * Transient structure seen on the GPU and not decided yet: the reason (`Detached enrolled layer`, `Zero-sized
+   * layer`) by layer id. See `observeStructure`.
+   */
+  private readonly pendingStructure = new Map<string, string>();
+  /** Set while an observation waits for the frame boundary: no GPU frame is drawn and no native geometry applied. */
+  private structureHeld = false;
+  /** A reconcile or membership update was skipped while held; the frame that decides runs it. */
+  private structureDeferredWork = false;
+  /** The frame callback that decides held observations (`requestStructureFrame`); 0 when none is pending. */
+  private structureFrame = 0;
+  /**
+   * Above 0 while one of the runtime's callbacks of the browser's rendering update runs (a frame callback, the resize
+   * observer, a resize or scroll event, the native paint): nothing else runs before that frame is presented, so a
+   * transient observation is decided there rather than held.
+   */
+  private rendering = 0;
   /** Shared RAF clock for owned animation playback and effect time; `clockTime` is the last tick's timestamp. */
   private clockFrame = 0;
   private clockTime: number | undefined;
@@ -258,7 +278,7 @@ export class CanvasRuntime {
       this.checkPolicy();
     });
     // Observes the frame, every layer, the layers' ancestors up to the root and the output canvas's ancestors.
-    this.resize = new ResizeObserver(() => {
+    this.resize = new ResizeObserver(() => this.inRendering(() => {
       if (this.stopped || !this.core) return;
       this.invalidatePolicy();
       // A non-default origin is a fraction of the layer size; ordinary DOM bakes it
@@ -267,7 +287,7 @@ export class CanvasRuntime {
         && [...this.registry.values()].some(layer => layer.origin && layer.origin !== "top-left")) this.presentation("dom");
       this.reconcile();
       this.checkPolicy();
-    });
+    }));
     try {
       // The renderer pulls everything it needs from these callbacks, so the registry stays the single
       // source of layers, size and policy. `mount` runs inside this call, before `this.core` is assigned:
@@ -296,11 +316,24 @@ export class CanvasRuntime {
         })),
         size: () => this.size(),
         nativeOrigin: () => this.ownerContentOrigin,
-        policy: () => this.rendererPolicy(),
+        policy: boundary => this.rendererPolicy(boundary),
+        // A draw withheld while a transient observation waits for the frame boundary (the frame that decides draws),
+        // or superseded once it is decided: the reconcile held meanwhile runs first and draws the current state.
+        held: () => {
+          if (this.structureHeld) {
+            this.checks.heldDraws++;
+            this.structureDeferredWork = true;
+            return true;
+          }
+          if (!this.structureDeferredWork) return false;
+          this.structureDeferredWork = false;
+          this.reconcile();
+          return true;
+        },
         // Called by the renderer when it moves the root: to the output canvas at admission ("gpu") and back
         // on recovery, disable or disposal ("dom"). DOM recovery also hands owned animations back.
         presentation: mode => {
-          if (mode === "dom") this.cancelTransitions("DOM recovery");
+          if (mode === "dom") { this.cancelTransitions("DOM recovery"); this.releaseStructure(); }
           this.cancelMotion();
           this.presentation(mode, true);
           if (mode === "gpu") this.admittedSize = this.sizeSignature();
@@ -368,26 +401,26 @@ export class CanvasRuntime {
       this.core?.invalidate();
       this.requestDraw();
     });
-    this.listen(window, "resize", () => {
+    this.listen(window, "resize", () => this.inRendering(() => {
       this.invalidatePolicy();
       this.reconcile();
-    });
+    }));
     // Structural policy is cached; these events can change its inputs without a DOM mutation.
     for (const type of ["animationstart", "animationcancel", "animationend", "transitionrun", "transitioncancel", "transitionend", "input", "focusin", "focusout"]) {
       this.listen(this.core.container, type, () => this.invalidatePolicy(), true);
     }
     // Scroll does not bubble, so both listeners capture.
-    this.listen(this.core.container, "scroll", event => { this.invalidatePolicy(); this.nativeScroll(event); }, true);
+    this.listen(this.core.container, "scroll", event => this.inRendering(() => { this.invalidatePolicy(); this.nativeScroll(event); }), true);
     // Document and external ancestor scrolling move the owner canvas and root together, so only the cached
     // owner-local projection is refreshed; captures and motion are left alone.
-    this.listen(document, "scroll", event => {
+    this.listen(document, "scroll", event => this.inRendering(() => {
       this.invalidatePolicy();
       const target = event.target;
       if (this.core?.phase() === "gpu" && (target === document
         || target === this.options.outputCanvas || target instanceof HTMLElement && this.externalAncestors.has(target))) {
         this.reconcileProjection();
       }
-    }, true);
+    }), true);
     for (const type of ["compositionstart", "compositionupdate", "compositionend"]) {
       this.listen(this.core.container, type, event => this.nativeComposition(event));
     }
@@ -498,7 +531,7 @@ export class CanvasRuntime {
   private ownerContentSize = { width: 0, height: 0 };
   /** Re-measures cached viewport geometry and redraws after document or external ancestor scrolling. */
   private reconcileProjection() {
-    if (this.stopped || this.core?.phase() !== "gpu") return;
+    if (this.stopped || this.core?.phase() !== "gpu" || this.holdStructure()) return;
     try {
       this.refreshViewportGeometry();
       this.core.draw();
@@ -688,6 +721,9 @@ export class CanvasRuntime {
    * host's `apply`, which ran the CSS provenance check and wrote `layer.transform` only (the clock and `advance` run on
    * the GPU, where `apply` writes no declaration). Nothing either check reads has changed since, so neither is
    * repeated for those layers; everything else is checked as always.
+   *
+   * A layer that is detached or zero-sized is transient structure on the GPU: `observeStructure` decides it at the frame
+   * boundary, and until then the pass returns no reason and holds (`structureHeld`), so nothing is drawn.
    */
   private policy(gpuGeometry = true, applied?: ReadonlySet<string>): string | undefined {
     this.checks.policyPasses++;
@@ -700,10 +736,13 @@ export class CanvasRuntime {
       catch (error) { return `CSS ownership validation failed: ${String(error)}`; }
     }
     const phase = this.core?.phase();
-    if (!this.structuralPolicy || this.structuralPolicy.phase !== phase) this.structuralPolicy = { phase, reason: this.structuralViolation() };
+    if (!this.structuralPolicy || this.structuralPolicy.phase !== phase) this.structuralPolicy = { phase, ...this.structuralViolation() };
     if (this.structuralPolicy.reason) return this.structuralPolicy.reason;
+    const transient = this.observeStructure(this.structuralPolicy.transient);
+    if (transient) return transient;
+    // Held: nothing is drawn or placed until the frame boundary, whose pass checks the geometry below.
     // GPU clip/extent geometry only constrains GPU presentation; ordinary DOM clips natively.
-    if (!gpuGeometry) return undefined;
+    if (!gpuGeometry || this.structureHeld) return undefined;
     const { width, height } = this.size();
     for (const layer of this.registry.values()) {
       const matrix = this.matrix(layer);
@@ -726,12 +765,26 @@ export class CanvasRuntime {
   /**
    * The renderer's `policy` callback (draws, paints, admission). Inside a draw made by `drawVerified` the first call
    * takes the verdict of the pass that ran just before that draw, in the same synchronous run; every other call is a
-   * full pass.
+   * full pass. `boundary`: the call is the native paint's, the last callback before the frame is presented, so a
+   * transient observation is decided there; when that leaves nothing pending, the work held meanwhile runs before
+   * the paint publishes.
    */
-  private rendererPolicy() {
-    if (!this.policyVerified) return this.policy();
-    this.policyVerified = false;
-    return undefined;
+  private rendererPolicy(boundary = false) {
+    if (this.policyVerified) {
+      this.policyVerified = false;
+      return undefined;
+    }
+    if (!boundary) return this.policy();
+    return this.inRendering(() => {
+      const reason = this.policy();
+      if (!reason && this.structureDeferredWork && !this.structureHeld) { this.structureDeferredWork = false; this.reconcile(); }
+      return reason;
+    });
+  }
+  /** Runs `callback` as part of the browser's rendering update (`rendering`). */
+  private inRendering<T>(callback: () => T): T {
+    this.rendering++;
+    try { return callback(); } finally { this.rendering--; }
   }
   /**
    * Draws after the caller's own policy pass found no violation, with nothing run in between: the draw's pass would
@@ -742,51 +795,154 @@ export class CanvasRuntime {
     try { this.renderer().draw(); } finally { this.policyVerified = false; }
   }
   /** Cached result of `structuralViolation()` for one renderer phase; cleared by `invalidatePolicy()`. */
-  private structuralPolicy: { phase: string | undefined; reason: string | undefined } | undefined;
+  private structuralPolicy: { phase: string | undefined; reason: string | undefined; transient: ReadonlyMap<string, string> } | undefined;
   /** Drops the cached structural policy so the next `policy()` call re-reads DOM and style. */
   private invalidatePolicy() { this.structuralPolicy = undefined; }
   /**
-   * Style- and DOM-derived checks on every layer (editable/top-layer content, effects on non-decorative
-   * content, competing animations, size, overflow, presentation declarations, stacking). Returns the first
-   * violation as the diagnosed reason, or undefined. Expensive, so `policy()` caches it.
+   * Style- and DOM-derived checks on every layer. Two kinds:
+   * - **Capability and contract** checks (editable/top-layer content, effects on non-decorative content, competing
+   *   animations, content beyond the capture bounds, presentation declarations, stacking): the first one found is the
+   *   diagnosed `reason`, decided at once.
+   * - **Transient structure** (`transientReason`: a detached or zero-sized layer), a state a framework commit passes
+   *   through: every such layer is listed in `transient` and `policy()` decides them at the frame boundary
+   *   (`observeStructure`). The checks of a detached layer stop there (it has no computed style); a zero-sized one
+   *   is checked on, so content it lets overflow is still a reason at once.
+   *
+   * Content beyond the capture bounds is a safety guard kept immediate: its native hits would land on content the
+   * capture does not hold, and no commit has been shown to pass through it for one task. `z-index` is a contract
+   * exit: the canvas paints and hit-tests layers in DOM order, and a stacking order of its own would put the hits of
+   * one layer over the pixels of another. Expensive, so `policy()` caches it.
    */
-  private structuralViolation(): string | undefined {
+  private structuralViolation(): { reason: string | undefined; transient: ReadonlyMap<string, string> } {
     const phase = this.core?.phase();
+    const transient = new Map<string, string>();
+    const violation = (reason: string) => ({ reason, transient });
     const nativeBoundary = '[contenteditable]:not([contenteditable="false" i]), dialog, [popover]';
     const sources = new Set<Animation>([...this.motions.values()].map(motion => motion.source));
     for (const layer of this.registry.values()) {
       if (layer.element.isContentEditable || layer.element.matches(nativeBoundary) || layer.element.querySelector(nativeBoundary)) {
-        return "Editable/top-layer boundaries require DOM or the explicit NativeOverlay boundary";
+        return violation("Editable/top-layer boundaries require DOM or the explicit NativeOverlay boundary");
       }
       // Transition effects hold their layer's content inert themselves and end if it becomes interactive.
       const effect = this.effects.get(layer.id);
-      if (effect && !effect.transition && !decorative(layer.element)) return `Effects are decorative/inert only: ${layer.id}; ordinary DOM required`;
+      if (effect && !effect.transition && !decorative(layer.element)) return violation(`Effects are decorative/inert only: ${layer.id}; ordinary DOM required`);
       // Descendant animations repaint native content and are captured by the paint
       // event; only animations of the boundary's own GPU-owned presentation conflict.
       if (layer.element.getAnimations().some(animation => !sources.has(animation) && animatesPresentation(animation))) {
-        return `Unowned/overlapping CSS/WAAPI animation requires explicit adapter: ${layer.id}`;
+        return violation(`Unowned/overlapping CSS/WAAPI animation requires explicit adapter: ${layer.id}`);
       }
-      if (!layer.element.isConnected) return `Detached enrolled layer: ${layer.id}`;
-      if (layer.layout.width === 0 || layer.layout.height === 0 || !layer.element.offsetWidth || !layer.element.offsetHeight) return `Zero-sized layer: ${layer.id}`;
+      const structure = this.transientReason(layer);
+      if (structure) {
+        transient.set(layer.id, structure);
+        if (!layer.element.isConnected) continue;
+      }
       const style = getComputedStyle(layer.element);
       if ((layer.element.scrollWidth > layer.element.clientWidth || layer.element.scrollHeight > layer.element.clientHeight)
         && style.overflowX === "visible" && style.overflowY === "visible") {
-        return `Content extends beyond enrolled capture bounds: ${layer.id}; ordinary DOM required`;
+        return violation(`Content extends beyond enrolled capture bounds: ${layer.id}; ordinary DOM required`);
       }
       if (layer.preserveStyles && !this.ownership.has(layer.id) && !this.transitions.has(layer.id) && phase === "dom"
         && (style.transform !== "none" || style.opacity !== "1" || style.translate !== "none" || style.rotate !== "none" || style.scale !== "none")) {
-        return `Existing presentation needs explicit animation ownership or neutral styles: ${layer.id}`;
+        return violation(`Existing presentation needs explicit animation ownership or neutral styles: ${layer.id}`);
       }
       if ((phase === "gpu" || phase === "admitting")
         && (style.transform !== "none" || style.opacity !== "1" || style.transformOrigin !== "0px 0px"
           || style.translate !== "none" || style.rotate !== "none" || style.scale !== "none")) {
-        return `Exclusive GPU presentation declarations were changed: ${layer.id}; ordinary DOM required`;
+        return violation(`Exclusive GPU presentation declarations were changed: ${layer.id}; ordinary DOM required`);
       }
       if (style.zIndex !== "auto" && style.zIndex !== "0") {
-        return "Custom stacking/clipping requires ordinary DOM";
+        return violation("Custom stacking/clipping requires ordinary DOM");
       }
     }
+    return { reason: undefined, transient };
+  }
+  /** Why a layer is transient structure (it left the document, or it or its typed layout has no area), or undefined. */
+  private transientReason(layer: LayerDefinition) {
+    if (!layer.element.isConnected) return `Detached enrolled layer: ${layer.id}`;
+    if (layer.layout.width === 0 || layer.layout.height === 0 || !layer.element.offsetWidth || !layer.element.offsetHeight) return `Zero-sized layer: ${layer.id}`;
     return undefined;
+  }
+  /**
+   * Decides transient structure (`transientReason`) on the GPU. A layer detached from the document or without area is a
+   * state a framework commit passes through: React removes an element before a passive effect releases its enrollment,
+   * a later effect gives a collapsed layer its size back, a `key` swap remounts an id. It is not a verdict at once.
+   * A check made in a task (a mutation, a commit's `update`, a membership change) records each such layer and holds
+   * (`structureHeld`): no GPU frame is drawn and no native geometry applied, and a frame callback is asked for
+   * (`requestStructureFrame`). The verdict is taken at the frame boundary: by the first check made in a callback of the
+   * browser's rendering update (`rendering`: that frame callback, any other frame callback of the runtime, the resize
+   * observer, a resize or scroll event, the native paint), where nothing can change the state before the frame is
+   * presented. A layer released by then has left membership and is forgotten; one that is still detached or
+   * zero-sized returns its reason, the same reason as before, so it falls back in the first frame after the task
+   * that made it. A hold made in a task ends at the next rendering update's frame callbacks, before its paint; one
+   * made by the page's own callback inside a rendering update (its frame callback writing the DOM) ends at that
+   * update's native paint, which core asks for with every mutation. So no frame is presented while a check holds:
+   * the canvas keeps showing the frame presented before, which is still the frame on screen, and no frame shows the
+   * undecided state.
+   *
+   * Outside the GPU phase (admission, ordinary DOM) the first reason is returned at once, as before.
+   */
+  private observeStructure(current: ReadonlyMap<string, string>): string | undefined {
+    this.structureHeld = false;
+    if (this.core?.phase() !== "gpu" || this.rendering) {
+      this.pendingStructure.clear();
+      return current.values().next().value;
+    }
+    for (const id of [...this.pendingStructure.keys()]) if (!current.has(id)) this.pendingStructure.delete(id);
+    if (!current.size) return undefined;
+    for (const [id, reason] of current) {
+      if (!this.pendingStructure.has(id)) this.checks.deferredStructure++;
+      this.pendingStructure.set(id, reason);
+    }
+    this.structureHeld = true;
+    this.requestStructureFrame();
+    return undefined;
+  }
+  /**
+   * Before native geometry is applied on the GPU (a reconcile, a membership change, a projection): checks transient
+   * structure as a policy pass would, reading only membership and size. True when the caller must not apply it now:
+   * the observation was decided (recovery has started) or is held, and then the frame that decides runs the held work.
+   */
+  private holdStructure() {
+    const current = new Map<string, string>();
+    for (const layer of this.registry.values()) {
+      const reason = this.transientReason(layer);
+      if (reason) current.set(layer.id, reason);
+    }
+    if (!current.size && !this.pendingStructure.size) { this.structureHeld = false; return false; }
+    const reason = this.observeStructure(current);
+    if (reason) { this.recover(reason); return true; }
+    if (!this.structureHeld) return false;
+    this.structureDeferredWork = true;
+    return true;
+  }
+  /**
+   * Asks for the frame callback that decides held observations: a fresh policy pass in the next rendering update,
+   * before anything of it is presented, which recovers with the reason of a layer that is still detached or
+   * zero-sized, or otherwise runs the reconcile held meanwhile (which draws the frame).
+   */
+  private requestStructureFrame() {
+    if (this.structureFrame || this.stopped) return;
+    this.resources.controllerFrames++;
+    this.structureFrame = requestAnimationFrame(this.timed(() => {
+      this.structureFrame = 0;
+      this.resources.controllerFrames--;
+      if (this.stopped || this.core?.phase() !== "gpu") return;
+      this.invalidatePolicy();
+      const reason = this.policy();
+      if (reason) { this.recover(reason); return; }
+      if (this.structureDeferredWork) { this.structureDeferredWork = false; this.reconcile(); }
+    }));
+  }
+  /** Forgets held observations and their frame (recovery, disable, disposal): ordinary DOM presents the state as it is. */
+  private releaseStructure() {
+    this.pendingStructure.clear();
+    this.structureHeld = false;
+    this.structureDeferredWork = false;
+    if (this.structureFrame) {
+      cancelAnimationFrame(this.structureFrame);
+      this.structureFrame = 0;
+      this.resources.controllerFrames--;
+    }
   }
   /** The author's own `content` attribute (null: none) of every canvas core has marked; a WeakMap, so a detached canvas is not kept alive. */
   private canvasOriginals = new WeakMap<HTMLCanvasElement, string | null>();
@@ -1091,11 +1247,11 @@ export class CanvasRuntime {
     if (this.drawFrame) return;
     this.drawAsked = now;
     this.resources.controllerFrames++;
-    this.drawFrame = requestAnimationFrame(() => {
+    this.drawFrame = requestAnimationFrame(() => this.inRendering(() => {
       this.drawFrame = 0;
       this.resources.controllerFrames--;
       if (this.drawWanted) this.drawWritten();
-    });
+    }));
   }
   /**
    * Draws what was written (`requestDraw`) and asks for the lead frame. `behind`: the draw is made as a task ends,
@@ -1134,6 +1290,10 @@ export class CanvasRuntime {
    */
   reconcile(written = false) {
     if (this.stopped || !this.core || this.core.phase() !== "gpu" && this.core.phase() !== "admitting") return;
+    // A detached or zero-sized layer on the GPU: decided now at the frame boundary, or held until it.
+    if (this.core.phase() === "gpu" && this.holdStructure()) return;
+    // This reconcile covers whatever was held before.
+    this.structureDeferredWork = false;
     try {
       this.refreshViewportGeometry();
       this.presentation("gpu");
@@ -1154,7 +1314,7 @@ export class CanvasRuntime {
    * to one microtask, so several membership changes in the same commit share it.
    */
   private reconcileMembership() {
-    if (this.stopped || this.core?.phase() !== "gpu") return;
+    if (this.stopped || this.core?.phase() !== "gpu" || this.holdStructure()) return;
     this.refreshViewportGeometry();
     this.core.reconcileGeometry();
     if (this.membershipCommitPending) return;
@@ -1244,9 +1404,10 @@ export class CanvasRuntime {
         }
         canonical(next);
         layer.transform = next;
-        const policy = this.policy();
+        // This continuation runs in the frame callback's microtasks, inside the rendering update.
+        const policy = this.inRendering(() => this.policy());
         if (policy) { await this.renderer().recover(policy); throw new Error(policy); }
-        this.drawVerified();
+        this.inRendering(() => this.drawVerified());
         ticked();
         if (progress >= 1) break;
       }
@@ -1296,7 +1457,8 @@ export class CanvasRuntime {
     await new Promise<void>(resolve => queueMicrotask(resolve));
     this.reconcileProjection();
     // The pending frame draws what was written and asks for its lead frame, which draws nothing more and ends.
-    for (let frames = 0; this.drawFrame && frames < 3; frames++) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    // A held transient observation is decided by its own frame callback, which draws or recovers.
+    for (let frames = 0; (this.drawFrame || this.structureFrame) && frames < 3; frames++) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
     await this.renderer().settle();
   }
   /** Marks one layer (or all when `id` is omitted) for recapture. */
@@ -1792,11 +1954,14 @@ export class CanvasRuntime {
       this.startClock();
     }));
   }
-  /** Wraps a frame callback so its work is reported as one `frameTickMs` sample; the frames it draws stay `frameWorkMs`. */
+  /**
+   * Wraps a frame callback so its work is reported as one `frameTickMs` sample; the frames it draws stay `frameWorkMs`.
+   * It runs as part of the rendering update (`inRendering`).
+   */
   private timed(callback: (time: number) => void) {
     return (time: number) => {
       const done = this.core?.timeTick();
-      try { callback(time); } finally { done?.(); }
+      try { this.inRendering(() => callback(time)); } finally { done?.(); }
     };
   }
   /** Convenience over `setEffects` for one ripple; `null` clears the layer's effect ownership. */
@@ -1969,9 +2134,10 @@ export class CanvasRuntime {
         const applied = new Set<string>();
         for (const [id, owner] of this.ownership) { owner.check?.(); if (owner.lease.tick(milliseconds, true)) applied.add(id); }
         this.tickRipples(milliseconds, true);
-        const policy = this.policy(true, applied);
+        // This continuation runs in the frame callback's microtasks, inside the rendering update.
+        const policy = this.inRendering(() => this.policy(true, applied));
         if (policy) { await this.disable(); throw new Error(policy); }
-        this.drawVerified();
+        this.inRendering(() => this.drawVerified());
         ticked();
       }
     } finally { this.moving = false; this.startClock(); }
@@ -2021,6 +2187,7 @@ export class CanvasRuntime {
     this.cancelReadmissionFrame();
     this.cancelTransitions("Disposed");
     this.cancelMotion();
+    this.releaseStructure();
     this.disposalRequested = true;
     try { await this.renderer().dispose(); }
     finally { this.disposalRequested = false; }

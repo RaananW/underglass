@@ -1451,6 +1451,60 @@ try {
       }
       await strataMode("after leaving");
       await strataContext.close();
+      // Instrument gallery, then the layers example in place and back. The gallery's wall is laid out by the fluid
+      // stage. The stage once took the next example's form as soon as the URL changed, while the gallery stayed on it
+      // until the next example had loaded: the wall had no height for those frames and GPU mode fell back with
+      // `Zero-sized layer: instrument-wall`. The stage's form now changes in the commit that swaps the example in.
+      const instrumentContext = await laneContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
+      const instrument = await instrumentContext.newPage();
+      instrument.on("pageerror", error => errors.push(String(error)));
+      await instrument.goto(`${url}examples/instrument`);
+      await instrument.waitForFunction(() => window.showcase && window.instrumentGallery);
+      await instrument.locator(".stage").scrollIntoViewIfNeeded();
+      const instrumentMode = async label => {
+        const current = await instrument.evaluate(() => window.showcase.state());
+        assert.equal(current.mode, lane === "native" ? "gpu" : "dom", `instrument ${label}: ${current.reason}`);
+        return current;
+      };
+      const instrumentSettle = async () => { await instrument.evaluate(() => window.showcase.controller.settle()); await instrument.waitForTimeout(250); };
+      const instrumentLayers = state => state.layers.map(layer => layer.id).filter(id => id === "instrument-wall" || id.startsWith("ig-"));
+      if (lane === "native") await autoAdmission(instrument);
+      await instrumentSettle();
+      record.instrument = { initial: await instrumentMode("opened") };
+      assert.ok(instrumentLayers(record.instrument.initial).includes("instrument-wall"), "the wall is a layer");
+      await instrument.getByLabel("Example", { exact: true }).selectOption("layers");
+      await instrument.locator("#studio-title").waitFor();
+      await instrumentSettle();
+      record.instrument.left = await instrumentMode("switched to layers");
+      assert.deepEqual(instrumentLayers(record.instrument.left), []);
+      assert.equal(await instrument.evaluate(() => document.querySelector(".stage").classList.contains("stage-fluid")), false);
+      const instrumentOutput = instrument.locator(".stage .output");
+      const instrumentSave = async text => {
+        await instrument.locator("#studio-title").fill(text);
+        const box = await instrument.locator(".stage button").filter({ hasText: /^Save postcard$/ }).boundingBox();
+        await instrument.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+        await instrument.locator("#saved-title").filter({ hasText: text }).waitFor();
+        await instrumentSettle();
+        if (lane === "native") return PNG.sync.read(await instrumentOutput.screenshot({ path: join(run, `native-instrument-left-${text[0]}.png`) }));
+      };
+      const instrumentWide = await instrumentSave("W".repeat(32)), instrumentNarrow = await instrumentSave("I".repeat(32));
+      if (lane === "native") {
+        let changed = 0;
+        for (let y = 92; y < 160; y++) for (let x = 406; x < 700; x++) {
+          const offset = (y * instrumentNarrow.width + x) * 4;
+          if (instrumentWide.data.subarray(offset, offset + 4).some((v, i) => v !== instrumentNarrow.data[offset + i])) changed++;
+        }
+        assert.ok(changed > 100, `Title pixels changed after leaving the Instrument gallery: ${changed}`);
+        record.instrument.leftChangedTitlePixels = changed;
+      }
+      // And back: the stage takes the fluid form in the commit that mounts the gallery, so its wall has its height.
+      await instrument.getByLabel("Example", { exact: true }).selectOption("instrument");
+      await instrument.locator(".stage .ig-wall").waitFor({ state: "attached" });
+      await instrumentSettle();
+      record.instrument.back = await instrumentMode("back to the gallery");
+      assert.ok(instrumentLayers(record.instrument.back).includes("instrument-wall"), "the wall is a layer again");
+      assert.equal(await instrument.evaluate(() => document.querySelector(".stage").classList.contains("stage-fluid")), true);
+      await instrumentContext.close();
       // With `navigator.gpu` hidden, enabling GPU must fall back to DOM with a GPU reason and keep the user's input.
       if (lane === "dom") {
         const unsupported = await browser.newContext({ viewport: { width: 1280, height: 1100 } });
