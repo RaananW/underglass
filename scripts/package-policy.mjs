@@ -17,7 +17,7 @@ const coreDeclarations = [
   "mount-boundary", "mutations", "native", "publication", "relief", "renderer", "ripple", "runtime", "stage", "swap-cover", "timeline", "viewport",
   "experimental-worker", "worker-thread", "worker-protocol",
 ];
-const reactDeclarations = ["build", "experimental-worker", "index", "react", "worker-thread"];
+const reactDeclarations = ["build", "experimental-worker", "first-render", "index", "react", "worker-thread"];
 /** Sorted package-relative paths that every packed `@underglass/react` archive must contain, and nothing else. */
 export const packageFiles = [
   "package.json", "README.md", "LICENSE", "CHANGELOG.md", "docs/distribution.md", ...entries,

@@ -12,6 +12,7 @@ import {
   CanvasRuntime, affine, pivot, compileStyle, canvasHostsMarkup, type CanvasController, type RuntimeOptions, type Transform, type TransformOrigin,
   type Layout, type Appearance, type EnrollmentOptions, type MotionDescriptor, type TransitionResult,
 } from "@underglass/core";
+import { mountRoot } from "./first-render.js";
 
 // Carries the runtime from `GPUHost` to every component and hook below.
 const Context = createContext<CanvasRuntime | null>(null);
@@ -244,10 +245,14 @@ export function prerenderCanvasApp(children: ReactNode, render: (tree: ReactNode
  * Options for `mountCanvasApp`: the runtime options minus `mount`, plus injectable React entry
  * points (for a second React copy or tests) and `strict` to wrap the tree in `StrictMode`.
  *
+ * The adapter's own `createRoot` and `hydrateRoot` make `mountCanvasApp` throw when the first render
+ * throws, which React 19 would otherwise only report. A `createRoot` or `hydrateRoot` you pass keeps
+ * React's behaviour: with React 19 the mount then returns over an empty root, and the error goes to
+ * that root's `onUncaughtError` (by default `reportError`).
+ *
  * With `hydrate` (a runtime option), the hosts must be the prerendered ones (`prerenderCanvasApp`,
  * adopted by `createCanvasHosts`) and the tree is hydrated with `hydrateRoot` instead of rendered.
- * Pass your own `hydrateRoot` to give React options such as `onRecoverableError`; the adapter's own
- * makes `mountCanvasApp` throw when the first render throws, which React 19 would otherwise only report.
+ * Pass your own `hydrateRoot` to give React options such as `onRecoverableError`.
  */
 export type MountCanvasOptions = Omit<RuntimeOptions, "mount"> & {
   createRoot?: typeof createRoot;
@@ -259,7 +264,9 @@ export type MountCanvasOptions = Omit<RuntimeOptions, "mount"> & {
  * Explicit bootstrap: creates the persistent React root inside the adapter-owned container, renders
  * `children` under `GPUHost` synchronously (or, with `hydrate`, hydrates the prerendered markup
  * there) and returns the controller. The app starts in ordinary DOM; call `enable()` to request GPU
- * presentation. If the first render throws, the root is unmounted and the error rethrown.
+ * presentation. If the first render throws (and no error boundary in `children` catches it), the root
+ * is unmounted, the runtime releases what it attached and the error is rethrown; with an injected
+ * `createRoot` or `hydrateRoot`, React 19 only reports it (see `MountCanvasOptions`).
  */
 export function mountCanvasApp(options: MountCanvasOptions, children: ReactNode): CanvasController {
   return new CanvasRuntime({
@@ -267,27 +274,16 @@ export function mountCanvasApp(options: MountCanvasOptions, children: ReactNode)
     mount(container, runtime) {
       const host = <GPUHost runtime={runtime}>{children}</GPUHost>;
       const tree = options.strict ? <StrictMode>{host}</StrictMode> : host;
-      const flush = options.flushSync ?? flushSync;
-      if (options.hydrate) {
-        // Hydration inside `flushSync` completes before it returns, so the layers are registered when
-        // the controller is, as with a client render.
-        let root: { unmount(): void } | undefined;
-        // React 19 reports an error thrown by the first render instead of throwing it, after discarding the
-        // prerendered markup: it is caught here and thrown below, so a failed mount is not a blank page with a
-        // working controller. Later errors are reported as React does by default. (React 18 throws from `flushSync`.)
-        let failure: { error: unknown } | undefined, mounting = true;
-        const reactOptions = { onUncaughtError(error: unknown) { if (mounting) failure = { error }; else reportError(error); } } as Parameters<typeof hydrateRoot>[2];
-        const hydrate = options.hydrateRoot ?? ((target: HTMLDivElement, node: ReactNode) => hydrateRoot(target, node, reactOptions));
-        try { flush(() => { root = hydrate(container, tree); }); }
-        catch (error) { root?.unmount(); throw error; }
-        finally { mounting = false; }
-        if (failure) { root?.unmount(); throw failure.error; }
-        return () => root!.unmount();
-      }
-      const root = (options.createRoot ?? createRoot)(container);
-      try { flush(() => root.render(tree)); }
-      catch (error) { root.unmount(); throw error; }
-      return () => root.unmount();
+      // Rendering and hydration complete inside `flushSync`, so the layers are registered when the controller
+      // is. A first render that throws makes this throw, unless the caller injected the root (see `mountRoot`).
+      return mountRoot(options.flushSync ?? flushSync, rootOptions => {
+        if (options.hydrate) {
+          return options.hydrateRoot ? options.hydrateRoot(container, tree) : hydrateRoot(container, tree, rootOptions as Parameters<typeof hydrateRoot>[2]);
+        }
+        const root = options.createRoot ? options.createRoot(container) : createRoot(container, rootOptions as Parameters<typeof createRoot>[1]);
+        root.render(tree);
+        return root;
+      });
     },
   });
 }

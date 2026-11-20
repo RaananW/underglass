@@ -93,8 +93,7 @@ when the frame holds only some of them, or anything else), and `hydrate: true` o
 hydrates inside it, synchronously, so the served elements stay the original ones. The
 `hydrateRoot` option replaces React's (to pass `onRecoverableError`, for example).
 Hydrating hosts that are not prerendered, or mounting without `hydrate` into prerendered
-ones, throws. With the adapter's own `hydrateRoot`, a first render that throws makes
-`mountCanvasApp` throw (React 19 only reports it otherwise). While prerendering,
+ones, throws. A first render that throws makes the mount throw, as below. While prerendering,
 controller methods and `useNativeOverlayHost` throw when called during render, and
 `NativeOverlay` renders nothing; it mounts after hydration. See
 [Prerendering and hydration](guide/server-rendering.md).
@@ -142,6 +141,17 @@ outside-root setup, not JSX refs whose descendants the runtime may move.
 `GPUHost` context automatically. The root always starts in usable ordinary DOM.
 Admission failure resolves to a state with `mode: "dom"` and an explicit reason;
 invalid topology/API/lifecycle calls throw before unsafe mutation.
+
+A first render that throws makes `mountCanvasApp` throw that error, on React 18
+and 19, with or without `hydrate`: the root is unmounted, the container removed
+(a prerendered one stays) and the runtime keeps no observer or listener, so the
+same hosts can take another mount. An error boundary in the application that
+catches the error is not a failure, and errors after the mount are reported as
+React does by default (`reportError`). This holds for the adapter's own
+`createRoot` and `hydrateRoot`. A `createRoot` or `hydrateRoot` you pass keeps
+React's behaviour: React 19 then only reports the error, to that root's
+`onUncaughtError`, and the mount returns a controller over an empty root.
+`mountWorkerCanvasApp` throws the same way.
 
 Normal commits synchronously register current-original native geometry and
 reconcile logical capture slots. Complete cached coverage may recompose; new
@@ -606,11 +616,20 @@ So core does it for you, with nothing to opt into:
   **Limit:** such a canvas is captured only as an unmarked canvas is (the first thing in its layer; blank behind other canvases): set
   `content="drawable"` on it yourself, and core leaves it alone. The nested-host canvas's own bitmap is captured unmarked.
   Both are pinned in `core-canvas-content.test.mjs`.
-- **Limit: an `OffscreenCanvas`-transferred canvas** (`transferControlToOffscreen()`) is captured correctly when a paint happens, but its
-  commits raise no `paint` event (a redraw of every other kind raises one), so **its pixels stay stale until `controller.invalidate(layerId)`
-  is called**; call it after drawing (the matrix in `core-canvas-content.test.mjs` does, and a test pins the stale state so a browser fix is
-  noticed). Core cannot detect such a canvas without a destructive probe (`getContext` or `toDataURL` on a canvas it does not own), so it
-  neither refuses nor recaptures them on its own.
+- **An `OffscreenCanvas`-transferred canvas** (`transferControlToOffscreen()`, drawn from the main thread or a worker) needs nothing from
+  Chromium main #1748781 on (crbug 576333010; the first Canary with it is 160.0.8172.0): each commit raises a `paint` event, as a redraw of
+  every other kind does, and core recaptures the layer with fresh pixels. **On builds before it** the commits raise no `paint` and its
+  pixels stay stale until `controller.invalidate(layerId)` is called: if you support those builds, call it after drawing. On a fixed build
+  the call is harmless (same pixels, GPU stays on), but it is not free: its paint can carry no `changedElements`, and core then recaptures
+  every layer, not only that one. Core cannot detect such a canvas without a destructive probe (`getContext` or `toDataURL` on a canvas it
+  does not own), so it does not call `invalidate` for you.
+- **Cost of an `OffscreenCanvas` that commits every frame** (an animation loop): one capture of its layer per frame, where before the fix
+  it cost none and showed a stale frame. It is the same cost as a 2D canvas drawn every frame. Measured on Canary 160.0.8172.0 (RTX 3080,
+  headless and headful, a 320 x 200 layer, 240 frames at 60 Hz, a loaded machine): 0.89 to 0.98 captures per frame (a frame can fold two
+  commits into one paint; never more than one per commit), `captureMs` 2.2 to 2.7 ms on average at DPR 1 and 3.4 to 3.5 ms at DPR 2,
+  `frameWorkMs` 0.3 to 0.5 ms, GPU on throughout; with the CPU slowed four times, 0.80 to 0.85 captures per frame, `captureMs` 5.6 to
+  5.9 ms, `frameWorkMs` 3.1 to 4.0 ms (a 2D canvas drawn every frame: 2.0 to 2.4 ms and 3.6 to 3.7 ms `captureMs` at 1x). Pinned in `core-canvas-content.test.mjs`, which
+  fails on a build without the fix.
 
 ### Same-value mutations are ignored
 

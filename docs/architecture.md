@@ -6,14 +6,14 @@ remain tracked; [archive access, hashes and reproduction](archive/archive-catalo
 
 This describes the supported **bounded Phase 2/3 runtime plus Phase 4/5
 ownership/module/decorative additions, the bounded Phase 6 matrix and implemented
-Phase7 integration and Phase8 effects independently accepted with explicit limits**, not a released
-library or arbitrary React application compatibility. The package remains
-private. Historical alternatives and evidence are in [feasibility.md](archive/feasibility.md);
+Phase7 integration and Phase8 effects independently accepted with explicit limits**, not arbitrary
+React application compatibility. The library packages are experimental and published on npm
+([releasing](releasing.md)). Historical alternatives and evidence are in [feasibility.md](archive/feasibility.md);
 contributor commands are in [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## Repository boundaries
 
-The private root npm workspace is tooling, not a second library package.
+The root npm workspace is private tooling (never published), not a second library package.
 `packages/core` (`@underglass/core`) owns the framework-neutral runtime: the
 shared engine, renderer, mount boundary, enrollment, motion, effects, typed
 style compiler, build generators and the worker protocol/thread. It imports no
@@ -25,8 +25,9 @@ worker-thread entries unchanged. `packages/vue` (`@underglass/vue`) is the Vue 3
 adapter over the same core, with the same dependency rule. No library package may
 depend on playground or tests. Every adapter must pass the shared framework
 contract in `tests/helpers/framework-contract.mjs`.
-The private `packages/css-compiler` workspace owns the
+`packages/css-compiler` (`@underglass/css-compiler`) owns the
 build-only JSON analyzer and Vite/webpack integration, not another UI runtime.
+`packages/ui` (`@underglass/ui`) is Strata, the design language: tokens, CSS and components over the same core.
 `examples/playground` owns the engineering HTML entries, app/demo/historical-probe source
 and its private manifest/configuration. Source development resolves the public
 package specifier to workspace source; installed consumer gates instead resolve
@@ -115,7 +116,7 @@ the DOM passed through B and the observer cannot prove the painted state equals 
 A `<canvas>` inside an enrolled layer is captured by HTML-in-Canvas only when it is itself `content="drawable"` (Canary 158.0.8112.0, issue
 #184). Core sets the mark on every such canvas while GPU presents (`CanvasRuntime.markCanvases`, called from `presentation()` and the
 mutation observer), keeps the author's own value and restores it when GPU ends, so the canvas is ordinary captured content: no refusal, no
-fallback. The mark is remembered per canvas and restored when GPU ends, a layer is released or the canvas leaves every layer; an author write mid-GPU replaces the remembered value. The one gap is an `OffscreenCanvas`-transferred canvas, whose commits raise no `paint` event (its pixels stay stale until the author calls `invalidate`). See
+fallback. The mark is remembered per canvas and restored when GPU ends, a layer is released or the canvas leaves every layer; an author write mid-GPU replaces the remembered value. An `OffscreenCanvas`-transferred canvas needs nothing more from Chromium main #1748781 (Canary 160.0.8172.0), where each of its commits raises a `paint` event like any other redraw; on older builds its commits raise none and its pixels stay stale until the author calls `invalidate`. See
 [api.md](api.md#canvas-inside-a-layer); the measurements, proposal SHA and tracker access limits are in
 [upstream/canvas-in-drawable.md](upstream/canvas-in-drawable.md).
 

@@ -131,9 +131,10 @@ async function markEffects(kind: "2d" | "webgl", withMark = true) {
 
 /**
  * Does a redraw of a marked canvas raise a `paint` event on its own (no `requestPaint`, no DOM change)? Draws three colours a few frames
- * apart and reports the paints each caused and the layer's pixel at each paint.
+ * apart and reports the paints each caused and the layer's pixel at each paint. `offscreen` draws a transferred canvas from the main
+ * thread, `offscreen-worker` from a dedicated worker (the fill resolves when the worker has drawn).
  */
-async function paintsAfterRedraw(kind: "2d" | "2d-read-frequently" | "webgl" | "webgl-preserve" | "offscreen" | "bitmaprenderer") {
+async function paintsAfterRedraw(kind: "2d" | "2d-read-frequently" | "webgl" | "webgl-preserve" | "offscreen" | "offscreen-worker" | "bitmaprenderer") {
   document.body.replaceChildren();
   const out = document.createElement("canvas") as HTMLCanvasElement & { content: string };
   out.width = 300; out.height = 100; out.content = "drawable"; out.style.cssText = "position:fixed;left:0;top:0;width:300px;height:100px";
@@ -144,8 +145,17 @@ async function paintsAfterRedraw(kind: "2d" | "2d-read-frequently" | "webgl" | "
   out.append(layer); layer.append(canvas); document.body.append(out);
   const context = out.getContext("2d", { willReadFrequently: true })! as CanvasRenderingContext2D & { drawElementImage(element: Element, x: number, y: number): void };
   let fill: (colour: Rgb) => void | Promise<void>;
+  let worker: Worker | undefined;
   if (kind === "offscreen") { const g = canvas.transferControlToOffscreen().getContext("2d")!; fill = c => { g.fillStyle = css(c); g.fillRect(0, 0, 60, 30); }; }
-  else if (kind === "webgl" || kind === "webgl-preserve") {
+  else if (kind === "offscreen-worker") {
+    const drawer = worker = new Worker(URL.createObjectURL(new Blob([
+      "let g; onmessage = e => { if (e.data.canvas) g = e.data.canvas.getContext('2d'); else { g.fillStyle = e.data.fill; g.fillRect(0, 0, 60, 30); } postMessage(0); };",
+    ], { type: "text/javascript" })));
+    const ask = (message: unknown, transfer: Transferable[] = []) => new Promise<void>(resolve => { drawer.onmessage = () => resolve(); drawer.postMessage(message, transfer); });
+    const transferred = canvas.transferControlToOffscreen();
+    await ask({ canvas: transferred }, [transferred]);
+    fill = c => ask({ fill: css(c) });
+  } else if (kind === "webgl" || kind === "webgl-preserve") {
     const gl = canvas.getContext("webgl", { preserveDrawingBuffer: kind === "webgl-preserve" })!;
     fill = c => { gl.clearColor(c[0] / 255, c[1] / 255, c[2] / 255, 1); gl.clear(gl.COLOR_BUFFER_BIT); };
   } else if (kind === "bitmaprenderer") {
@@ -164,6 +174,7 @@ async function paintsAfterRedraw(kind: "2d" | "2d-read-frequently" | "webgl" | "
     for (let i = 0; i < 8; i++) await frame();
     paints.push(seen.length - before);
   }
+  worker?.terminate();
   return { kind, paints, last: seen[seen.length - 1] ?? null, seen };
 }
 

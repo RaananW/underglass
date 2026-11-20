@@ -11,7 +11,17 @@ Found with Underglass issue [#184](https://github.com/RaananW/underglass/issues/
 - WICG [html-in-canvas#187](https://github.com/WICG/html-in-canvas/issues/187), integration feedback that asks the explainer questions
   below and links both bugs.
 
-Both reproduce on Chrome Canary 158.0.8115.0, headless and headful (re-checked 2026-10-21; `offscreen-canvas-paint.html`: a 2D canvas
+**576333010 is fixed** in Chromium main #1748781 (Gerrit [8714422](https://chromium-review.googlesource.com/c/chromium/src/+/8714422),
+"[html-in-canvas] Fire paint events for nested OffscreenCanvas commits", commit
+[`2044075f`](https://chromium.googlesource.com/chromium/src/+/2044075f210d5334daa6a12f2f9d3988990b0aee), merged 2026-11-19; main thread
+and worker; WPT `html/canvas/element/manual/draw-element-image/onpaint-offscreen-canvas-invalidation.tentative.html`). The first
+Windows Canary with it is 160.0.8172.0 (main position 1749187; 160.0.8171.0 is 1748523, without it; chromiumdash). Re-checked
+2026-11-20 on the installed Canary 160.0.8172.0, Windows 11, headless and headful: `offscreen-canvas-paint.html` gives
+`[1, 1, 1]` paints for the `OffscreenCanvas`, like the 2D canvas, with the last colour in a paint and no `requestPaint()`; the same
+canvas drawn from a dedicated worker gives `[1, 1, 1]` with each colour seen in its own paint. **576333009 is not fixed** (no linked
+change): the mark below stays.
+
+Both reproduced on Chrome Canary 158.0.8115.0, headless and headful (re-checked 2026-10-21; `offscreen-canvas-paint.html`: a 2D canvas
 raises one `paint` per redraw, the `OffscreenCanvas` none, and an explicit `requestPaint()` then captures its current pixels). A
 signed-in search of the tracker and of hotlist 6783002 found no duplicate; the nearest were 503420419 ("Nested canvas do not
 invalidate", fixed) and 418089323 ("HIC: Support Offscreen canvas", fixed).
@@ -68,9 +78,11 @@ and identical to the unmarked canvas; `getContext` returns the same context; `to
 pixels are unchanged; `elementFromPoint` at its centre returns the canvas. (Tables: `evidence/regression/current/core-canvas-content/`:
 `raw-marked-before|after|resize.json`, `mark-effects-2d|webgl.json`, `raw-alone.json`, `raw-together.json`, `core-dpr1|2.json`.)
 
-One gap, also reproducible raw: a marked `OffscreenCanvas`-transferred canvas is captured when a paint happens (`requestPaint()`), but its
-commits raise **no** `paint` event (0 paints for three redraws; 2D, WebGL, `preserveDrawingBuffer` and `bitmaprenderer` each raise one), so
-an observer that waits for `paint` never sees the new frame.
+One gap, also reproducible raw, on builds before Chromium main #1748781: a marked `OffscreenCanvas`-transferred canvas is captured when a
+paint happens (`requestPaint()`), but its commits raise **no** `paint` event (0 paints for three redraws; 2D, WebGL,
+`preserveDrawingBuffer` and `bitmaprenderer` each raise one), so an observer that waits for `paint` never sees the new frame. From
+#1748781 (Canary 160.0.8172.0) each commit raises one `paint`, from the main thread and from a worker, and core recaptures the layer
+like any other redraw (`core-canvas-content.test.mjs` asserts the fixed behaviour, so it fails on an older build).
 
 ## Draft issue (before filing; the filed texts differ slightly)
 
@@ -87,4 +99,5 @@ captured with fresh pixels, in every arrangement tried, with no other visible ef
 
 **Questions for the explainer:** (1) is a nested canvas captured only when it is itself marked drawable, and is that intended? If so the
 explainer could say so; if not, an unmarked nested canvas should be captured, or never. Today it depends on attach order. (2) A commit of
-an `OffscreenCanvas`-transferred canvas should invalidate the owning drawable and raise `paint`, as every other canvas type does.
+an `OffscreenCanvas`-transferred canvas should invalidate the owning drawable and raise `paint`, as every other canvas type does
+(answered by the fix at Chromium main #1748781).
