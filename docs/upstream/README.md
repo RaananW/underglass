@@ -3,7 +3,7 @@
 Babylon Lite findings (defects, missing APIs and behaviours found by the Instrument work, not yet filed upstream) are
 collected in [babylon-lite.md](babylon-lite.md). A nested `<canvas>` captured blank (#184) and the missing
 `paint` for `OffscreenCanvas` commits, filed as Chromium 576333009 and 576333010 and raised in WICG #187, are in
-[canvas-in-drawable.md](canvas-in-drawable.md).
+[canvas-in-drawable.md](canvas-in-drawable.md). 576333010 is fixed in Chromium main #1748781 (Canary 160.0.8172.0); 576333009 is open.
 
 ## Upstream check, 2026-11-14
 

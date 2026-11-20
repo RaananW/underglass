@@ -115,7 +115,7 @@ window.canvasContent = { ready: Promise.resolve({
   },
   /** Moves a slot's canvas out of the layer into the body (still in the document, no longer in a layer). */
   async leave(index: number) { document.body.append(nodes[index]!); await settle(); },
-  /** Marks the probe layer for recapture (what the author calls after drawing an OffscreenCanvas-transferred canvas). */
+  /** Marks the probe layer for recapture (what an author calls after drawing an OffscreenCanvas-transferred canvas on builds before Chromium main #1748781). */
   async invalidate() { controller.invalidate("probe"); await settle(); },
   /** Releases the probe layer's enrollment while its element stays in the DOM, and enrolls it again. */
   releaseProbe() { release?.(); release = undefined; },
@@ -131,6 +131,20 @@ window.canvasContent = { ready: Promise.resolve({
   async markShadow(index: number) { nodes[index]!.shadowRoot!.querySelector("canvas")!.setAttribute("content", "drawable"); await settle(); },
   /** Draws an OffscreenCanvas-transferred slot again (no waiting). */
   offscreenDraw(index: number, fill: Rgb) { (nodes[index] as unknown as { draw: (fill: Rgb) => void }).draw(fill); },
+  /**
+   * An animation loop: draws an OffscreenCanvas-transferred slot once in each of `count` frames (red, green, blue in turn), and with
+   * `invalidate` also calls `controller.invalidate("probe")` after each draw, as code written for older builds does. Resolves with the
+   * last colour drawn.
+   */
+  async offscreenAnimate(index: number, count: number, invalidate = false) {
+    const draw = (nodes[index] as unknown as { draw: (fill: Rgb) => void }).draw, colours = [RED, GREEN, BLUE];
+    for (let i = 0; i < count; i++) {
+      await nextFrame();
+      draw(colours[i % 3]!);
+      if (invalidate) controller.invalidate("probe");
+    }
+    return colours[(count - 1) % 3]!;
+  },
   /** Appends a canvas and disposes the controller in the same task: a capture is pending. */
   appendAndDispose(kind: string) { const node = place(makers[kind]!(), nodes.length); nodes.push(node); probe.append(node); return controller.dispose(); },
   dispose: () => controller.dispose(),

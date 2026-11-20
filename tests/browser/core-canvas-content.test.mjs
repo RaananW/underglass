@@ -7,7 +7,8 @@
  *   enrolled layer `content="drawable"` while GPU presents (at admission and for one added later), restores the author's value when GPU
  *   ends, and captures it like any content.
  * Measured on Canary 158.0.8112.0: an unmarked nested canvas is captured only when it is the first thing attached to its layer; a marked one
- * is captured in every arrangement and variant. At DPR 1 and 2; decoded screenshots.
+ * is captured in every arrangement and variant. At DPR 1 and 2; decoded screenshots. The OffscreenCanvas tests assert a paint per commit, which
+ * needs Chromium main #1748781 (Canary 160.0.8172.0 or later): they fail on an older build.
  */
 import { test, expect } from "../helpers/current-browser.mjs";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -118,11 +119,13 @@ test.describe("the raw browser behaviour (no core)", () => {
     });
   }
 
-  test("a redraw of a marked canvas raises a paint event of its own for 2D, WebGL and bitmaprenderer canvases, never for an OffscreenCanvas-transferred one", async ({ browser }) => {
+  // An OffscreenCanvas commit raises a paint from Chromium main #1748781 (crbug 576333010; first in Canary 160.0.8172.0), drawn from the main
+  // thread or a worker. On an older build the two offscreen kinds raise none and this test fails: the suite targets the installed Canary.
+  test("a redraw of a marked canvas raises a paint event of its own for every kind, an OffscreenCanvas-transferred one drawn from the main thread or a worker included", async ({ browser }) => {
     const { context, page, errors } = await open(browser, 1, "/canvas-capture-raw.html");
     try {
       const rows = {};
-      for (const kind of ["2d", "2d-read-frequently", "webgl", "webgl-preserve", "bitmaprenderer", "offscreen"]) {
+      for (const kind of ["2d", "2d-read-frequently", "webgl", "webgl-preserve", "bitmaprenderer", "offscreen", "offscreen-worker"]) {
         await page.reload();
         await page.waitForFunction(() => window.canvasMarked, null, { timeout: 60000 });
         rows[kind] = await page.evaluate(kind => window.canvasMarked.paintsAfterRedraw(kind), kind);
@@ -130,11 +133,19 @@ test.describe("the raw browser behaviour (no core)", () => {
       await evidence("raw-marked-redraw-paints", rows);
       for (const kind of ["2d", "2d-read-frequently", "webgl", "webgl-preserve", "bitmaprenderer"]) {
         expect(rows[kind].paints, `${kind}: one paint per redraw`).toEqual([1, 1, 1]);
-        expect(near(rows[kind].last, BLUE), `${kind}: the layer shows the last colour`).toBe(true);
+        expect(near(rows[kind].last, BLUE), `${kind}: the layer shows the last colour (${rows[kind].last})`).toBe(true);
       }
-      // The browser raises no paint for an OffscreenCanvas commit (the layer stays at what the first paint saw): core cannot see it either.
-      expect(rows.offscreen.paints.slice(1), "offscreen: no paint events from its commits (the first count is the layer's first paint)").toEqual([0, 0]);
-      expect(near(rows.offscreen.last, BLUE), "offscreen: the layer never saw the last colour").toBe(false);
+      for (const kind of ["offscreen", "offscreen-worker"]) {
+        // The first count can also hold the layer's own first paint (the background, seen headful): one or two.
+        const { paints } = rows[kind];
+        expect(paints[0], `${kind}: the first commit's paint (${paints})`).toBeGreaterThanOrEqual(1);
+        expect(paints[0], `${kind}: the first commit's paint (${paints})`).toBeLessThanOrEqual(2);
+        expect(paints.slice(1), `${kind}: one paint per later commit`).toEqual([1, 1]);
+        expect(near(rows[kind].last, BLUE), `${kind}: the layer shows the last colour (${rows[kind].last})`).toBe(true);
+        // Each commit's own paint already sees its colour.
+        const seen = rows[kind].seen.slice(-3);
+        [RED, GREEN, BLUE].forEach((colour, index) => expect(near(seen[index], colour), `${kind}: commit ${index} is seen in its paint (${seen[index]})`).toBe(true));
+      }
       expect(errors).toEqual([]);
     } finally { await context.close(); }
   });
@@ -195,9 +206,8 @@ for (const dpr of [1, 2]) {
       const { context, call, shot, errors } = await openCore(browser, dpr);
       try {
         expect((await call("state")).mode, "starts on GPU").toBe("gpu");
+        // No invalidate for an OffscreenCanvas-transferred canvas: its commit raises a paint (Chromium main #1748781 and later).
         await call("install", kinds);
-        // An OffscreenCanvas-transferred canvas raises no paint when it commits: the author recaptures the layer after drawing it.
-        if (kinds.includes("offscreen")) await call("invalidate");
         const state = await call("state");
         expect(state.mode, `GPU stays on (${state.reason})`).toBe("gpu");
         expect(state.reason).toMatch(healthy);
@@ -385,21 +395,76 @@ for (const dpr of [1, 2]) {
       } finally { await context.close(); }
     });
 
-    test("an OffscreenCanvas-transferred canvas stays stale after a redraw until invalidate is called", async ({ browser }) => {
-      const { context, call, shot, frames, errors } = await openCore(browser, dpr);
+    // From Chromium main #1748781 (crbug 576333010; first in Canary 160.0.8172.0) each OffscreenCanvas commit raises a paint, which core
+    // captures like any redraw. On an older build these two tests fail (the pixels stay stale until invalidate): the suite targets the
+    // installed Canary.
+    const captures = async call => { const metrics = (await call("state")).metrics; return { probe: metrics.perLayer.probe.captures, plain: metrics.perLayer.plain.captures, paints: metrics.paintNotifications }; };
+    test("an OffscreenCanvas-transferred canvas is fresh after each commit without invalidate, one capture per commit, GPU on and hits native; invalidate still works and is harmless", async ({ browser }) => {
+      const { context, call, shot, page, errors } = await openCore(browser, dpr);
       try {
         await call("install", ["div", "offscreen"]);
-        await call("invalidate");
-        await frames(3);
-        expect(near(centre(await shot(), await call("slot", 1), dpr), RED), "captured after invalidate").toBe(true);
+        expect(near(centre(await shot(), await call("slot", 1), dpr), RED), "captured without invalidate").toBe(true);
+        for (const colour of [GREEN, BLUE, RED]) {
+          const before = await captures(call);
+          await call("offscreenDraw", 1, colour);
+          await call("settle");
+          const after = await captures(call), state = await call("state");
+          const pixel = centre(await shot(), await call("slot", 1), dpr);
+          expect(near(pixel, colour), `fresh after a commit with no invalidate (${pixel}, expected ${colour})`).toBe(true);
+          expect(state.mode, state.reason).toBe("gpu");
+          expect(after.probe - before.probe, "one capture of the canvas's layer per commit").toBe(1);
+          expect(after.plain - before.plain, "no capture of the other layer").toBe(0);
+        }
+        // A real press on the canvas lands on it, and beside it on the layer.
+        const box = await call("slot", 1);
+        const press = async (x, y) => {
+          await page.evaluate(() => { window.pressed = null; document.addEventListener("pointerdown", event => { window.pressed = event.target.getAttribute("data-slot") ?? event.target.id; }, { once: true }); });
+          await page.mouse.click(x, y);
+          return page.evaluate(() => window.pressed);
+        };
+        expect(await press(box.x + box.width / 2, box.y + box.height / 2), "native hit on the offscreen canvas").toBe("1");
+        expect(await press(box.x + box.width + 8, box.y + box.height / 2), "beside it: the layer").toBe("probe");
+        // Code written for older builds calls invalidate after drawing: the pixels and GPU stay right, and drawing goes on working.
         await call("offscreenDraw", 1, GREEN);
-        await call("settle");
-        await frames(10);
-        const stale = centre(await shot(), await call("slot", 1), dpr);
-        expect(near(stale, RED), `no paint event for an offscreen commit: still the old pixels (${stale})`).toBe(true);
         await call("invalidate");
-        await frames(3);
-        expect(near(centre(await shot(), await call("slot", 1), dpr), GREEN), "fresh after invalidate").toBe(true);
+        expect(near(centre(await shot(), await call("slot", 1), dpr), GREEN), "invalidate after a commit: same fresh pixels").toBe(true);
+        expect((await call("state")).mode).toBe("gpu");
+        await call("offscreenDraw", 1, BLUE);
+        await call("settle");
+        expect(near(centre(await shot(), await call("slot", 1), dpr), BLUE), "fresh after the next commit").toBe(true);
+        expect(errors).toEqual([]);
+      } finally { await context.close(); }
+    });
+
+    test("an OffscreenCanvas-transferred canvas committing every frame costs at most one capture of its layer per frame, with or without invalidate; GPU stays on", async ({ browser }) => {
+      const { context, call, shot, page, errors } = await openCore(browser, dpr);
+      try {
+        await call("install", ["div", "offscreen"]);
+        const count = 120, rows = {};
+        for (const invalidate of [false, true]) {
+          await call("settle");
+          // Counts the frames from before the first commit to after the last capture.
+          await page.evaluate(() => { window.frameCount = 0; const tick = () => { window.frameCount++; window.frameTicker = requestAnimationFrame(tick); }; window.frameTicker = requestAnimationFrame(tick); });
+          const before = await captures(call);
+          const last = await call("offscreenAnimate", 1, count, invalidate);
+          await call("settle");
+          const after = await captures(call), state = await call("state");
+          const frameCount = await page.evaluate(() => { cancelAnimationFrame(window.frameTicker); return window.frameCount; });
+          const pixel = centre(await shot(), await call("slot", 1), dpr);
+          const row = rows[invalidate ? "with-invalidate" : "commits-only"] = { commits: count, frames: frameCount, probeCaptures: after.probe - before.probe,
+            plainCaptures: after.plain - before.plain, paints: after.paints - before.paints, mode: state.mode, pixel };
+          const label = invalidate ? "with invalidate" : "commits only";
+          expect(state.mode, `${label}: ${state.reason}`).toBe("gpu");
+          expect(near(pixel, last), `${label}: the last commit is shown (${pixel}, expected ${last})`).toBe(true);
+          expect(row.probeCaptures, `${label}: captures of the canvas's layer`).toBeGreaterThan(0);
+          // At most one capture of the layer per frame. Commits alone: a frame can fold two commits into one paint, so at most one per
+          // commit too. With invalidate every frame gets a paint, also while it settles after the loop (measured: 121 or 122 for 120 commits).
+          expect(row.probeCaptures, `${label}: at most one capture per frame (${frameCount} frames)`).toBeLessThanOrEqual(frameCount);
+          if (!invalidate) expect(row.probeCaptures, "commits only: at most one capture per commit").toBeLessThanOrEqual(count);
+          // A commit's paint names the canvas's layer in changedElements; an invalidate's paint can name none, and core then refreshes every layer.
+          if (!invalidate) expect(row.plainCaptures, "commits only: no capture of the other layer").toBe(0);
+        }
+        await evidence(`offscreen-loop-dpr${dpr}`, rows);
         expect(errors).toEqual([]);
       } finally { await context.close(); }
     });
