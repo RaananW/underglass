@@ -77,6 +77,10 @@ React-owned roots. The application owns their common frame and positioning;
 `canvasHost` contains the adapter-owned canvas, not a pretransferred canvas.
 Neither mounting nor `WorkerSurface` clones controls. The adapter may move only
 its persistent root container using connected same-document `moveBefore`.
+A first render that throws (and that no error boundary in the application
+catches) makes `mountWorkerCanvasApp` throw it, on React 18 and 19: the root is
+unmounted, the container removed and the controller's observers and listeners
+released before it returns, so the hosts are empty again.
 Layout/appearance compile to browser styles internally, not a custom layout engine.
 
 Vite requires `worker: { format: "es" }`; see the executable fixture's

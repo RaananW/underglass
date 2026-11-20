@@ -93,8 +93,7 @@ when the frame holds only some of them, or anything else), and `hydrate: true` o
 hydrates inside it, synchronously, so the served elements stay the original ones. The
 `hydrateRoot` option replaces React's (to pass `onRecoverableError`, for example).
 Hydrating hosts that are not prerendered, or mounting without `hydrate` into prerendered
-ones, throws. With the adapter's own `hydrateRoot`, a first render that throws makes
-`mountCanvasApp` throw (React 19 only reports it otherwise). While prerendering,
+ones, throws. A first render that throws makes the mount throw, as below. While prerendering,
 controller methods and `useNativeOverlayHost` throw when called during render, and
 `NativeOverlay` renders nothing; it mounts after hydration. See
 [Prerendering and hydration](guide/server-rendering.md).
@@ -142,6 +141,17 @@ outside-root setup, not JSX refs whose descendants the runtime may move.
 `GPUHost` context automatically. The root always starts in usable ordinary DOM.
 Admission failure resolves to a state with `mode: "dom"` and an explicit reason;
 invalid topology/API/lifecycle calls throw before unsafe mutation.
+
+A first render that throws makes `mountCanvasApp` throw that error, on React 18
+and 19, with or without `hydrate`: the root is unmounted, the container removed
+(a prerendered one stays) and the runtime keeps no observer or listener, so the
+same hosts can take another mount. An error boundary in the application that
+catches the error is not a failure, and errors after the mount are reported as
+React does by default (`reportError`). This holds for the adapter's own
+`createRoot` and `hydrateRoot`. A `createRoot` or `hydrateRoot` you pass keeps
+React's behaviour: React 19 then only reports the error, to that root's
+`onUncaughtError`, and the mount returns a controller over an empty root.
+`mountWorkerCanvasApp` throws the same way.
 
 Normal commits synchronously register current-original native geometry and
 reconcile logical capture slots. Complete cached coverage may recompose; new

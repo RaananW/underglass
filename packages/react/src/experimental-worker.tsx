@@ -15,6 +15,7 @@ import {
   validateWorkerProgram, type WorkerProgram, type WorkerAnimation, type WorkerSnapshot,
   type WorkerFrame, type WorkerRequest, type WorkerResponse, type WorkerStats,
 } from "@underglass/core/experimental-worker";
+import { mountRoot } from "./first-render.js";
 
 export type { WorkerProgram, WorkerAnimation, WorkerStats } from "@underglass/core/experimental-worker";
 /** Options for `mountWorkerCanvasApp`. */
@@ -134,8 +135,9 @@ export class WorkerCanvasController {
   private paintListener: EventListener | undefined;
 
   // Created by `mountWorkerCanvasApp`; `container` is the adapter-owned persistent root container.
-  // The observers and listeners below request a new capture through `invalidate`.
-  constructor(private readonly options: WorkerMountOptions, readonly container: HTMLDivElement) {
+  // The observers and listeners below request a new capture through `invalidate`. `mount` creates the React root
+  // once they are attached and returns its unmount callback; if it throws, they are released again.
+  constructor(private readonly options: WorkerMountOptions, readonly container: HTMLDivElement, mount?: (controller: WorkerCanvasController) => () => void) {
     validateWorkerProgram(options.program);
     if (![options.width, options.height].every(value => Number.isInteger(value) && value > 0)
       || options.width * options.height > 2_000_000) throw new Error("Invalid worker surface extent");
@@ -155,9 +157,21 @@ export class WorkerCanvasController {
     this.resolution.addEventListener("change", this.resolutionChanged);
     this.resources.listeners++;
     this.removers.push(() => { this.resolution.removeEventListener("change", this.resolutionChanged); this.resources.listeners--; });
+    if (mount) {
+      // Nothing has started a worker or a canvas yet, so the release is synchronous.
+      try { this.unmount = mount(this); }
+      catch (error) { this.release(); throw error; }
+    }
   }
-  /** Registers the callback that unmounts the React root; called by `mountWorkerCanvasApp`. */
+  /** Registers the callback that unmounts the React root. `mountWorkerCanvasApp` passes it to the constructor instead. */
   attachUnmount(unmount: () => void) { this.unmount = unmount; }
+  // Marks the controller disposed and releases the layers, observers and listeners; the worker and canvas are already stopped.
+  private release() {
+    this.disposed = true; this.layers.clear(); this.fixedLayouts.clear();
+    this.resize.disconnect(); this.mutation.disconnect(); this.resources.observers = 0;
+    for (const remove of this.removers.splice(0)) remove();
+    this.resources.roots = 0; this.mode = "disposed";
+  }
   // Adds a listener and records its removal for `dispose`.
   private listen(target: EventTarget, name: string, listener: EventListener, capture = false) {
     target.addEventListener(name, listener, capture);
@@ -607,10 +621,8 @@ export class WorkerCanvasController {
       if (this.disposed) return this.state();
       await this.stop();
       this.disposed = true; this.unmount?.();
-      this.container.remove(); this.layers.clear(); this.fixedLayouts.clear();
-      this.resize.disconnect(); this.mutation.disconnect(); this.resources.observers = 0;
-      for (const remove of this.removers.splice(0)) remove();
-      this.resources.roots = 0; this.mode = "disposed"; this.reason = "Worker and original root disposed";
+      this.container.remove(); this.release();
+      this.reason = "Worker and original root disposed";
       this.status(); return this.state();
     });
   }
@@ -619,7 +631,9 @@ export class WorkerCanvasController {
  * Explicit bootstrap for the worker compositor: validates that the hosts are distinct, empty,
  * connected and in this document, creates the adapter-owned root container, renders `children`
  * (which use `WorkerSurface`) synchronously and returns the controller. The app starts in ordinary
- * DOM; call `enable()` to request worker GPU presentation. Throws for invalid hosts or options.
+ * DOM; call `enable()` to request worker GPU presentation. Throws for invalid hosts or options, and
+ * when the first render throws (unless an error boundary in `children` catches it): the root is then
+ * unmounted and the controller's observers and listeners released before the error is rethrown.
  */
 export function mountWorkerCanvasApp(options: WorkerMountOptions, children: ReactNode): WorkerCanvasController {
   if (!options.ordinaryHost.isConnected || !options.canvasHost.isConnected
@@ -630,17 +644,14 @@ export function mountWorkerCanvasApp(options: WorkerMountOptions, children: Reac
   const container = document.createElement("div");
   container.style.cssText = `position:relative;width:${options.width}px;height:${options.height}px`;
   options.ordinaryHost.append(container);
-  let controller: WorkerCanvasController;
-  try { controller = new WorkerCanvasController(options, container); }
-  catch (error) { container.remove(); throw error; }
-  const root = createRoot(container);
-  controller.attachUnmount(() => root.unmount());
   try {
-    const tree = <Context.Provider value={controller}>{children}</Context.Provider>;
-    flushSync(() => root.render(options.strict ? <StrictMode>{tree}</StrictMode> : tree));
-  } catch (error) {
-    void controller.dispose().catch(failure => console.error("Worker mount cleanup failed", failure));
-    throw error;
-  }
-  return controller;
+    return new WorkerCanvasController(options, container, controller => {
+      const tree = <Context.Provider value={controller}>{children}</Context.Provider>;
+      return mountRoot(flushSync, rootOptions => {
+        const root = createRoot(container, rootOptions as Parameters<typeof createRoot>[1]);
+        root.render(options.strict ? <StrictMode>{tree}</StrictMode> : tree);
+        return root;
+      });
+    });
+  } catch (error) { container.remove(); throw error; }
 }
