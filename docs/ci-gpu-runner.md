@@ -12,6 +12,11 @@ So `.github/workflows/browser.yml` runs on a **self-hosted runner with a GPU**. 
 off (the job is skipped) until such a runner is registered and the repository variable
 `GPU_RUNNER` is `true`.
 
+While it is off, a pull request lists **GPU browser suite (Chrome Canary, self-hosted GPU)**
+as skipped, and no other check stands in for it: a green check list then says nothing about
+GPU behaviour. Run the browser tests the change needs locally, and say in the pull request
+which ran.
+
 ## Set up a runner (one machine with a GPU)
 
 1. Install Chrome Canary and Node 24 on the machine. The tests launch the installed Canary
