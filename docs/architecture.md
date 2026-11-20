@@ -6,14 +6,14 @@ remain tracked; [archive access, hashes and reproduction](archive/archive-catalo
 
 This describes the supported **bounded Phase 2/3 runtime plus Phase 4/5
 ownership/module/decorative additions, the bounded Phase 6 matrix and implemented
-Phase7 integration and Phase8 effects independently accepted with explicit limits**, not a released
-library or arbitrary React application compatibility. The package remains
-private. Historical alternatives and evidence are in [feasibility.md](archive/feasibility.md);
+Phase7 integration and Phase8 effects independently accepted with explicit limits**, not arbitrary
+React application compatibility. The library packages are experimental and published on npm
+([releasing](releasing.md)). Historical alternatives and evidence are in [feasibility.md](archive/feasibility.md);
 contributor commands are in [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## Repository boundaries
 
-The private root npm workspace is tooling, not a second library package.
+The root npm workspace is private tooling (never published), not a second library package.
 `packages/core` (`@underglass/core`) owns the framework-neutral runtime: the
 shared engine, renderer, mount boundary, enrollment, motion, effects, typed
 style compiler, build generators and the worker protocol/thread. It imports no
@@ -25,8 +25,9 @@ worker-thread entries unchanged. `packages/vue` (`@underglass/vue`) is the Vue 3
 adapter over the same core, with the same dependency rule. No library package may
 depend on playground or tests. Every adapter must pass the shared framework
 contract in `tests/helpers/framework-contract.mjs`.
-The private `packages/css-compiler` workspace owns the
+`packages/css-compiler` (`@underglass/css-compiler`) owns the
 build-only JSON analyzer and Vite/webpack integration, not another UI runtime.
+`packages/ui` (`@underglass/ui`) is Strata, the design language: tokens, CSS and components over the same core.
 `examples/playground` owns the engineering HTML entries, app/demo/historical-probe source
 and its private manifest/configuration. Source development resolves the public
 package specifier to workspace source; installed consumer gates instead resolve
