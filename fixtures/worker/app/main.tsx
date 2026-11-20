@@ -2,9 +2,10 @@
  * Fixture app for the worker compositor validation (`scripts/worker-validation.mjs`). One page serves
  * several variants chosen by `?variant=`: `css` (plain CSS animation), `main` and `main-ripple` (main-thread
  * GPU), `worker` and `worker-ripple` (experimental worker). Tests use `window.workerFixture`; `?fault=`
- * injects a worker construction failure (`factory`) or a delayed shutdown reply (`stop-delay`).
+ * injects a worker construction failure (`factory`) or a delayed shutdown reply (`stop-delay`). `firstRender` mounts a
+ * second application, whose first render throws, into hosts of its own.
  */
-import { Profiler, useState, version } from "react";
+import { Component, Profiler, useState, version, type ReactNode } from "react";
 import { flushSync, version as domVersion } from "react-dom";
 import { mountCanvasApp, Surface, Box } from "@underglass/react";
 import { mountWorkerCanvasApp, WorkerSurface, type WorkerProgram } from "@underglass/react/experimental-worker";
@@ -88,6 +89,64 @@ if ("createMotion" in controller) for (let slot = 1; slot < 8; slot++) {
     motion.play();
   }
 }
+function Throws(): never { throw new Error("The worker application failed in its first render"); }
+class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() { return this.state.failed ? <p id="first-render-fallback">Caught</p> : this.props.children; }
+}
+/**
+ * Mounts an application whose first render throws (inside an error boundary when `caught`) into new hosts of its own
+ * with `mountWorkerCanvasApp`, and reports what the mount threw and what it left: observers that observe and were not
+ * disconnected, listeners still on the window, the document, a media query or a host, the hosts' content and the status
+ * calls. Then a healthy application mounts into the same hosts and is disposed.
+ */
+async function firstRender(caught: boolean) {
+  const frame = document.body.appendChild(document.createElement("div"));
+  frame.style.cssText = "position:relative;width:200px;height:120px";
+  const ordinaryHost = frame.appendChild(document.createElement("div")), canvasHost = frame.appendChild(document.createElement("div"));
+  const observing = new Set<object>(), listening: [EventTarget, string, unknown, boolean][] = [];
+  const watched = (target: EventTarget) => target === window || target === document || target instanceof MediaQueryList || target === ordinaryHost || target === canvasHost;
+  const capture = (options: unknown) => typeof options === "boolean" ? options : !!(options as { capture?: boolean } | undefined)?.capture;
+  const find = (target: EventTarget, type: string, listener: unknown, options: unknown) =>
+    listening.findIndex(([t, y, l, c]) => t === target && y === type && l === listener && c === capture(options));
+  const observers = [MutationObserver, ResizeObserver].map(Observer => Observer.prototype as unknown as { observe(...args: unknown[]): void; disconnect(): void });
+  const originals = observers.map(prototype => ({ observe: prototype.observe, disconnect: prototype.disconnect }));
+  const { addEventListener, removeEventListener } = EventTarget.prototype;
+  observers.forEach((prototype, index) => {
+    prototype.observe = function (this: object, ...args: unknown[]) { observing.add(this); return originals[index]!.observe.apply(this, args); };
+    prototype.disconnect = function (this: object) { observing.delete(this); return originals[index]!.disconnect.call(this); };
+  });
+  EventTarget.prototype.addEventListener = function (this: EventTarget, type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions) {
+    if (listener && watched(this) && find(this, type, listener, options) < 0) listening.push([this, type, listener, capture(options)]);
+    return addEventListener.call(this, type, listener, options);
+  };
+  EventTarget.prototype.removeEventListener = function (this: EventTarget, type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | EventListenerOptions) {
+    const index = find(this, type, listener, options);
+    if (index >= 0) listening.splice(index, 1);
+    return removeEventListener.call(this, type, listener, options);
+  };
+  let statuses = 0, mountError: string | null = null, mounted: ReturnType<typeof mountWorkerCanvasApp> | undefined;
+  const options = { ordinaryHost, canvasHost, width: 200, height: 120, program: program as WorkerProgram, strict: true,
+    onStatus: () => { statuses++; }, createWorker: () => new Worker(new URL("./thread.ts", import.meta.url), { type: "module" }) };
+  try {
+    try { mounted = mountWorkerCanvasApp(options, caught ? <Boundary><Throws /></Boundary> : <Throws />); }
+    catch (error) { mountError = String(error); }
+  } finally {
+    observers.forEach((prototype, index) => Object.assign(prototype, originals[index]));
+    Object.assign(EventTarget.prototype, { addEventListener, removeEventListener });
+  }
+  const left = { mountError, statuses, observers: observing.size, listeners: listening.map(([, type]) => type),
+    hosts: [ordinaryHost.outerHTML, canvasHost.outerHTML], fallback: document.getElementById("first-render-fallback")?.textContent ?? null };
+  if (mounted) await mounted.dispose();
+  // The same hosts take a healthy application.
+  const healthy = mountWorkerCanvasApp(options, <WorkerSurface id="first-render-healthy" layout={{ x: 10, y: 10, width: 100, height: 60 }}
+    appearance={{ background: "rgb(245,196,41)" }}><button>Healthy</button></WorkerSurface>);
+  const afterwards = healthy.state();
+  const disposed = await healthy.dispose();
+  frame.remove();
+  return { ...left, afterwards: { mode: afterwards.mode, enrolledLayers: afterwards.enrolledLayers }, disposed: { mode: disposed.mode, resources: disposed.resources } };
+}
 // Worker controllers report `statistics()` asynchronously; the main-thread controller reports `state()`.
 const getState = async () => ({ ...("statistics" in controller ? await controller.statistics() : controller.state()), commits, renders,
   focused: document.activeElement?.id });
@@ -100,6 +159,7 @@ const api = {
   structure: () => flushSync(() => changeStructure()),
   layout: () => flushSync(() => changeLayout()),
   settle: () => controller.settle(),
+  firstRender,
   // Asks the controller to validate a moved surface and returns the error text plus layout before and after, to show nothing moved.
   fixedGeometryGuard() {
     if (!("validateSurface" in controller)) throw new Error("Worker fixture required");

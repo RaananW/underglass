@@ -103,7 +103,7 @@ try {
     // The copy has no `dist`, and the playground imports Strata's built stylesheet, so write it first.
     await run(process.execPath, ["packages/ui/scripts/build-css.mjs"], "ui-css");
     await run(process.execPath, ["node_modules/vite/bin/vite.js", "build"], "build");
-    await run(process.execPath, ["scripts/test-browser.mjs", "runtime.test.mjs", "animation.test.mjs", "todo.test.mjs", "integration.test.mjs", "effects.test.mjs", "hardening.test.mjs", "dynamic.test.mjs", "native-editing.test.mjs", "viewport.test.mjs",
+    await run(process.execPath, ["scripts/test-browser.mjs", "runtime.test.mjs", "animation.test.mjs", "todo.test.mjs", "integration.test.mjs", "effects.test.mjs", "hardening.test.mjs", "dynamic.test.mjs", "native-editing.test.mjs", "viewport.test.mjs", "mount-error.test.mjs",
       ...process.argv.slice(2).filter(argument => argument !== "--primary"), "--max-failures=1"], "behavior");
     // Bring the copy's Playwright reports back into the real evidence tree.
     await cp(resolve(destination, evidenceRoot), resolve(evidence, "reports"), { recursive: true });
@@ -116,7 +116,7 @@ try {
       "source copy, no implementation substitutions; independent resolution from declared fixture node_modules",
     versions: isPrimary ? primary : fixture,
     toolVersions: { ...primary.devDependencies, ...(!isPrimary ? fixture.devDependencies : {}) },
-    behavior: ["runtime.test.mjs", "animation.test.mjs", "todo.test.mjs", "integration.test.mjs", "effects.test.mjs", "hardening.test.mjs", "dynamic.test.mjs", "native-editing.test.mjs", "viewport.test.mjs"],
+    behavior: ["runtime.test.mjs", "animation.test.mjs", "todo.test.mjs", "integration.test.mjs", "effects.test.mjs", "hardening.test.mjs", "dynamic.test.mjs", "native-editing.test.mjs", "viewport.test.mjs", "mount-error.test.mjs"],
     behaviorFilter: process.argv.slice(2).filter(argument => argument !== "--primary"),
     production: "Vite production + react-dom/profiling",
     development: `Actual Vite development React + StrictMode; ports ${process.env.CANVAS_TEST_DEV_URL ?? (isPrimary ? "5173" : "5185")} / ${process.env.CANVAS_TEST_PREVIEW_URL ?? (isPrimary ? "5174" : "5186")}`,

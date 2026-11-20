@@ -72,8 +72,9 @@ mountCanvasApp({ ...hosts, hydrate: true,
   from an effect or an event handler, where they only run in the browser.
 - **A first render that throws makes the mount throw.** React has discarded the
   prerendered markup by then, so catch the error from `mountCanvasApp` and show
-  something. (With your own `hydrateRoot`, React 19 reports the error to you instead:
-  pass `onUncaughtError`.)
+  something. The same holds for a client render without `hydrate`. (With your own
+  `hydrateRoot` or `createRoot`, React 19 reports the error to you instead: pass
+  `onUncaughtError`.)
 - **`NativeOverlay` has no prerendered markup.** A portal cannot be hydrated, so an
   overlay renders nothing in the HTML and mounts right after hydration.
 - **Colours are checked in the browser.** `appearance` colours are validated with the

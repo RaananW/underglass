@@ -2,7 +2,7 @@
  * Validation of the experimental worker presentation path (`@underglass/react/experimental-worker`, see
  * docs/worker.md). In an isolated copy of the repository it builds and packs `@underglass/core` and the
  * library, installs both packed archives, builds the fixture app in `fixtures/worker/app`, and runs functional proofs in a real
- * browser (pixels, native input, rollback, media and DPR changes, refusals, cancellation, disposal),
+ * browser (pixels, native input, rollback, media and DPR changes, refusals, a first render that throws, cancellation, disposal),
  * followed by a CSS / main-thread / worker timing comparison.
  *
  * Invoked as `npm run test:worker`. Flags: `--react18` (use the React 18.3.1 peer instead of 19.3.1),
@@ -343,6 +343,28 @@ try {
       await page.locator("#native-input").fill("usable fallback");
       await page.locator("#save").click(); assert.equal(await page.locator("#saved").textContent(), "usable fallback");
       report.proof.push({ refusal: refusal.reason, disposal: await call(page, "dispose") });
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  }
+  {
+    // A first render that throws makes mountWorkerCanvasApp throw, with the root unmounted and the controller's
+    // observers and listeners released at once; the same hosts then take a healthy application. An error boundary
+    // in the application that catches the error leaves an ordinary mount.
+    const { context, page, errors } = await open("worker");
+    try {
+      const failed = await call(page, "firstRender", false);
+      assert.match(failed.mountError, /failed in its first render/, JSON.stringify(failed));
+      assert.deepEqual({ statuses: failed.statuses, observers: failed.observers, listeners: failed.listeners, hosts: failed.hosts },
+        { statuses: 0, observers: 0, listeners: [], hosts: ["<div></div>", "<div></div>"] }, JSON.stringify(failed));
+      const caught = await call(page, "firstRender", true);
+      assert.equal(caught.mountError, null, JSON.stringify(caught));
+      assert.equal(caught.fallback, "Caught");
+      for (const result of [failed, caught]) {
+        assert.deepEqual(result.afterwards, { mode: "dom", enrolledLayers: 1 });
+        assert.equal(result.disposed.mode, "disposed");
+        for (const value of Object.values(result.disposed.resources)) assert.equal(value, 0);
+      }
+      report.proof.push({ firstRenderThrows: failed, firstRenderCaught: caught });
       assert.deepEqual(errors, []);
     } finally { await context.close(); }
   }
