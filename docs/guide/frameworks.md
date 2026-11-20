@@ -48,6 +48,11 @@ const name = ref("Ada");
   store) before it mounts.
 - `Surface`, `Box`, `NativeScroll`, `NativeOverlay` and `Presence` take the same
   props as in React. `Presence` emits `complete` instead of calling `onComplete`.
+- As in React, `Surface`, `Box` and `NativeScroll` take no `style`: their inline
+  style comes from `layout` and `appearance`. A typed template or `h()` call
+  rejects it, and a `style` passed anyway is not applied (Vue warns in
+  development). Use `class` for other styles. Other attributes and listeners fall
+  through to the element.
 - `useSurfaceRef({ id })` returns a callback for `:ref`; bind it to your own
   top-level element. The options may be a ref or getter.
 - `useGPUHost()` and `useNativeOverlayHost()` work in `setup`.

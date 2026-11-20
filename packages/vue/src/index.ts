@@ -6,7 +6,7 @@
  * plain DOM, so they work unchanged when GPU presentation is off. The core runtime owns all GPU behaviour.
  */
 import {
-  createApp, defineComponent, h, inject, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, shallowRef, toValue, watch,
+  createApp, defineComponent, h, inject, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, shallowRef, toValue, warn, watch,
   Teleport, type App, type Component, type ComponentPublicInstance, type InjectionKey, type MaybeRefOrGetter, type PropType,
 } from "vue";
 import {
@@ -89,16 +89,41 @@ export function useSurfaceRef(options: MaybeRefOrGetter<EnrollmentOptions>): Sur
 }
 
 /**
+ * `style` is not an authored prop of `Surface`, `Box` or `NativeScroll`, as in React: their inline style is
+ * compiled from the typed `layout` and `appearance`, and on a layer the runtime writes the presentation
+ * declarations (`transform`, `opacity`, `transform-origin`) itself. Declaring it as a `never` prop makes a
+ * typed `h()` call or template reject it, keeps it out of the fallthrough attributes, and lets the component
+ * warn (in development) instead of dropping it unnoticed. Style the content with `class` or with elements
+ * inside.
+ */
+const rejectedStyle = {
+  /** Not supported: use `layout` and `appearance`, or `class`. */
+  style: { type: null as unknown as PropType<never>, default: undefined },
+};
+/** Warns once per component instance, in development, that a `style` it was given is not applied. */
+function styleWarning(component: string) {
+  let warned = false;
+  return (style: unknown) => {
+    if (style === undefined || warned) return;
+    warned = true;
+    warn(`${component} does not apply \`style\`: its inline style comes from \`layout\` and \`appearance\`. Use \`class\` for other styles.`);
+  };
+}
+
+/**
  * A top-level GPU layer: renders one native `<section>` (the original element, never a copy) and
  * registers it with the runtime. Its content is ordinary Vue and stays interactive through native hit
  * testing. `layout`, `transform` and `origin` updates are forwarded to the runtime after Vue patches
- * the DOM, in the same flush, so they land in the same GPU frame. Other attributes and listeners fall
- * through to the `<section>`.
+ * the DOM, in the same flush, so they land in the same GPU frame. Other attributes (`class`, `aria-*`,
+ * `data-*`) and listeners fall through to the `<section>`. `style` is not accepted, as in React: the
+ * layer's inline style comes from `layout` and `appearance`, and a `style` given anyway is not applied
+ * (Vue warns in development).
  */
 export const Surface = defineComponent({
   name: "UnderglassSurface",
   inheritAttrs: false,
   props: {
+    ...rejectedStyle,
     /** Unique layer ID used by the controller methods. */
     id: { type: String, required: true },
     /** Position, size and flex layout compiled to browser styles. */
@@ -132,10 +157,12 @@ export const Surface = defineComponent({
       () => runtime.update(props.id, props.layout, props.transform), { flush: "post" });
     onUpdated(() => runtime.requestReconcile());
     onBeforeUnmount(() => { release?.(); release = undefined; });
+    const checkStyle = styleWarning("Surface");
     return () => {
       // Validate eagerly so a bad transform or origin throws during render rather than inside a watcher.
       affine(props.transform);
       pivot(props.origin, { width: 1, height: 1 });
+      checkStyle(props.style);
       // Vue re-applies every key of a style object on each patch, so the style below must never name the
       // presentation properties the runtime owns (`transform`, `opacity`, `transform-origin`): rewriting
       // them would drop the runtime's GPU declarations and revoke GPU. The runtime writes the element's
@@ -156,20 +183,26 @@ const boxProps = {
   layout: { type: Object as PropType<Layout>, default: undefined },
   /** Visual styling compiled to browser styles. */
   appearance: { type: Object as PropType<Appearance>, default: undefined },
+  ...rejectedStyle,
 };
 
 /**
  * A styled `<div>` for content inside a `Surface`. It gets a `data-underglass-clipped` marker attribute
- * when its `overflow` clips. Other attributes and listeners fall through to the `<div>`.
+ * when its `overflow` clips. Other attributes and listeners fall through to the `<div>`; `style` is not
+ * accepted, as on `Surface`.
  */
 export const Box = defineComponent({
   name: "UnderglassBox",
   props: boxProps,
   setup(props, { slots }) {
-    return () => h("div", {
-      "data-underglass-clipped": props.layout?.overflow && props.layout.overflow !== "visible" ? "" : undefined,
-      style: compileStyle(props.layout, props.appearance),
-    }, slots.default?.());
+    const checkStyle = styleWarning("Box");
+    return () => {
+      checkStyle(props.style);
+      return h("div", {
+        "data-underglass-clipped": props.layout?.overflow && props.layout.overflow !== "visible" ? "" : undefined,
+        style: compileStyle(props.layout, props.appearance),
+      }, slots.default?.());
+    };
   },
 });
 
@@ -178,7 +211,11 @@ export const NativeScroll = defineComponent({
   name: "UnderglassNativeScroll",
   props: boxProps,
   setup(props, { slots }) {
-    return () => h(Box, { layout: { ...props.layout, overflow: "scroll" }, appearance: props.appearance, "data-underglass-scroll": "" }, slots);
+    const checkStyle = styleWarning("NativeScroll");
+    return () => {
+      checkStyle(props.style);
+      return h(Box, { layout: { ...props.layout, overflow: "scroll" }, appearance: props.appearance, "data-underglass-scroll": "" }, slots);
+    };
   },
 });
 

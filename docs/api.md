@@ -389,7 +389,9 @@ direction and visible/hidden/scroll overflow. `Appearance` supports background,
 color, border color/width, radius and font size. Numeric fields are validated;
 colors use the browser's `CSS.supports`. These types compile to HTML/CSS layout,
 not a new layout engine or an absence of browser styles. `style` is intentionally
-excluded from authored Surface/Box props. Existing arbitrary classes/ancestor
+excluded from authored Surface/Box/NativeScroll props in both adapters: React's prop
+types leave it out, and Vue's components declare it as `never`, do not apply a
+`style` passed anyway and warn about it in development. Existing arbitrary classes/ancestor
 selectors are not normalized or proven compatible.
 The positioned x/y origin applies to Surface; Box remains ordinary flow layout.
 
