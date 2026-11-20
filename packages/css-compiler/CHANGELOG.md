@@ -1,5 +1,11 @@
 # @underglass/css-compiler
 
+## 0.6.0
+
+### Patch Changes
+
+- @underglass/core@0.6.0
+
 ## 0.5.0
 
 ### Patch Changes
