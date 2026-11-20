@@ -137,3 +137,8 @@ Each adapter must pass the shared browser contract in
 `tests/helpers/framework-contract.mjs`: GPU stays on through content, structure and
 transform updates, the canvas shows fresh pixels, native hits land on the right
 elements, and `disable`, `enable` and `dispose` keep the original root and state.
+Its structural cases (`frameworkCases`) also unmount, key-swap, rename and make
+decorative a layer enrolled by ref and one registered by the adapter's layer
+component, take a `Presence` away and flip it back mid-exit, and mount a second
+application whose first render throws. The plain-DOM, Vue and React pages
+(`vanilla.html`, `vue.html`, `react.html`) run it.
