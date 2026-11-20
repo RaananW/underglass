@@ -49,8 +49,10 @@ export function useNativeOverlayHost(): HTMLElement {
  * React root. The enrollment is released when the element detaches or `id`/`decorative` change;
  * `origin` updates in place. Throws `EnrollmentError` (from the runtime) when the element is refused.
  */
-export function useSurfaceRef<T extends HTMLElement = HTMLElement>({ id, decorative, origin }: EnrollmentOptions): RefCallback<T> {
+export function useSurfaceRef<T extends HTMLElement = HTMLElement>({ id, decorative: flag, origin }: EnrollmentOptions): RefCallback<T> {
   const runtime = useRuntime();
+  // `undefined` and `false` name the same enrollment, so a change between them does not re-enroll (as in Vue).
+  const decorative = !!flag;
   const originKey = JSON.stringify(origin ?? "top-left");
   const latestOrigin = useRef(origin);
   latestOrigin.current = origin;
