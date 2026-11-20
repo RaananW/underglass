@@ -12,8 +12,13 @@ GPU draws them, and native hit testing, focus and input stay on those elements.
 
 ## Vue
 
-`@underglass/vue` is the Vue 3 adapter (`vue@^3.5`). It has the same components as
-the React package, written as Vue components:
+`@underglass/vue` is the Vue 3 adapter (`vue@^3.5`). It has the React package's
+layer components, hooks (as composables) and core re-exports, written for Vue, with
+these differences: it has no `GPUHost` (`mountCanvasApp` provides the runtime to the
+app), no prerendering (`prerenderCanvasApp`, `canvasHostsMarkup`) and no `strict`
+option; its `mountCanvasApp` takes a root component and a `configure(app)` option
+instead; and it exports no props interfaces (`SurfaceProps`, `BoxProps`,
+`PresenceProps`) but a `SurfaceRef` callback type.
 
 ```ts
 import { createCanvasHosts, mountCanvasApp } from "@underglass/vue";

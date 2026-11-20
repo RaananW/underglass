@@ -14,12 +14,14 @@ import {
   type Transform, type TransformOrigin, type EnrollmentOptions, type MotionDescriptor, type TransitionHandle, type TransitionResult,
 } from "@underglass/core";
 
+// The same core runtime names and types as `@underglass/react` re-exports, minus `canvasHostsMarkup` (prerendering
+// is React-only); `tests/unit/adapter-exports.unit.test.mjs` holds the two lists to each other.
 export {
-  createCanvasHosts, EnrollmentError, defineEffect,
+  createCanvasHosts, EnrollmentError, mountApplicationModule, defineEffect,
 } from "@underglass/core";
 export type {
   CanvasController, CanvasHosts, EnrollmentOptions, EnrollmentErrorCode, Transform, TransformOrigin, Affine, Point,
-  Layout, Appearance, AdmissionPolicy, RuntimeOptions, CanvasStatus, AnimationPlayback, ReleaseOptions, CSSAnimationSource,
+  Layout, Appearance, LocalApplicationModule, AdmissionPolicy, LayerDefinition, RuntimeOptions, CanvasStatus, AnimationPlayback, ReleaseOptions, CSSAnimationSource,
   CompiledAnimation, CompiledProgramSet, Ripple, ApplicationEffect, ParameterRange, EffectDescriptor, EffectTime, EffectHandle,
   EffectResult, MaterialDescriptor, MaterialHandle, CustomMaterial, ReliefMaterial, ReliefScene, ReliefPrimitive, ReliefSceneMaterial, MotionKeyframe, MotionTiming, MotionDescriptor, MotionHandle, TransitionHandle, TransitionResult, CoordinatedMotion,
 } from "@underglass/core";

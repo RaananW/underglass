@@ -8,6 +8,8 @@
  */
 export { GPUHost, Surface, Box, NativeScroll, NativeOverlay, Presence, useSurfaceRef, useNativeOverlayHost, useGPUHost, mountCanvasApp, prerenderCanvasApp } from "./react.js";
 export type { SurfaceProps, BoxProps, PresenceProps, MountCanvasOptions } from "./react.js";
+// Named re-exports of core, the same as `@underglass/vue`'s plus `canvasHostsMarkup` (prerendering);
+// `tests/unit/adapter-exports.unit.test.mjs` holds the two lists to each other.
 export { createCanvasHosts, canvasHostsMarkup, EnrollmentError, mountApplicationModule, defineEffect } from "@underglass/core";
 export type {
   CanvasController, CanvasHosts, EnrollmentOptions, EnrollmentErrorCode, Transform, TransformOrigin, Affine, Point,
