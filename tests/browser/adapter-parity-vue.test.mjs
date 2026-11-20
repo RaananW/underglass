@@ -72,3 +72,40 @@ test("Vue Surface, Box and NativeScroll reject style alike and warn, under GPU",
   await mkdir(evidence, { recursive: true });
   await writeFile(`${evidence}/vue-style.json`, JSON.stringify({ before, section, messages, after: { mode: after.mode, uploads: after.metrics.uploads } }, null, 2));
 });
+
+// `useSurfaceRef` bound to a component enrolls the component's root element (`$el`), as its `SurfaceRef` type
+// promises; before, a component ref enrolled nothing and said nothing. An element of another realm is handed to the
+// runtime, which refuses it with the usual `EnrollmentError`, instead of being taken for "no element".
+test("Vue useSurfaceRef on a component enrolls its root element under GPU, and refuses an element of another realm", async ({ page }) => {
+  const messages = watch(page);
+  await ready(page);
+  const startup = await state(page);
+  expect(startup.layers.map(layer => layer.id)).toEqual(["styled", "component"]);
+  expect(await page.locator("#component").getAttribute("drawable")).toBe("");
+  const point = { card: { x: 390, y: 130 } };
+  expect((await pixels(page, "component-gpu", point)).card).toEqual(colours.green);
+
+  // The native button inside the component's root is hit at its own position on the GPU layer; a real click there
+  // updates the component's own state, and the canvas shows it.
+  const centre = await page.locator("#component-button").evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  });
+  expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.id, centre)).toBe("component-button");
+  await page.mouse.click(centre.x, centre.y);
+  await expect.poll(async () => (await state(page)).cardColour).toBe("blue");
+  await page.evaluate(() => window.adapterParity.settle());
+  const swapped = await state(page);
+  expect(swapped.mode, swapped.reason).toBe("gpu");
+  expect(swapped.metrics.uploads).toBeGreaterThan(startup.metrics.uploads);
+  expect((await pixels(page, "component-gpu-swapped", point)).card).toEqual(colours.blue);
+
+  const foreign = await page.evaluate(() => window.adapterParity.foreignRef());
+  expect(foreign).toMatchObject({ instanceOfHTMLElement: false, error: { name: "EnrollmentError", code: "foreign-element" } });
+  const after = await state(page);
+  expect(after.mode, after.reason).toBe("gpu");
+  expect(after.layers.map(layer => layer.id)).toEqual(["styled", "component"]);
+  expect(messages.filter(message => !/does not apply `style`/.test(message))).toEqual([]);
+  await mkdir(evidence, { recursive: true });
+  await writeFile(`${evidence}/vue-component-ref.json`, JSON.stringify({ startup: startup.layers, foreign, after: { mode: after.mode, layers: after.layers } }, null, 2));
+});

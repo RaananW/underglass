@@ -51,11 +51,23 @@ export function useNativeOverlayHost(): HTMLElement {
 export type SurfaceRef = (element: Element | ComponentPublicInstance | null) => void;
 
 /**
+ * The element a template ref names: the element itself, or a component's root element (`$el`). Checked by
+ * `nodeType`, as the core checks nodes, so an element of another realm (an iframe's) is not mistaken for
+ * "no element"; anything else is returned as it is, for the runtime to refuse.
+ */
+function refElement(value: Element | ComponentPublicInstance): HTMLElement {
+  if ((value as Node).nodeType !== 1 && "$el" in value) return (value.$el ?? value) as HTMLElement;
+  return value as HTMLElement;
+}
+
+/**
  * Enrolls your own element (bind the returned callback with `:ref`) as a layer of the runtime without
  * cloning it, so the original Vue controls and state are kept. Bind it to a direct child of the app's
- * root. The enrollment is released when the element unmounts or `id`/`decorative` change; `origin`
- * updates in place. `options` may be a ref or getter. Throws `EnrollmentError` (from the runtime) when
- * the element is refused.
+ * root, or to a component whose single root element is one (its `$el` is enrolled; it must keep that
+ * root element while enrolled). The enrollment is released when the element unmounts or
+ * `id`/`decorative` change; `origin` updates in place. `options` may be a ref or getter. Throws
+ * `EnrollmentError` (from the runtime) when the element is refused, including a component whose root is
+ * not one element and an element of another document or realm.
  */
 export function useSurfaceRef(options: MaybeRefOrGetter<EnrollmentOptions>): SurfaceRef {
   const runtime = useRuntime();
@@ -79,7 +91,7 @@ export function useSurfaceRef(options: MaybeRefOrGetter<EnrollmentOptions>): Sur
   onBeforeUnmount(detach);
   // Vue calls a stable function ref on every patch of its element, so only a changed element re-enrolls.
   return element => {
-    const next = element instanceof HTMLElement ? element : null;
+    const next = element ? refElement(element) : null;
     if (next === attached) return;
     detach();
     attached = next;

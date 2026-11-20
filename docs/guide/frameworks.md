@@ -54,7 +54,10 @@ const name = ref("Ada");
   development). Use `class` for other styles. Other attributes and listeners fall
   through to the element.
 - `useSurfaceRef({ id })` returns a callback for `:ref`; bind it to your own
-  top-level element. The options may be a ref or getter.
+  top-level element, or to a component whose single root element is one (its
+  `$el` is enrolled, so it must keep that root element while enrolled). The
+  options may be a ref or getter. A component whose root is not one element, or
+  an element of another document or realm, is refused with `EnrollmentError`.
 - `useGPUHost()` and `useNativeOverlayHost()` work in `setup`.
 - Vue re-applies every key of a `:style` object on each update. Never bind
   `transform`, `opacity` or `transform-origin` on a layer element: the runtime
