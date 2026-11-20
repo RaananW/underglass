@@ -159,6 +159,8 @@ for (const strict of [false, true]) test(`300 real GPU frames, incremental non-e
     expect(interval.after.metrics.admission).toEqual(interval.before.metrics.admission);
     expect(interval.after.metrics.effectShaderCompilations).toBe(interval.before.metrics.effectShaderCompilations);
     expect(interval.after.resources.effects).toBe(EFFECT_PASSES);
+    // Each `advance` step reports its own work (advancing the effects, the policy check) as one `frameTickMs` sample.
+    expect(interval.samples.filter(sample => sample.kind === "frameTickMs")).toHaveLength(300);
     intervals.push({ kind, ...interval });
   }
   // Declarative motion on top of two playing effects: another 300 real animation frames must again need no
@@ -186,6 +188,38 @@ for (const strict of [false, true]) test(`300 real GPU frames, incremental non-e
   const disposed = await page.evaluate(() => window.effectsProbe.dispose()); zero(disposed);
   await save(`independence-${strict}`, { claim: "Added non-equivalent effect work, not a DOM speedup; public CPU frame samples, GPU timestamps unavailable",
     intervals, motion, contentChangedBytes: changed(before.data, after.data), disposed });
+});
+
+// `frameTickMs` reports the work of the runtime's own frame callbacks apart from the frames they draw: first a
+// transition alone (nothing else plays, so the effect clock is stopped), then a playing ripple alone (the effect clock).
+// Each window keeps GPU on and presents frames, and every tick reaches `onMeasure` and `state().metrics.timings`.
+test("a transition's tick and the effect clock's tick are reported as frameTickMs while GPU presents", async ({ page }) => {
+  await ready(page);
+  const windows = {};
+  for (const source of ["transition", "clock"]) {
+    windows[source] = await page.evaluate(async source => {
+      const probe = window.effectsProbe;
+      let transition;
+      if (source === "clock") probe.apply([probe.descriptor("ripple", 0, true)]);
+      await probe.controller().settle(); probe.clearSamples();
+      const before = probe.state();
+      if (source === "transition") transition = probe.controller().transition("art", { keyframes: [{ offset: 0 }, { offset: 1, x: 15 }], timing: { duration: 60000 } });
+      for (let i = 0; i < 30; i++) await new Promise(resolve => requestAnimationFrame(resolve));
+      const after = probe.state(), samples = probe.samples();
+      if (transition) { transition.cancel(); await transition.finished; } else probe.handle().cancel();
+      await probe.controller().settle();
+      return { before, after, samples };
+    }, source);
+    const { before, after, samples } = windows[source];
+    expect(after.mode, source).toBe("gpu");
+    expect(after.metrics.gpuFrames - before.metrics.gpuFrames, `${source}: frames advanced`).toBeGreaterThanOrEqual(20);
+    const ticks = samples.filter(sample => sample.kind === "frameTickMs");
+    expect(ticks.length, `${source}: one tick per frame`).toBeGreaterThanOrEqual(20);
+    expect(ticks.length, `${source}: every recorded tick reached onMeasure`).toBe(after.metrics.timings.frameTickMs.count - before.metrics.timings.frameTickMs.count);
+    expect(ticks.every(sample => Number.isFinite(sample.durationMs) && sample.durationMs >= 0 && sample.phase === "content"), source).toBe(true);
+  }
+  zero(await page.evaluate(() => window.effectsProbe.dispose()));
+  await save("frame-tick", windows);
 });
 
 // Five invalid operations (out-of-range parameter, a colour effect (dissolve) placed before a sampling effect (ripple), an effect on `panel`, a tampered custom

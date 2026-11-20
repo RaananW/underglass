@@ -516,20 +516,36 @@ No controls are hidden or duplicated to simulate exit retention.
 `MountCanvasOptions.onMeasure` receives synchronous samples with
 `kind`, `at` (`performance.now` milliseconds), `durationMs`, `phase`
 (`admission` or `content`) and optional `layerId`/RGBA `bytes`.
-Kinds are `captureMs`, `readbackCompareMs`, `uploadMs`, `frameWorkMs` and
-`frameIntervalsMs`. The runtime retains no extra event array; its normal
-last 256 histories/cumulative counters remain bounded.
+`captureMs`, `uploadMs`, `frameWorkMs`, `frameTickMs` and `frameIntervalsMs`
+are also kept in `state().metrics.timings` (count, total, minimum, maximum) and
+in a last-256 history under `state().metrics`. The runtime retains no extra
+event array; its histories and cumulative counters remain bounded.
+
+| Kind | One sample per | Covers | Leaves out |
+| --- | --- | --- | --- |
+| `captureMs`, `uploadMs` | layer upload | The synchronous native upload of one layer's paint into its texture, with its `layerId` and `bytes` (both kinds time the same call) | The wait for the browser's paint, and GPU execution |
+| `readbackCompareMs` | layer readback | A pixel readback plus its comparison | Reserved: the current renderer makes no content readbacks and emits none |
+| `frameWorkMs` | drawn GPU frame | The whole `draw`: the policy check, native geometry, lights, uniforms and the submission of every pass | A draw that presents nothing (a failing policy check, an incomplete composition), and the frame callback's other work |
+| `frameTickMs` | runtime frame callback | The callback's own work: the shared clock advancing owned animations and playing effects, the running transitions sampling their timelines, an `animate()` or `advance()` step, with the policy checks they make | The `frameWorkMs` of any frame drawn inside it. Draws the runtime batches into a frame of its own are `frameWorkMs` only |
+| `frameIntervalsMs` | draw that passed its policy check, after the first | The time between two such draws, each timestamped just after its policy check | Work: it is cadence, not cost |
+| `effectCompileMs` | effect compilation | From the start of compilation until the shaders are ready (`phase: "admission"`) | It is not kept in `timings` |
+| `instrumentGpuMs`, `emitterGpuMs` | layer and frame | The GPU time of one layer's instrument mesh pass and post chain, or of its emitter face pool pass, from Babylon Lite's per-task timings when the device has timestamp queries | CPU work; they are not kept in `timings` |
+
+`frameWorkMs` and `frameTickMs` never overlap, so they add up: together they are
+most of the runtime's JavaScript in the frames it animates (90 to 95% of a CPU
+profile on the playground's performance page). The rest is work outside a frame
+callback and a draw: observer and paint callbacks, and an adapter's commits.
+Transitions share one frame callback, so however many run they take one
+`frameTickMs` sample a frame between them, and they also tick in ordinary DOM. Neither kind covers the browser's own
+work for a frame (style, layout, paint, the native capture) or GPU execution:
+compare them with a profile, not with frame intervals. The CPU kinds are synchronous public CPU
+work, not completion or GPU execution, and `phase` separates admission work
+from content work.
 
 Use a cheap, nonthrowing callback and bound any external collection. Throwing
 is not silently swallowed and can trigger the renderer's explicit failure
-path. Callback/profiling overhead can perturb timing. Capture timing excludes
-the native paint wait; readback plus comparison is measured separately;
-upload/frame timing is synchronous public CPU work, not completion/GPU
-execution. `phase` separates admission work from content work.
+path. Callback/profiling overhead can perturb timing.
 See [measurement definitions and raw evidence](archive/measurements.md).
-With an `instrument` material, `instrumentGpuMs` samples (`layerId`, `phase: "content"`) carry the GPU time of one
-layer's mesh pass and post chain in one frame, and with emitters, `emitterGpuMs` samples the GPU time of one layer's face pool pass,
-both from Babylon Lite's per-task timings when the device has timestamp queries.
 
 ### Input events and captures
 
