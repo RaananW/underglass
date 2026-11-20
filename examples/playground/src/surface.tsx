@@ -3,7 +3,8 @@
  * (`createSurfaceRenderer`, re-exported by `surface-renderer.ts`) directly, without the `CanvasController` API.
  * A small React app with two `drawable` layers is mounted through the renderer's `mount` hook. The page shows
  * the renderer's diagnostics and offers enable/disable, a tint effect, motion and dispose. `window.surfaceProbe`
- * is the browser-test hook; `?dom` skips automatic enabling and `?strict` uses StrictMode.
+ * is the browser-test hook (`slowPolicy(ms)` makes the renderer's policy check that slow); `?dom` skips automatic
+ * enabling and `?strict` uses StrictMode.
  */
 import { Profiler, StrictMode, useEffect, useLayoutEffect, useState, type ProfilerOnRenderCallback } from "react";
 import { createRoot } from "./demo/react-root";
@@ -14,6 +15,8 @@ const commits = { reactCommits: 0, commitEvents: [] as { phase: "mount" | "updat
 const actionRemovers: (() => void)[] = [];
 // Pending startup `requestAnimationFrame` id, tracked so `dispose` can cancel it.
 let startupFrame = 0;
+// Milliseconds the renderer's `policy` check busy-waits each time it runs (`surfaceProbe.slowPolicy`); it never fails.
+let policyCost = 0;
 const recordCommit: ProfilerOnRenderCallback = (_id, phase, _actual, _base, _start, commitTime) => {
   commits.reactCommits++;
   commits.commitEvents.push({ phase, commitTime });
@@ -67,6 +70,11 @@ const renderer = createSurfaceRenderer({
     return () => root.unmount();
   },
   onStatus(message) { document.querySelector<HTMLElement>("#diagnostics")!.textContent = message; },
+  policy() {
+    const started = performance.now();
+    while (performance.now() - started < policyCost);
+    return undefined;
+  },
 });
 // Renderer state plus React commit metrics and a snapshot of the control values and focus.
 function state() {
@@ -99,8 +107,10 @@ async function dispose() {
   for (const remove of actionRemovers.splice(0)) remove();
   return state();
 }
+// Makes every policy check cost at least `milliseconds` of main-thread time (0 restores the free check).
+function slowPolicy(milliseconds: number) { policyCost = milliseconds; }
 // Test hook.
-window.surfaceProbe = { enable, disable, frames, settle: renderer.settle, state, dispose };
+window.surfaceProbe = { enable, disable, frames, settle: renderer.settle, state, dispose, slowPolicy };
 for (const [id, operation] of [
   ["enable", enable], ["disable", disable], ["effect", renderer.toggleTint],
   ["motion", renderer.toggleMotion], ["dispose", dispose],
@@ -125,6 +135,6 @@ startupFrame = requestAnimationFrame(() => {
 
 declare global {
   interface Window {
-    surfaceProbe: { enable: typeof enable; disable: typeof disable; frames: typeof frames; settle: typeof renderer.settle; state: typeof state; dispose: typeof dispose };
+    surfaceProbe: { enable: typeof enable; disable: typeof disable; frames: typeof frames; settle: typeof renderer.settle; state: typeof state; dispose: typeof dispose; slowPolicy: typeof slowPolicy };
   }
 }

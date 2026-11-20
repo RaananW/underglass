@@ -426,6 +426,24 @@ for (const action of ["disable", "dispose"]) {
   });
 }
 
+// `frameWorkMs` times the whole draw, its policy check included: with the check made 6 ms slow on purpose, every drawn
+// GPU frame reports at least 6 ms, and GPU keeps presenting the frames. The slow check never fails, so nothing recovers.
+test("frameWorkMs covers the policy check of every drawn GPU frame", async ({ page }) => {
+  await mkdir(evidence, { recursive: true });
+  await ready(page);
+  const run = await page.evaluate(async () => {
+    const probe = window.surfaceProbe;
+    probe.slowPolicy(6);
+    try { return await probe.frames(20, 10, 0); } finally { probe.slowPolicy(0); }
+  });
+  expect(run.state.mode).toBe("gpu");
+  expect(run.after.gpuFrames - run.before.gpuFrames).toBe(20);
+  const work = run.state.metrics.frameWorkMs.slice(-20);
+  expect(work).toHaveLength(20);
+  expect(Math.min(...work), "each frame's work includes the 6 ms policy check").toBeGreaterThanOrEqual(6);
+  await writeFile(`${evidence}/frame-work-policy.json`, JSON.stringify({ policyMs: 6, frameWorkMs: work, timings: run.state.metrics.timings }, null, 2));
+});
+
 // Pixel staging through the owning canvas works on both public GPU backends (WebGPU, WebGL2) in
 // `probe.html`: two real native layers captured, copied and uploaded, with the expected colours.
 test("owning-canvas pixel staging transfers real native layers through both public backends", async ({ page }) => {

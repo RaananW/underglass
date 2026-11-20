@@ -47,6 +47,11 @@ for (const variant of ["dom-static", "gpu-static", "dom-affine", "gpu-affine", "
       expect(interval.after.metrics.gpuFrames - interval.before.metrics.gpuFrames).toBeGreaterThan(5);
       expect(interval.samples.filter(s => s.kind === "frameWorkMs").length).toBe(
         interval.after.metrics.gpuFrames - interval.before.metrics.gpuFrames);
+      // The shared clock (owned animations, or the playing ripples) reports its own work as `frameTickMs`, one sample
+      // per tick, apart from the frame it draws.
+      const ticks = interval.samples.filter(s => s.kind === "frameTickMs").length;
+      expect(ticks).toBeGreaterThan(5);
+      expect(ticks).toBe(interval.after.metrics.timings.frameTickMs.count - interval.before.metrics.timings.frameTickMs.count);
     }
     // Disposal must release every GPU and runtime resource.
     const retired = await page.evaluate(() => window.measurement.dispose());
