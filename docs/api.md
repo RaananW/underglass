@@ -550,8 +550,11 @@ unanimated first frame. It is controlled by `present`; initially present content
 settled and does not enter-animate. False retains the **same** React subtree
 during exit; completion or cancellation removes it. True during exit reverses
 from the sampled state without remounting that subtree. True after removal
-mounts one new React subtree and enters. A parent unmount cancels motion and
-suppresses stale completion callbacks. Keep its ID/runtime stable; changing
+mounts one new React subtree and enters. A parent unmount cancels motion within
+the commit that removes the `Presence` (a layout-effect cleanup, before React
+removes its DOM) and suppresses stale completion callbacks, including the
+`Unenrolled` cancellation when its boundary is removed with it. Suspense hiding a
+`Presence` cancels its motion the same way; it plays again when shown. Keep its ID/runtime stable; changing
 descriptors alone does not restart a transition. Content remains native
 interactive DOM until React removes it; opacity 0 does not disable focus/hits.
 Presence animates the enrolled boundary, so place only the intended subtree
