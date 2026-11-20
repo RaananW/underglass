@@ -83,3 +83,101 @@ for (const strict of [false, true]) test(`React useSurfaceRef keeps its enrollme
     after: { revision: after.registryRevision, uploads: after.metrics.uploads, enrolls: after.enrolls }, messages,
   }, null, 2));
 });
+
+// `useSurfaceRef` reads the origin of the last commit, never of a render React discarded. A transition that changes
+// the origin suspends, so React renders it but does not commit it; a new element then enrolls (in a commit that does
+// not render the hook's component) with the committed origin. When the transition commits, the layer takes its origin,
+// and an origin changed in the same commit as a new element is the one that element enrolls with.
+for (const strict of [false, true]) test(`React useSurfaceRef enrolls with the committed origin, not a discarded render's strict=${strict}`, async ({ page }) => {
+  const messages = watch(page);
+  await ready(page, strict);
+  const pivot = async () => (await state(page)).layers.find(layer => layer.id === "pivot");
+  expect((await pivot()).origin).toBe("center");
+  await page.evaluate(() => window.reactParity.discardOrigin({ x: 1, y: 1 }));
+  await expect.poll(async () => (await state(page)).rendered.origin).toEqual({ x: 1, y: 1 });
+  expect((await state(page)).committed.origin).toBe("center");
+
+  await page.evaluate(() => window.reactParity.replacePivot());
+  await settle(page);
+  const replaced = await state(page);
+  expect(replaced.mode, replaced.reason).toBe("gpu");
+  // StrictMode (React 19) replays a new element's ref callback, so it may enroll twice; each enrollment carries the same origin.
+  expect(replaced.enrolls.length === 1 || strict).toBe(true);
+  expect(new Set(replaced.enrolls.map(entry => JSON.stringify(entry)))).toEqual(new Set([JSON.stringify({ id: "pivot", origin: "center" })]));
+  expect(replaced.layers.find(layer => layer.id === "pivot").origin).toBe("center");
+  // The new element is the live layer: a real click on its button lands, and the canvas shows the change.
+  const point = { x: 390, y: 130 };
+  expect(await pixel(page, `origin-${strict}-replaced`, point)).toEqual(colours.green);
+  await click(page, "#pivot-button");
+  await expect.poll(async () => (await state(page)).pivotColour).toBe("blue");
+  await settle(page);
+  const clicked = await state(page);
+  expect(clicked.mode, clicked.reason).toBe("gpu");
+  expect(clicked.metrics.uploads).toBeGreaterThan(replaced.metrics.uploads);
+  expect(await pixel(page, `origin-${strict}-clicked`, point)).toEqual(colours.blue);
+
+  // The transition commits: its origin now applies, in place.
+  await page.evaluate(() => window.reactParity.resume());
+  await expect.poll(async () => (await state(page)).committed.origin).toEqual({ x: 1, y: 1 });
+  expect((await pivot()).origin).toEqual({ x: 1, y: 1 });
+  // One commit with a new origin and a new element: the element enrolls with that origin.
+  await page.evaluate(() => window.reactParity.replaceWithOrigin("top-left"));
+  await settle(page);
+  const together = await state(page);
+  expect(together.mode, together.reason).toBe("gpu");
+  const added = together.enrolls.slice(replaced.enrolls.length);
+  expect(added.length === 1 || strict).toBe(true);
+  expect(new Set(added.map(entry => JSON.stringify(entry)))).toEqual(new Set([JSON.stringify({ id: "pivot", origin: "top-left" })]));
+  expect(together.layers.find(layer => layer.id === "pivot").origin).toBe("top-left");
+  expect(await pixel(page, `origin-${strict}-together`, point)).toEqual(colours.blue);
+  await click(page, "#pivot-button");
+  await expect.poll(async () => (await state(page)).pivotColour).toBe("green");
+  await settle(page);
+  expect((await state(page)).mode).toBe("gpu");
+  expect(await pixel(page, `origin-${strict}-together-clicked`, point)).toEqual(colours.green);
+  expect(messages).toEqual([]);
+  await mkdir(evidence, { recursive: true });
+  await writeFile(`${evidence}/react-origin-${strict}.json`, JSON.stringify({ reactVersion: together.reactVersion, enrolls: together.enrolls, messages }, null, 2));
+});
+
+// `Presence` calls the `onComplete` of the last commit, never of a render React discarded: a transition that changes
+// the handler suspends while the exit runs, and the exit's completion goes to the committed handler. A handler changed
+// by a commit while a transition runs is the one called when it ends.
+for (const strict of [false, true]) test(`React Presence calls the committed onComplete, not a discarded render's strict=${strict}`, async ({ page }) => {
+  const messages = watch(page);
+  await ready(page, strict);
+  const badge = { x: 500, y: 60 };
+  expect(await pixel(page, `presence-${strict}`, badge)).toEqual(colours.green);
+  await page.evaluate(() => window.reactParity.setPresent(false));
+  await page.evaluate(() => window.reactParity.discardLabel("discarded"));
+  await expect.poll(async () => (await state(page)).rendered.label).toBe("discarded");
+  expect((await state(page)).committed.label).toBe("initial");
+  await expect.poll(async () => (await state(page)).completions.length, { timeout: 5000 }).toBe(1);
+  const exited = await state(page);
+  expect(exited.completions).toEqual([{ label: "initial", status: "completed" }]);
+  expect(exited.badge).toBe(false);
+  await settle(page);
+  expect((await state(page)).mode).toBe("gpu");
+  expect(await pixel(page, `presence-${strict}-exited`, badge)).toEqual([250, 200, 20, 255]);
+
+  // The transition commits; then the enter's handler is replaced by a commit while the enter runs.
+  await page.evaluate(() => window.reactParity.resume());
+  await expect.poll(async () => (await state(page)).committed.label).toBe("discarded");
+  await page.evaluate(() => window.reactParity.setPresent(true));
+  await page.evaluate(() => window.reactParity.setLabel("latest"));
+  await expect.poll(async () => (await state(page)).completions.length, { timeout: 5000 }).toBe(2);
+  const entered = await state(page);
+  expect(entered.completions[1]).toEqual({ label: "latest", status: "completed" });
+  await settle(page);
+  expect((await state(page)).mode).toBe("gpu");
+  expect(await pixel(page, `presence-${strict}-entered`, badge)).toEqual(colours.green);
+  // Native hits still land on the GPU-presented layers.
+  await click(page, "#plain-button");
+  await expect.poll(async () => (await state(page)).plainColour).toBe("blue");
+  await settle(page);
+  expect(await pixel(page, `presence-${strict}-clicked`, { x: 200, y: 130 })).toEqual(colours.blue);
+  expect((await state(page)).mode).toBe("gpu");
+  expect(messages).toEqual([]);
+  await mkdir(evidence, { recursive: true });
+  await writeFile(`${evidence}/react-presence-${strict}.json`, JSON.stringify({ reactVersion: entered.reactVersion, completions: entered.completions, messages }, null, 2));
+});
