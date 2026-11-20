@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 // The public runtime surface, by name: a change here is an API change.
 assert.deepEqual(Object.keys(runtime).sort(), ["Box", "EnrollmentError", "GPUHost", "NativeOverlay", "NativeScroll", "Presence", "Surface",
-  "createCanvasHosts", "defineEffect", "mountApplicationModule", "mountCanvasApp", "useGPUHost", "useNativeOverlayHost", "useSurfaceRef"]);
+  "canvasHostsMarkup", "createCanvasHosts", "defineEffect", "mountApplicationModule", "mountCanvasApp", "prerenderCanvasApp", "useGPUHost", "useNativeOverlayHost", "useSurfaceRef"]);
 // The worker entries (the React adapter's and the core primitives they build on) must not ship the
 // main-thread shader builder or private engine fields.
 for (const name of ["@underglass/react", "@underglass/core"]) for (const entry of ["experimental-worker", "experimental-worker/thread"]) {
