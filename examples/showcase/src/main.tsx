@@ -160,6 +160,10 @@ function Studio({ opening }: { opening: ExampleId }) {
   // called once on registration too, in case the URL changed while the root was loading.
   const change = useRef<(id: ExampleId) => void>(undefined);
   const ready = useCallback((update: (id: ExampleId) => void) => { change.current = update; update(shown.current); }, []);
+  // The stage's form follows the example on it, not the URL: `Demo` reports it in the commit that swaps the example in, so
+  // the example that stays on stage while the next one loads keeps its own stage (`.stage-fluid` lays out the Instrument
+  // gallery's wall). The class is written here rather than rendered, so a render of this page never changes it.
+  const onStage = useCallback((id: ExampleId) => { frame.current?.classList.toggle("stage-fluid", id === "instrument"); }, []);
   // The example on stage, and the ones before and after it in the catalog.
   const current = exampleOf(selected), { previous, next } = neighbours(selected);
   useEffect(() => {
@@ -216,7 +220,7 @@ function Studio({ opening }: { opening: ExampleId }) {
           setDiagnostic(status.reason); setMode(status.mode);
           if (lastMode.current === "gpu" && status.mode !== "gpu" && !leaving.current && !retired.current) track("GPU Lost", { example: shown.current, status: explain(status.reason).title, api: polyfillActive.current ? "polyfill" : "native" });
           lastMode.current = status.mode;
-        } }, <Demo id={opening} onReady={ready} />);
+        } }, <Demo id={opening} onReady={ready} onStage={onStage} />);
       controller.current = app;
       setMounted(true);
       // Handle for inspecting the running example from the console.
@@ -233,7 +237,7 @@ function Studio({ opening }: { opening: ExampleId }) {
     window.addEventListener("pageshow", restore);
     return () => { cancelled = true; window.removeEventListener("popstate", show); window.removeEventListener("hashchange", show);
       window.removeEventListener("pagehide", close); window.removeEventListener("pageshow", restore); close(); };
-  }, [ready]);
+  }, [ready, onStage]);
   // Opens an example's page in place.
   function go(id: ExampleId) {
     history.pushState(null, "", pageURL(id));
@@ -350,7 +354,7 @@ function Studio({ opening }: { opening: ExampleId }) {
         <div className="stage-chrome" aria-hidden="true"><i /><i /><i /><span>{gpu ? polyfilled ? "webgpu · html-in-canvas polyfill" : "webgpu · shared compositor" : "ordinary dom"}</span>
           {selected !== "instrument" && <span className="scroll-hint">scroll sideways &#8594;</span>}</div>
         <div className="stage-scroll" role="region" aria-label="Live example canvas; scroll horizontally on small screens" tabIndex={0}>
-          <div className={selected === "instrument" ? "stage stage-fluid" : "stage"} ref={frame} /></div>
+          <div className={opening === "instrument" ? "stage stage-fluid" : "stage"} ref={frame} /></div>
       </div>
       <div className="status-row">
         {modePill}

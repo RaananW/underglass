@@ -151,6 +151,32 @@ CPU figures with the CPU slowed four times). None is closed in `packages/` yet; 
 - **Not tried on a real phone since:** the tilt on the home page's deck, the Instrument gallery's one-panel pages,
   and whether the gallery is fast enough there.
 
+## Transient structure (2026-11-20, issue #262)
+
+A layer that is detached or zero-sized on the GPU is now decided at the next frame boundary instead of at once
+([api](api.md#transient-structure)); one that is still in that state then falls back with the same reason, in the first
+frame after the task that made it. Covered by `tests/browser/transient-structure.test.mjs` (removal before a passive
+release, a hide undone by the next effect, a `key` swap of a passive enrollment, and the three persistent counterparts),
+Canary 160.0.8172.0 on Windows 11, headless and headful. Upstream check: WICG proposal
+`5d9d970ebc06d1903aa0f4b99ac78655b9922804` (2026-10-30), whose `paint` event fires after the resize and intersection
+observer steps of the same rendering update; Chromium hotlist 6783002 not readable without sign-in. What is left:
+
+- **A state that lasts into the next frame still falls back.** React runs a commit's passive effects in a later task,
+  and the browser may render in between. An enrollment released only in a passive cleanup can therefore still fall back
+  with `Detached enrolled layer`; `useStrataGpu` keeps its layout-effect release (#259) for that reason.
+- **The showcase's Instrument to layers switch was not a one-task state.** The stage lost the gallery's fluid form when
+  the URL changed, and the gallery left only after the next example had loaded, several frames later: the wall had no
+  height all that time. The showcase now changes the stage's form in the commit that swaps the example in; the core
+  change alone does not keep GPU there, and should not.
+- **A state made inside a rendering update is decided by that update's native paint.** Shown for a layer hidden in the
+  page's own frame callback (the paint fired in that frame); not shown for every kind of DOM change.
+- **An element removed while enrolled keeps whatever native geometry the browser keeps for it.** The browser refuses
+  `clearElementGeometry` for an element that is no longer in the canvas, so core no longer calls it there (a fallback
+  with such a layer used to throw in that call and left the page without its ordinary DOM). Whether that element hit-tests
+  with its old canvas transform if it is put back into the canvas without being enrolled again was not checked.
+- **`z-index` and content beyond the capture bounds stay immediate:** a contract exit and a safety guard
+  ([api](api.md#transient-structure)).
+
 ## Unsupported or untargeted scope
 
 | ID | Current boundary and impact | Concrete closure criterion |

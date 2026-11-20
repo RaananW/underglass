@@ -58,8 +58,9 @@ spinning descendant kept GPU active with about 62 fresh uploads per second.
 
 Structural policy checks (style/DOM-derived) are cached and re-evaluated after
 mutations, resize, scroll, animation/transition events, input/focus, membership,
-ownership, effects and phase changes. Ownership checks and transform-dependent
-geometry still run every frame. Paint events upload only layers listed in
+ownership, effects and phase changes. A detached or zero-sized layer is decided at
+the next frame boundary rather than at once ([transient structure](#transient-structure)).
+Ownership checks and transform-dependent geometry still run every frame. Paint events upload only layers listed in
 `changedElements`, plus stale ones (new slot, extent/grid change, invalidated,
 or after a hidden-document pause); unchanged layers are not re-uploaded.
 
@@ -181,7 +182,8 @@ not CSS-sized downsampling; allocation growth prepares a successor.
 `metrics.incompleteFramesSkipped` counts withheld incomplete compositions.
 `metrics.mutationsIgnored` counts ignored same-value mutation records ([below](#same-value-mutations-are-ignored)).
 `metrics.policyPasses` and `metrics.ownershipChecks` count the presentation policy's passes and the owned-animation
-source checks ([below](#policy-checks-per-frame)).
+source checks ([below](#policy-checks-per-frame)); `metrics.deferredStructure` and `metrics.heldDraws` count the
+detached or zero-sized layers held for the frame boundary and the draws withheld meanwhile ([below](#transient-structure)).
 Compatibility admission/readmission counters remain, but automatic attempts
 and retry frames stay zero. Visibility pauses scheduling, reduced motion uses
 its canonical endpoint/identity contract and forced colors refreshes native
@@ -259,6 +261,46 @@ effect, material and emitter update.
 Changes the browser makes (a resize, a scroll, a new device pixel ratio) are drawn in
 the call that learns of them, so they are in the frame that shows the change.
 
+### Transient structure
+
+A layer whose element has left the document (`Detached enrolled layer`) or has no area
+(`Zero-sized layer`: `display: none`, a collapsed box, or a typed layout of width or height 0)
+is a state a framework commit can pass through for a task: React removes an element before a
+passive effect releases its enrollment, a later effect shows a hidden layer again, a `key`
+swap removes the old element and enrolls the new one with the same id. On the GPU these two
+are decided at the frame boundary, not when they are first seen:
+
+- **Seen in a task** (a mutation, a commit's `update`, a membership change): the runtime holds.
+  It draws no GPU frame and applies no native geometry, and asks for a frame callback. No
+  frame is presented while it holds, so the canvas keeps the frame already on screen.
+- **Decided at the frame boundary**: by the first check the runtime makes in the browser's
+  rendering update (that frame callback, its other frame callbacks, the resize observer, a
+  resize or scroll event, the native `paint`), before the frame is presented. A layer
+  released by then has left membership; one that is back is drawn in that frame with its
+  current pixels, and the work held meanwhile (a reconcile, a membership change) runs first.
+  A layer that is still detached or zero-sized falls back to ordinary DOM with the same
+  reason as before, in the first frame after the task that made it, and no GPU frame is
+  drawn from that state.
+- **Seen inside a rendering update** (a page's own frame callback writes the DOM after the
+  runtime's): the native `paint` of the same update decides; there is no later boundary.
+
+So a state that lasts until the next frame falls back, as before: React lets a frame run
+between a commit and its passive effects when the browser is due to render, and a layer
+released only then still falls back. Release enrollments before React removes their elements
+(a layout effect or a callback ref, as `Surface` and `useSurfaceRef` do) where that is possible.
+
+Admission and ordinary DOM do not hold: there both reasons are decided at once. The other
+structural checks are decided at once too. `Content extends beyond enrolled capture bounds`
+is a safety guard: native hits on the overflow would land on content the capture does not hold,
+and no commit has been shown to pass through it for one task. `Custom stacking/clipping`
+(`z-index` on a layer) is a contract exit: the canvas paints and hit-tests layers in DOM
+order, and a stacking order of the layer's own would put one layer's hits over another's
+pixels. A zero-sized layer whose content overflows visibly is that guard's reason at once.
+
+`state().metrics.deferredStructure` counts the observations held for a frame boundary and
+`state().metrics.heldDraws` the draws withheld meanwhile, both since the runtime was created.
+Covered by `tests/browser/transient-structure.test.mjs`.
+
 ### Policy checks per frame
 
 Every drawn frame is checked against the presentation contract first: the declarations core owns, each owned
@@ -277,6 +319,8 @@ keyframe edit, a stylesheet edit), so the check runs in every frame rather than 
   cancels the others with `DOM recovery`.
 - **Every other draw**, and every check made for a mutation, a resize, a React commit, a native paint or admission,
   runs a full pass: a verdict is never kept across a callback or a task.
+- **A frame that decides a held layer** ([transient structure](#transient-structure)) runs one more pass, in the
+  frame callback asked for when the layer was held, and the draw that follows runs its own.
 
 `state().metrics.policyPasses` counts full passes and `state().metrics.ownershipChecks` counts owned-animation
 source checks, both since the runtime was created. A page with three playing owned animations makes one pass and

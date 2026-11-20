@@ -25,7 +25,7 @@ the showcase's **Status** line. Then call `enable()` again once the cause is gon
 | `Custom stacking/clipping` | `z-index` on a layer | Remove it; order layers in the DOM |
 | `Content extends beyond enrolled capture bounds` | Visible overflow outside the layer | Clip or scroll the content, or enlarge the layer |
 | `Nested enrollment` | A layer inside a layer | Make them siblings |
-| `Zero-sized layer` / `Detached enrolled layer` | A layer collapsed or left the DOM | Give it a size; unmount its `Surface` instead of hiding the element |
+| `Zero-sized layer` / `Detached enrolled layer` | A layer was still collapsed or out of the DOM at the next frame (a state that lasts only until then is held, not a fallback) | Give it a size; unmount its `Surface` instead of hiding the element; release a ref enrollment before React removes its element (a layout effect or a callback ref, not a passive effect's cleanup) |
 | `Transformed viewport ancestors` | A CSS-transformed ancestor around the stage or a layer | Keep transforms on layers, not their containers |
 | `Viewport clipping requires positive axis-aligned layer transforms` | A rotated or mirrored layer inside a scrolling or clipping container | Move it out of the container, or keep it axis-aligned there |
 | `Rotated layers with clipped overflowing content` | A rotated layer with `overflow: hidden` hiding overflow | Fit the content, or avoid hidden overflow while rotated |

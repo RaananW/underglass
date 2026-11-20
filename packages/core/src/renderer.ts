@@ -112,9 +112,16 @@ export interface SurfaceRendererOptions extends MountBoundaryOptions {
   nativeOrigin?(): { x: number; y: number };
   /**
    * A non-empty string is a diagnosed reason GPU cannot present the current state; the renderer then recovers
-   * to ordinary DOM with that reason.
+   * to ordinary DOM with that reason. `boundary` is set for the native paint's check, the last callback before
+   * the frame is presented.
    */
-  policy?(): string | undefined;
+  policy?(boundary?: boolean): string | undefined;
+  /**
+   * Asked by `draw` after a passing policy check: true when no frame may be drawn now, because the current state
+   * waits for the runtime's decision at the frame boundary or the runtime has just drawn it itself. The last
+   * presented frame stays on the canvas.
+   */
+  held?(): boolean;
   /** Called when the root switches presentation, so the runtime can switch layer styling to match. */
   presentation?(mode: "dom" | "gpu"): void;
   /** Called when scheduled frames and in-flight GPU motion are cancelled. */
@@ -814,7 +821,8 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       publication: { generation: publicationGeneration, submittedGeneration, pending: membershipPending || !!pending || paintRequested,
         captures: layers.map(layer => ({ id: layer.id, ...layer.coverage, textureWidth: layer.texture.texture.width, textureHeight: layer.texture.texture.height })) },
       rootContainer: container.parentElement?.id,
-      transforms: mode === "gpu" ? current.map(layer => ({ id: layer.element.id, matrix: Array.from(nativeHost().getElementTransform(layer.element).toFloat64Array()) })) : [],
+      // An element that left the canvas has no native transform to read (a layer the runtime holds while a commit removes it).
+      transforms: mode === "gpu" ? current.filter(layer => inHost(layer.element)).map(layer => ({ id: layer.element.id, matrix: Array.from(nativeHost().getElementTransform(layer.element).toFloat64Array()) })) : [],
       /** The `instrument` material's diagnostics, or null before the first instrument layer on this engine. */
       instrument: instrument?.state() ?? null,
       /** Emitters (`emitters.ts`): per lit layer what it draws and drops, its guard and its face pool. */
@@ -890,15 +898,20 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     lightTiming = { enabled: false, frameIndex: 0, status: "disabled" };
     if (engine) { disposeEngine(engine); engine = undefined; resources.engines--; }
   }
+  /** Whether `element` is still the output canvas's own descendant, the only place native geometry can be read or cleared. */
+  function inHost(element: HTMLElement) {
+    return element.isConnected && element.closest("canvas") === host;
+  }
   /**
    * Clears native geometry from every element that has it applied, recording whether each transform returned to
-   * identity. Also removes the admission probe unless `removeProbe` is false.
+   * identity. Also removes the admission probe unless `removeProbe` is false. An element that already left the canvas
+   * (removed by the page) is not cleared: the browser refuses it, and it holds no hit region there.
    */
   function clearGeometry(removeProbe = true) {
     // A repeated DOM transition with nothing applied keeps the last cleared record.
     if (nativeOrder.length) clearedGeometry = nativeOrder.map(layer => {
-      nativeHost().clearElementGeometry(layer.element);
-      return { id: layer.element.id, identity: layer.element.isConnected && layer.element.hasAttribute("drawable") && layer.element.closest("canvas") === host
+      if (inHost(layer.element)) nativeHost().clearElementGeometry(layer.element);
+      return { id: layer.element.id, identity: inHost(layer.element) && layer.element.hasAttribute("drawable")
         ? nativeHost().getElementTransform(layer.element).isIdentity : null };
     });
     nativeOrder = [];
@@ -1044,7 +1057,8 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   }
   /**
    * Applies each current layer's matrix and clip to its native element, so browser hit-testing matches the
-   * drawn pixels, and clears geometry of removed layers. Calls `updateElementGeometry` only when a matrix, clip or
+   * drawn pixels, and clears geometry of removed layers (of those still in the canvas: one the page removed first holds
+   * no hit region, and the browser refuses to clear it). Calls `updateElementGeometry` only when a matrix, clip or
    * the order changed (the applied transform is read back and validated every time). Throws if a required drawable is unavailable or a matrix is invalid.
    */
   function geometry() {
@@ -1052,10 +1066,10 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     const orderChanged = ordered.length !== nativeOrder.length || ordered.some((layer, index) => layer.element !== nativeOrder[index]?.element);
     clearedGeometry = [];
     for (const layer of nativeOrder) if (!ordered.some(next => next.element === layer.element)) {
-      nativeHost().clearElementGeometry(layer.element);
+      if (inHost(layer.element)) nativeHost().clearElementGeometry(layer.element);
       nativeMatrices.delete(layer.element);
       nativeClips.delete(layer.element);
-      clearedGeometry.push({ id: layer.element.id, identity: layer.element.isConnected && layer.element.hasAttribute("drawable") && layer.element.closest("canvas") === host
+      clearedGeometry.push({ id: layer.element.id, identity: inHost(layer.element) && layer.element.hasAttribute("drawable")
         ? nativeHost().getElementTransform(layer.element).isIdentity : null });
     }
     for (const layer of ordered) {
@@ -1090,7 +1104,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
   /**
    * Draws one frame if GPU is presented: re-applies geometry, skips (and requests a paint) while the composition
    * is incomplete, writes uniforms and submits all passes. Does nothing while hidden or after device loss. A
-   * failing `policy` triggers recovery; a draw error triggers recovery and is rethrown. A drawn frame's
+   * failing `policy` triggers recovery, and a `held` state draws nothing; a draw error triggers recovery and is rethrown. A drawn frame's
    * `frameWorkMs` runs from before the policy check to the end.
    */
   function draw() {
@@ -1101,6 +1115,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
       void recover(policy).catch(reportFailure);
       return;
     }
+    if (options.held?.()) return;
     const now = performance.now();
     if (previousFrame !== undefined) recordTiming("frameIntervalsMs", now - previousFrame);
     previousFrame = now;
@@ -1995,7 +2010,7 @@ export function createSurfaceRenderer(options: SurfaceRendererOptions) {
     if (!active && !pending) return;
     const changed: unknown = Reflect.get(event, "changedElements");
     markChanged(changed);
-    const policy = options.policy?.();
+    const policy = options.policy?.(true);
     if (policy) { void recover(policy).catch(reportFailure); return; }
     metrics.paintNotifications++;
     if (Array.isArray(changed)) sample(metrics.paintElements, changed.map(element => element instanceof Element ? element.id || element.tagName : String(element)));
