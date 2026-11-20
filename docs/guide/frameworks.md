@@ -46,6 +46,13 @@ const name = ref("Ada");
 - `mountCanvasApp(options, RootComponent, rootProps?)` creates the one persistent
   Vue app. Pass `configure(app)` in the options to install plugins (a router, a
   store) before it mounts.
+- A first render that throws (in a render function, `setup` or a mounted hook)
+  makes `mountCanvasApp` throw that error, on Vue's production and development
+  builds alike. The app is unmounted and the hosts are left as they were, so they
+  can take another mount. The error goes to the caller, not to an `errorHandler`
+  you set in `configure`; that handler gets the errors after the mount. To keep a
+  failing component from failing the mount, stop its error with
+  `onErrorCaptured` (return `false`).
 - `Surface`, `Box`, `NativeScroll`, `NativeOverlay` and `Presence` take the same
   props as in React. `Presence` emits `complete` instead of calling `onComplete`.
 - `useSurfaceRef({ id })` returns a callback for `:ref`; bind it to your own

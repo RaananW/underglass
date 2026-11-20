@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Underglass first-render errors, Vue</title>
+  <style>
+    body { font: 16px system-ui; margin: 24px; background: white; color: #17202a; }
+    button, input { font: inherit; }
+    #frame { position: relative; width: 640px; height: 420px; background: white; }
+    #status { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>A first render that throws</h1>
+  <p>Mounts Vue applications whose first render fails, or whose <code>onErrorCaptured</code> hook stops the error, into the same frame
+    (<code>mountCanvasApp</code>), and reports what each mount left behind.</p>
+  <div id="frame"></div>
+  <pre id="status" role="status"></pre>
+  <script type="module" src="/src/mount-error/vue-page.ts"></script>
+</body>
+</html>

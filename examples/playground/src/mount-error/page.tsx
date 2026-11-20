@@ -2,10 +2,9 @@
  * Mounts applications whose first render throws into the frame of `mount-error.html`, for
  * `tests/browser/mount-error.test.mjs` (`window.mountErrorProbe`), and reports what each mount left behind.
  *
- * Before any mount the page counts what a mount could leave: observers that observe and were not disconnected, and
- * listeners on the window, the document, media queries and the three hosts. The root containers the runtime creates are
- * recorded, so the page can tell whether React still holds a root in one. React's own one-time document listener is
- * added by a throwaway root first, so it is not counted against a mount.
+ * Before any mount the page starts counting what a mount could leave (`watchMounts` in `leaks.ts`), and records the
+ * root containers the runtime creates, so it can tell whether React still holds a root in one. React's own one-time
+ * document listener is added by a throwaway root first, so it is not counted against a mount.
  *
  * `attempt(kind, strict)` mounts into the same hosts every time:
  *
@@ -17,6 +16,7 @@
 import { Component, useState, version, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { createCanvasHosts, mountCanvasApp, Surface, type CanvasController } from "@underglass/react";
+import { watchMounts } from "./leaks";
 
 declare global { interface Window { mountErrorProbe: unknown } }
 type Kind = "throws" | "caught" | "injected" | "healthy";
@@ -26,40 +26,7 @@ createRoot(document.createElement("div")).unmount();
 
 const frame = document.querySelector<HTMLElement>("#frame")!;
 const hosts = createCanvasHosts(frame);
-// Root containers, recorded as the runtime appends them. Created before the observer counting below starts.
-const containers: Element[] = [];
-const added = new MutationObserver(records => record(records));
-added.observe(frame, { childList: true, subtree: true });
-function record(records: MutationRecord[]) {
-  for (const entry of records) for (const node of entry.addedNodes) if (node instanceof HTMLDivElement && entry.target === hosts.ordinaryHost) containers.push(node);
-}
-
-// Observers that observe something and were not disconnected since.
-const observing = new Set<object>();
-for (const Observer of [MutationObserver, ResizeObserver, IntersectionObserver] as { prototype: { observe(...args: unknown[]): void; disconnect(): void } }[]) {
-  const { observe, disconnect } = Observer.prototype;
-  Observer.prototype.observe = function (this: object, ...args: unknown[]) { observing.add(this); return observe.apply(this, args); };
-  Observer.prototype.disconnect = function (this: object) { observing.delete(this); return disconnect.call(this); };
-}
-// Listeners on the targets a runtime or a React root outside its container could hold on to.
-const listening: { target: EventTarget; type: string; listener: unknown; capture: boolean }[] = [];
-const watched = (target: EventTarget) => target === window || target === document || target instanceof MediaQueryList
-  || target === hosts.outputCanvas || target === hosts.ordinaryHost || target === hosts.overlayHost;
-const capture = (options: unknown) => typeof options === "boolean" ? options : !!(options as { capture?: boolean } | undefined)?.capture;
-const find = (target: EventTarget, type: string, listener: unknown, options: unknown) => listening.findIndex(entry =>
-  entry.target === target && entry.type === type && entry.listener === listener && entry.capture === capture(options));
-const { addEventListener, removeEventListener } = EventTarget.prototype;
-EventTarget.prototype.addEventListener = function (this: EventTarget, type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions) {
-  if (listener && watched(this) && find(this, type, listener, options) < 0) listening.push({ target: this, type, listener, capture: capture(options) });
-  return addEventListener.call(this, type, listener, options);
-};
-EventTarget.prototype.removeEventListener = function (this: EventTarget, type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | EventListenerOptions) {
-  const index = find(this, type, listener, options);
-  if (index >= 0) listening.splice(index, 1);
-  return removeEventListener.call(this, type, listener, options);
-};
-const described = (target: EventTarget) => target === window ? "window" : target === document ? "document"
-  : target instanceof MediaQueryList ? `media ${target.media}` : `host ${(target as Element).getAttribute("data-underglass-host") ?? (target as Element).tagName}`;
+const watch = watchMounts(frame, hosts);
 
 function Throws(): never { throw new Error("The application failed in its first render"); }
 class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -91,18 +58,11 @@ const applications: Record<Kind, () => ReactNode> = {
 
 let controller: CanvasController | undefined;
 let statuses = 0;
-const snapshot = () => ({
-  hosts: [hosts.outputCanvas, hosts.ordinaryHost, hosts.overlayHost].map(host => host.outerHTML),
-  frameChildren: frame.childNodes.length,
-  observers: observing.size,
-  listeners: listening.map(entry => `${described(entry.target)} ${entry.type}`).sort(),
-});
 /** Mounts `kind` into the hosts and returns what the mount threw and what it left, against what was there before. */
 function attempt(kind: Kind, strict = false) {
   if (controller) throw new Error("Dispose the mounted application first");
-  record(added.takeRecords());
-  const from = containers.length;
-  const before = snapshot();
+  const from = watch.containers().length;
+  const before = watch.snapshot();
   statuses = 0;
   let mountError: string | null = null;
   try {
@@ -111,12 +71,11 @@ function attempt(kind: Kind, strict = false) {
       onStatusChange(status) { statuses++; document.querySelector("#status")!.textContent = `${status.mode}: ${status.reason}`; },
     }, applications[kind]());
   } catch (error) { mountError = String(error); }
-  record(added.takeRecords());
-  const after = snapshot();
+  const after = watch.snapshot();
   return {
     reactVersion: version, mountError, mounted: !!controller, statuses, before, after,
     // Each root container this mount created: whether it is still in the document and whether React still holds a root in it.
-    containers: containers.slice(from).map(container => ({ connected: container.isConnected,
+    containers: watch.containers().slice(from).map(container => ({ connected: container.isConnected,
       reactRoot: Object.keys(container).some(key => key.startsWith("__reactContainer$") && (container as unknown as Record<string, unknown>)[key] != null) })),
     layers: controller?.state().layers.map(layer => layer.id) ?? [],
     fallback: document.querySelector("#fallback")?.textContent ?? null,
@@ -133,9 +92,8 @@ async function dispose() {
   await controller?.dispose();
   controller = undefined;
   await frames();
-  record(added.takeRecords());
-  return snapshot();
+  return watch.snapshot();
 }
-window.mountErrorProbe = { attempt, enable, dispose, snapshot,
+window.mountErrorProbe = { attempt, enable, dispose, snapshot: watch.snapshot,
   state: () => controller!.state(),
   box: (id: string) => { const rect = document.getElementById(id)!.getBoundingClientRect(); return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }; } };

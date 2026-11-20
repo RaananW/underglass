@@ -15,16 +15,8 @@ const directory = evidenceDirectory("frameworks");
 for (const dpr of [1, 2]) test(`Vue adapter keeps GPU presentation, fresh pixels and native hits DPR${dpr}`, async ({ browser }) => {
   await frameworkContract(browser, { path: "/vue.html", framework: "vue", dpr, directory });
 });
-// Known defects (`gaps`, declared `test.fixme`): the Vue adapter's `mountCanvasApp` leaves a first-render error to Vue.
-// Vue's production build only logs it (`console.error`) and mounts what rendered, so the mount returns a controller over
-// a broken app. Its development build throws, and the mount throws, but the failed app's queued `onMounted` hooks stay in
-// Vue's post-flush queue: the next flush runs its `Surface` registration against the removed container, which throws.
-frameworkCases({ path: "/vue.html", framework: "vue", directory, gaps: {
-  "first-render-error": "Vue production build: a throwing first render is only logged by Vue, and mountCanvasApp returns a controller with the layers that rendered",
-} });
-frameworkCases({ path: `${developmentURL}/vue.html`, framework: "vue", label: "vue development", directory, gaps: {
-  "first-render-error": "Vue development build: mountCanvasApp throws, but the failed app's Surface onMounted registration runs at the next Vue flush and throws \"Surface must belong to the connected persistent root\"; a healthy mount into the same hosts then registers no layer",
-} });
+frameworkCases({ path: "/vue.html", framework: "vue", directory });
+frameworkCases({ path: `${developmentURL}/vue.html`, framework: "vue", label: "vue development", directory });
 
 // The page runs the pinned Vue, and the adapter-rendered layer is the original drawable `<section>`
 // carrying the compiled typed styles, not a copy.
