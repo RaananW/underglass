@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,"><title>Underglass React</title>
+  <style>
+    body { margin: 24px; background: white; color: black; font: 16px system-ui; }
+    button, input { font: inherit; }
+    [hidden] { display: none !important; }
+    #frame { position: relative; width: 640px; height: 420px; background: white; }
+    #second { position: relative; width: 200px; height: 100px; }
+    #output, #ordinary { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #output { pointer-events: none; }
+    #status { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>React on the core runtime</h1>
+  <p>A React app through @underglass/react: original controls updated by React state.</p>
+  <p><button id="enable">GPU</button> <button id="disable">Ordinary DOM</button> <button id="dispose">Dispose</button></p>
+  <div id="frame"><canvas id="output" hidden></canvas><div id="ordinary"></div><div id="overlay"></div></div>
+  <pre id="status" role="status"></pre>
+  <div id="second"></div>
+  <script type="module" src="/src/demo/react-demo.tsx"></script>
+</body>
+</html>
