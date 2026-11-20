@@ -504,11 +504,13 @@ event array; its histories and cumulative counters remain bounded.
 | `instrumentGpuMs`, `emitterGpuMs` | layer and frame | The GPU time of one layer's instrument mesh pass and post chain, or of its emitter face pool pass, from Babylon Lite's per-task timings when the device has timestamp queries | CPU work; they are not kept in `timings` |
 
 `frameWorkMs` and `frameTickMs` never overlap, so they add up: together they are
-the runtime's JavaScript in the frames it animates. Several transitions take one
-`frameTickMs` sample each in the same frame, and a transition also ticks in
-ordinary DOM. Neither kind covers the browser's own work for a frame (style,
-layout, paint, the native capture) or GPU execution: compare them with a
-profile, not with frame intervals. The CPU kinds are synchronous public CPU
+most of the runtime's JavaScript in the frames it animates (90 to 95% of a CPU
+profile on the playground's performance page). The rest is work outside a frame
+callback and a draw: observer and paint callbacks, and an adapter's commits.
+Several transitions take one `frameTickMs` sample each in the same frame, and a
+transition also ticks in ordinary DOM. Neither kind covers the browser's own
+work for a frame (style, layout, paint, the native capture) or GPU execution:
+compare them with a profile, not with frame intervals. The CPU kinds are synchronous public CPU
 work, not completion or GPU execution, and `phase` separates admission work
 from content work.
 
