@@ -7,6 +7,6 @@
 import { attachStrataMeters, syncStrataMeter } from "./meter.ts";
 
 /** Runs every `.ug-gauge` (and every Meter) in `doc` through the meter observer, once per document. `attachStrata` calls it. */
-export const attachStrataGauges = (doc: Document = document): void => attachStrataMeters(doc);
+export const attachStrataGauges = (doc: Document = document): (() => void) => attachStrataMeters(doc);
 /** Brings a gauge's needle up to date with its native `<meter>` (what the observer does on every change). */
 export const syncStrataGauge = (native: HTMLMeterElement): void => syncStrataMeter(native);

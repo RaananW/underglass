@@ -6,6 +6,8 @@
  * of document listeners (`attachStrataMenus`); `attachStrata` and the React and Vue bindings call it.
  */
 
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
+
 const item = "[role='menuitem']";
 
 /** The menu's items, in order. */
@@ -40,15 +42,15 @@ function menuOf(button: Element): HTMLElement | null {
   return menu?.matches(".ug-menu") ? menu : null;
 }
 
-const attached = new WeakSet<Document>();
-
 /** Attaches the menu behaviour to `doc` once; later calls do nothing. */
-export function attachStrataMenus(doc: Document = document): void {
-  if (attached.has(doc)) return;
-  attached.add(doc);
+export function attachStrataMenus(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installMenus);
+}
+
+function installMenus(doc: Document, scope: StrataDelegateScope): void {
   // Which item a menu focuses when it opens: the last when Up opened it, else the first.
   const openAt = new WeakMap<Element, "first" | "last">();
-  doc.addEventListener("keydown", event => {
+  scope.listen(doc, "keydown", event => {
     const target = event.target as Element | null;
     if (!target || event.altKey || event.ctrlKey || event.metaKey) return;
     const menu = target.closest?.(".ug-menu") as HTMLElement | null;
@@ -66,7 +68,7 @@ export function attachStrataMenus(doc: Document = document): void {
     const next = strataMenuTarget(target, event.key);
     if (next) { event.preventDefault(); next.focus(); }
   });
-  doc.addEventListener("toggle", event => {
+  scope.listen(doc, "toggle", event => {
     const menu = event.target as HTMLElement;
     if (!menu.matches?.(".ug-menu") || (event as ToggleEvent).newState !== "open") return;
     const items = itemsOf(menu);
@@ -74,12 +76,12 @@ export function attachStrataMenus(doc: Document = document): void {
     openAt.delete(menu);
   }, true);
   // A disabled item does nothing: its click is stopped before any other listener sees it.
-  doc.addEventListener("click", event => {
+  scope.listen(doc, "click", event => {
     const entry = (event.target as Element | null)?.closest?.(`.ug-menu ${item}`);
     if (entry?.getAttribute("aria-disabled") === "true") { event.preventDefault(); event.stopImmediatePropagation(); }
   }, true);
   // After the item's own listeners: choosing it closes the menu (focus returns to the button) and is reported.
-  doc.addEventListener("click", event => {
+  scope.listen(doc, "click", event => {
     const entry = (event.target as Element | null)?.closest?.<HTMLElement>(`.ug-menu ${item}`);
     const menu = entry?.closest<HTMLElement>(".ug-menu");
     if (!entry || !menu) return;

@@ -7,8 +7,9 @@
  * `attachStrataPatchPoints` from `@underglass/ui/dom`, attached once when a jack mounts. PatchBay is a `<fieldset>` of PatchPoints on
  * one plinth, named by its `legend`.
  */
-import { defineComponent, h, mergeProps, onMounted, ref, type PropType } from "vue";
+import { defineComponent, h, mergeProps, ref, type PropType } from "vue";
 import { attachStrataPatchPoints } from "../dom/patch-point.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import type { StrataLampColour } from "../shared/lamp.ts";
 import { patchBayModel, patchLedMarkup, patchPointMarkup } from "../shared/patch-point.ts";
 import { classes, splitAttrs, strataAttributes, strataProps, useFieldControl } from "./shared.ts";
@@ -33,7 +34,7 @@ export const PatchPoint = defineComponent({
     const field = useFieldControl();
     const input = ref<HTMLInputElement | HTMLButtonElement | null>(null);
     expose({ input });
-    onMounted(() => attachStrataPatchPoints());
+    useStrataDelegates(() => [attachStrataPatchPoints]);
     return () => {
       const colour = props.led === true ? "success" : props.led || undefined;
       const parts = [

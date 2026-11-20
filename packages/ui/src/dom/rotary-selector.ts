@@ -30,6 +30,7 @@
  * - on every `change` the cap's angle (`--strata-rotary-value`) follows the checked radio and a changed radio plays `tick`.
  * A group has no checked radio until one is checked: its cap rests at the first position.
  */
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
 import { rotaryDefaults, rotaryDrag, rotaryFraction, rotaryIndexAtAngle, rotaryNearest, rotaryStep, type RotaryOption, type RotaryTokens } from "../shared/rotary-selector.ts";
 import { knobRegion } from "../shared/knob.ts";
 import { listenForStrataFeedback, strataFeedback } from "./feedback.ts";
@@ -100,24 +101,26 @@ export function syncStrataRotarySelector(select: HTMLSelectElement): void {
 
 interface Gesture { select: HTMLSelectElement; root: Element; x: number; y: number; last: number; raw: number; moved: boolean; tokens: RotaryTokens }
 
-const attached = new WeakSet<Document>();
-
 /**
  * Runs every `.ug-rotary` in `doc`, present and future, through delegated listeners (one of them the blocking
  * document-level wheel listener), once per document. `attachStrata` calls it; the React and Vue bindings call it when a
  * selector mounts.
  */
-export function attachStrataRotarySelectors(doc: Document = document): void {
-  if (attached.has(doc)) return;
-  attached.add(doc);
-  listenForStrataFeedback(doc);
+export function attachStrataRotarySelectors(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installRotarySelectors);
+}
+
+function installRotarySelectors(doc: Document, scope: StrataDelegateScope): void {
+  scope.onRelease(listenForStrataFeedback(doc));
   const gestures = new Map<number, Gesture>();
+  // A drag in progress lets go of its pointer, so nothing keeps it captured with no listener to end it.
+  scope.onRelease(() => { for (const [pointerId, gesture] of gestures) try { gesture.select.releasePointerCapture(pointerId); } catch { /* already released */ } gestures.clear(); });
   const selectOf = (target: EventTarget | null) => {
     const select = (target as Element | null)?.closest?.(selects);
     return select instanceof HTMLSelectElement && !select.disabled ? select : undefined;
   };
 
-  doc.addEventListener("pointerdown", event => {
+  scope.listen(doc, "pointerdown", event => {
     const select = selectOf(event.target);
     const root = select?.closest(".ug-rotary");
     if (!select || !root || event.button !== 0 || !event.isPrimary || event.defaultPrevented) return;
@@ -128,8 +131,8 @@ export function attachStrataRotarySelectors(doc: Document = document): void {
     gestures.set(event.pointerId, { select, root, x: event.clientX, y: event.clientY, last: event.clientY, raw: Math.max(0, select.selectedIndex), moved: false, tokens: tokensOf(root) });
   });
   // A touch would otherwise scroll or open the select by itself: cancelling `touchstart` leaves it to the pointer events.
-  doc.addEventListener("touchstart", event => { if (selectOf(event.target)) event.preventDefault(); }, { passive: false });
-  doc.addEventListener("pointermove", event => {
+  scope.listen(doc, "touchstart", event => { if (selectOf(event.target)) event.preventDefault(); }, { passive: false });
+  scope.listen(doc, "pointermove", event => {
     const gesture = gestures.get(event.pointerId);
     if (!gesture) return;
     if (!gesture.moved && Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) < gesture.tokens.tapSlop) return;
@@ -152,12 +155,12 @@ export function attachStrataRotarySelectors(doc: Document = document): void {
     const options = optionsOf(select);
     commit(select, where.cap ? rotaryStep(select.selectedIndex, where.upper ? 1 : -1, options) : rotaryIndexAtAngle(where.theta, options, tokens.sweep));
   };
-  doc.addEventListener("pointerup", event => end(event, false));
-  doc.addEventListener("pointercancel", event => end(event, true));
+  scope.listen(doc, "pointerup", event => end(event, false));
+  scope.listen(doc, "pointercancel", event => end(event, true));
 
   // The wheel: notches up step to the next option. Fine-grained wheels (touchpads) add up to a notch before stepping.
   let wheelSelect: HTMLSelectElement | undefined, wheelGroup: Element | undefined, wheelSum = 0, wheelTime = 0;
-  doc.addEventListener("wheel", event => {
+  scope.listen(doc, "wheel", event => {
     if (event.ctrlKey) return;
     const under = doc.elementFromPoint(event.clientX, event.clientY);
     const group = under?.closest(".ug-rotary--group");
@@ -191,7 +194,7 @@ export function attachStrataRotarySelectors(doc: Document = document): void {
 
   // Keys, the wheel, drags, taps and the native popup all end in `input` and `change`: the dial follows the option. In the
   // capture phase, so the page's own listeners already see the new state. A changed option ticks (feedback, off by default).
-  doc.addEventListener("input", event => {
+  scope.listen(doc, "input", event => {
     const select = (event.target as Element | null)?.closest?.(selects);
     if (!(select instanceof HTMLSelectElement)) return;
     const root = select.closest<HTMLElement>(".ug-rotary");
@@ -200,7 +203,7 @@ export function attachStrataRotarySelectors(doc: Document = document): void {
     if (Number.isFinite(before) && count > 1 && Math.round(before * (count - 1)) !== select.selectedIndex) strataFeedback(select, "tick");
     syncStrataRotarySelector(select);
   }, true);
-  doc.addEventListener("change", event => {
+  scope.listen(doc, "change", event => {
     const target = event.target as Element | null, select = target?.closest?.(selects);
     if (select instanceof HTMLSelectElement) syncStrataRotarySelector(select);
     const radio = target?.closest?.(radios);
@@ -213,7 +216,7 @@ export function attachStrataRotarySelectors(doc: Document = document): void {
   }, true);
 
   // A radio selector's dial: a click on the ring that no printed label (no radio) took checks the radio at the pressed angle; on the skirt or the cap it steps.
-  doc.addEventListener("click", event => {
+  scope.listen(doc, "click", event => {
     const target = event.target as Element | null, dial = target?.closest<HTMLElement>(".ug-rotary--group .ug-rotary__dial");
     if (!dial || target?.closest(radios) || event.defaultPrevented || event.button !== 0) return;
     const root = dial.closest<HTMLElement>(".ug-rotary--group")!;

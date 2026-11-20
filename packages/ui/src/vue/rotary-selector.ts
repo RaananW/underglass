@@ -5,8 +5,9 @@
  * pointer behaviour is `attachStrataRotarySelectors` from `@underglass/ui/dom`, attached once when a selector mounts; keys,
  * type-ahead and the native popup are the select's own. Use `v-model`, or `defaultValue` uncontrolled. Field-aware, as Select is.
  */
-import { defineComponent, h, onMounted, ref, useId, type PropType } from "vue";
+import { defineComponent, h, ref, useId, type PropType } from "vue";
 import { attachStrataRotarySelectors } from "../dom/rotary-selector.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { rotaryModel, type RotaryOption } from "../shared/rotary-selector.ts";
 import { strataAttributes, strataProps, useFieldControl } from "./shared.ts";
 
@@ -39,7 +40,7 @@ export const RotarySelector = defineComponent({
     const own = ref(props.defaultValue ?? props.modelValue ?? props.options.find(option => !option.disabled)?.value);
     const root = ref<HTMLElement>(), select = ref<HTMLSelectElement>();
     expose({ root, select });
-    onMounted(() => attachStrataRotarySelectors());
+    useStrataDelegates(() => [attachStrataRotarySelectors]);
     return () => {
       const current = props.modelValue ?? own.value;
       const model = rotaryModel({ options: props.options, value: current, sweep: props.sweep });

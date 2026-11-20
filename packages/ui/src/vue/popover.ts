@@ -4,8 +4,9 @@
  * default slot) is teleported to `to` (`body` by default), outside every Underglass layer. The browser toggles,
  * dismisses and places it; `toggle(open)` reports it.
  */
-import { Fragment, Teleport, cloneVNode, defineComponent, h, onMounted, useId, type PropType } from "vue";
+import { Fragment, Teleport, cloneVNode, defineComponent, h, useId, type PropType } from "vue";
 import { attachStrataPopovers } from "../dom/popover.ts";
+import { useStrataDelegates } from "./delegates.ts";
 
 export const Popover = defineComponent({
   name: "StrataPopover",
@@ -23,7 +24,7 @@ export const Popover = defineComponent({
   emits: { toggle: (open: boolean) => typeof open === "boolean" },
   setup(props, { slots, emit }) {
     const generated = (useId() ?? "").replace(/[^a-zA-Z0-9_-]/g, "");
-    onMounted(() => attachStrataPopovers());
+    useStrataDelegates(() => [attachStrataPopovers]);
     return () => {
       const popoverId = props.id ?? `popover-${generated}`, titleId = `${popoverId}-title`;
       const [trigger] = slots.trigger?.() ?? [];

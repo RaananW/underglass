@@ -8,6 +8,7 @@
  * Under the GPU the lenses are read frame by frame from the same variable, drawn as lenses with emitters, so a value change moves
  * only their lights. One observer and no listener on the native event path: nothing is blocked or changed.
  */
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
 import { progressFraction } from "../shared/indicator-forms.ts";
 
 const roots = ".ug-progress-bar";
@@ -23,12 +24,12 @@ export function syncStrataProgress(native: HTMLProgressElement): void {
   else if (root.style.getPropertyValue("--strata-progress-value") !== String(fraction)) root.style.setProperty("--strata-progress-value", String(fraction));
 }
 
-const attached = new WeakSet<Document>();
-
 /** Runs every segment-meter `.ug-progress-bar` in `doc`, present and future, through one observer, once per document. `attachStrata` calls it. */
-export function attachStrataProgress(doc: Document = document): void {
-  if (attached.has(doc)) return;
-  attached.add(doc);
+export function attachStrataProgress(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installProgress);
+}
+
+function installProgress(doc: Document, scope: StrataDelegateScope): void {
   const all = (root: ParentNode) => root.querySelectorAll<HTMLProgressElement>(`${roots} > progress`);
   const syncAll = (root: ParentNode) => { for (const native of all(root)) syncStrataProgress(native); };
   syncAll(doc);
@@ -41,4 +42,5 @@ export function attachStrataProgress(doc: Document = document): void {
     }
   });
   observer.observe(doc.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: watched });
+  scope.onRelease(() => observer.disconnect());
 }

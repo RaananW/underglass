@@ -5,6 +5,7 @@
  */
 import { Comment, Fragment, Text, computed, defineComponent, h, inject, mergeProps, onMounted, onUpdated, provide, ref, useId, type ComputedRef, type InjectionKey, type PropType, type VNode, type VNodeChild } from "vue";
 import { attachStrataPushButtons } from "../dom/push-button.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { attachStrataRotarySelectors } from "../dom/rotary-selector.ts";
 import { attachStrataSwitches } from "../dom/switch.ts";
 import { bankMarkup, checkboxMarkup, latchForm, nativeForm } from "../shared/latching-forms.ts";
@@ -41,9 +42,9 @@ export const Checkbox = defineComponent({
     const input = ref<HTMLInputElement | null>(null);
     const sync = () => { if (input.value) input.value.indeterminate = props.indeterminate; };
     // A latching key is held down while it is pressed and plays its feedback (`dom/push-button.ts`), once per document.
-    const attach = () => { if (latchForm(props.form)) attachStrataPushButtons(); };
-    onMounted(() => { sync(); attach(); });
-    onUpdated(() => { sync(); attach(); });
+    useStrataDelegates(() => [latchForm(props.form) && attachStrataPushButtons], { updated: true });
+    onMounted(sync);
+    onUpdated(sync);
     expose({ input });
     return () => {
       const { row, control } = splitAttrs(attrs);
@@ -91,8 +92,7 @@ export const Switch = defineComponent({
     const input = ref<HTMLInputElement | null>(null);
     expose({ input });
     // A hardware form throws on a drag past centre and plays its feedback (`dom/switch.ts`), once per document.
-    onMounted(() => { if (isSwitchForm(props.form)) attachStrataSwitches(); });
-    onUpdated(() => { if (isSwitchForm(props.form)) attachStrataSwitches(); });
+    useStrataDelegates(() => [isSwitchForm(props.form) && attachStrataSwitches], { updated: true });
     const parts = (list: SwitchPart[]): VNode[] => list.map(part => h("span", { class: part.className, ...(part.face ? { "data-strata-face": part.face } : {}) }, part.children ? parts(part.children) : undefined));
     return () => {
       const { row, control } = splitAttrs(attrs);
@@ -210,9 +210,7 @@ export const RadioGroup = defineComponent({
       select: (value: string) => { own.value = value; emit("update:modelValue", value); },
     });
     // A bank's keys are held down while they are pressed and play their feedback (`dom/push-button.ts`); a selector's dial has its own behaviour; both once per document.
-    const attach = () => { if (drawn === "bank") attachStrataPushButtons(); if (drawn === "selector") attachStrataRotarySelectors(); };
-    onMounted(attach);
-    onUpdated(attach);
+    useStrataDelegates(() => [drawn === "bank" && attachStrataPushButtons, drawn === "selector" && attachStrataRotarySelectors], { updated: true });
     return () => {
       const describedBy = [props.help ? `${name.value}-help` : undefined, props.error ? `${name.value}-error` : undefined].filter(Boolean).join(" ") || undefined;
       const children = slots.default?.();

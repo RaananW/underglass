@@ -4,8 +4,9 @@
  * indicator form through `form` (`led`, `ring`, `meter`; anatomy pages, *Indicator form*): the same native element with LED lenses drawn over it;
  * `flush`, or no `form`, is the look they had before.
  */
-import { computed, defineComponent, h, onMounted, onUpdated, useId, type PropType } from "vue";
+import { computed, defineComponent, h, useId, type PropType } from "vue";
 import { attachStrataProgress } from "../dom/progress.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { badgeForm, badgeLensMarkup, lensStyle, progressForm, progressFraction, progressSegmentCount, progressSegments, progressStyle, spinnerForm, spinnerLensIndices } from "../shared/indicator-forms.ts";
 import type { StrataLampColour } from "../shared/lamp.ts";
 import { PANEL_TRAY_CLASS, surfaceForm, type StrataSurfaceForm } from "../shared/structure-forms.ts";
@@ -153,9 +154,7 @@ export const ProgressBar = defineComponent({
   setup(props, { attrs }) {
     const field = useFieldControl();
     // A segment meter's value reaches the drawing through `attachStrataProgress`, attached once; a changed `value` is all it takes.
-    const attach = () => { if (progressForm(props.form)) attachStrataProgress(); };
-    onMounted(attach);
-    onUpdated(attach);
+    useStrataDelegates(() => [progressForm(props.form) && attachStrataProgress], { updated: true });
     return () => {
       const { id, "aria-describedby": describedBy } = field?.value ?? {};
       const meter = progressForm(props.form), { row, control } = splitAttrs(attrs);

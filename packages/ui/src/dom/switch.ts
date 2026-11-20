@@ -14,6 +14,7 @@
  * (stopped at the document in the capture phase, so no framework sees a toggle that did not happen); nothing else on
  * the native event path is blocked or changed.
  */
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
 import { listenForStrataFeedback, strataFeedback } from "./feedback.ts";
 
 const formInputs = ".ug-switch[data-strata-form] > .ug-switch__input";
@@ -29,35 +30,37 @@ export function pastCentre(form: string | null, box: { left: number; top: number
   return checked ? y > centre : y < centre;
 }
 
-const attached = new WeakSet<Document>();
-
 /**
  * Runs every `.ug-switch[data-strata-form]` in `doc`, present and future, through delegated listeners, once per
  * document. `attachStrata` calls it; the React and Vue bindings call it when a form switch mounts.
  */
-export function attachStrataSwitches(doc: Document = document): void {
-  if (attached.has(doc)) return;
-  attached.add(doc);
-  listenForStrataFeedback(doc);
+export function attachStrataSwitches(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installSwitches);
+}
+
+function installSwitches(doc: Document, scope: StrataDelegateScope): void {
+  scope.onRelease(listenForStrataFeedback(doc));
   const presses = new Map<number, Press>();
   let ended: Press | undefined;
+  // A drag in progress lets go of its pointer, so nothing keeps it captured with no listener to end it.
+  scope.onRelease(() => { for (const [pointerId, press] of presses) try { press.input.releasePointerCapture(pointerId); } catch { /* already released */ } presses.clear(); ended = undefined; });
   const formInput = (target: EventTarget | null) => {
     const input = (target as Element | null)?.closest?.(formInputs);
     return input instanceof HTMLInputElement && !input.disabled ? input : undefined;
   };
 
-  doc.addEventListener("pointerdown", event => {
+  scope.listen(doc, "pointerdown", event => {
     const input = formInput(event.target);
     if (!input || event.button !== 0 || !event.isPrimary) return;
     presses.set(event.pointerId, { input, x: event.clientX, y: event.clientY, moved: false, checked: input.checked });
     // Keep the drag on the input when it leaves the box, so its release (and the click) still reach it.
     try { input.setPointerCapture(event.pointerId); } catch { /* not capturable: the release may land elsewhere */ }
   });
-  doc.addEventListener("pointermove", event => {
+  scope.listen(doc, "pointermove", event => {
     const press = presses.get(event.pointerId);
     if (press && !press.moved && Math.hypot(event.clientX - press.x, event.clientY - press.y) >= switchTapSlop) press.moved = true;
   });
-  doc.addEventListener("pointerup", event => {
+  scope.listen(doc, "pointerup", event => {
     const press = presses.get(event.pointerId);
     presses.delete(event.pointerId);
     if (!press || !press.moved) return;
@@ -70,9 +73,9 @@ export function attachStrataSwitches(doc: Document = document): void {
       if (press.decision === "throw" && !press.clicked && press.input.checked === press.checked && !press.input.disabled) press.input.click();
     }, 0);
   });
-  doc.addEventListener("pointercancel", event => { presses.delete(event.pointerId); });
+  scope.listen(doc, "pointercancel", event => { presses.delete(event.pointerId); });
   // The click a drag ends with: a throw lets the native toggle happen, a hold cancels it (the checkbox stays as it was).
-  doc.addEventListener("click", event => {
+  scope.listen(doc, "click", event => {
     const input = formInput(event.target);
     const press = ended;
     if (!input || !press || press.input !== input) return;
@@ -81,7 +84,7 @@ export function attachStrataSwitches(doc: Document = document): void {
     // A held lever is not an activation: nothing else sees this click, and the checkbox stays as it was.
     if (press.decision === "hold") { event.preventDefault(); event.stopImmediatePropagation(); }
   }, true);
-  doc.addEventListener("change", event => {
+  scope.listen(doc, "change", event => {
     const input = (event.target as Element | null)?.closest?.(formInputs);
     if (input) strataFeedback(input, "snap");
   });

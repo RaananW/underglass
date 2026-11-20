@@ -4,8 +4,9 @@
  * `popover="manual"`) is teleported to `to` (`body` by default), outside every Underglass layer; the teleport is
  * deferred, so `to` may be an element rendered in the same tree.
  */
-import { Fragment, Teleport, cloneVNode, defineComponent, h, onMounted, useId, type PropType } from "vue";
+import { Fragment, Teleport, cloneVNode, defineComponent, h, useId, type PropType } from "vue";
 import { attachStrataTooltips } from "../dom/tooltip.ts";
+import { useStrataDelegates } from "./delegates.ts";
 
 export const Tooltip = defineComponent({
   name: "StrataTooltip",
@@ -18,7 +19,7 @@ export const Tooltip = defineComponent({
   },
   setup(props, { slots }) {
     const generated = useId().replace(/[^a-zA-Z0-9_-]/g, "");
-    onMounted(() => attachStrataTooltips());
+    useStrataDelegates(() => [attachStrataTooltips]);
     return () => {
       const tipId = props.id ?? `tooltip-${generated}`;
       const [trigger] = slots.default?.() ?? [];

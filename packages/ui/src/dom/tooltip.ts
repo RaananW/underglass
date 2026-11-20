@@ -6,6 +6,8 @@
  * listeners per document (`attachStrataTooltips`); `attachStrata` and the React and Vue bindings call it.
  */
 
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
+
 const showDelay = 300, hideDelay = 100, gap = 8, margin = 4;
 
 interface TipState { hovered: boolean; focused: boolean; timer?: ReturnType<typeof setTimeout>; trigger?: HTMLElement }
@@ -63,13 +65,13 @@ function settle(tip: HTMLElement, trigger: HTMLElement | undefined, delay: numbe
   }, delay);
 }
 
-const attached = new WeakSet<Document>();
-
 /** Attaches the tooltip behaviour to `doc` once; later calls do nothing. */
-export function attachStrataTooltips(doc: Document = document): void {
-  if (attached.has(doc)) return;
-  attached.add(doc);
-  doc.addEventListener("pointerover", event => {
+export function attachStrataTooltips(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installTooltips);
+}
+
+function installTooltips(doc: Document, scope: StrataDelegateScope): void {
+  scope.listen(doc, "pointerover", event => {
     const target = event.target as Element | null;
     const hoveredTip = target?.closest?.<HTMLElement>(".ug-tooltip");
     if (hoveredTip) { stateOf(hoveredTip).hovered = true; settle(hoveredTip, stateOf(hoveredTip).trigger, 0); return; }
@@ -78,7 +80,7 @@ export function attachStrataTooltips(doc: Document = document): void {
     stateOf(tip).hovered = true;
     settle(tip, trigger, tip.matches(":popover-open") ? 0 : showDelay);
   });
-  doc.addEventListener("pointerout", event => {
+  scope.listen(doc, "pointerout", event => {
     const from = event.target as Element | null, to = event.relatedTarget as Element | null;
     const tip = from?.closest?.<HTMLElement>(".ug-tooltip") ?? (triggerFrom(from) && tooltipOf(triggerFrom(from)!));
     if (!tip) return;
@@ -88,24 +90,29 @@ export function attachStrataTooltips(doc: Document = document): void {
     stateOf(tip).hovered = false;
     settle(tip, trigger, hideDelay);
   });
-  doc.addEventListener("focusin", event => {
+  scope.listen(doc, "focusin", event => {
     const trigger = triggerFrom(event.target), tip = trigger && tooltipOf(trigger);
     if (!trigger || !tip || !trigger.matches(":focus-visible")) return;
     stateOf(tip).focused = true;
     showStrataTooltip(trigger, tip);
   });
-  doc.addEventListener("focusout", event => {
+  scope.listen(doc, "focusout", event => {
     const trigger = triggerFrom(event.target), tip = trigger && tooltipOf(trigger);
     if (!tip) return;
     stateOf(tip).focused = false;
     settle(tip, trigger, 0);
   });
-  doc.addEventListener("keydown", event => {
+  scope.listen(doc, "keydown", event => {
     if (event.key !== "Escape") return;
     for (const tip of doc.querySelectorAll<HTMLElement>(".ug-tooltip:popover-open")) hideStrataTooltip(tip);
   });
   // A scroll or resize moves the trigger: an open tooltip follows it.
   const follow = () => { for (const tip of doc.querySelectorAll<HTMLElement>(".ug-tooltip:popover-open")) { const trigger = stateOf(tip).trigger; if (trigger) place(tip, trigger); } };
-  doc.defaultView?.addEventListener("scroll", follow, { capture: true, passive: true });
-  doc.defaultView?.addEventListener("resize", follow);
+  const view = doc.defaultView;
+  if (view) {
+    scope.listen(view, "scroll", follow, { capture: true, passive: true });
+    scope.listen(view, "resize", follow);
+  }
+  // The listeners that would hide an open tooltip are gone: hide them now, and drop their pending timers.
+  scope.onRelease(() => { for (const tip of doc.querySelectorAll<HTMLElement>(".ug-tooltip")) if (states.has(tip)) hideStrataTooltip(tip); });
 }

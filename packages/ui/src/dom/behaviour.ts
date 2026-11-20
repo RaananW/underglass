@@ -83,27 +83,11 @@ function applyIndeterminate(root: Document | HTMLElement) {
  */
 export function attachStrata(root: Document | HTMLElement = document): () => void {
   applyIndeterminate(root);
-  attachStrataTooltips(root instanceof Document ? root : root.ownerDocument);
-  attachStrataSwitches(root instanceof Document ? root : root.ownerDocument);
-  attachStrataPushButtons(root instanceof Document ? root : root.ownerDocument);
-  attachStrataRotarySelectors(root instanceof Document ? root : root.ownerDocument);
-  attachStrataSelectDisplays(root instanceof Document ? root : root.ownerDocument);
-  attachStrataPopovers(root instanceof Document ? root : root.ownerDocument);
-  attachStrataTrees(root instanceof Document ? root : root.ownerDocument);
-  attachStrataFaders(root instanceof Document ? root : root.ownerDocument);
-  attachStrataCarousels(root instanceof Document ? root : root.ownerDocument);
-  attachStrataMenus(root instanceof Document ? root : root.ownerDocument);
-  attachStrataKnobs(root instanceof Document ? root : root.ownerDocument);
-  attachStrataLamps(root instanceof Document ? root : root.ownerDocument);
-  attachStrataJogWheels(root instanceof Document ? root : root.ownerDocument);
-  attachStrataPatchPoints(root instanceof Document ? root : root.ownerDocument);
-  attachStrataMeters(root instanceof Document ? root : root.ownerDocument);
-  attachStrataProgress(root instanceof Document ? root : root.ownerDocument);
-  attachStrataPads(root instanceof Document ? root : root.ownerDocument);
-  attachStrataPadLatches(root instanceof Document ? root : root.ownerDocument);
-  attachStrataKeypads(root instanceof Document ? root : root.ownerDocument);
   const existing = attached.get(root);
   if (existing) return existing;
+  // One reference to each delegate, given back by the detach (a second call for the same root returns that detach and takes none).
+  const doc = root instanceof Document ? root : root.ownerDocument;
+  const delegates = [attachStrataTooltips, attachStrataSwitches, attachStrataPushButtons, attachStrataRotarySelectors, attachStrataSelectDisplays, attachStrataPopovers, attachStrataTrees, attachStrataFaders, attachStrataCarousels, attachStrataMenus, attachStrataKnobs, attachStrataLamps, attachStrataJogWheels, attachStrataPatchPoints, attachStrataMeters, attachStrataProgress, attachStrataPads, attachStrataPadLatches, attachStrataKeypads].map(attach => attach(doc));
   const block = (event: Event) => {
     const button = (event.target as Element | null)?.closest?.(buttons);
     if (button && button.getAttribute("aria-disabled") === "true") { event.preventDefault(); event.stopImmediatePropagation(); }
@@ -179,7 +163,8 @@ export function attachStrata(root: Document | HTMLElement = document): () => voi
     root.removeEventListener("click", remove);
     root.removeEventListener("click", dismiss);
     root.removeEventListener("keydown", tabKey as EventListener);
-    attached.delete(root);
+    if (attached.get(root) === detach) attached.delete(root);
+    for (const release of delegates) release();
   };
   attached.set(root, detach);
   return detach;

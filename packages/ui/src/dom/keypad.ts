@@ -10,13 +10,13 @@
  *   of the keypad; nothing wraps (`dom/pad.ts` has the grid, which the Pad shares).
  * Every listener is delegated and passive except the grid's keys, which cancel only the keys they move focus with.
  */
+import { combineStrataDisposers } from "./delegate.ts";
 import { attachStrataGrids, attachStrataHeldButtons } from "./pad.ts";
 
 /**
  * Runs every `button.ug-keypad__key` in `doc`, present and future, through delegated listeners, once per document. `attachStrata`
  * calls it; the React and Vue bindings call it when a keypad mounts.
  */
-export function attachStrataKeypads(doc: Document = document): void {
-  attachStrataHeldButtons(doc, "button.ug-keypad__key");
-  attachStrataGrids(doc);
+export function attachStrataKeypads(doc: Document = document): () => void {
+  return combineStrataDisposers(attachStrataHeldButtons(doc, "button.ug-keypad__key"), attachStrataGrids(doc));
 }

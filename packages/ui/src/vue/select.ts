@@ -5,6 +5,7 @@
  */
 import { Comment, Fragment, Text, defineComponent, h, mergeProps, onMounted, onUpdated, ref, useId, type PropType, type VNode, type VNodeChild } from "vue";
 import { attachStrataRotarySelectors } from "../dom/rotary-selector.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { attachStrataSelectDisplays } from "../dom/select-display.ts";
 import { displayAttributes, displayClasses, displayMarkup } from "../shared/display.ts";
 import { pushMarkup } from "../shared/push-button.ts";
@@ -81,12 +82,12 @@ export const Select = defineComponent({
     // Options are children, so the value is applied once they exist.
     onMounted(() => { const value = props.modelValue ?? props.defaultValue; if (value !== undefined && element.value) element.value.value = value; });
     // A selector may be drawn as a display (see `selectFormFor`), so a form asked for attaches both behaviours, once per document.
-    const attach = () => { if (selectForm(props.form)) { attachStrataRotarySelectors(); attachStrataSelectDisplays(); } };
+    useStrataDelegates(() => selectForm(props.form) ? [attachStrataRotarySelectors, attachStrataSelectDisplays] : [], { updated: true });
     // A selector's value is the select's property, set after its options exist (Vue's `value` prop would also write an attribute, which the markup has no use for).
     let shown: string | undefined;
     const apply = () => { if (shown !== undefined && element.value && element.value.value !== shown) element.value.value = shown; };
-    onMounted(() => { attach(); apply(); });
-    onUpdated(() => { attach(); apply(); });
+    onMounted(apply);
+    onUpdated(apply);
     return () => {
       const children = slots.default?.();
       const asked = selectForm(props.form);

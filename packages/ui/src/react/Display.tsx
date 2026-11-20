@@ -122,7 +122,7 @@ export const ProgressBar = forwardRef<HTMLProgressElement, ProgressBarProps>(fun
   const { id, "aria-describedby": describedBy } = field ?? {};
   const meter = progressForm(form);
   // A segment meter's value reaches the drawing through `attachStrataProgress`, attached once; a changed `value` is all it takes.
-  useEffect(() => { if (meter) attachStrataProgress(); }, [meter]);
+  useEffect(() => (meter ? attachStrataProgress() : undefined), [meter]);
   if (!meter) return <progress ref={ref} className={classes("ug-progress", className)} style={style} data-strata-face="groove" {...(field ? { id, "aria-describedby": describedBy } : {})} value={value} max={max} {...rest} />;
   const count = progressSegmentCount(segments);
   return (

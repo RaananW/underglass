@@ -171,7 +171,8 @@ provisional). Props: `label` (the legend), `value` / `defaultValue` (or `v-model
 - Every change goes through the input's `value`: `input` while it changes, `change` at the end of a gesture, so forms
   and bindings see native events. The behaviour is `attachStrataKnobs` from `@underglass/ui/dom` (one set of delegated
   listeners per document, among them the blocking document-level wheel listener); `attachStrata` and the React, Vue
-  and Astro components attach it.
+  and Astro components attach it, and the returned disposer removes them with the last one
+  ([conventions](README.md#conventions)).
 - `disabled` uses the native attribute, which removes the knob from the tab order and from the pointer behaviour.
 
 ## 9. CSS presentation

@@ -4,6 +4,8 @@
  * runs the buttons for plain HTML and Astro (through `attachStrata`) and reports `strata-slide` from the carousel.
  */
 
+import { acquireStrataDelegate, type StrataDelegateScope } from "./delegate.ts";
+
 /** The slide a carousel button leads to from the current one, or undefined when it is not a carousel button. */
 export function strataSlideTarget(button: Element, current: number, count: number): number | undefined {
   if (!count) return undefined;
@@ -31,13 +33,13 @@ export function showStrataSlide(carousel: Element, index: number): void {
   });
 }
 
-const attached = new WeakSet<Document>();
-
 /** Runs every `.ug-carousel` in `doc` from its markup, once, and reports `strata-slide` (`detail.index`). */
-export function attachStrataCarousels(doc: Document = document): void {
-  if (attached.has(doc)) return;
-  attached.add(doc);
-  doc.addEventListener("click", event => {
+export function attachStrataCarousels(doc: Document = document): () => void {
+  return acquireStrataDelegate(doc, installCarousels);
+}
+
+function installCarousels(doc: Document, scope: StrataDelegateScope): void {
+  scope.listen(doc, "click", event => {
     const button = (event.target as Element | null)?.closest?.(".ug-carousel button");
     const carousel = button?.closest(".ug-carousel");
     if (!button || !carousel || event.defaultPrevented || (button as HTMLButtonElement).disabled) return;

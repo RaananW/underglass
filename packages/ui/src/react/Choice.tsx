@@ -45,7 +45,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
   const latching = latchForm(form), owner = nativeForm(form, "latching");
   useLayoutEffect(() => { if (own.current) own.current.indeterminate = indeterminate; });
   // A latching key is held down while it is pressed and plays its feedback (`dom/push-button.ts`), once per document.
-  useEffect(() => { if (latching) attachStrataPushButtons(); }, [latching]);
+  useEffect(() => (latching ? attachStrataPushButtons() : undefined), [latching]);
   const input = <input ref={mergeRefs(own, ref)} className="ug-checkbox__input" data-strata-face={latching ? undefined : "well"} type="checkbox" {...field} {...(invalid ? { "aria-invalid": true as const } : {})} {...(owner !== undefined ? { form: owner } : {})} {...rest} />;
   if (latching) return (
     <label className={classes("ug-checkbox", className)} style={style} {...strataAttributes({ size, material, level })} data-strata-form={latching}>
@@ -90,7 +90,7 @@ export const Switch = forwardRef<HTMLInputElement, SwitchProps>(function Switch(
   const field = useFieldControl();
   const hardware = isSwitchForm(form) ? form : undefined;
   // A hardware form throws on a drag past centre and plays its feedback (`dom/switch.ts`), once per document.
-  useEffect(() => { if (hardware) attachStrataSwitches(); }, [hardware]);
+  useEffect(() => (hardware ? attachStrataSwitches() : undefined), [hardware]);
   return (
     <label className={classes("ug-switch", reverse && "ug-switch--reverse", className)} style={style} {...strataAttributes({ size, material, level })} {...(hardware ? { "data-strata-form": hardware } : {})}>
       <input ref={ref} className="ug-switch__input" data-strata-face={hardware ? undefined : "well"} type="checkbox" role="switch" {...field} {...(invalid ? { "aria-invalid": true as const } : {})}

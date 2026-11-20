@@ -3,8 +3,9 @@
  * `<legend>`, each visually hidden over its key on one plinth. Use `v-model` (or `defaultValue`); arrow keys, Tab and
  * Space stay native.
  */
-import { defineComponent, h, onMounted, onUpdated, useId, type PropType } from "vue";
+import { defineComponent, h, useId, type PropType } from "vue";
 import { attachStrataPushButtons } from "../dom/push-button.ts";
+import { useStrataDelegates } from "./delegates.ts";
 import { bankMarkup, latchForm, nativeForm } from "../shared/latching-forms.ts";
 import type { StrataLampColour } from "../shared/lamp.ts";
 import { classes, strataAttributes, strataProps } from "./shared.ts";
@@ -43,8 +44,7 @@ export const SegmentedControl = defineComponent({
   setup(props, { emit }) {
     const generated = (useId() ?? "").replace(/[^a-zA-Z0-9_-]/g, "");
     // A latching key is held down while it is pressed and plays its feedback (`dom/push-button.ts`), once per document.
-    onMounted(() => { if (latchForm(props.form)) attachStrataPushButtons(); });
-    onUpdated(() => { if (latchForm(props.form)) attachStrataPushButtons(); });
+    useStrataDelegates(() => [latchForm(props.form) && attachStrataPushButtons], { updated: true });
     return () => {
       const name = props.name ?? `segmented-${generated}`;
       const latching = latchForm(props.form), owner = nativeForm(props.form, "latching");
