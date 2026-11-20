@@ -42,10 +42,9 @@ jobs:
       - name: Build showcase and documentation site
         if: matrix.os == 'ubuntu-latest'
         run: npm run build:site
-      - name: GPU browser suite
-        if: always()
-        shell: bash
-        run: echo "The GPU browser suite runs in the Browser workflow on a self-hosted GPU runner (docs/ci-gpu-runner.md), or locally with 'npm run test:browser'."
+      # No GPU step here: the GPU browser suite is the Browser workflow's job (browser.yml), on a self-hosted GPU
+      # runner (docs/ci-gpu-runner.md). When that runner is off, a pull request shows that job as skipped, and
+      # nothing in this workflow stands in for it.
 
   release-dry-run:
     name: Release archives (dry run)
