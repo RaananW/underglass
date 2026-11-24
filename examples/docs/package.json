@@ -11,7 +11,7 @@
     "preview": "astro preview --host 127.0.0.1 --port 5193"
   },
   "dependencies": {
-    "@astrojs/markdown-remark": "7.3.9",
+    "@astrojs/markdown-remark": "7.3.10",
     "@astrojs/starlight": "0.43.1",
     "astro": "7.4.12"
   }
