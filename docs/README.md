@@ -22,6 +22,10 @@ Start here if you are using Underglass or writing components for it.
 - [Distribution](distribution.md): packing and installing the library.
 - [Showcase](showcase.md): the example gallery and its deployment.
 
+## Articles
+
+- [Real React controls, drawn by WebGPU: keeping every click on the right element](articles/real-controls-drawn-by-webgpu.md): how Underglass keeps hit-testing, focus and React's tree honest while the GPU draws real controls, what broke, what it costs and where it stops.
+
 ## Contributing
 
 - [Architecture](architecture.md) and the GPU-first contract.
