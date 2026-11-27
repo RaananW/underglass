@@ -67,6 +67,9 @@ browser. Licensed under the
 
 ## Install
 
+To try it without installing anything, [![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/RaananW/underglass/tree/main/examples/starter)
+(a tiny React starter, [`examples/starter`](examples/starter); use Chrome or Edge 157 or later for GPU mode).
+
 ```sh
 npm install @underglass/react react react-dom   # React 18.3 or 19
 npm install @underglass/vue vue                 # Vue 3.5

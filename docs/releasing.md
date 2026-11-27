@@ -24,6 +24,19 @@ made this possible is done and kept below for reference.
 The example apps (`@underglass/playground`, `@underglass/showcase`) are ignored by Changesets and
 depend on `"*"`, so they always use the workspace's current library version.
 
+## The starter
+
+`examples/starter` is a standalone app (not a workspace, with its own `package-lock.json`) that people open on
+StackBlitz or copy with `degit`. It installs the **published** `@underglass/react`, so it follows releases:
+
+- `npm run version-packages` runs `scripts/sync-starter.mjs`, which sets the starter's range to
+  `^<new version>` in its `package.json` and the lockfile's root entry. `tests/unit/starter.unit.test.mjs` fails
+  when the range stops covering `packages/react`'s version.
+- The lockfile's resolved entry cannot be refreshed in the Version Packages pull request, because the version is
+  not on npm until the release publishes. **After the release publishes**, run `npm install` in
+  `examples/starter` and commit the lockfile in a small pull request. Until then (and until it merges) the
+  starter on `main` asks for a version npm does not have yet, so StackBlitz installs fail for that short window.
+
 ## Changesets: one per pull request
 
 A pull request that changes anything under `packages/` adds a changeset. CI fails without one.

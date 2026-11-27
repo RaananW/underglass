@@ -7,6 +7,7 @@
 !/vercel.json
 !/packages
 !/examples
+/examples/starter
 !/docs
 /docs/archive
 !/scripts

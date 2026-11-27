@@ -26,6 +26,10 @@ changes.
 
 ## Install
 
+To see it running first, open the starter in your browser:
+[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/RaananW/underglass/tree/main/examples/starter)
+Or copy it with `npx degit RaananW/underglass/examples/starter my-app`.
+
 ```sh
 npm install @underglass/react
 ```
