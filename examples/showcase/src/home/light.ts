@@ -42,7 +42,8 @@ export function createLight(controller: CanvasController, element: HTMLElement, 
     const stage = element.offsetParent?.getBoundingClientRect();
     if (!stage) return;
     pointer.x = event.clientX - stage.left; pointer.y = event.clientY - stage.top;
-    pointer.inside = pointer.x >= 0 && pointer.y >= 0 && pointer.x <= stage.width && pointer.y <= stage.height;
+    // The header lies over the top of the stage: a pointer on it is not on the stage.
+    pointer.inside = pointer.x >= 0 && pointer.y >= 0 && pointer.x <= stage.width && pointer.y <= stage.height && !(event.target as Element | null)?.closest?.(".top");
   }, { passive: true });
   document.documentElement.addEventListener("pointerleave", () => { pointer.inside = false; });
   return {

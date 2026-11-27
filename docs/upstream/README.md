@@ -126,3 +126,12 @@ Recorded with the #159 work (2026-10-20): WICG html-in-canvas `main` at `5fb3df8
 Raised as an observation (finding 3) in WICG [html-in-canvas#187](https://github.com/WICG/html-in-canvas/issues/187) on 2026-10-21. A
 Chromium bug needs a raw repro that reads the snapshot back directly (`drawElementImage` into a 2D canvas, then `getImageData`) and
 compares it with on-screen text; the measurement above compares composited output, not the capture.
+
+## moveBefore into a drawable canvas reports a layout shift (observed, not filed in Chromium)
+
+Recorded 2026-11-28 with the showcase home page's CLS fix: WICG html-in-canvas `main` at `5d9d970ebc06d1903aa0f4b99ac78655b9922804`
+(committed 2026-10-30T21:30:20Z), Chrome 158.0.8127.88 and Canary 160.0.8188.0, Windows 11, headless. Chromium hotlist 6783002 was not checked
+for this note. In [movebefore-layout-shift.html](movebefore-layout-shift.html) a box moved with `moveBefore` into a `content="drawable"`
+canvas keeps its `getBoundingClientRect` (200,40), yet a `layout-shift` entry of 0.075 reports it moved from (400,80): the old rect is offset
+a second time by the canvas's place on the page, and with the canvas at the page's origin nothing is reported. `append` into the canvas
+and `moveBefore` into a plain `div` report nothing. See SCOPE-010 in [open issues](../open-issues.md).

@@ -23,8 +23,8 @@
  *   park, inside `flushSync`, so a change starts in the frame its sections are enrolled.
  * - The layout changes to the deck before `enable()` and back to the flow whenever the mode returns to `dom` (a
  *   refusal, `disable()`, a lost GPU). The section in the window, and how far it has scrolled, stay the same.
- * - `enable()` proves in the stage's top left corner that native hits follow a tilted layer. Below the wide layout the
- *   header lies over that corner, so while the check runs the header takes no pointer (`html.checking`). Where the
+ * - `enable()` proves in the stage's top left corner that native hits follow a tilted layer. The header lies over that
+ *   corner, so while the check runs the header takes no pointer (`html.checking`). Where the
  *   proof still fails, a change that tilts runs as the flat `slide`.
  * - A custom effect's shader is compiled when it is first used, which stalls the page for a few frames. So after the
  *   deck has started, each change's chain is put once on an empty layer in the stage's corner, in idle moments, and

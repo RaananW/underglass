@@ -108,7 +108,7 @@ code { font-family: var(--mono); font-size: .92em; }
 @media (min-width: 1180px) {
   :root { --rail: 72px; --u: min(1vw, 1.6vh); }
   /* On a wide screen the bar stays in the window in both layouts, so the readout and its switch are always at hand.
-     The flow scrolls under it and fades out; the deck's stage starts below it. */
+     In both the stage starts at the top of the window, under the bar, and fades out under its foot. */
   .top { position: fixed; background: linear-gradient(var(--ground) 72%, transparent); }
   /* A graduated scale down the left edge: one numbered mark per section. */
   .rail { display: block; position: fixed; z-index: 2; inset: 0 auto 0 0; width: var(--rail); border-right: 1px solid var(--rule);
@@ -157,8 +157,10 @@ html:not(.deck) #stage .app-container { height: auto !important; }
 .slide-text { grid-column: 1; padding: 8px; margin-inline: -8px; scroll-margin-top: 112px; }
 /* A specimen starts level with its section's heading: under the text layer's padding, the label and its space. */
 .app-container > .specimen { grid-column: 2; margin-top: calc(112px + 20px + var(--space)); }
-/* On a wide screen the flow's margins are the deck's plus the header the deck's stage starts under. Where the deck fits,
-   every row of the flow is then one window tall with its section where the deck has it: starting the GPU moves nothing. */
+/* On a wide screen the bar is fixed over the top of the stage, so a section starts under it and `--lift` lower. The deck
+   has the same margins and its stage starts at the same place, so where the deck fits every row of the flow is one
+   window tall with its section where the deck has it: starting the GPU moves nothing, not even the root container
+   (a container that moves counts as a layout shift, even when what it holds stays where it was). */
 @media (min-width: 1180px) {
   .app-container > [data-section] { margin-block: calc(var(--header) + var(--lift)) 24px; }
   .app-container > .specimen { margin-top: calc(var(--header) + var(--lift) + 20px + var(--space)); }
@@ -169,24 +171,18 @@ html:not(.deck) #stage .app-container { height: auto !important; }
 .cover-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); column-gap: var(--gap); align-items: start; }
 .cover-grid > .specimen { margin: 0; }
 
-/* The deck: the pin keeps a stage in the window, under the header, while the track (one window per section) scrolls
-   past. Every section is in the one row; those not on stage are parked: in the document and the accessibility tree,
-   unpainted and out of the pointer's way. Nothing overlays the stage: the header and the side scale sit beside it. */
+/* The deck: the pin keeps a stage in the window while the track (one window per section) scrolls past. Every section
+   is in the one row; those not on stage are parked: in the document and the accessibility tree, unpainted and out of
+   the pointer's way. The side scale sits beside the stage; the header lies over its top, as it does over the flow. */
 /* The track is as long as the deck's scroll range (`deck.ts` measures it: `--track`). The pin keeps the stage in the
    window. Every section lies in the one grid cell, with the margins it has in the flow, so a section is in the same
    place in both layouts; one taller than the stage reaches past its bottom, and the driver moves it up as the page
-   scrolls. On a wide screen the stage starts under the fixed header, so the flow's top margin is the deck's plus the
-   header. */
+   scrolls. The stage starts where the flow's root container does, at the top of the track, at every width. */
 html.deck #track { height: var(--track, calc(var(--count) * 100vh)); }
 html.deck #pin { position: sticky; top: 0; height: 100vh; box-sizing: border-box; }
 html.deck #stage { width: min(100%, 2560px); height: 100%; margin-inline: auto; }
 html.deck #stage .app-container { grid-template-rows: minmax(0, 1fr); }
 html.deck .app-container > [data-section] { grid-row: 1; }
-@media (min-width: 1180px) {
-  html.deck #pin { padding-top: var(--header); }
-  html.deck .app-container > [data-section] { margin-block: var(--lift) 24px; }
-  html.deck .app-container > .specimen { margin-top: calc(var(--lift) + 20px + var(--space)); }
-}
 /* In one column the deck shows a section as two pages, its text and then its specimen, each starting at the same
    height near the top of the stage so that it fits a phone's screen. The cover's text starts lower: the header lies over
    the top of the page there. Where the demonstration's controls lie above its panels, the driver tells each panel
@@ -213,9 +209,9 @@ html.deck:not(.measuring) .parked { max-height: 0; overflow: clip; margin-block:
    its links take the pointer there, so the stage under the rest of it does (the GPU check draws and clicks a probe in
    the stage's corner). */
 @media (max-width: 1179px) { .top { pointer-events: none; } .top > * { pointer-events: auto; } }
-/* While that check runs, the links do not take it either: one of its points is under the brand on a phone, and a
-   check that misses it leaves tilted layers off (`deck.ts`). */
-html.checking .top > * { pointer-events: none; }
+/* While that check runs, no part of the header takes it: one of its points is under the brand on a phone and under the
+   bar on a wide screen, and a check that misses it leaves tilted layers off (`deck.ts`). */
+html.checking .top, html.checking .top > * { pointer-events: none; }
 /* The light's layer: an eighth of the stage, which the deck draws eight times larger (`light.ts`). */
 .app-container > .light { position: absolute; left: 0; top: 0; width: 12.5%; height: 12.5%; margin: 0; pointer-events: none; }
 html:not(.deck) .app-container > .light { display: none; }

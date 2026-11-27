@@ -321,11 +321,39 @@ try {
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
       const page = await context.newPage();
       const problems = watch(page);
+      // Starting the deck is to move nothing, not even the root container, whose own move counts as a layout shift
+      // (Lighthouse's CLS) even when what it holds stays put. The flow's boxes are read on every frame until the deck
+      // starts, and the layout shifts are recorded with what Chrome says moved. Chrome also reports the layers moved
+      // into the output canvas (`moveBefore`) as shifted when they are not, so only the root container is checked by
+      // that record (SCOPE-010 in docs/open-issues.md); the boxes check the rest.
+      await page.addInitScript(() => {
+        const box = selector => { const rect = document.querySelector(selector)?.getBoundingClientRect(); return rect ? [rect.x, rect.y, rect.width, rect.height] : null; };
+        window.flowBoxes = null;
+        const read = () => { if (document.documentElement.classList.contains("deck")) return; window.flowBoxes = { container: box("#stage .app-container"), cover: box("#cover"), scrollY }; requestAnimationFrame(read); };
+        requestAnimationFrame(read);
+        window.layoutShifts = [];
+        new PerformanceObserver(list => {
+          for (const entry of list.getEntries()) if (!entry.hadRecentInput) window.layoutShifts.push({ value: entry.value, classes: document.documentElement.className,
+            moved: entry.sources.map(source => ({ container: source.node?.classList?.contains("app-container") ?? false,
+              node: `${source.node?.nodeName}${source.node?.id ? `#${source.node.id}` : ""}`, from: [source.previousRect.x, source.previousRect.y], to: [source.currentRect.x, source.currentRect.y] })) });
+        }).observe({ type: "layout-shift", buffered: true });
+      });
       await page.goto(url);
       // The elements the page was served with, before the deck moves them into the canvas.
       await page.evaluate(() => { window.servedPress = document.querySelector(".live-row button"); });
       await page.waitForFunction(() => window.homeDeck?.state().mode === "gpu", null, { timeout: 30_000 });
       await page.evaluate(() => window.homeDeck.idle());
+      {
+        const { flowBoxes, shifts, container, cover, top } = await page.evaluate(() => {
+          const box = selector => { const rect = document.querySelector(selector).getBoundingClientRect(); return [rect.x, rect.y, rect.width, rect.height]; };
+          return { flowBoxes: window.flowBoxes, shifts: window.layoutShifts, container: box("#stage .app-container"), cover: box("#cover"), top: scrollY };
+        });
+        assert.ok(flowBoxes?.container && flowBoxes.cover, "the flow was measured before the deck started");
+        assert.deepEqual([flowBoxes.scrollY, top], [0, 0], "the page is at its top in both layouts");
+        assert.deepEqual(container.slice(0, 3), flowBoxes.container.slice(0, 3), "the root container starts where the flow's did");
+        assert.deepEqual(cover, flowBoxes.cover, "the cover is where the flow had it");
+        assert.ok(!shifts.some(shift => shift.moved.some(source => source.container)), `the root container is never reported moved: ${JSON.stringify(shifts)}`);
+      }
       const snapshot = () => page.evaluate(() => {
         const state = window.homeDeck.state();
         // The light under the sections is a layer with an effect of its own for as long as the deck is on: counted apart.
