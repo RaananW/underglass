@@ -1,0 +1,30 @@
+name: IndexNow
+
+# Tells IndexNow (Bing, Yandex, Seznam, Naver) which pages of https://underglass.dev a new build changed, once
+# Vercel serves that build. No secret: the key is public and the site serves it. See docs/showcase.md#deployment.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: indexnow
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    name: Submit the changed URLs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24.19.0
+      - name: Wait for the build to go live, then submit
+        run: node scripts/indexnow.mjs "${{ github.sha }}"

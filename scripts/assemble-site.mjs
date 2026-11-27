@@ -17,8 +17,8 @@
  * or a file), each URL of the sitemap gets the day its text last changed (`<lastmod>`, `sitemap-dates.mjs`), and the
  * record for the next build is written to `sitemap-dates.json`. Any other build writes the sitemap without dates.
  *
- * Writes only `examples/showcase/dist/docs`, `examples/showcase/dist/llms.txt`, `examples/showcase/dist/sitemap.xml`
- * and, with dates, `examples/showcase/dist/sitemap-dates.json`.
+ * Writes only `examples/showcase/dist/docs`, `examples/showcase/dist/llms.txt`, `examples/showcase/dist/sitemap.xml`,
+ * `examples/showcase/dist/build.json` (the commit and the day of the build, which `scripts/indexnow.mjs` waits for) and, with dates, `examples/showcase/dist/sitemap-dates.json`.
  */
 import assert from "node:assert/strict";
 import { cp, lstat, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -117,12 +117,13 @@ const urls = [...locs(await readFile(sitemap, "utf8")).filter(url => !url.starts
 // Each URL's date is the day its text last changed, kept from the record the deployed site published (see the file comment).
 const record = join(showcase, "sitemap-dates.json");
 const source = process.env.UNDERGLASS_SITEMAP_DATES ?? (process.env.VERCEL === "1" ? `${origin}/sitemap-dates.json` : undefined);
+const today = new Date().toISOString().slice(0, 10);
 let dates, dated = "no dates (not a deployed build)";
 await rm(record, { force: true });
 if (source) {
   // A showcase URL's page: the home page is `index.html`, `/examples/motion` is `examples/motion.html`.
   const html = url => { const path = url.slice(origin.length); return path === base || path.startsWith(`${base}/`) ? pages.get(pageFile(path)) : readFile(join(showcase, path.length > 1 ? `${path.slice(1)}.html` : "index.html"), "utf8"); };
-  const published = await publishedDates(source), today = new Date().toISOString().slice(0, 10);
+  const published = await publishedDates(source);
   dates = datePages(await Promise.all(urls.map(async url => [url, await html(url)])), published.dates, today);
   const changed = urls.filter(url => dates[url].date === today && published.dates?.[url]?.date !== today);
   dated = published.dates ? `${changed.length} of ${urls.length} URLs dated ${today}${changed.length ? ` (${changed.slice(0, 8).map(url => url.slice(origin.length) || "/").join(", ")}${changed.length > 8 ? ", ..." : ""})` : ""}, the others keep their dates`
@@ -130,4 +131,6 @@ if (source) {
   await writeFile(record, `${JSON.stringify(dates, null, 1)}\n`);
 }
 await writeFile(sitemap, sitemapXml(urls, dates));
+// Which build is live, for `scripts/indexnow.mjs`: the commit Vercel built (none elsewhere) and the day the dates use.
+await writeFile(join(showcase, "build.json"), `${JSON.stringify({ commit: process.env.VERCEL_GIT_COMMIT_SHA ?? null, date: today })}\n`);
 console.log(`Documentation site: ${pages.size} pages, ${all.length} files copied to ${relative(".", output)}; llms.txt at the site root; sitemap.xml lists ${urls.length} URLs; ${dated}`);
