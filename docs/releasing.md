@@ -24,6 +24,19 @@ made this possible is done and kept below for reference.
 The example apps (`@underglass/playground`, `@underglass/showcase`) are ignored by Changesets and
 depend on `"*"`, so they always use the workspace's current library version.
 
+## The starter
+
+`examples/starter` is a standalone app (not a workspace, and without a lockfile, like other project templates)
+that people open on StackBlitz or copy with `degit`. It installs the **published** `@underglass/react`, so it
+follows releases:
+
+- `npm run version-packages` runs `scripts/sync-starter.mjs`, which sets the starter's range to
+  `^<new version>`. `tests/unit/starter.unit.test.mjs` fails when the range stops covering `packages/react`'s
+  version. The root `.gitignore` keeps out the `package-lock.json` a local `npm install` creates there.
+- Between merging the Version Packages pull request and the release reaching npm (a few minutes), the starter on
+  `main` asks for a version npm does not have yet, so a StackBlitz install in that window fails. Nothing needs
+  doing afterwards.
+
 ## Changesets: one per pull request
 
 A pull request that changes anything under `packages/` adds a changeset. CI fails without one.
