@@ -481,6 +481,22 @@ moves when nothing changed is soon ignored, so it is not the build's date:
 - An example's page has little text of its own (its title, its summary and the list
   of examples), so a change to an example's code alone does not move its date.
 
+New builds are announced to [IndexNow](https://www.indexnow.org) (Bing, Yandex, Seznam
+and Naver; ChatGPT search and Copilot answer from Bing's index; Google ignores it):
+
+- The site serves the IndexNow key at `/<key>.txt` (`examples/showcase/public/`). The key
+  is public by design: serving it is how IndexNow checks that the host is ours.
+- Each build writes `/build.json`, `{ "commit": <VERCEL_GIT_COMMIT_SHA or null>, "date" }`,
+  where `date` is the day the sitemap's dates use.
+- Vercel creates no GitHub deployment events here, so `.github/workflows/indexnow.yml`
+  runs on every push to `main` (and by hand). `node scripts/indexnow.mjs <commit>` polls
+  `build.json` every 20 seconds, for up to 20 minutes, until the site reports that commit,
+  reads `sitemap-dates.json` and POSTs the URLs dated that day, the pages the build changed
+  or added, to `https://api.indexnow.org/indexnow` (200 and 202 are success). If the build
+  never goes live in time it prints a notice and exits 0. The workflow needs no secret.
+- `--dry-run` prints the URLs and the payload without sending; `--no-wait` skips the wait
+  and uses the build the site runs now.
+
 ## Documentation site
 
 <https://underglass.dev/docs> is the private `examples/docs` workspace, an

@@ -23,7 +23,7 @@ await assertPhysicalPath(directory);
  * Babylon Lite's lazily loaded shader chunks after their source files (`skybox.vertex-<hash>.js`), which the
  * instrument material's environment loading brings in.
  */
-const allowed = /^(?:(?:index|examples|404)\.html|robots\.txt|sitemap\.xml|favicon\.svg|og\.jpg|apple-touch-icon\.png|examples\/[\w-]+\.html|thumbs\/[\w-]+\.jpg|assets\/[\w.-]+\.(?:js|css|jpg))$/;
+const allowed = /^(?:(?:index|examples|404)\.html|robots\.txt|[0-9a-f]{32}\.txt|sitemap\.xml|favicon\.svg|og\.jpg|apple-touch-icon\.png|examples\/[\w-]+\.html|thumbs\/[\w-]+\.jpg|assets\/[\w.-]+\.(?:js|css|jpg))$/;
 let count = 0;
 /** Recursively checks `path`; `prefix` is the output-relative prefix (`""`, `"assets/"` or `"examples/"`) of its entries. */
 async function check(path, prefix = "") {
