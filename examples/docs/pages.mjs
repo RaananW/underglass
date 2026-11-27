@@ -42,6 +42,9 @@ export const sidebar = [
     ["worker.md", "reference/worker"],
     ["distribution.md", "reference/distribution"],
   ] },
+  { label: "Articles", pages: [
+    ["articles/real-controls-drawn-by-webgpu.md", "articles/real-controls-drawn-by-webgpu"],
+  ] },
   { label: "Strata UI", pages: [
     ["ui-library/design-language.md", "strata/design-language"],
     ["ui-library/components/README.md", "strata/components"],
