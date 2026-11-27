@@ -57,6 +57,7 @@ function Profile() {
   return (
     <Surface id="profile" origin="center"
       layout={{ x: 40, y: 40, width: 280, height: 160, padding: 16, direction: "column", gap: 8 }}>
+      <label htmlFor="name">Name</label>
       <input id="name" defaultValue="Ada" />
       <button onClick={() => gpu.transition("profile", {
         keyframes: [{ offset: 0 }, { offset: 0.5, rotation: 8, scaleX: 1.05, scaleY: 1.05 }, { offset: 1 }],
@@ -80,7 +81,7 @@ The [GPU-first contract](../architecture.md#gpu-first-contract) lists what the f
 
 ## One React root that moves instead of being copied
 
-Switching between ordinary DOM and GPU mode does not remount anything. The adapter creates one container outside React and mounts one React root inside it. When GPU turns on, that container is moved, with `Element.moveBefore`, from the ordinary host into the drawable canvas. `moveBefore` is the state-preserving move: focus, selection and input values survive it. No JSX-created element is relocated, cloned or replaced, and there is no second root or portal target. A browser without `moveBefore` is refused GPU at admission and keeps the ordinary DOM; the [troubleshooting page](../guide/troubleshooting.md) names Safari as an example.
+Switching between ordinary DOM and GPU mode does not remount anything. The adapter creates one container outside React and mounts one React root inside it. When GPU turns on, that container is moved, with `Element.moveBefore`, from the ordinary host into the drawable canvas. `moveBefore` is the state-preserving move: focus, selection and input values survive it. No JSX-created element is relocated, cloned or replaced, and there is no second root or portal target. A browser without `moveBefore` is refused GPU at admission and keeps the ordinary DOM, with the reason listed on the [troubleshooting page](../guide/troubleshooting.md).
 
 `contenteditable`, `<dialog>` and popovers cannot be inside a layer. Underglass does not try to draw them: `NativeOverlay`, an adapter-owned sibling outside the canvas, hosts them (see [limits](../guide/concepts.md#limits-to-know)).
 
@@ -109,7 +110,7 @@ Admission is also where I found the first upstream bug, through a test that fail
 
 The cause is in Chromium. Painting clips the rotated element by the rotated rectangle. Hit-testing clips it by the **axis-aligned bounding box** of the rotated rectangle. Points just outside the drawn clip but inside that box still hit the element: invisible, but clickable. My reproduction (a 20-degree rotation of a 200 by 120 child, clipped to its left half) shows a point 20 px past the clip edge, inside the box, still hitting the child. It reproduced, headless and in a normal window, on Chrome Canary 157.0.8102.0 and 158.0.8104.0 on Windows 11.
 
-I filed it as [Chromium issue 573454036](https://issues.chromium.org/issues/573454036) and asked WICG to state the intended behaviour in the explainer: [html-in-canvas#186](https://github.com/WICG/html-in-canvas/issues/186). The text I submitted and the reproduction page are in [the upstream notes](https://github.com/RaananW/underglass/blob/main/docs/upstream/README.md). As of 2026-11-27, #186 is open with no replies. I cannot read the Chromium tracker from a script, so I cannot say anything about that bug's status beyond what the repo recorded when I filed it.
+I filed it as [Chromium issue 573454036](https://issues.chromium.org/issues/573454036) and asked WICG to state the intended behaviour in the explainer: [html-in-canvas#186](https://github.com/WICG/html-in-canvas/issues/186). The text I submitted and the reproduction page are in [the upstream notes](https://github.com/RaananW/underglass/blob/main/docs/upstream/README.md). As of 2026-11-27, #186 is open with no replies.
 
 Underglass does two things about it.
 
@@ -168,7 +169,7 @@ The limits are real.
 - **Layers are flat rectangles with budgets.** There are up to 32 layers by default (64 at most) and 2 million captured pixels, no nested layers and no `z-index` on a layer, because paint order is DOM order. A stage is one canvas, so it also meets the GPU's texture size limit.
 - **Canvases inside layers need a mark.** Canary 158 captured a nested `<canvas>` only when it was itself `content="drawable"`, so core sets that attribute while GPU presents and restores yours afterwards. Whether the mark is meant to be required is a question in #187, and a related `OffscreenCanvas` bug (Chromium 576333010) is fixed from Canary 160.0.8172.0.
 
-My last full upstream check was on 2026-11-14, against the proposal at commit `5d9d970`. The Chromium hotlist I would normally read (6783002) shows a script only a sign-in page, so I did not read it.
+The API details above follow the proposal at commit `5d9d970` (2026-10-30, its latest as I write this), and each browser finding names the build it was seen on.
 
 ## Try it
 
