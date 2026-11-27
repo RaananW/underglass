@@ -26,7 +26,7 @@ export function App() {
         <label htmlFor="message">Type something</label>
         <input id="message" value={text} onChange={event => setText(event.target.value)} />
         <output className="echo">{text || "..."}</output>
-        <button onClick={() => { setCount(count + 1); wiggle(); }}>Clicked {count} times</button>
+        <button onClick={() => { setCount(count + 1); wiggle(); }}>Clicked {count} {count === 1 ? "time" : "times"}</button>
       </Surface>
     </>
   );

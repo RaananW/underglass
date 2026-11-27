@@ -11,6 +11,7 @@ h1 { margin: 0 0 16px; font-size: 1.1rem; font-weight: 600; letter-spacing: 0.02
 
 #status { max-width: 720px; margin: 14px 0 0; font-size: 0.9rem; line-height: 1.4; color: #b9b4d6; }
 #status[data-mode="gpu"] { color: #7ee2a8; }
+.note { max-width: 720px; margin: 6px 0 0; font-size: 0.8rem; color: #8d88ab; }
 
 /* Decorative artwork: CSS animation is captured live, then the ripple shader bends it. */
 .art { position: absolute; inset: 0; background: linear-gradient(135deg, #2b1a5e, #0e4a6b); }

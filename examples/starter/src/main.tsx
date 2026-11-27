@@ -16,7 +16,7 @@ const controller = mountCanvasApp({
       ? "GPU mode: WebGPU is presenting your native controls."
       : mode === "admitting"
         ? "Checking GPU support..."
-        : `DOM mode, and the app still works. GPU mode needs Chrome or Edge 157 or later. Reason: ${reason}`;
+        : `DOM mode, and the app still works. Reason: ${reason}`;
   },
 }, <App />);
 
