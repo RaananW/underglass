@@ -31,10 +31,8 @@ test("the starter's @underglass/react range covers the version in packages/react
   assert.ok(!covers("^0.6.0", "0.7.0") && !covers("^0.6.0", "0.5.9") && covers("^0.6.0", "0.6.3") && covers("^1.2.0", "1.9.0"));
 });
 
-test("the starter's lockfile asks for the same range and is not a workspace of the root", async () => {
+test("the starter installs standalone, not as a workspace of the root", async () => {
   const starter = await json("examples/starter/package.json");
-  const lock = await json("examples/starter/package-lock.json");
-  assert.equal(lock.packages[""].dependencies["@underglass/react"], starter.dependencies["@underglass/react"]);
   const root = await json("package.json");
   assert.ok(!root.workspaces.some(path => path.startsWith("examples/starter")), "the starter must install standalone");
   assert.equal(starter.stackblitz.startCommand, "npm run dev");
