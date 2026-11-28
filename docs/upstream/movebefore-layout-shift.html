@@ -1,0 +1,50 @@
+<!doctype html>
+<!--
+  Chromium: moving a box into a `content="drawable"` canvas with `moveBefore` reports a layout shift although the box
+  does not move. Open in a build with HTML-in-Canvas (Chrome 157+), then press a button. The box's
+  getBoundingClientRect is the same before and after every move; only "moveBefore into canvas" reports a shift, and
+  its previousRect is the box's own rect offset a second time by the canvas's position on the page (zero when the
+  canvas is at the page's origin). The same move into a plain div, or `append` into the canvas, reports nothing.
+  Observed on Chrome 158.0.8127.88 and Canary 160.0.8188.0, Windows 11.
+-->
+<meta charset="utf-8">
+<title>moveBefore into a drawable canvas reports a layout shift</title>
+<style>
+  body { margin: 0; font: 14px system-ui, sans-serif; }
+  #stage { position: relative; margin: 40px 0 0 200px; width: 600px; height: 500px; }
+  #ordinary, #canvas, #plain { position: absolute; inset: 0; width: 600px; height: 500px; }
+  .box { display: flow-root; width: 600px; height: 500px; }
+  .child { margin: 176px 0 0 60px; width: 400px; height: 200px; background: #c33; }
+  #controls { position: fixed; right: 16px; top: 16px; display: grid; gap: 8px; }
+  pre { position: fixed; left: 16px; top: 560px; margin: 0; }
+</style>
+<div id="controls">
+  <button data-to="canvas" data-how="move">moveBefore into canvas</button>
+  <button data-to="canvas" data-how="append">append into canvas</button>
+  <button data-to="plain" data-how="move">moveBefore into div</button>
+</div>
+<div id="stage">
+  <canvas id="canvas" content="drawable" width="600" height="500"></canvas>
+  <div id="plain"></div>
+  <div id="ordinary"><div class="box"><div class="child"></div></div></div>
+</div>
+<pre id="log"></pre>
+<script>
+  const log = document.getElementById("log"), box = document.querySelector(".box");
+  const rect = () => { const r = box.getBoundingClientRect(); return `${r.x},${r.y}`; };
+  new PerformanceObserver(list => {
+    for (const entry of list.getEntries()) log.textContent += `layout-shift ${entry.value.toFixed(4)}: ${entry.sources.map(source =>
+      `[${source.previousRect.x},${source.previousRect.y}] -> [${source.currentRect.x},${source.currentRect.y}]`).join(" ")}\n`;
+  }).observe({ type: "layout-shift", buffered: true });
+  for (const button of document.querySelectorAll("button")) button.addEventListener("click", () => {
+    // The move is made outside the input's 500 ms window, so the shift is not excluded as input-driven.
+    setTimeout(() => {
+      document.getElementById("ordinary").moveBefore(box, null);
+      requestAnimationFrame(() => setTimeout(() => {
+        const before = rect(), to = document.getElementById(button.dataset.to);
+        if (button.dataset.how === "move") to.moveBefore(box, null); else to.append(box);
+        requestAnimationFrame(() => { log.textContent += `${button.textContent}: box ${before} -> ${rect()}\n`; });
+      }, 600));
+    }, 0);
+  });
+</script>
